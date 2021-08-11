@@ -1,0 +1,14 @@
+# macOS DS_STORE files
+**/*.DS_STORE
+# Python precompiled files
+*.pyc
+# PyCharm config files
+.idea/
+# PyCharm Virtual Environment
+venv/
+
+# personal test file
+test.py
+
+# Dataset directory
+# data/*
