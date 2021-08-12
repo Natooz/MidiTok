@@ -131,7 +131,7 @@ class StructuredEncoding(MIDIEncoding):
         :param program: the MIDI program of the produced track and if it drum, (default (0, False), piano)
         :return: the miditoolkit instrument object
         """
-        name = 'Drums' if program[1] else MIDI_INSTRUMENTS[program]['name']
+        name = 'Drums' if program[1] else MIDI_INSTRUMENTS[program[0]]['name']
         instrument = Instrument(program[0], is_drum=program[1], name=name)
         current_tick = 0
         count = 0

@@ -1,39 +1,52 @@
 # MidiTok
 
-MidiTok is a MIDI encoding / tokenization for deep neural networks. It can process MIDI files and "tokenize" them as for text in the NLP field.
+MidiTok is a package for MIDI encoding / tokenization for deep neural networks. It can process MIDI files and "tokenize" them as for text in the NLP field, to use them with Transformers or RNNs.
 
 MidiTok features most known MIDI encoding strategies, and is built around the idea that they all share common parameters and methods.
 
-## Installation
+## Install
 
-You can install MidiTok directly from pip:
 ```shell
 pip install miditok
 ```
 MidiTok uses MIDIToolkit, which itself uses Mido to read and write MIDI files.
 
-## What it can do
+## Encodings
 
-Desc
+### MIDI-Like
 
-### Common parameters
+Strategy used in the first symbolic music generative transformers and RNN / LSTM models. It consists of encoding the MIDI messages (Note On, Note Off, Velocity and Time Shift) into tokens as represented in a pure "MIDI way".
 
-Every encoding strategy share some common parameters:
+### REMI
 
-* **Pitch range:** the MIDI norm can represent pitch values from 0 to 127, but the [GM2 specification](https://www.midi.org/specifications-old/item/general-midi-2) recommend from 21 to 108 for piano, which covers the recommended pitch values for all MIDI program. Notes with pitches under or above this range can be discarded or clipped to the limits.
-* **Beat resolution:** is the number of "frames" sampled within a beat. In NAME we
-* **Number of velocities:** the number of velocity values you want represents. For instance if you set this parameter to 32, the velocities of the notes will be quantized into 32 velocity values from 0 to 127.
-* **Additional tokens:** specify which additional tokens bringing information like chords should be included. Note that each encoding is compatible with different additional tokens.
+Proposed in the [Pop Music Transformer](https://arxiv.org/abs/2002.00212), it is what we would call a "position-based" representation. The time is represented with "Bar" and "Position" tokens that indicate respectively when a new bar is beginning, and the current position within a bar.
 
-### Encodings
+### Compound Word
 
-Desc
+Similar to the REMI encoding, the main difference here is that token types of a same "event" are merged together.
+A note will be the association of Pitch + Velocity + Duration tokens for instance.
 
-### Use NAME to create your own encoding strategy
+### Structured
+
+Presented with the [Piano Inpainting Application](https://arxiv.org/abs/2107.05944), it is similar to the MIDI-Like encoding but with Duration tokens instead Note-Off.
+The main advantage of this encoding is the consistent token type transitions it imposes, which can greatly speed up training. The structure is as: Pitch -> Velocity -> Duration -> Time Shift -> ... (pitch again)
+
+### Create your own
 
 desc
 
-## Example
+## Common parameters
+
+Every encoding strategy share some common parameters around which the tokenizers are built:
+
+* **Pitch range:** the MIDI norm can represent pitch values from 0 to 127, but the [GM2 specification](https://www.midi.org/specifications-old/item/general-midi-2) recommend from 21 to 108 for piano, which covers the recommended pitch values for all MIDI program. Notes with pitches under or above this range can be discarded or clipped to the limits.
+* **Beat resolution:** is the number of "frames" sampled within a beat. MidiTok handles this with a flexible way: a dictionary of the form ```{(0, 3): 8, (3, 8): 4, ...}```. The keys are tuples indicating a range of beats, ex 0 to 3 for the first bar. The values are the resolution, in frames per beat, of the given range, ex 8. This way you can create a tokenizer with durations / time shifts of different lengths and resolutions.
+* **Number of velocities:** the number of velocity values you want represents. For instance if you set this parameter to 32, the velocities of the notes will be quantized into 32 velocity values from 0 to 127.
+* **Additional tokens:** specify which additional tokens bringing information like chords should be included. Note that each encoding is compatible with different additional tokens.
+
+Examples of these parameters can be found in the [constants](./miditok/constants.py) file.
+
+## Examples
 
 ```python
 from miditok import REMIEncoding

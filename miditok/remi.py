@@ -121,7 +121,7 @@ class REMIEncoding(MIDIEncoding):
         """
         ticks_per_frame = time_division // max(self.beat_res.values())
 
-        name = 'Drums' if program[1] else MIDI_INSTRUMENTS[program]['name']
+        name = 'Drums' if program[1] else MIDI_INSTRUMENTS[program[0]]['name']
         instrument = Instrument(program[0], is_drum=program[1], name=name)
         current_tick = 0
         current_bar = -1

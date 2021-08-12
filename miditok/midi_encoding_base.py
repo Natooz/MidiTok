@@ -2,6 +2,7 @@
 TODO MuMIDI ? https://arxiv.org/abs/2008.07703
 TODO Octotuple ? : https://arxiv.org/abs/2106.05630
 TODO Tempo messages ?
+TODO Control change messages (sustain, modulation, pitch bend)
 
 """
 

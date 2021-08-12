@@ -117,7 +117,7 @@ class MIDILikeEncoding(MIDIEncoding):
         """
         max_duration = (self.durations[-1][0] + self.durations[-1][1]) * time_division
 
-        name = 'Drums' if program[1] else MIDI_INSTRUMENTS[program]['name']
+        name = 'Drums' if program[1] else MIDI_INSTRUMENTS[program[0]]['name']
         instrument = Instrument(program[0], is_drum=program[1], name=name)
         current_tick = 0
 

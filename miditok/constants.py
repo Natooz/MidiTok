@@ -12,7 +12,7 @@ ADDITIONAL_TOKENS = {'Chord': True,
                      'Tempo': False,
                      'Ignore': True}  # for CP words only
 
-# Used when preparing data
+# Used when creating the event <--> token dictionary
 PROGRAM_TOKENS = True  # will include tokens specifying the instrument of each sequence at its beginning
 
 # Defaults when writing new MIDI files, 384 and 480 are convenient as divisible by 4, 8, 12, 16, 24, 32
