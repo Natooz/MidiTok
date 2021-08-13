@@ -17,19 +17,27 @@ MidiTok uses MIDIToolkit, which itself uses Mido to read and write MIDI files.
 
 Strategy used in the first symbolic music generative transformers and RNN / LSTM models. It consists of encoding the MIDI messages (Note On, Note Off, Velocity and Time Shift) into tokens as represented in a pure "MIDI way".
 
+![MIDI-Like figure](https://github.com/Natooz/MidiTok/blob/assets/assets/midi_like.png "Three notes played together with different durations")
+
 ### REMI
 
 Proposed in the [Pop Music Transformer](https://arxiv.org/abs/2002.00212), it is what we would call a "position-based" representation. The time is represented with "Bar" and "Position" tokens that indicate respectively when a new bar is beginning, and the current position within a bar.
+
+![REMI figure](https://github.com/Natooz/MidiTok/blob/assets/assets/remi.png "Time is tracked with Bar and position tokens")
 
 ### Compound Word
 
 Similar to the REMI encoding, the main difference here is that token types of a same "event" are merged together.
 A note will be the association of Pitch + Velocity + Duration tokens for instance.
 
+![Compound Word figure](https://github.com/Natooz/MidiTok/blob/assets/assets/cp_word.png "Tokens of the same family are grouped together")
+
 ### Structured
 
 Presented with the [Piano Inpainting Application](https://arxiv.org/abs/2107.05944), it is similar to the MIDI-Like encoding but with Duration tokens instead Note-Off.
 The main advantage of this encoding is the consistent token type transitions it imposes, which can greatly speed up training. The structure is as: Pitch -> Velocity -> Duration -> Time Shift -> ... (pitch again)
+
+![Structured figure](https://github.com/Natooz/MidiTok/blob/assets/assets/structured.png "The token types always follow the same transition pattern")
 
 ### Create your own
 
