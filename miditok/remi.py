@@ -8,11 +8,11 @@ from typing import List, Tuple, Dict, Optional
 import numpy as np
 from miditoolkit import Instrument, Note
 
-from .midi_encoding_base import MIDIEncoding, Event, detect_chords
+from .midi_tokenizer_base import MIDITokenizer, Event, detect_chords
 from .constants import *
 
 
-class REMIEncoding(MIDIEncoding):
+class REMIEncoding(MIDITokenizer):
     """ MIDI encoding method, similar to the REMI introduced in the Pop Music Transformer paper
     https://arxiv.org/abs/2002.00212
 

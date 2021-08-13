@@ -15,11 +15,21 @@ NOTE: encoded tracks has to be compared with the quantized original track.
 
 """
 
+import time
 from pathlib import Path, PurePath
 from typing import Union
 
-from miditok import REMIEncoding, CPWordEncoding, MIDIEncoding
+from miditok import REMIEncoding, CPWordEncoding, MIDITokenizer
 from miditoolkit import MidiFile
+
+
+# Special beat res for test, up to 16 beats so the duration and time-shift values are
+# long enough for MIDI-Like and Structured encodings, and with a single beat resolution
+BEAT_RES_TEST = {(0, 16): 8}
+ADDITIONAL_TOKENS_TEST = {'Chord': False,
+                          'Empty': False,
+                          'Tempo': False,
+                          'Ignore': True}  # for CP words only
 
 
 def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './Maestro_MIDIs',
@@ -32,10 +42,11 @@ def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = '.
     files = list(Path(data_path).glob('**/*.mid'))
 
     # Creates tokenizers
-    cp_enc = CPWordEncoding()
-    remi_enc = REMIEncoding()
+    cp_enc = CPWordEncoding(beat_res=BEAT_RES_TEST, additional_tokens=ADDITIONAL_TOKENS_TEST)
+    remi_enc = REMIEncoding(beat_res=BEAT_RES_TEST, additional_tokens=ADDITIONAL_TOKENS_TEST)
 
     for i, file_path in enumerate(files):
+        t0 = time.time()
         print(f'Converting MIDI {i} / {len(files)} - {file_path}')
 
         # Reads the MIDI
@@ -44,6 +55,9 @@ def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = '.
         # Convert to tokens and back to MIDI
         midi_cp = midi_to_tokens_to_midi(cp_enc, midi)
         midi_remi = midi_to_tokens_to_midi(remi_enc, midi)
+
+        t1 = time.time()
+        print(f'Took {t1 - t0} seconds')
 
         if saving_midi:
             # Build the final MIDI file
@@ -60,7 +74,7 @@ def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = '.
             final_midi.dump(PurePath('tests', 'test_results', file_path.name))
 
 
-def midi_to_tokens_to_midi(tokenizer: MIDIEncoding, midi: MidiFile) -> MidiFile:
+def midi_to_tokens_to_midi(tokenizer: MIDITokenizer, midi: MidiFile) -> MidiFile:
     """ Converts a MIDI into tokens, and convert them back to MIDI
     Useful to see if the conversion works well in both ways
 

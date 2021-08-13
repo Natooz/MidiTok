@@ -10,6 +10,7 @@ NOTE: encoded tracks has to be compared with the quantized original track.
 
 """
 
+import time
 from copy import deepcopy
 from pathlib import Path, PurePath
 from typing import Union
@@ -21,6 +22,10 @@ from miditoolkit import MidiFile
 # Special beat res for test, up to 16 beats so the duration and time-shift values are
 # long enough for MIDI-Like and Structured encodings, and with a single beat resolution
 BEAT_RES_TEST = {(0, 16): 8}
+ADDITIONAL_TOKENS_TEST = {'Chord': False,
+                          'Empty': False,
+                          'Tempo': False,
+                          'Ignore': True}  # for CP words only
 
 
 def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './Maestro_MIDIs',
@@ -33,12 +38,13 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
     files = list(Path(data_path).glob('**/*.mid'))
 
     # Creates tokenizers
-    cp_enc = CPWordEncoding(beat_res=BEAT_RES_TEST)
-    remi_enc = REMIEncoding(beat_res=BEAT_RES_TEST)
-    struct_enc = StructuredEncoding(beat_res=BEAT_RES_TEST)
-    midilike_enc = MIDILikeEncoding(beat_res=BEAT_RES_TEST)
+    cp_enc = CPWordEncoding(beat_res=BEAT_RES_TEST, additional_tokens=ADDITIONAL_TOKENS_TEST)
+    remi_enc = REMIEncoding(beat_res=BEAT_RES_TEST, additional_tokens=ADDITIONAL_TOKENS_TEST)
+    struct_enc = StructuredEncoding(beat_res=BEAT_RES_TEST, additional_tokens=ADDITIONAL_TOKENS_TEST)
+    midilike_enc = MIDILikeEncoding(beat_res=BEAT_RES_TEST, additional_tokens=ADDITIONAL_TOKENS_TEST)
 
     for i, file_path in enumerate(files):
+        t0 = time.time()
         print(f'Converting MIDI {i} / {len(files)} - {file_path}')
 
         # Reads the midi
@@ -56,6 +62,9 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
         track_remi = remi_enc.tokens_to_track(tokens_remi[0], midi.ticks_per_beat)
         track_struct = struct_enc.tokens_to_track(tokens_struct[0], midi.ticks_per_beat)
         track_midilike = midilike_enc.tokens_to_track(tokens_midilike[0], midi.ticks_per_beat)
+
+        t1 = time.time()
+        print(f'Took {t1 - t0} seconds')
 
         if saving_midi:
             track_cp.name = 'encoded with cp word'

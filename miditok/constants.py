@@ -9,7 +9,7 @@ BEAT_RES = {(0, 4): 8, (4, 12): 4}  # samples per beat
 NB_VELOCITIES = 32  # nb of velocity bins, velocities values from 0 to 127 will be quantized
 ADDITIONAL_TOKENS = {'Chord': True,
                      'Empty': True,
-                     'Tempo': False,
+                     'Tempo': False,  # Unused for now (not implemented)
                      'Ignore': True}  # for CP words only
 
 # Used when creating the event <--> token dictionary
@@ -18,22 +18,22 @@ PROGRAM_TOKENS = True  # will include tokens specifying the instrument of each s
 # Defaults when writing new MIDI files, 384 and 480 are convenient as divisible by 4, 8, 12, 16, 24, 32
 TIME_DIVISION = 384
 
-CHORD_MAPS = {'min': [0, 3, 7],
-              'maj': [0, 4, 7],
-              'dim': [0, 3, 6],
-              'aug': [0, 4, 8],
-              'sus2': [0, 2, 7],
-              'sus4': [0, 5, 7],
+CHORD_MAPS = {'min': (0, 3, 7),
+              'maj': (0, 4, 7),
+              'dim': (0, 3, 6),
+              'aug': (0, 4, 8),
+              'sus2': (0, 2, 7),
+              'sus4': (0, 5, 7),
 
-              '7dom': [0, 4, 7, 10],
-              '7min': [0, 3, 7, 10],
-              '7maj': [0, 4, 7, 11],
-              '7halfdim': [0, 3, 6, 10],
-              '7dim': [0, 3, 6, 9],
-              '7aug': [0, 4, 8, 11],
+              '7dom': (0, 4, 7, 10),
+              '7min': (0, 3, 7, 10),
+              '7maj': (0, 4, 7, 11),
+              '7halfdim': (0, 3, 6, 10),
+              '7dim': (0, 3, 6, 9),
+              '7aug': (0, 4, 8, 11),
 
-              '9maj': [0, 4, 7, 10, 14],
-              '9min': [0, 4, 7, 10, 13]}
+              '9maj': (0, 4, 7, 10, 14),
+              '9min': (0, 4, 7, 10, 13)}
 
 
 # http://newt.phys.unsw.edu.au/jw/notes.html

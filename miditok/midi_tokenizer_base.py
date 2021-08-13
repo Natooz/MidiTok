@@ -31,7 +31,7 @@ class Event:
         return f'Event(name={self.name}, time={self.time}, value={self.value}, text={self.text})'
 
 
-class MIDIEncoding:
+class MIDITokenizer:
     """ MIDI encoding base class, containing common parameters to all encodings
     and common methods.
 
@@ -76,13 +76,23 @@ class MIDIEncoding:
 
         tokens = []
         for track in midi.instruments:
-            quantize_note_times(track.notes, midi.ticks_per_beat, max(self.beat_res.values()))  # adjusts notes timings
-            track_events = self.track_to_events(track.notes, midi.ticks_per_beat, track.is_drum)  # get distinct events
-            track_tokens = self.events_to_tokens(track_events)
-            tokens.append(track_tokens)
+            tokens.append(self.track_to_tokens(track, midi.ticks_per_beat))
 
         track_info = [(int(track.program), track.is_drum) for track in midi.instruments]
         return tokens, track_info
+
+    def track_to_tokens(self, track: Instrument, time_division: int) -> List[int]:
+        """ Converts a track (miditoolkit.Instrument object) into a sequence of tokens
+
+        :param track: MIDI track to convert
+        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
+        :return: sequence of corresponding tokens
+        """
+        quantize_note_times(track.notes, time_division, max(self.beat_res.values()))  # adjusts notes timings
+        track.notes.sort(key=lambda x: (x.start, x.pitch))  # sort notes
+        remove_duplicated_notes(track.notes)  # remove possible duplicated notes
+        events = self.track_to_events(track.notes, time_division, track.is_drum)  # get distinct events
+        return self.events_to_tokens(events)
 
     def events_to_tokens(self, events: List[Event]) -> List[int]:
         """ Converts a list of Event objects into a list of tokens
@@ -256,37 +266,96 @@ class MIDIEncoding:
                        'additional_tokens': self.additional_tokens}, outfile)
 
 
-def quantize_note_times(notes: List[Note], time_division: int, beat_res: int) -> List[Note]:
+def quantize_note_times(notes: List[Note], time_division: int, beat_res: int):
     """ Quantize the notes items start and end values.
     It shifts the notes so they start at times that match the quantization (e.g. 16 frames per bar)
 
     :param notes: notes to quantize
     :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
     :param beat_res: number of frames (time steps, or positions) per beat
-    :return: quantized note items
     """
     ticks = int(time_division / beat_res)
-    quantized_ticks = np.arange(0, max(n.end for n in notes) + 2 * ticks, ticks, dtype=int)
+    quantized_ticks = np.arange(0, max([n.end for n in notes]) + 2 * ticks, ticks, dtype=int)
     for i, note in enumerate(notes):  # items are notes
-        note.start = quantized_ticks[np.argmin(abs(quantized_ticks - note.start))]
-        note.end = quantized_ticks[np.argmin(abs(quantized_ticks - note.end))]
+        note.start = quantized_ticks[np.argmin(np.abs(quantized_ticks - note.start))]
+        note.end = quantized_ticks[np.argmin(np.abs(quantized_ticks - note.end))]
 
         if note.start == note.end:  # if this happens to often, consider using a higher beat resolution
-            note.end += ticks  # like 8 frames per beat or 24 frames per bar (default is 4/beat == 16/bar)
+            note.end += ticks  # like 8 frames per beat or 24 frames per bar
+
+
+def remove_duplicated_notes(notes: List[Note]):
+    """ Remove possible duplicated notes, i.e. with the same pitch, starting and ending times.
+    Before running this function make sure the notes has been sorted by start and pitch:
     notes.sort(key=lambda x: (x.start, x.pitch))
+
+    :param notes: notes to analyse
+    """
     for i in range(len(notes) - 1, 0, -1):  # removing possible duplicated notes
         if notes[i].pitch == notes[i - 1].pitch and notes[i].start == notes[i - 1].start and \
                 notes[i].end == notes[i - 1].end:
             del notes[i]
-    return notes
 
 
-def detect_chords(notes: List[Note], time_division) -> List[Event]:
-    """
+def detect_chords(notes: List[Note], time_division: int) -> List[Event]:
+    """ Chord detection method.
+    NOTE: on very large tracks with high note density this method can be very slow !
+    If you plan to use it with the Maestro or GiantMIDI datasets, it can take up to
+    hundreds of seconds per MIDI depending on your cpu.
+    One time step at a time, it will analyse the notes played together
+    and detect possible chords.
 
-    :param notes:
+    :param notes: notes to analyse
     :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
-    :return:
+    :return: the detected chords as Event objects
+    """
+    tuples = []
+    for note in notes:
+        tuples.append((note.pitch, int(note.start), int(note.end)))
+    notes = np.asarray(tuples)
+
+    count = 0
+    chords = []
+    while count < len(notes):
+        # Gather the notes around the same time step
+        onset_notes = notes[count:]
+        onset_notes = onset_notes[np.where(onset_notes[:, 1] <= notes[count][1] + time_division / 4)]
+
+        # If it is ambiguous, e.g. the notes lengths are too different
+        if np.any(np.abs(onset_notes[:, 2] - onset_notes[0, 2]) > time_division / 2):
+            count += len(onset_notes)
+            continue
+
+        # Selects the possible chords notes
+        if notes[count][2] - notes[count][1] <= time_division / 2:
+            onset_notes = onset_notes[np.where(onset_notes[:, 1] == onset_notes[0][1])]
+        chord = onset_notes[np.where(onset_notes[:, 2] - onset_notes[0, 2] <= time_division / 2)]
+
+        # Creates the "chord map" and see if it has a "known" quality, append a chord event if it is valid
+        chord_map = (chord[:, 0] - chord[0, 0]).tolist()
+        if 3 <= len(chord_map) <= 5 and chord_map[-1] <= 24:  # max interval between the root and highest degree
+            chord_quality = len(chord)
+            for quality, known_chord in CHORD_MAPS.items():
+                if known_chord == chord_map:
+                    chord_quality = quality
+                    break
+            chords.append((chord_quality, min(chord[:, 1]), chord_map))
+        count += len(onset_notes)  # Move to the next notes
+
+    events = []
+    for chord in chords:
+        events.append(Event('Chord', chord[1], chord[0], chord[2]))
+    return events
+
+
+def _detect_chords_python(notes: List[Note], time_division: int) -> List[Event]:
+    """ DEPRECIATED
+    Old chord detection method, equivalent to detect_chords but 100% python
+    The code is more elegant but slower
+
+    :param notes: notes to analyse
+    :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
+    :return: the detected chords as Event objects
     """
     count = 0
     chords = []

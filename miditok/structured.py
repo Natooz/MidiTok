@@ -8,11 +8,11 @@ from typing import List, Tuple, Dict, Optional
 import numpy as np
 from miditoolkit import Instrument, Note
 
-from .midi_encoding_base import MIDIEncoding, Event, detect_chords
+from .midi_tokenizer_base import MIDITokenizer, Event, detect_chords
 from .constants import *
 
 
-class StructuredEncoding(MIDIEncoding):
+class StructuredEncoding(MIDITokenizer):
     """ Structured MIDI encoding method as using in the Piano Inpainting Application
     https://arxiv.org/abs/2107.05944
     The token types follows the specific pattern:

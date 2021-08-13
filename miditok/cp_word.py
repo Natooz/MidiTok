@@ -8,11 +8,11 @@ from typing import List, Tuple, Dict, Optional
 import numpy as np
 from miditoolkit import Instrument, Note
 
-from .midi_encoding_base import MIDIEncoding, Event, detect_chords
+from .midi_tokenizer_base import MIDITokenizer, Event, detect_chords
 from .constants import *
 
 
-class CPWordEncoding(MIDIEncoding):
+class CPWordEncoding(MIDITokenizer):
     """ MIDI encoding method, similar to Compound Word
     https://arxiv.org/abs/2101.02402
     In this implementation the "Ignore" tokens are optional.
@@ -346,7 +346,10 @@ class CPWordEncoding(MIDIEncoding):
             count += 4
             if self.additional_tokens['Chord'] or self.additional_tokens['Empty']:
                 event_to_token['ChordEmpty_Ignore'] = count
-                token_type_indices['ChordEmpty'] += [count]
+                try:
+                    token_type_indices['ChordEmpty'] += [count]
+                except KeyError as _:
+                    token_type_indices['ChordEmpty'] = [count]
                 count += 1
 
             token_type_indices['Empty'] = [count]
