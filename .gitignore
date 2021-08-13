@@ -2,6 +2,8 @@
 **/*.DS_STORE
 # Python precompiled files
 *.pyc
+# Builds dir
+dist/
 # PyCharm config files
 .idea/
 # PyCharm Virtual Environment
