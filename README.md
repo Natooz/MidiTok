@@ -1,6 +1,6 @@
 # MidiTok
 
-MidiTok is a package for MIDI encoding / tokenization for deep neural networks. It can process MIDI files and "tokenize" them as for text in the NLP field, to use them with Transformers or RNNs.
+MidiTok is a package for MIDI encoding / tokenization for deep neural networks. It "tokenize" MIDI files as for text in the NLP field, to use them with Transformers or RNNs.
 
 MidiTok features most known MIDI encoding strategies, and is built around the idea that they all share common parameters and methods.
 
@@ -21,27 +21,43 @@ Strategy used in the first symbolic music generative transformers and RNN / LSTM
 
 ### REMI
 
-Proposed in the [Pop Music Transformer](https://arxiv.org/abs/2002.00212), it is what we would call a "position-based" representation. The time is represented with "Bar" and "Position" tokens that indicate respectively when a new bar is beginning, and the current position within a bar.
+Proposed in the [Pop Music Transformer](https://arxiv.org/abs/2002.00212), it is what we would call a "position-based" representation. The time is represented with "_Bar_" and "_Position_" tokens that indicate respectively when a new bar is beginning, and the current position within a bar.
 
 ![REMI figure](https://github.com/Natooz/MidiTok/blob/assets/assets/remi.png "Time is tracked with Bar and position tokens")
 
 ### Compound Word
 
-Similar to the REMI encoding, the main difference here is that token types of a same "event" are merged together.
-A note will be the association of Pitch + Velocity + Duration tokens for instance.
+Introduced with the [Compound Word Transformer](https://arxiv.org/abs/2101.02402) this representation is similar to the REMI encoding. The key difference is that tokens of different types of a same "event" are combined and processed at the same time by the model.
+_Pitch_, _Velocity_ and _Durations_ tokens of a same note will be combined for instance. The greatest benefit of this encoding strategy is the **reduced sequence lengths** that it creates, which means less time and memory consumption as transformers (with softmax attention) have a quadratic complexity.
+
+You can combine them in your model the way you want. CP Word authors concatenated each embeddings and projected the sequence with a projection matrix, resulting in a _d_-dimensional vector (_d_ being the model size).
+
+At decoding, the easiest way to predict multiple tokens (employed by the original authors) is to project the output vector of your model with several projection matrices, one for each token type.
 
 ![Compound Word figure](https://github.com/Natooz/MidiTok/blob/assets/assets/cp_word.png "Tokens of the same family are grouped together")
 
 ### Structured
 
-Presented with the [Piano Inpainting Application](https://arxiv.org/abs/2107.05944), it is similar to the MIDI-Like encoding but with Duration tokens instead Note-Off.
-The main advantage of this encoding is the consistent token type transitions it imposes, which can greatly speed up training. The structure is as: Pitch -> Velocity -> Duration -> Time Shift -> ... (pitch again)
+Presented with the [Piano Inpainting Application](https://arxiv.org/abs/2107.05944), it is similar to the MIDI-Like encoding but with _Duration_ tokens instead Note-Off.
+The main advantage of this encoding is the consistent token type transitions it imposes, which can greatly speed up training. The structure is as: _Pitch_ -> _Velocity_ -> _Duration_ -> _Time Shift_ -> ... (pitch again)
 
 ![Structured figure](https://github.com/Natooz/MidiTok/blob/assets/assets/structured.png "The token types always follow the same transition pattern")
 
+### MuMIDI
+
+Presented with the [PopMAG](https://arxiv.org/abs/2008.07703) model, this representation is mostly suited for multitrack tasks. The time is based on _Position_ and _Bar_ tokens as REMI and Compound Word.
+The key idea of MuMIDI is to represent every track in a single sequence. At each time step, "_Track_" tokens preceding note tokens indicate from which track they are.
+MuMIDI also include a "built-in" positional encoding mechanism. At each time step, embeddings of the current bar and current position are merged with the token. For a note, the _Pitch_, _Velocity_ and _Duration_ embeddings are also merged together.
+
+NOTE: in the original MuMIDI _Chord_ tokens are placed before Track tokens. We decided in this implementation to put them after as chords are produced by one instrument, and several instrument can produce more than one chord at a time step.
+
+NOTE 2: this implementation uses _Track_ tokens defined by their MIDI programs. Hence, two tracks with the same program will be treated as being the same.
+
+![MuMIDI figure](https://github.com/Natooz/MidiTok/blob/assets/assets/mumidi.png "Sequence with notes from two different tracks, with a bar and position embeddings")
+
 ### Create your own
 
-You can easily create your own encoding strategy and benefit from the MidiTok framework. Just create a class inheriting from the [MIDITokenizer](miditok/midi_tokenizer_base.py#L34) base class, and override the ```events_to_tokens```, ```tokens_to_event``` and ```create_token_dicts``` methods with your tokenization strategy.
+You can easily create your own encoding strategy and benefit from the MidiTok framework. Just create a class inheriting from the [MIDITokenizer](miditok/midi_tokenizer_base.py#L34) base class, and override the ```events_to_tokens```, ```tokens_to_event``` and ```create_vocabulary``` methods with your tokenization strategy.
 
 ## Features
 
@@ -144,6 +160,19 @@ Contributions are gratefully welcomed, feel free to send a PR if you want to add
 ## Citations
 
 ```bibtex
+@article{midilike2018,
+    title={This time with feeling: Learning expressive musical performance},
+    author={Oore, Sageev and Simon, Ian and Dieleman, Sander and Eck, Douglas and Simonyan, Karen},
+    journal={Neural Computing and Applications},
+    volume={32},
+    number={4},
+    pages={955--967},
+    year={2018},
+    publisher={Springer}
+}
+```
+
+```bibtex
 @inproceedings{remi2020,
     title={Pop Music Transformer: Beat-based modeling and generation of expressive Pop piano compositions},
     author={Huang, Yu-Siang and Yang, Yi-Hsuan},
@@ -162,19 +191,6 @@ Contributions are gratefully welcomed, feel free to send a PR if you want to add
 ```
 
 ```bibtex
-@article{midilike2018,
-    title={This time with feeling: Learning expressive musical performance},
-    author={Oore, Sageev and Simon, Ian and Dieleman, Sander and Eck, Douglas and Simonyan, Karen},
-    journal={Neural Computing and Applications},
-    volume={32},
-    number={4},
-    pages={955--967},
-    year={2018},
-    publisher={Springer}
-}
-```
-
-```bibtex
 @misc{structured2021,
     title={The Piano Inpainting Application},
     author={Gaëtan Hadjeres and Léopold Crestel},
@@ -182,6 +198,17 @@ Contributions are gratefully welcomed, feel free to send a PR if you want to add
     eprint={2107.05944},
     archivePrefix={arXiv},
     primaryClass={cs.SD}
+}
+```
+
+```bibtex
+@inproceedings{mumidi2020,
+    author = {Ren, Yi and He, Jinzheng and Tan, Xu and Qin, Tao and Zhao, Zhou and Liu, Tie-Yan},
+    title = {PopMAG: Pop Music Accompaniment Generation},
+    year = {2020},
+    publisher = {Association for Computing Machinery},
+    booktitle = {Proceedings of the 28th ACM International Conference on Multimedia},
+    pages = {1198–1206}
 }
 ```
 
