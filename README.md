@@ -49,11 +49,27 @@ Presented with the [PopMAG](https://arxiv.org/abs/2008.07703) model, this repres
 The key idea of MuMIDI is to represent every track in a single sequence. At each time step, "_Track_" tokens preceding note tokens indicate from which track they are.
 MuMIDI also include a "built-in" positional encoding mechanism. At each time step, embeddings of the current bar and current position are merged with the token. For a note, the _Pitch_, _Velocity_ and _Duration_ embeddings are also merged together.
 
-NOTE: in the original MuMIDI _Chord_ tokens are placed before Track tokens. We decided in this implementation to put them after as chords are produced by one instrument, and several instrument can produce more than one chord at a time step.
-
-NOTE 2: this implementation uses _Track_ tokens defined by their MIDI programs. Hence, two tracks with the same program will be treated as being the same.
+NOTES:
+* In this implementation, the tokens are first sorted by time, then track, then pitch values.
+* In the original MuMIDI _Chord_ tokens are placed before Track tokens. We decided in this implementation to put them after as chords are produced by one instrument, and several instrument can produce more than one chord at a time step.
+* This implementation uses _Track_ tokens defined by their MIDI programs. Hence, two tracks with the same program will be treated as being the same.
+* As in the original MuMIDI implementation, this on distinguishes pitch tokens of drums from pitch tokens of other instruments. More details in the [code](miditok/mumidi.py).
 
 ![MuMIDI figure](https://github.com/Natooz/MidiTok/blob/assets/assets/mumidi.png "Sequence with notes from two different tracks, with a bar and position embeddings")
+
+### Octuple
+
+Introduced with [Symbolic Music Understanding with Large-Scale Pre-Training](https://arxiv.org/abs/2106.05630), it share the same purpose of MuMIDI. Each note of each track is the combination of multiple embeddings: _Pitch_, _Velocity_, _Duration_, _Track_, current _Bar_, current _Position_ and additional tokens.
+The main benefit is the reduction of the sequence lengths, and its simple structure easy to decode.
+The Bar and Position embeddings acts as a positional encoding, but the authors of the original paper still applied a token-wise positional encoding.
+In this implementation, the tokens are first sorted by time, then track, then pitch values.
+
+NOTES: 
+* In this implementation, the tokens are first sorted by time, then track, then pitch values.
+* This implementation uses _Track_ tokens defined by their MIDI programs. Hence, two tracks with the same program will be treated as being the same.
+* Time signature tokens are not implemented in MidiTok 
+
+![Octuple figure](https://github.com/Natooz/MidiTok/blob/assets/assets/octuple.png "Sequence with notes from two different tracks, with a bar and position embeddings")
 
 ### Create your own
 
@@ -78,6 +94,7 @@ MidiTok offers the possibility to insert additional tokens in the encodings.
 These tokens bring additional information about the structure and content of MIDI tracks to explicitly use them to train a neural network.
 
 TODO chart encoding / token compatibility
+
 TODO Chord detection paragraph
 
 ## Examples
@@ -209,6 +226,17 @@ Contributions are gratefully welcomed, feel free to send a PR if you want to add
     publisher = {Association for Computing Machinery},
     booktitle = {Proceedings of the 28th ACM International Conference on Multimedia},
     pages = {1198–1206}
+}
+```
+
+```bibtex
+@misc{zeng2021musicbert,
+    title={MusicBERT: Symbolic Music Understanding with Large-Scale Pre-Training}, 
+    author={Mingliang Zeng and Xu Tan and Rui Wang and Zeqian Ju and Tao Qin and Tie-Yan Liu},
+    year={2021},
+    eprint={2106.05630},
+    archivePrefix={arXiv},
+    primaryClass={cs.SD}
 }
 ```
 

@@ -204,9 +204,7 @@ class REMIEncoding(MIDITokenizer):
             for program in range(-1, 128):  # -1 is drums
                 event_to_token[f'Program_{program}'] = count
                 count += 1
-        """count += 1
-        token_type_indices['Empty'] = [count]  # Empty token, token of the seq to be filled by the decoder
-        event_to_token['Empty_None'] = count"""
+
         token_to_event = {v: k for k, v in event_to_token.items()}  # inversion
         return event_to_token, token_to_event, token_type_indices
 

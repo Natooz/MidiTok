@@ -1,7 +1,8 @@
-""" MuMIDI encoding method, as introduced in PopMag
-https://arxiv.org/abs/2008.07703
+""" Octuple encoding method, as introduced in MusicBERT
+https://arxiv.org/abs/2106.05630
 
 """
+# TODO Time signature
 
 from math import ceil
 import json
@@ -11,21 +12,15 @@ from typing import List, Tuple, Dict, Optional, Union
 import numpy as np
 from miditoolkit import Instrument, Note, MidiFile
 
-from .midi_tokenizer_base import MIDITokenizer, Event, detect_chords, quantize_note_times, remove_duplicated_notes
+from .midi_tokenizer_base import MIDITokenizer, Event, quantize_note_times, remove_duplicated_notes
 from .constants import *
 
 
-# recommended range from the GM2 specs
-# note: the "Applause" at pitch 88 of the orchestra drum set is ignored, increase to 89 if you need it
-DRUM_PITCH_RANGE = range(27, 88)
-
-
-class MuMIDIEncoding(MIDITokenizer):
-    """ MuMIDI encoding method, as introduced in PopMag
-    https://arxiv.org/abs/2008.07703
+class OctupleEncoding(MIDITokenizer):
+    """ Octuple encoding method, as introduced in MusicBERT
+    https://arxiv.org/abs/2106.05630
 
     :param pitch_range: range of used MIDI pitches
-    :param drum_pitch_range: range of used MIDI pitches for drums exclusively
     :param beat_res: beat resolutions, with the form:
             {(beat_x1, beat_x2): beat_res_1, (beat_x2, beat_x3): beat_res_2, ...}
             The keys of the dict are tuples indicating a range of beats, ex 0 to 3 for the first bar
@@ -36,12 +31,12 @@ class MuMIDIEncoding(MIDITokenizer):
             in the case of multitrack generation for instance
     :param params: can be a path to the parameter (json encoded) file or a dictionary
     """
-    def __init__(self, pitch_range: range = PITCH_RANGE, drum_pitch_range: range = DRUM_PITCH_RANGE,
-                 beat_res: Dict[Tuple[int, int], int] = BEAT_RES, nb_velocities: int = NB_VELOCITIES,
-                 additional_tokens: Dict[str, bool] = ADDITIONAL_TOKENS, program_tokens: bool = PROGRAM_TOKENS,
-                 params=None):
+    def __init__(self, pitch_range: range = PITCH_RANGE, beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
+                 nb_velocities: int = NB_VELOCITIES, additional_tokens: Dict[str, bool] = ADDITIONAL_TOKENS,
+                 program_tokens: bool = PROGRAM_TOKENS, params=None):
         additional_tokens['Ignore'] = False  # Incompatible additional tokens
-        self.drum_pitch_range = drum_pitch_range
+        additional_tokens['Chord'] = False
+        additional_tokens['Empty'] = False  # could be done with special tokens for pitch/velocity/duration
         # used in place of positional encoding
         self.max_bar_embedding = 60  # this attribute might increase during encoding
         super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, program_tokens, params)
@@ -56,7 +51,6 @@ class MuMIDIEncoding(MIDITokenizer):
         Path(out_dir).mkdir(parents=True, exist_ok=True)
         with open(PurePath(out_dir, 'config').with_suffix(".txt"), 'w') as outfile:
             json.dump({'pitch_range': (self.pitch_range.start, self.pitch_range.stop),
-                       'drum_pitch_range': (self.drum_pitch_range.start, self.drum_pitch_range.stop),
                        'beat_res': self.beat_res, 'nb_velocities': len(self.velocity_bins),
                        'additional_tokens': self.additional_tokens, 'max_bar_embedding': self.max_bar_embedding},
                       outfile)
@@ -105,30 +99,13 @@ class MuMIDIEncoding(MIDITokenizer):
         current_tick = -1
         current_bar = -1
         current_pos = -1
-        current_track = -2  # doesnt exist
         for note_event in note_events:
             # Positions and bars
             if note_event[0].time != current_tick:
                 pos_index = int((note_event[0].time % ticks_per_bar) / ticks_per_frame)
                 current_tick = note_event[0].time
+                current_bar = current_tick // ticks_per_bar
                 current_pos = pos_index
-                current_track = -2  # reset
-                if current_bar < current_tick // ticks_per_bar:
-                    nb_new_bars = current_tick // ticks_per_bar - current_bar
-                    for i in range(nb_new_bars):
-                        tokens.append([self.event2token['Bar_None'],
-                                       self.event2token['Position_Ignore'],
-                                       self.event2token[f'Bar_{current_bar + i + 1}']])
-                    current_bar += nb_new_bars
-                tokens.append([self.event2token['Position_None'],
-                               self.event2token[f'Position_{current_pos}'],
-                               self.event2token[f'Bar_{current_bar}']])
-            # Tracks (programs)
-            if note_event[0].text != current_track:
-                current_track = note_event[0].text
-                tokens.append([self.event2token[f'Program_{current_track}'],
-                               self.event2token[f'Position_{current_pos}'],
-                               self.event2token[f'Bar_{current_bar}']])
 
             # Adding bar and position tokens to notes for positional encoding
             note_event[0] = self.event2token[f'{note_event[0].name}_{note_event[0].value}']
@@ -157,23 +134,11 @@ class MuMIDIEncoding(MIDITokenizer):
             velocity_index = (np.abs(self.velocity_bins - note.velocity)).argmin()
             duration = note.end - note.start
             dur_index = np.argmin(np.abs([ticks - duration for ticks in self.durations_ticks[time_division]]))
-            if not track.is_drum:
-                events.append([Event(name='Pitch', time=note.start, value=note.pitch, text=track.program),
-                               self.event2token[f'Velocity_{velocity_index}'],
-                               self.event2token[f'Duration_{".".join(map(str, self.durations[dur_index]))}']])
-            else:
-                events.append([Event(name='DrumPitch', time=note.start, value=note.pitch, text=-1),
-                               self.event2token[f'Velocity_{velocity_index}'],
-                               self.event2token[f'Duration_{".".join(map(str, self.durations[dur_index]))}']])
 
-        # Adds chord events if specified
-        if self.additional_tokens['Chord'] and not track.is_drum:
-            chords = detect_chords(track.notes, time_division)
-            unsqueezed = []
-            for c in range(len(chords)):
-                chords[c].text = track.program
-                unsqueezed.append([chords[c]])
-            events = unsqueezed + events  # chords at the beginning to keep the good order during sorting
+            events.append([Event(name='Pitch', time=note.start, value=note.pitch, text=track.program),
+                           self.event2token[f'Velocity_{velocity_index}'],
+                           self.event2token[f'Duration_{".".join(map(str, self.durations[dur_index]))}'],
+                           self.event2token[f'Program_{-1 if track.is_drum else track.program}']])
 
         return events
 
@@ -194,33 +159,29 @@ class MuMIDIEncoding(MIDITokenizer):
         midi = MidiFile(ticks_per_beat=time_division)
         ticks_per_frame = time_division // max(self.beat_res.values())
 
-        tracks = {}
-        current_tick = 0
-        current_bar = -1
-        current_track = -2
+        tracks = dict([(n, []) for n in range(-1, 128)])
         for time_step in tokens:
             events = self.tokens_to_events(time_step)
-            if events[0].name == 'Bar':
-                current_bar += 1
-                current_tick = current_bar * time_division * 4
-            elif events[0].name == 'Position':
-                current_tick = current_bar * time_division * 4 + int(events[1].value) * ticks_per_frame
-            elif events[0].name == 'Program':
-                current_track = events[0].value
-                try:
-                    _ = tracks[current_track]
-                except KeyError:
-                    tracks[current_track] = []
-            elif events[0].name == 'Pitch' or events[0].name == 'DrumPitch':
-                pitch = int(events[0].value)
-                vel = int(self.velocity_bins[int(events[1].value)])
-                beat, pos, res = map(int, events[2].value.split('.'))
-                duration = (beat * res + pos) * time_division // res
 
-                tracks[current_track].append(Note(vel, pitch, current_tick, current_tick + duration))
+            # Note attributes
+            pitch = int(events[0].value)
+            vel = int(self.velocity_bins[int(events[1].value)])
+            beat, pos, res = map(int, events[2].value.split('.'))
+            duration = (beat * res + pos) * time_division // res
+
+            # Time and track values
+            program = int(events[3].value)
+            current_pos = int(events[4].value)
+            current_bar = int(events[5].value)
+            current_tick = current_bar * time_division * 4 + current_pos * ticks_per_frame
+
+            # Append the created note
+            tracks[program].append(Note(vel, pitch, current_tick, current_tick + duration))
 
         # Appends created notes to MIDI object
         for program, notes in tracks.items():
+            if len(notes) == 0:
+                continue
             if int(program) == -1:
                 midi.instruments.append(Instrument(0, True, 'Drums'))
             else:
@@ -243,7 +204,7 @@ class MuMIDIEncoding(MIDITokenizer):
         :param program: the MIDI program of the produced track and if it drum, (default (0, False), piano)
         :return: the miditoolkit instrument object
         """
-        raise NotImplementedError('event_to_track not implemented for MuMIDI, use tokens_to_midi instead')
+        raise NotImplementedError('event_to_track not implemented for Octuple, use tokens_to_midi instead')
 
     def create_vocabulary(self, _) -> Tuple[dict, dict, dict]:
         """ Create the tokens <-> event dictionaries
@@ -268,12 +229,6 @@ class MuMIDIEncoding(MIDITokenizer):
             event_to_token[f'Pitch_{i}'] = count
             count += 1
 
-        # DRUM PITCHES
-        token_type_indices['DrumPitch'] = list(range(count, count + len(self.drum_pitch_range)))
-        for i in self.drum_pitch_range:
-            event_to_token[f'DrumPitch_{i}'] = count
-            count += 1
-
         # VELOCITY
         token_type_indices['Velocity'] = list(range(count, count + len(self.velocity_bins)))
         for i in range(len(self.velocity_bins)):
@@ -287,19 +242,14 @@ class MuMIDIEncoding(MIDITokenizer):
             count += 1
 
         # BAR
-        token_type_indices['Bar'] = list(range(count, count + self.max_bar_embedding + 1))
-        event_to_token['Bar_None'] = count  # new bar token
-        count += 1
+        token_type_indices['Bar'] = list(range(count, count + self.max_bar_embedding))
         for i in range(self.max_bar_embedding):  # bar embeddings (positional encoding)
             event_to_token[f'Bar_{i}'] = count
             count += 1
 
         # POSITION
         nb_positions = max(self.beat_res.values()) * 4  # 4/4 time signature
-        token_type_indices['Position'] = list(range(count, count + nb_positions + 2))
-        event_to_token['Position_None'] = count  # new position token
-        event_to_token['Position_Ignore'] = count + 1  # special embedding associated with 'Bar_None' tokens
-        count += 2
+        token_type_indices['Position'] = list(range(count, count + nb_positions))
         for i in range(0, nb_positions):  # position embeddings (positional encoding)
             event_to_token[f'Position_{i}'] = count
             count += 1
@@ -314,12 +264,6 @@ class MuMIDIEncoding(MIDITokenizer):
                 event_to_token[f'Chord_{chord_quality}'] = count
                 count += 1
 
-        # EMPTY
-        if self.additional_tokens['Empty']:
-            event_to_token['Empty_None'] = count
-            token_type_indices['Empty'] = [count]
-            count += 1
-
         # PROGRAM
         token_type_indices['Program'] = list(range(count, count + 129))
         for program in range(-1, 128):  # -1 is drums
@@ -330,15 +274,4 @@ class MuMIDIEncoding(MIDITokenizer):
         return event_to_token, token_to_event, token_type_indices
 
     def create_token_types_graph(self) -> Dict[str, List[str]]:
-        dic = dict()
-
-        dic['Bar'] = ['Bar', 'Position']
-        dic['Position'] = ['Program']
-        dic['Program'] = ['PitchVelDur']
-        dic['PitchVelDur'] = ['PitchVelDur', 'Program', 'Bar', 'Position']
-
-        if self.additional_tokens['Chord']:
-            dic['Position'] += ['Chord']
-            dic['Chord'] += ['Program']
-
-        return dic
+        return {}  # not relevant for this encoding
