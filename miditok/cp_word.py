@@ -53,11 +53,12 @@ class CPWordEncoding(MIDITokenizer):
     :param additional_tokens: specifies additional tokens (chords, empty bars, tempo...)
     :param program_tokens: will add entries for MIDI programs in the dictionary, to use
             in the case of multitrack generation for instance
+    :param params: can be a path to the parameter (json encoded) file or a dictionary
     """
     def __init__(self, pitch_range: range = PITCH_RANGE, beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
                  nb_velocities: int = NB_VELOCITIES, additional_tokens: Dict[str, bool] = ADDITIONAL_TOKENS,
-                 program_tokens: bool = PROGRAM_TOKENS):
-        super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, program_tokens)
+                 program_tokens: bool = PROGRAM_TOKENS, params=None):
+        super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, program_tokens, params)
 
     def events_to_tokens(self, events: List[List[Event]]) -> List[List[int]]:
         tokens = []
@@ -75,26 +76,23 @@ class CPWordEncoding(MIDITokenizer):
             events.append(time_step)
         return events
 
-    def track_to_events(self, notes: List[Note], time_division: int, drum: Optional[bool] = False) -> List[List[Event]]:
+    def track_to_events(self, track: Instrument, time_division: int) -> List[List[Event]]:
         """ Converts a track (list of Note objects) into Event objects
 
-        :param notes: notes of the track to convert
+        :param track: track object to convert
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
-        :param drum: specify if the notes treated are from a drum track (if it is the case no chord should be detected)
         :return: list of events
                  the events should be in the order Bar -> Position -> Chord -> Pitch -> Velocity -> Duration
         """
         if self.additional_tokens['Ignore']:
-            return self._track_to_events_ignore(notes, time_division, drum)
-        return self._track_to_events_no_ignore(notes, time_division, drum)
+            return self._track_to_events_ignore(track, time_division)
+        return self._track_to_events_no_ignore(track, time_division)
 
-    def _track_to_events_ignore(self, notes: List[Note], time_division: int, drum: Optional[bool] = False) -> \
-            List[List[Event]]:
+    def _track_to_events_ignore(self, track: Instrument, time_division: int) -> List[List[Event]]:
         """ Converts a track (list of Note objects) into Event objects
 
-        :param notes: notes of the track to convert
+        :param track: track object to convert
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
-        :param drum: specify if the notes treated are from a drum track (if it is the case no chord should be detected)
         :return: list of events
                  the events should be in the order Bar -> Position -> Chord -> Pitch -> Velocity -> Duration
         """
@@ -132,20 +130,20 @@ class CPWordEncoding(MIDITokenizer):
             return event_template
 
         # Creates Bar and Position events
-        bar_ticks = np.arange(0, max(n.end for n in notes) + ticks_per_bar, ticks_per_bar)
+        bar_ticks = np.arange(0, max(n.end for n in track.notes) + ticks_per_bar, ticks_per_bar)
         for t, tick in enumerate(bar_ticks):  # creating a "Bar" event at each beginning of bars
             emp = False
             if self.additional_tokens['Empty']:
                 # We consider a note inside a bar when its onset time is within the bar
                 # as it is how the note messages will be put in the sequence
-                notes_in_this_bar = [note for note in notes if tick <= note.start < tick + ticks_per_bar]
+                notes_in_this_bar = [note for note in track.notes if tick <= note.start < tick + ticks_per_bar]
                 if len(notes_in_this_bar) == 0:
                     emp = True
             events.append(create_event(tick, bar=True, empty=emp, text=str(t)))
 
         # Creates the Pitch, Velocity and Duration events
         current_tick = -1
-        for note in notes:
+        for note in track.notes:
             if note.pitch not in self.pitch_range:  # Notes to low or to high are discarded
                 continue
             if note.start != current_tick:
@@ -164,8 +162,8 @@ class CPWordEncoding(MIDITokenizer):
         events.sort(key=lambda x: x[0].time)
 
         # Adds chord events if specified
-        if self.additional_tokens['Chord'] and not drum:
-            chord_events = detect_chords(notes, time_division)
+        if self.additional_tokens['Chord'] and not track.is_drum:
+            chord_events = detect_chords(track.notes, time_division)
             count = 0
             for chord_event in chord_events:
                 for e, compound_token in enumerate(events[count:]):
@@ -176,13 +174,12 @@ class CPWordEncoding(MIDITokenizer):
 
         return events
 
-    def _track_to_events_no_ignore(self, notes: List[Note], time_division: int, drum: Optional[bool] = False) -> \
+    def _track_to_events_no_ignore(self, track: Instrument, time_division: int) -> \
             List[List[Event]]:
         """ Converts a track (list of Note objects) into Event objects
 
-        :param notes: notes of the track to convert
+        :param track: track object to convert
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
-        :param drum: specify if the notes treated are from a drum track (if it is the case no chord should be detected)
         :return: list of events
                  the events should be in the order Bar -> Position -> Chord -> Pitch -> Velocity -> Duration
         """
@@ -193,7 +190,7 @@ class CPWordEncoding(MIDITokenizer):
         events = []  # list of lists of Event objects
 
         # Creates Bar and Position events
-        bar_ticks = np.arange(0, max(n.end for n in notes) + ticks_per_bar, ticks_per_bar)
+        bar_ticks = np.arange(0, max(n.end for n in track.notes) + ticks_per_bar, ticks_per_bar)
         for t, tick in enumerate(bar_ticks):  # creating a "Bar" event at each beginning of bars
 
             events.append([Event(name='Family', time=tick, value='Metric', text=t),
@@ -202,13 +199,13 @@ class CPWordEncoding(MIDITokenizer):
             if self.additional_tokens['Empty']:
                 # We consider a note inside a bar when its onset time is within the bar
                 # as it is how the note messages will be put in the sequence
-                notes_in_this_bar = [note for note in notes if tick <= note.start < tick + ticks_per_bar]
+                notes_in_this_bar = [note for note in track.notes if tick <= note.start < tick + ticks_per_bar]
                 if len(notes_in_this_bar) == 0:
                     events[-1].append(Event(name='Empty', time=tick, value=None, text=t))
 
         # Creates the Pitch, Velocity and Duration events
         current_tick = -1
-        for note in notes:
+        for note in track.notes:
             if note.pitch not in self.pitch_range:  # Notes to low or to high are discarded
                 continue
             if note.start != current_tick:
@@ -232,8 +229,8 @@ class CPWordEncoding(MIDITokenizer):
         events.sort(key=lambda x: x[0].time)
 
         # Adds chord events if specified
-        if self.additional_tokens['Chord'] and not drum:
-            chord_events = detect_chords(notes, time_division)
+        if self.additional_tokens['Chord'] and not track.is_drum:
+            chord_events = detect_chords(track.notes, time_division)
             count = 0
             for chord_event in chord_events:
                 for e, compound_token in enumerate(events[count:]):
@@ -278,7 +275,7 @@ class CPWordEncoding(MIDITokenizer):
 
         return instrument
 
-    def create_token_dicts(self, program_tokens: bool) -> Tuple[dict, dict, dict]:
+    def create_vocabulary(self, program_tokens: bool) -> Tuple[dict, dict, dict]:
         """ Create the tokens <-> event dictionaries
         These dictionaries are created arbitrary according to constants defined
         at the top of this file.

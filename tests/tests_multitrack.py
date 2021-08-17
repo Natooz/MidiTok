@@ -16,10 +16,11 @@ NOTE: encoded tracks has to be compared with the quantized original track.
 """
 
 import time
+from copy import deepcopy
 from pathlib import Path, PurePath
 from typing import Union
 
-from miditok import REMIEncoding, CPWordEncoding, MIDITokenizer
+from miditok import REMIEncoding, CPWordEncoding, MIDITokenizer, MuMIDIEncoding
 from miditoolkit import MidiFile
 
 
@@ -42,8 +43,9 @@ def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = '.
     files = list(Path(data_path).glob('**/*.mid'))
 
     # Creates tokenizers
-    cp_enc = CPWordEncoding(beat_res=BEAT_RES_TEST, additional_tokens=ADDITIONAL_TOKENS_TEST)
-    remi_enc = REMIEncoding(beat_res=BEAT_RES_TEST, additional_tokens=ADDITIONAL_TOKENS_TEST)
+    cp_enc = CPWordEncoding(beat_res=BEAT_RES_TEST, additional_tokens=deepcopy(ADDITIONAL_TOKENS_TEST))
+    remi_enc = REMIEncoding(beat_res=BEAT_RES_TEST, additional_tokens=deepcopy(ADDITIONAL_TOKENS_TEST))
+    mumidi_enc = MuMIDIEncoding(beat_res=BEAT_RES_TEST, additional_tokens=deepcopy(ADDITIONAL_TOKENS_TEST))
 
     for i, file_path in enumerate(files):
         t0 = time.time()
@@ -55,23 +57,15 @@ def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = '.
         # Convert to tokens and back to MIDI
         midi_cp = midi_to_tokens_to_midi(cp_enc, midi)
         midi_remi = midi_to_tokens_to_midi(remi_enc, midi)
+        midi_mumidi = mumidi_enc.tokens_to_midi(mumidi_enc.midi_to_tokens(midi), time_division=midi.ticks_per_beat)
 
         t1 = time.time()
         print(f'Took {t1 - t0} seconds')
 
         if saving_midi:
-            # Build the final MIDI file
-            final_midi = MidiFile()
-            for j in range(len(midi.instruments)):
-                midi_cp.instruments[j].name = 'encoded with cp word'
-                midi_remi.instruments[j].name = 'encoded with remi'
-
-                final_midi.instruments.append(midi.instruments[j])
-                final_midi.instruments.append(midi_cp.instruments[j])
-                final_midi.instruments.append(midi_remi.instruments[j])
-
-            # Updates the MIDI and save it
-            final_midi.dump(PurePath('tests', 'test_results', file_path.name))
+            midi_cp.dump(PurePath('tests', 'test_results', f'{file_path.stem}_cp').with_suffix('.mid'))
+            midi_remi.dump(PurePath('tests', 'test_results', f'{file_path.stem}_remi').with_suffix('.mid'))
+            midi_mumidi.dump(PurePath('tests', 'test_results', f'{file_path.stem}_mumidi').with_suffix('.mid'))
 
 
 def midi_to_tokens_to_midi(tokenizer: MIDITokenizer, midi: MidiFile) -> MidiFile:

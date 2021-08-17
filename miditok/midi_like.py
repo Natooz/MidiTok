@@ -35,21 +35,21 @@ class MIDILikeEncoding(MIDITokenizer):
     :param additional_tokens: specifies additional tokens (chords, empty bars, tempo...)
     :param program_tokens: will add entries for MIDI programs in the dictionary, to use
             in the case of multitrack generation for instance
+    :param params: can be a path to the parameter (json encoded) file or a dictionary
     """
     def __init__(self, pitch_range: range = PITCH_RANGE, beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
                  nb_velocities: int = NB_VELOCITIES, additional_tokens: Dict[str, bool] = ADDITIONAL_TOKENS,
-                 program_tokens: bool = PROGRAM_TOKENS):
+                 program_tokens: bool = PROGRAM_TOKENS, params=None):
         additional_tokens['Empty'] = False  # Incompatible additional tokens
         additional_tokens['Ignore'] = False  # Incompatible additional tokens
-        super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, program_tokens)
+        super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, program_tokens, params)
 
-    def track_to_events(self, notes: List[Note], time_division: int, drum: Optional[bool] = False) -> List[Event]:
+    def track_to_events(self, track: Instrument, time_division: int) -> List[Event]:
         """ Converts a track (list of Note objects) into Event objects
         (can probably be achieved faster with Mido objects)
 
-        :param notes: notes of the track to convert
+        :param track: track object to convert
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
-        :param drum: specify if the notes treated are from a drum track (if it is the case no chord should be detected)
         :return: list of events
                  the events should be in the order Bar -> Position -> Chord -> Pitch -> Velocity -> Duration
         """
@@ -59,7 +59,7 @@ class MIDILikeEncoding(MIDITokenizer):
         current_tick = 0
 
         # Creates the Note On, Note Off and Velocity events
-        for n, note in enumerate(notes):
+        for n, note in enumerate(track.notes):
             if note.pitch not in self.pitch_range:  # Notes to low or to high are discarded
                 continue
             # Note On
@@ -97,8 +97,8 @@ class MIDILikeEncoding(MIDITokenizer):
             current_tick = event.time
 
         # Adds chord events if specified
-        if self.additional_tokens['Chord'] and not drum:
-            events += detect_chords(notes, time_division)
+        if self.additional_tokens['Chord'] and not track.is_drum:
+            events += detect_chords(track.notes, time_division)
 
         events.sort(key=lambda x: (x.time, self._order(x)))
 
@@ -158,7 +158,7 @@ class MIDILikeEncoding(MIDITokenizer):
 
         return instrument
 
-    def create_token_dicts(self, program_tokens: bool) -> Tuple[dict, dict, dict]:
+    def create_vocabulary(self, program_tokens: bool) -> Tuple[dict, dict, dict]:
         """ Create the tokens <-> event dictionaries
         These dictionaries are created arbitrary according to constants defined
         at the top of this file.

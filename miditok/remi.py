@@ -25,19 +25,19 @@ class REMIEncoding(MIDITokenizer):
     :param additional_tokens: specifies additional tokens (chords, empty bars, tempo...)
     :param program_tokens: will add entries for MIDI programs in the dictionary, to use
             in the case of multitrack generation for instance
+    :param params: can be a path to the parameter (json encoded) file or a dictionary
     """
     def __init__(self, pitch_range: range = PITCH_RANGE, beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
                  nb_velocities: int = NB_VELOCITIES, additional_tokens: Dict[str, bool] = ADDITIONAL_TOKENS,
-                 program_tokens: bool = PROGRAM_TOKENS):
+                 program_tokens: bool = PROGRAM_TOKENS, params=None):
         additional_tokens['Ignore'] = False  # Incompatible additional tokens
-        super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, program_tokens)
+        super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, program_tokens, params)
 
-    def track_to_events(self, notes: List[Note], time_division: int, drum: Optional[bool] = False) -> List[Event]:
+    def track_to_events(self, track: Instrument, time_division: int) -> List[Event]:
         """ Converts a track (list of Note objects) into Event objects
 
-        :param notes: notes of the track to convert
+        :param track: track object to convert
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
-        :param drum: specify if the notes treated are from a drum track (if it is the case no chord should be detected)
         :return: list of events
                  the events should be in the order Bar -> Position -> Chord -> Pitch -> Velocity -> Duration
         """
@@ -48,7 +48,7 @@ class REMIEncoding(MIDITokenizer):
         events = []
 
         # Creates Bar and Position events
-        bar_ticks = np.arange(0, max(n.end for n in notes) + ticks_per_bar, ticks_per_bar)
+        bar_ticks = np.arange(0, max(n.end for n in track.notes) + ticks_per_bar, ticks_per_bar)
         for t, tick in enumerate(bar_ticks):  # creating a "Bar" event at each beginning of bars
             events.append(Event(
                 name='Bar',
@@ -59,7 +59,7 @@ class REMIEncoding(MIDITokenizer):
             if self.additional_tokens['Empty']:
                 # We consider a note inside a bar when its onset time is within the bar
                 # as it is how the note messages will be put in the sequence
-                notes_in_this_bar = [note for note in notes if tick <= note.start < tick + ticks_per_bar]
+                notes_in_this_bar = [note for note in track.notes if tick <= note.start < tick + ticks_per_bar]
                 if len(notes_in_this_bar) == 0:
                     events.append(Event(  # marks an empty bar
                         name='Empty',
@@ -68,18 +68,18 @@ class REMIEncoding(MIDITokenizer):
                         text=t))
 
         # Creates the Pitch, Velocity and Duration events
-        previous_tick = -1
-        for note in notes:
+        current_tick = -1
+        for note in track.notes:
             if note.pitch not in self.pitch_range:  # Notes to low or to high are discarded
                 continue
-            if note.start != previous_tick:
+            if note.start != current_tick:
                 pos_index = int((note.start % ticks_per_bar) / ticks_per_frame)
                 events.append(Event(
                     name='Position',
                     time=note.start,
                     value=pos_index,
                     text=note.start))
-                previous_tick = note.start
+                current_tick = note.start
             # Pitch
             events.append(Event(
                 name='Pitch',
@@ -103,8 +103,8 @@ class REMIEncoding(MIDITokenizer):
                 text=f'{duration} ticks'))
 
         # Adds chord events if specified
-        if self.additional_tokens['Chord'] and not drum:
-            events += detect_chords(notes, time_division)
+        if self.additional_tokens['Chord'] and not track.is_drum:
+            events += detect_chords(track.notes, time_division)
 
         events.sort(key=lambda x: (x.time, self._order(x)))
 
@@ -143,7 +143,7 @@ class REMIEncoding(MIDITokenizer):
                     pass  # However with generated sequences this can happen
         return instrument
 
-    def create_token_dicts(self, program_tokens: bool) -> Tuple[dict, dict, dict]:
+    def create_vocabulary(self, program_tokens: bool) -> Tuple[dict, dict, dict]:
         """ Create the tokens <-> event dictionaries
         These dictionaries are created arbitrary according to constants defined
         at the top of this file.

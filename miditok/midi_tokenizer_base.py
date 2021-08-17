@@ -1,16 +1,15 @@
 """ MIDI encoding base class and methods
-TODO MuMIDI ? https://arxiv.org/abs/2008.07703
 TODO Octotuple ? : https://arxiv.org/abs/2106.05630
 TODO Tempo messages ?
 TODO Control change messages (sustain, modulation, pitch bend)
+TODO common method to add additional tokens to vocab
 
 """
 
 from sys import stdout
 from pathlib import Path, PurePath
-from copy import deepcopy
 import json
-from typing import List, Tuple, Dict, Union, Callable, Optional
+from typing import List, Tuple, Dict, Union, Callable, Optional, Any
 
 import numpy as np
 from miditoolkit import MidiFile, Instrument, Note
@@ -44,17 +43,23 @@ class MIDITokenizer:
     :param additional_tokens: specifies additional tokens (chords, empty bars, tempo...)
     :param program_tokens: will add entries for MIDI programs in the dictionary, to use
             in the case of multitrack generation for instance
+    :param params: can be a path to the parameter (json encoded) file or a dictionary
     """
     def __init__(self, pitch_range: range, beat_res: Dict[Tuple[int, int], int], nb_velocities: int,
-                 additional_tokens: Dict[str, bool], program_tokens: bool):
-        self.pitch_range = pitch_range
-        self.beat_res = beat_res
-        self.additional_tokens = deepcopy(additional_tokens)
+                 additional_tokens: Dict[str, bool], program_tokens: bool,
+                 params: Union[str, Path, PurePath, Dict[str, Any]] = None):
+        if params is None:
+            self.pitch_range = pitch_range
+            self.beat_res = beat_res
+            self.additional_tokens = additional_tokens
+            self.nb_velocities = nb_velocities
+        else:
+            self.load_params(params)
 
         self.durations = self.create_durations_tuples()
-        self.velocity_bins = np.linspace(0, 127, nb_velocities + 1, dtype=np.intc)
+        self.velocity_bins = np.linspace(0, 127, self.nb_velocities + 1, dtype=np.intc)
         np.delete(self.velocity_bins, 0)  # removes velocity 0
-        self.event2token, self.token2event, self.token_types_indices = self.create_token_dicts(program_tokens)
+        self.event2token, self.token2event, self.token_types_indices = self.create_vocabulary(program_tokens)
 
         # keep in memory durations in ticks for seen time divisions so these values
         # are not calculated each time a MIDI is processed
@@ -91,7 +96,7 @@ class MIDITokenizer:
         quantize_note_times(track.notes, time_division, max(self.beat_res.values()))  # adjusts notes timings
         track.notes.sort(key=lambda x: (x.start, x.pitch))  # sort notes
         remove_duplicated_notes(track.notes)  # remove possible duplicated notes
-        events = self.track_to_events(track.notes, time_division, track.is_drum)  # get distinct events
+        events = self.track_to_events(track, time_division)  # get distinct events
         return self.events_to_tokens(events)
 
     def events_to_tokens(self, events: List[Event]) -> List[int]:
@@ -116,14 +121,13 @@ class MIDITokenizer:
             events.append(Event(name, None, val, None))
         return events
 
-    def track_to_events(self, notes: List[Note], time_division: int, drum: Optional[bool] = False) -> List[Event]:
+    def track_to_events(self, track: Instrument, time_division: int) -> List[Event]:
         """ Converts a track (list of Note objects) into Event objects
         NOTE: this method must take care of chord or other types of tokens, if specified
         And to sort every events in the right order!
 
-        :param notes: notes of the track to convert
+        :param track: track object to convert
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
-        :param drum: specify if the notes treated are from a drum track (if it is the case no chord should be detected)
         :return: list of events
                  the events should be in the order Bar -> Position -> Chord -> Pitch -> Velocity -> Duration
         """
@@ -177,7 +181,7 @@ class MIDITokenizer:
         """
         raise NotImplementedError
 
-    def create_token_dicts(self, program_tokens: bool) -> Tuple[dict, dict, dict]:
+    def create_vocabulary(self, program_tokens: bool) -> Tuple[dict, dict, dict]:
         """ Create the tokens <-> event dictionaries
         These dictionaries are created arbitrary according to constants defined
         at the top of this file.
@@ -225,7 +229,6 @@ class MIDITokenizer:
         :param logging: logs a progress bar
         """
         Path(out_dir).mkdir(parents=True, exist_ok=True)
-        self.save_params(out_dir)  # Saves the parameters with which the MIDIs are converted
 
         for m, midi_path in enumerate(midi_paths):
             if logging:
@@ -253,6 +256,8 @@ class MIDITokenizer:
             with open(PurePath(out_dir, midi_path).with_suffix(".json"), 'w') as outfile:
                 json.dump([tokens[0], track_info[0]], outfile)
 
+        self.save_params(out_dir)  # Saves the parameters with which the MIDIs are converted
+
     def save_params(self, out_dir: Union[str, Path, PurePath]):
         """ Saves the base parameters of this encoding in a txt file
         Useful to keep track of how a dataset has been tokenized / encoded
@@ -264,6 +269,21 @@ class MIDITokenizer:
             json.dump({'pitch_range': (self.pitch_range.start, self.pitch_range.stop),
                        'beat_res': self.beat_res, 'nb_velocities': len(self.velocity_bins),
                        'additional_tokens': self.additional_tokens}, outfile)
+
+    def load_params(self, params: Union[str, Path, PurePath, Dict[str, Any]]):
+        """ Load parameters and set the encoder attributes
+
+        :param params: can be a path to the parameter (json encoded) file or a dictionary
+        """
+        if isinstance(params, (str, Path, PurePath)):
+            with open(params) as param_file:
+                params = json.load(param_file)
+
+        if not isinstance(params['pitch_range'], range):
+            params['pitch_range'] = range(*params['pitch_range'])
+
+        for key, value in params.items():
+            setattr(self, key, value)
 
 
 def quantize_note_times(notes: List[Note], time_division: int, beat_res: int):
