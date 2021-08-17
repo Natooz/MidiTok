@@ -17,13 +17,13 @@ MidiTok uses MIDIToolkit, which itself uses Mido to read and write MIDI files.
 
 Strategy used in the first symbolic music generative transformers and RNN / LSTM models. It consists of encoding the MIDI messages (Note On, Note Off, Velocity and Time Shift) into tokens as represented in a pure "MIDI way".
 
-![MIDI-Like figure](https://github.com/Natooz/MidiTok/blob/assets/assets/midi_like.png "Three notes played together with different durations")
+![MIDI-Like figure](https://github.com/Natooz/MidiTok/blob/assets/assets/midi_like.png?raw=true "Three notes played together with different durations")
 
 ### REMI
 
 Proposed in the [Pop Music Transformer](https://arxiv.org/abs/2002.00212), it is what we would call a "position-based" representation. The time is represented with "_Bar_" and "_Position_" tokens that indicate respectively when a new bar is beginning, and the current position within a bar.
 
-![REMI figure](https://github.com/Natooz/MidiTok/blob/assets/assets/remi.png "Time is tracked with Bar and position tokens")
+![REMI figure](https://github.com/Natooz/MidiTok/blob/assets/assets/remi.png?raw=true "Time is tracked with Bar and position tokens")
 
 ### Compound Word
 
@@ -34,14 +34,14 @@ You can combine them in your model the way you want. CP Word authors concatenate
 
 At decoding, the easiest way to predict multiple tokens (employed by the original authors) is to project the output vector of your model with several projection matrices, one for each token type.
 
-![Compound Word figure](https://github.com/Natooz/MidiTok/blob/assets/assets/cp_word.png "Tokens of the same family are grouped together")
+![Compound Word figure](https://github.com/Natooz/MidiTok/blob/assets/assets/cp_word.png?raw=true "Tokens of the same family are grouped together")
 
 ### Structured
 
 Presented with the [Piano Inpainting Application](https://arxiv.org/abs/2107.05944), it is similar to the MIDI-Like encoding but with _Duration_ tokens instead Note-Off.
 The main advantage of this encoding is the consistent token type transitions it imposes, which can greatly speed up training. The structure is as: _Pitch_ -> _Velocity_ -> _Duration_ -> _Time Shift_ -> ... (pitch again)
 
-![Structured figure](https://github.com/Natooz/MidiTok/blob/assets/assets/structured.png "The token types always follow the same transition pattern")
+![Structured figure](https://github.com/Natooz/MidiTok/blob/assets/assets/structured.png?raw=true "The token types always follow the same transition pattern")
 
 ### MuMIDI
 
@@ -55,7 +55,7 @@ NOTES:
 * This implementation uses _Track_ tokens defined by their MIDI programs. Hence, two tracks with the same program will be treated as being the same.
 * As in the original MuMIDI implementation, this on distinguishes pitch tokens of drums from pitch tokens of other instruments. More details in the [code](miditok/mumidi.py).
 
-![MuMIDI figure](https://github.com/Natooz/MidiTok/blob/assets/assets/mumidi.png "Sequence with notes from two different tracks, with a bar and position embeddings")
+![MuMIDI figure](https://github.com/Natooz/MidiTok/blob/assets/assets/mumidi.png?raw=true "Sequence with notes from two different tracks, with a bar and position embeddings")
 
 ### Octuple
 
@@ -69,7 +69,7 @@ NOTES:
 * This implementation uses _Track_ tokens defined by their MIDI programs. Hence, two tracks with the same program will be treated as being the same.
 * Time signature tokens are not implemented in MidiTok 
 
-![Octuple figure](https://github.com/Natooz/MidiTok/blob/assets/assets/octuple.png "Sequence with notes from two different tracks, with a bar and position embeddings")
+![Octuple figure](https://github.com/Natooz/MidiTok/blob/assets/assets/octuple.png?raw=true "Sequence with notes from two different tracks, with a bar and position embeddings")
 
 ### Create your own
 
