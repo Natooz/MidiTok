@@ -30,7 +30,6 @@ BEAT_RES_TEST = {(0, 16): 8}
 ADDITIONAL_TOKENS_TEST = {'Chord': False,
                           'Empty': False,
                           'Tempo': True,
-                          'Ignore': True,  # for CP words only
                           'nb_tempos': 32,
                           'tempo_range': (40, 250)}
 
@@ -51,8 +50,6 @@ def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = '.
     oct_enc = OctupleEncoding(beat_res=BEAT_RES_TEST, additional_tokens=deepcopy(ADDITIONAL_TOKENS_TEST))
 
     for i, file_path in enumerate(files):
-        if i < 2:
-            continue
         t0 = time.time()
         print(f'Converting MIDI {i} / {len(files)} - {file_path}')
 

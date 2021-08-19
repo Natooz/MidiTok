@@ -1,5 +1,4 @@
 """ MIDI encoding base class and methods
-TODO Tempo messages ?
 TODO Control change messages (sustain, modulation, pitch bend)
 TODO common method to add additional tokens to vocab
 

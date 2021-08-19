@@ -47,20 +47,6 @@ The main advantage of this encoding is the consistent token type transitions it 
 
 ![Structured figure](https://github.com/Natooz/MidiTok/blob/assets/assets/structured.png?raw=true "The token types always follow the same transition pattern")
 
-### MuMIDI
-
-Presented with the [PopMAG](https://arxiv.org/abs/2008.07703) model, this representation is mostly suited for multitrack tasks. The time is based on _Position_ and _Bar_ tokens as REMI and Compound Word.
-The key idea of MuMIDI is to represent every track in a single sequence. At each time step, "_Track_" tokens preceding note tokens indicate from which track they are.
-MuMIDI also include a "built-in" positional encoding mechanism. At each time step, embeddings of the current bar and current position are merged with the token. For a note, the _Pitch_, _Velocity_ and _Duration_ embeddings are also merged together.
-
-NOTES:
-* In this implementation, the tokens are first sorted by time, then track, then pitch values.
-* In the original MuMIDI _Chord_ tokens are placed before Track tokens. We decided in this implementation to put them after as chords are produced by one instrument, and several instrument can produce more than one chord at a time step.
-* This implementation uses _Track_ tokens defined by their MIDI programs. Hence, two tracks with the same program will be treated as being the same.
-* As in the original MuMIDI implementation, this on distinguishes pitch tokens of drums from pitch tokens of other instruments. More details in the [code](miditok/mumidi.py).
-
-![MuMIDI figure](https://github.com/Natooz/MidiTok/blob/assets/assets/mumidi.png?raw=true "Sequence with notes from two different tracks, with a bar and position embeddings")
-
 ### Octuple
 
 Introduced with [Symbolic Music Understanding with Large-Scale Pre-Training](https://arxiv.org/abs/2106.05630), it share the same purpose of MuMIDI. Each note of each track is the combination of multiple embeddings: _Pitch_, _Velocity_, _Duration_, _Track_, current _Bar_, current _Position_ and additional tokens.
@@ -74,6 +60,20 @@ NOTES:
 * Time signature tokens are not implemented in MidiTok 
 
 ![Octuple figure](https://github.com/Natooz/MidiTok/blob/assets/assets/octuple.png?raw=true "Sequence with notes from two different tracks, with a bar and position embeddings")
+
+### MuMIDI
+
+Presented with the [PopMAG](https://arxiv.org/abs/2008.07703) model, this representation is mostly suited for multitrack tasks. The time is based on _Position_ and _Bar_ tokens as REMI and Compound Word.
+The key idea of MuMIDI is to represent every track in a single sequence. At each time step, "_Track_" tokens preceding note tokens indicate from which track they are.
+MuMIDI also include a "built-in" positional encoding mechanism. At each time step, embeddings of the current bar and current position are merged with the token. For a note, the _Pitch_, _Velocity_ and _Duration_ embeddings are also merged together.
+
+NOTES:
+* In this implementation, the tokens are first sorted by time, then track, then pitch values.
+* In the original MuMIDI _Chord_ tokens are placed before Track tokens. We decided in MidiTok to put them after as chords are produced by one instrument, and several instrument can produce more than one chord at a time step.
+* This implementation uses _Track_ tokens defined by their MIDI programs. Hence, two tracks with the same program will be treated as being the same.
+* As in the original MuMIDI implementation, this on distinguishes pitch tokens of drums from pitch tokens of other instruments. More details in the [code](miditok/mumidi.py).
+
+![MuMIDI figure](https://github.com/Natooz/MidiTok/blob/assets/assets/mumidi.png?raw=true "Sequence with notes from two different tracks, with a bar and position embeddings")
 
 ### Create your own
 
@@ -90,16 +90,25 @@ Every encoding strategy share some common parameters around which the tokenizers
 * **Number of velocities:** the number of velocity values you want represents. For instance if you set this parameter to 32, the velocities of the notes will be quantized into 32 velocity values from 0 to 127.
 * **Additional tokens:** specify which additional tokens bringing information like chords should be included. Note that each encoding is compatible with different additional tokens.
 
-Examples of these parameters can be found in the [constants](miditok/constants.py) file.
+Check [constants.py](miditok/constants.py) to see how these parameters are constructed.
 
 ### Additional tokens
 
 MidiTok offers the possibility to insert additional tokens in the encodings.
 These tokens bring additional information about the structure and content of MIDI tracks to explicitly use them to train a neural network.
 
-TODO chart encoding / token compatibility
+* **Chords:** indicate the presence of a chord at a certain time step. MidiTok uses a chord detection method based on onset times and duration. This allows MidiTok to detect precisely chords without ambiguity, whereas most chord detection methods in symbolic music based on chroma features can't.
+* **Tempo:** specify the current tempo. Tempo values are quantized on the range and number of bins you want. This allows to also train a model to predict tempo changes alongside with the notes, unless specified in the chart below.
+* **Empty:** indicate if a bar is empty, _i.e._ no note is starting within. An absence of note is an information that in some cases can be useful to express explicitly.
 
-TODO Chord detection paragraph
+|       | MIDI-Like     | REMI          | Compound Word | Structured | Octuple | MuMIDI        |
+|-------|:-------------:|:-------------:|:-------------:|:----------:|:-------:|:-------------:|
+| Chord | ✅             | ✅             | ✅             | ❌          | ❌       | ✅             |
+| Tempo | ✅<sup>1</sup> | ✅<sup>1</sup> | ✅<sup>1</sup> | ❌          | ✅       | ✅<sup>2</sup> |
+| Empty | ❌             | ✅             | ✅             | ❌          | ❌       | ✅             |
+
+<sup>1</sup> Should not be used with multiple tracks. At decoding, only the tempo changes of the first track will be considered.\
+<sup>2</sup> Only used in the input as additional information. At decoding no tempo tokens should be predicted, _i.e_ will be considered.
 
 ## Examples
 

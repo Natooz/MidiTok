@@ -1,7 +1,7 @@
 """ MuMIDI encoding method, as introduced in PopMag
 https://arxiv.org/abs/2008.07703
 
-"""  # TODO include empty and tempo token
+"""  # TODO include empty token
 
 from math import ceil
 import json
@@ -9,7 +9,7 @@ from pathlib import Path, PurePath
 from typing import List, Tuple, Dict, Optional, Union
 
 import numpy as np
-from miditoolkit import Instrument, Note, MidiFile
+from miditoolkit import MidiFile, Instrument, Note
 
 from .midi_tokenizer_base import MIDITokenizer, Event, detect_chords, quantize_note_times, quantize_tempos, \
     remove_duplicated_notes
@@ -41,7 +41,6 @@ class MuMIDIEncoding(MIDITokenizer):
                  beat_res: Dict[Tuple[int, int], int] = BEAT_RES, nb_velocities: int = NB_VELOCITIES,
                  additional_tokens: Dict[str, bool] = ADDITIONAL_TOKENS, program_tokens: bool = PROGRAM_TOKENS,
                  params=None):
-        additional_tokens['Ignore'] = False  # Incompatible additional tokens
         self.drum_pitch_range = drum_pitch_range
         # used in place of positional encoding
         self.max_bar_embedding = 60  # this attribute might increase during encoding
@@ -113,7 +112,22 @@ class MuMIDIEncoding(MIDITokenizer):
         current_bar = -1
         current_pos = -1
         current_track = -2  # doesnt exist
+        current_tempo_idx = 0
+        current_tempo = self.current_midi_metadata['tempo_changes'][current_tempo_idx].tempo
+        current_tempo = (np.abs(self.tempo_bins - current_tempo)).argmin()
         for note_event in note_events:
+            # (Tempo) update tempo values current_tempo
+            if self.additional_tokens['Tempo']:
+                # If the current tempo is not the last one
+                if current_tempo_idx + 1 < len(self.current_midi_metadata['tempo_changes']):
+                    # Will loop over incoming tempo changes
+                    for tempo_change in self.current_midi_metadata['tempo_changes'][current_tempo_idx + 1:]:
+                        # If this tempo change happened before the current moment
+                        if tempo_change.time <= current_tick:
+                            current_tempo = (np.abs(self.tempo_bins - tempo_change.tempo)).argmin()
+                            current_tempo_idx += 1  # update tempo value (might not change) and index
+                        elif tempo_change.time > current_tick:
+                            break  # this tempo change is beyond the current time step, we break the loop
             # Positions and bars
             if note_event[0].time != current_tick:
                 pos_index = int((note_event[0].time % ticks_per_bar) / ticks_per_frame)
@@ -123,24 +137,35 @@ class MuMIDIEncoding(MIDITokenizer):
                 if current_bar < current_tick // ticks_per_bar:
                     nb_new_bars = current_tick // ticks_per_bar - current_bar
                     for i in range(nb_new_bars):
-                        tokens.append([self.event2token['Bar_None'],
-                                       self.event2token['Position_Ignore'],
-                                       self.event2token[f'Bar_{current_bar + i + 1}']])
+                        bar_token = [self.event2token['Bar_None'],
+                                     self.event2token['Position_Ignore'],
+                                     self.event2token[f'Bar_{current_bar + i + 1}']]
+                        if self.additional_tokens['Tempo']:
+                            bar_token.append(self.event2token[f'Tempo_{current_tempo}'])
+                        tokens.append(bar_token)
                     current_bar += nb_new_bars
-                tokens.append([self.event2token['Position_None'],
-                               self.event2token[f'Position_{current_pos}'],
-                               self.event2token[f'Bar_{current_bar}']])
+                pos_token = [self.event2token['Position_None'],
+                             self.event2token[f'Position_{current_pos}'],
+                             self.event2token[f'Bar_{current_bar}']]
+                if self.additional_tokens['Tempo']:
+                    pos_token.append(self.event2token[f'Tempo_{current_tempo}'])
+                tokens.append(pos_token)
             # Tracks (programs)
             if note_event[0].text != current_track:
                 current_track = note_event[0].text
-                tokens.append([self.event2token[f'Program_{current_track}'],
+                track_token = [self.event2token[f'Program_{current_track}'],
                                self.event2token[f'Position_{current_pos}'],
-                               self.event2token[f'Bar_{current_bar}']])
+                               self.event2token[f'Bar_{current_bar}']]
+                if self.additional_tokens['Tempo']:
+                    track_token.append(self.event2token[f'Tempo_{current_tempo}'])
+                tokens.append(track_token)
 
             # Adding bar and position tokens to notes for positional encoding
             note_event[0] = self.event2token[f'{note_event[0].name}_{note_event[0].value}']
-            tokens.append(note_event + [self.event2token[f'Position_{current_pos}'],
-                                        self.event2token[f'Bar_{current_bar}']])
+            note_event += [self.event2token[f'Position_{current_pos}'], self.event2token[f'Bar_{current_bar}']]
+            if self.additional_tokens['Tempo']:
+                note_event.append(self.event2token[f'Tempo_{current_tempo}'])
+            tokens.append(note_event)
 
         return tokens
 
@@ -189,6 +214,11 @@ class MuMIDIEncoding(MIDITokenizer):
         """ Override the parent class method
         Convert multiple sequences of tokens into a multitrack MIDI and save it.
         The tokens will be converted to event objects and then to a miditoolkit.MidiFile object.
+        A time step is a list of tokens where:
+        (list index: token type)
+        0: Pitch / Position / Bar
+        (1: Velocity)
+        (2: Duration)
 
         :param tokens: list of lists of tokens to convert, each list inside the
                        first list corresponds to a track

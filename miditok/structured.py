@@ -36,7 +36,7 @@ class StructuredEncoding(MIDITokenizer):
     def __init__(self, pitch_range: range = PITCH_RANGE, beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
                  nb_velocities: int = NB_VELOCITIES, program_tokens: bool = PROGRAM_TOKENS, params=None):
         # No additional tokens
-        additional_tokens = {'Chord': False, 'Empty': False, 'Tempo': False, 'Ignore': False}
+        additional_tokens = {'Chord': False, 'Empty': False, 'Tempo': False}
         super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, program_tokens, params)
 
     def track_to_events(self, track: Instrument) -> List[Event]:

@@ -41,7 +41,6 @@ class MIDILikeEncoding(MIDITokenizer):
                  nb_velocities: int = NB_VELOCITIES, additional_tokens: Dict[str, bool] = ADDITIONAL_TOKENS,
                  program_tokens: bool = PROGRAM_TOKENS, params=None):
         additional_tokens['Empty'] = False  # Incompatible additional tokens
-        additional_tokens['Ignore'] = False  # Incompatible additional tokens
         super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, program_tokens, params)
 
     def track_to_events(self, track: Instrument) -> List[Event]:

@@ -23,8 +23,7 @@ from miditoolkit import MidiFile
 BEAT_RES_TEST = {(0, 32): 8}
 ADDITIONAL_TOKENS_TEST = {'Chord': False,
                           'Empty': False,
-                          'Tempo': False,
-                          'Ignore': True}  # for CP words only
+                          'Tempo': False}
 
 
 def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './Maestro_MIDIs',

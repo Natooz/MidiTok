@@ -2,7 +2,6 @@
 https://arxiv.org/abs/2106.05630
 
 """
-# TODO Time signature
 
 from math import ceil
 import json
@@ -34,8 +33,7 @@ class OctupleEncoding(MIDITokenizer):
     def __init__(self, pitch_range: range = PITCH_RANGE, beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
                  nb_velocities: int = NB_VELOCITIES, additional_tokens: Dict[str, bool] = ADDITIONAL_TOKENS,
                  program_tokens: bool = PROGRAM_TOKENS, params=None):
-        additional_tokens['Ignore'] = False  # Incompatible additional tokens
-        additional_tokens['Chord'] = False
+        additional_tokens['Chord'] = False  # Incompatible additional token
         additional_tokens['Empty'] = False  # could be done with special tokens for pitch/velocity/duration
         # used in place of positional encoding
         self.max_bar_embedding = 60  # this attribute might increase during encoding
@@ -58,6 +56,15 @@ class OctupleEncoding(MIDITokenizer):
     def midi_to_tokens(self, midi: MidiFile) -> List[List[int]]:
         """ Override the parent class method
         Converts a MIDI file in a tokens representation
+        A time step is a list of tokens where:
+        (list index: token type)
+        0: Pitch
+        1: Velocity
+        2: Duration
+        3: Program (track)
+        4: Position
+        5: Bar
+        (6: Tempo)
 
         :param midi: the MIDI objet to convert
         :return: the token representation :
@@ -123,6 +130,7 @@ class OctupleEncoding(MIDITokenizer):
         current_pos = -1
         current_tempo_idx = 0
         current_tempo = self.current_midi_metadata['tempo_changes'][current_tempo_idx].tempo
+        current_tempo = (np.abs(self.tempo_bins - current_tempo)).argmin()
         for note in track.notes:
             if note.pitch not in self.pitch_range:  # Notes to low or to high are discarded
                 continue
@@ -154,11 +162,11 @@ class OctupleEncoding(MIDITokenizer):
                     for tempo_change in self.current_midi_metadata['tempo_changes'][current_tempo_idx + 1:]:
                         # If this tempo change happened before the current moment
                         if tempo_change.time <= current_tick:
-                            current_tempo = tempo_change.tempo
+                            current_tempo = (np.abs(self.tempo_bins - tempo_change.tempo)).argmin()
                             current_tempo_idx += 1  # update tempo value (might not change) and index
                         elif tempo_change.time > current_tick:
-                            break  # this tempo change is beyond the current moment, we break the loop
-                event.append(self.event2token[f'Tempo_{(np.abs(self.tempo_bins - current_tempo)).argmin()}'])
+                            break  # this tempo change is beyond the current time step, we break the loop
+                event.append(self.event2token[f'Tempo_{current_tempo}'])
 
             events.append(event)
 
@@ -169,6 +177,15 @@ class OctupleEncoding(MIDITokenizer):
         """ Override the parent class method
         Convert multiple sequences of tokens into a multitrack MIDI and save it.
         The tokens will be converted to event objects and then to a miditoolkit.MidiFile object.
+        A time step is a list of tokens where:
+        (list index: token type)
+        0: Pitch
+        1: Velocity
+        2: Duration
+        3: Program (track)
+        4: Position
+        5: Bar
+        (6: Tempo)
 
         :param tokens: list of lists of tokens to convert, each list inside the
                        first list corresponds to a track

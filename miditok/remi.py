@@ -31,7 +31,6 @@ class REMIEncoding(MIDITokenizer):
     def __init__(self, pitch_range: range = PITCH_RANGE, beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
                  nb_velocities: int = NB_VELOCITIES, additional_tokens: Dict[str, Union[bool, int]] = ADDITIONAL_TOKENS,
                  program_tokens: bool = PROGRAM_TOKENS, params=None):
-        additional_tokens['Ignore'] = False  # Incompatible additional tokens
         super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, program_tokens, params)
 
     def track_to_events(self, track: Instrument) -> List[Event]:
@@ -71,6 +70,7 @@ class REMIEncoding(MIDITokenizer):
         current_tick = -1
         current_tempo_idx = 0
         current_tempo = self.current_midi_metadata['tempo_changes'][current_tempo_idx].tempo
+        current_tempo = (np.abs(self.tempo_bins - current_tempo)).argmin()
         for note in track.notes:
             if note.pitch not in self.pitch_range:  # Notes to low or to high are discarded
                 continue
@@ -91,14 +91,14 @@ class REMIEncoding(MIDITokenizer):
                         for tempo_change in self.current_midi_metadata['tempo_changes'][current_tempo_idx + 1:]:
                             # If this tempo change happened before the current moment
                             if tempo_change.time <= current_tick:
-                                current_tempo = tempo_change.tempo
+                                current_tempo = (np.abs(self.tempo_bins - tempo_change.tempo)).argmin()
                                 current_tempo_idx += 1  # update tempo value (might not change) and index
                             elif tempo_change.time > current_tick:
-                                break  # this tempo change is beyond the current moment, we break the loop
+                                break  # this tempo change is beyond the current time step, we break the loop
                     events.append(Event(
                         name='Tempo',
                         time=note.start,
-                        value=(np.abs(self.tempo_bins - current_tempo)).argmin(),
+                        value=current_tempo,
                         text=note.start))
             # Pitch
             events.append(Event(

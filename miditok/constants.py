@@ -10,7 +10,6 @@ NB_VELOCITIES = 32  # nb of velocity bins, velocities values from 0 to 127 will 
 ADDITIONAL_TOKENS = {'Chord': True,
                      'Empty': True,
                      'Tempo': False,  # Unused for now (not implemented)
-                     'Ignore': True,  # for CP words only
                      # tempo params
                      'nb_tempos': 32,  # nb of tempo bins for additional tempo tokens, quantized like velocities
                      'tempo_range': (40, 250)}  # (min_tempo, max_tempo)
