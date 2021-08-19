@@ -38,7 +38,6 @@ class REMIEncoding(MIDITokenizer):
 
         :param track: track object to convert
         :return: list of events
-                 the events should be in the order Bar -> Position -> Chord -> Pitch -> Velocity -> Duration
         """
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
         # notes.sort(key=lambda x: (x.start, x.pitch))  # it should have been done in quantization function

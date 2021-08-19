@@ -141,7 +141,6 @@ class MIDITokenizer:
 
         :param track: track object to convert
         :return: list of events
-                 the events should be in the order Bar -> Position -> Chord -> Pitch -> Velocity -> Duration
         """
         raise NotImplementedError
 
@@ -172,7 +171,7 @@ class MIDITokenizer:
         return midi
 
     def tokens_to_track(self, tokens: List[int], time_division: Optional[int] = TIME_DIVISION,
-                        program: Optional[Tuple[int, bool]] = (0, False)) -> Instrument:
+                        program: Optional[Tuple[int, bool]] = (0, False)):
         """ Converts a sequence of tokens into a track object
 
         :param tokens: sequence of tokens to convert

@@ -23,7 +23,9 @@ from miditoolkit import MidiFile
 BEAT_RES_TEST = {(0, 32): 8}
 ADDITIONAL_TOKENS_TEST = {'Chord': False,
                           'Empty': False,
-                          'Tempo': False}
+                          'Tempo': True,
+                          'nb_tempos': 32,
+                          'tempo_range': (40, 250)}
 
 
 def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './Maestro_MIDIs',
@@ -60,10 +62,10 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
         tokens_oct = oct_enc.midi_to_tokens(midi)
 
         # Convert back tokens into a track object
-        track_cp = cp_enc.tokens_to_track(tokens_cp[0], midi.ticks_per_beat)
-        track_remi = remi_enc.tokens_to_track(tokens_remi[0], midi.ticks_per_beat)
+        track_cp = cp_enc.tokens_to_track(tokens_cp[0], midi.ticks_per_beat)[0]
+        track_remi = remi_enc.tokens_to_track(tokens_remi[0], midi.ticks_per_beat)[0]
         track_struct = struct_enc.tokens_to_track(tokens_struct[0], midi.ticks_per_beat)
-        track_midilike = midilike_enc.tokens_to_track(tokens_midilike[0], midi.ticks_per_beat)
+        track_midilike = midilike_enc.tokens_to_track(tokens_midilike[0], midi.ticks_per_beat)[0]
         track_mumidi = mumidi_enc.tokens_to_midi(tokens_mumidi, time_division=midi.ticks_per_beat).instruments[0]
         track_oct = oct_enc.tokens_to_midi(tokens_oct, time_division=midi.ticks_per_beat).instruments[0]
 

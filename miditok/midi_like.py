@@ -1,12 +1,13 @@
 """ MIDI-like encoding method similar to ???
 Music Transformer:
 
-"""  # TODO tempo events
+"""
 
+from pathlib import Path
 from typing import List, Tuple, Dict, Optional
 
 import numpy as np
-from miditoolkit import Instrument, Note
+from miditoolkit import MidiFile, Instrument, Note, TempoChange
 
 from .midi_tokenizer_base import MIDITokenizer, Event, detect_chords
 from .constants import *
@@ -49,12 +50,10 @@ class MIDILikeEncoding(MIDITokenizer):
 
         :param track: track object to convert
         :return: list of events
-                 the events should be in the order Bar -> Position -> Chord -> Pitch -> Velocity -> Duration
         """
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
         # notes.sort(key=lambda x: (x.start, x.pitch))  # it should have been done in quantization function
         events = []
-        current_tick = 0
 
         # Creates the Note On, Note Off and Velocity events
         for n, note in enumerate(track.notes):
@@ -79,9 +78,20 @@ class MIDILikeEncoding(MIDITokenizer):
                 time=note.end,
                 value=note.pitch,
                 text=note.pitch))
+        # Adds tempo events if specified
+        if self.additional_tokens['Tempo']:
+            for tempo_change in self.current_midi_metadata['tempo_changes']:
+                events.append(Event(
+                    name='Tempo',
+                    time=tempo_change.time,
+                    value=(np.abs(self.tempo_bins - tempo_change.tempo)).argmin(),
+                    text=tempo_change.tempo))
+
+        # Sorts events in the good order
         events.sort(key=lambda x: x.time)
 
         # Time Shift
+        current_tick = 0
         for e, event in enumerate(events[:-1].copy()):
             if event.time == current_tick:
                 continue
@@ -103,8 +113,41 @@ class MIDILikeEncoding(MIDITokenizer):
 
         return events
 
+    def tokens_to_midi(self, tokens: List[List[int]], programs: Optional[List[Tuple[int, bool]]] = None,
+                       output_path: Optional[str] = None, time_division: Optional[int] = TIME_DIVISION) -> MidiFile:
+        """ Override the parent class method
+        Convert multiple sequences of tokens into a multitrack MIDI and save it.
+        The tokens will be converted to event objects and then to a miditoolkit.MidiFile object.
+        NOTE: for multitrack with tempo, only the tempo tokens of the first
+            decoded track will be used for the MIDI
+
+        :param tokens: list of lists of tokens to convert, each list inside the
+                       first list corresponds to a track
+        :param programs: programs of the tracks
+        :param output_path: path to save the file (with its name, e.g. music.mid),
+                        leave None to not save the file
+        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create)
+        :return: the midi object (miditoolkit.MidiFile)
+        """
+        midi = MidiFile(ticks_per_beat=time_division)
+        for i, track_tokens in enumerate(tokens):
+            if programs is not None:
+                track, tempos = self.tokens_to_track(track_tokens, time_division, programs[i])
+            else:
+                track, tempos = self.tokens_to_track(track_tokens, time_division)
+            midi.instruments.append(track)
+            if i == 0:  # only keep tempo changes of the first track
+                midi.tempo_changes = tempos
+                midi.tempo_changes[0].time = 0
+
+        # Write MIDI file
+        if output_path:
+            Path(output_path).mkdir(parents=True, exist_ok=True)
+            midi.dump(output_path)
+        return midi
+
     def events_to_track(self, events: List[Event], time_division: int, program: Optional[Tuple[int, bool]] = (0, False),
-                        default_duration: int = None) -> Instrument:
+                        default_duration: int = None) -> Tuple[Instrument, List[TempoChange]]:
         """ Transform a list of Event objects into an instrument object
 
         :param events: list of Event objects to convert to a track
@@ -118,8 +161,12 @@ class MIDILikeEncoding(MIDITokenizer):
 
         name = 'Drums' if program[1] else MIDI_INSTRUMENTS[program[0]]['name']
         instrument = Instrument(program[0], is_drum=program[1], name=name)
-        current_tick = 0
+        if self.additional_tokens['Tempo']:
+            tempo_changes = [TempoChange(TEMPO, -1)]  # mock the first tempo change to optimize below
+        else:  # default
+            tempo_changes = [TempoChange(TEMPO, 0)] * 2  # the first will be deleted at the end of the method
 
+        current_tick = 0
         count = 0
         while count < len(events):
             if events[count].name == 'Note-On':
@@ -152,10 +199,15 @@ class MIDILikeEncoding(MIDITokenizer):
                 beat, pos, res = map(int, events[count].value.split('.'))
                 current_tick += (beat * res + pos) * time_division // res
                 count += 1
+            elif events[count].name == 'Tempo':
+                tempo = int(self.tempo_bins[int(events[count].value)])
+                if tempo != tempo_changes[-1].tempo:
+                    tempo_changes.append(TempoChange(tempo, current_tick))
+                count += 1
             else:
                 count += 1
-
-        return instrument
+        del tempo_changes[0]
+        return instrument, tempo_changes
 
     def create_vocabulary(self, program_tokens: bool) -> Tuple[dict, dict, dict]:
         """ Create the tokens <-> event dictionaries
