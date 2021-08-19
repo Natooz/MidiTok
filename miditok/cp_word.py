@@ -76,30 +76,28 @@ class CPWordEncoding(MIDITokenizer):
             events.append(time_step)
         return events
 
-    def track_to_events(self, track: Instrument, time_division: int) -> List[List[Event]]:
+    def track_to_events(self, track: Instrument) -> List[List[Event]]:
         """ Converts a track (list of Note objects) into Event objects
 
-        :param track: track object to convert
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
+        :param track: track object to convert TODO tempo
         :return: list of events
                  the events should be in the order Bar -> Position -> Chord -> Pitch -> Velocity -> Duration
         """
         if self.additional_tokens['Ignore']:
-            return self._track_to_events_ignore(track, time_division)
-        return self._track_to_events_no_ignore(track, time_division)
+            return self._track_to_events_ignore(track)
+        return self._track_to_events_no_ignore(track)
 
-    def _track_to_events_ignore(self, track: Instrument, time_division: int) -> List[List[Event]]:
+    def _track_to_events_ignore(self, track: Instrument) -> List[List[Event]]:
         """ Converts a track (list of Note objects) into Event objects
 
         :param track: track object to convert
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
         :return: list of events
                  the events should be in the order Bar -> Position -> Chord -> Pitch -> Velocity -> Duration
         """
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
         # notes.sort(key=lambda x: (x.start, x.pitch))  # it should have been done in quantization function
-        ticks_per_frame = time_division // max(self.beat_res.values())
-        ticks_per_bar = time_division * 4
+        ticks_per_frame = self.current_midi_metadata['time_division'] // max(self.beat_res.values())
+        ticks_per_bar = self.current_midi_metadata['time_division'] * 4
         events = []  # list of lists of Event objects
 
         def create_event(time: int, bar=False, pos=None, pitch=None, vel=None, dur=None, chord=None, empty=False,
@@ -154,7 +152,8 @@ class CPWordEncoding(MIDITokenizer):
             # Note
             velocity_index = (np.abs(self.velocity_bins - note.velocity)).argmin()
             duration = note.end - note.start
-            dur_index = np.argmin(np.abs([ticks - duration for ticks in self.durations_ticks[time_division]]))
+            dur_index = np.argmin(np.abs([ticks - duration for ticks in
+                                          self.durations_ticks[self.current_midi_metadata['time_division']]]))
             dur_value = '.'.join(map(str, self.durations[dur_index]))
             events.append(create_event(int(note.start), pitch=note.pitch, vel=velocity_index, dur=dur_value,
                                        text=f'{duration} ticks'))
@@ -163,7 +162,7 @@ class CPWordEncoding(MIDITokenizer):
 
         # Adds chord events if specified
         if self.additional_tokens['Chord'] and not track.is_drum:
-            chord_events = detect_chords(track.notes, time_division)
+            chord_events = detect_chords(track.notes, self.current_midi_metadata['time_division'])
             count = 0
             for chord_event in chord_events:
                 for e, compound_token in enumerate(events[count:]):
@@ -174,19 +173,17 @@ class CPWordEncoding(MIDITokenizer):
 
         return events
 
-    def _track_to_events_no_ignore(self, track: Instrument, time_division: int) -> \
-            List[List[Event]]:
+    def _track_to_events_no_ignore(self, track: Instrument) -> List[List[Event]]:
         """ Converts a track (list of Note objects) into Event objects
 
         :param track: track object to convert
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
         :return: list of events
                  the events should be in the order Bar -> Position -> Chord -> Pitch -> Velocity -> Duration
         """
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
         # notes.sort(key=lambda x: (x.start, x.pitch))  # it should have been done in quantization function
-        ticks_per_frame = time_division // max(self.beat_res.values())
-        ticks_per_bar = time_division * 4
+        ticks_per_frame = self.current_midi_metadata['time_division'] // max(self.beat_res.values())
+        ticks_per_bar = self.current_midi_metadata['time_division'] * 4
         events = []  # list of lists of Event objects
 
         # Creates Bar and Position events
@@ -218,7 +215,8 @@ class CPWordEncoding(MIDITokenizer):
             # Note
             velocity_index = (np.abs(self.velocity_bins - note.velocity)).argmin()
             duration = note.end - note.start
-            dur_index = np.argmin(np.abs([ticks - duration for ticks in self.durations_ticks[time_division]]))
+            dur_index = np.argmin(np.abs([ticks - duration for ticks in
+                                          self.durations_ticks[self.current_midi_metadata['time_division']]]))
             events.append([Event(name='Family', time=note.start, value='Note', text=note.start),
                            Event(name='Pitch', time=note.start, value=note.pitch, text=note.pitch),
                            Event(name='Velocity', time=note.start, value=velocity_index,
@@ -230,7 +228,7 @@ class CPWordEncoding(MIDITokenizer):
 
         # Adds chord events if specified
         if self.additional_tokens['Chord'] and not track.is_drum:
-            chord_events = detect_chords(track.notes, time_division)
+            chord_events = detect_chords(track.notes, self.current_midi_metadata['time_division'])
             count = 0
             for chord_event in chord_events:
                 for e, compound_token in enumerate(events[count:]):
@@ -330,6 +328,13 @@ class CPWordEncoding(MIDITokenizer):
                 event_to_token[f'Chord_{chord_quality}'] = count
                 count += 1
 
+        # TEMPO
+        if self.additional_tokens['Tempo']:
+            token_type_indices['Tempo'] = list(range(count, count + len(self.tempo_bins)))
+            for i in range(len(self.tempo_bins)):
+                event_to_token[f'Tempo_{i}'] = count
+                count += 1
+
         # IGNORE
         if self.additional_tokens['Ignore']:
             event_to_token['BarPosition_Ignore'] = count
@@ -341,6 +346,10 @@ class CPWordEncoding(MIDITokenizer):
             event_to_token['Duration_Ignore'] = count + 3
             token_type_indices['Duration'] += [count + 3]
             count += 4
+            if self.additional_tokens['Tempo']:
+                event_to_token['Tempo_Ignore'] = count
+                token_type_indices['Tempo'] += [count]
+                count += 1
             if self.additional_tokens['Chord'] or self.additional_tokens['Empty']:
                 event_to_token['ChordEmpty_Ignore'] = count
                 try:

@@ -11,7 +11,7 @@ import json
 from typing import List, Tuple, Dict, Union, Callable, Optional, Any
 
 import numpy as np
-from miditoolkit import MidiFile, Instrument, Note
+from miditoolkit import MidiFile, Instrument, Note, TempoChange
 
 from .constants import TIME_DIVISION, CHORD_MAPS
 
@@ -58,11 +58,21 @@ class MIDITokenizer:
         self.durations = self.create_durations_tuples()
         self.velocity_bins = np.linspace(0, 127, self.nb_velocities + 1, dtype=np.intc)
         np.delete(self.velocity_bins, 0)  # removes velocity 0
+        if additional_tokens['Tempo']:
+            self.tempo_bins = np.linspace(*additional_tokens['tempo_range'], additional_tokens['nb_tempos'],
+                                          dtype=np.intc)
+        else:
+            self.tempo_bins = None
+
         self.event2token, self.token2event, self.token_types_indices = self.create_vocabulary(program_tokens)
 
-        # keep in memory durations in ticks for seen time divisions so these values
+        # Keep in memory durations in ticks for seen time divisions so these values
         # are not calculated each time a MIDI is processed
         self.durations_ticks = {}
+
+        # Holds the tempo changes, time signature, time division and key signature of a
+        # MIDI (being parsed) so that methods processing tracks can access them
+        self.current_midi_metadata = {}  # needs to be updated each time a MIDI is read
 
     def midi_to_tokens(self, midi: MidiFile) -> Tuple[List[List[int]], List[Tuple[int, bool]]]:
         """ Converts a MIDI file in a tokens representation
@@ -78,24 +88,29 @@ class MIDITokenizer:
             self.durations_ticks[midi.ticks_per_beat] = [(beat * res + pos) * midi.ticks_per_beat // res
                                                          for beat, pos, res in self.durations]
 
+        self.current_midi_metadata = {'time_division': midi.ticks_per_beat,
+                                      'tempo_changes': midi.tempo_changes,
+                                      'time_sig_changes': midi.time_signature_changes,
+                                      'key_sig_changes': midi.key_signature_changes}
+        quantize_tempos(midi.tempo_changes, midi.ticks_per_beat, max(self.beat_res.values()))
+
         tokens = []
         for track in midi.instruments:
-            tokens.append(self.track_to_tokens(track, midi.ticks_per_beat))
+            tokens.append(self.track_to_tokens(track))
 
         track_info = [(int(track.program), track.is_drum) for track in midi.instruments]
         return tokens, track_info
 
-    def track_to_tokens(self, track: Instrument, time_division: int) -> List[int]:
+    def track_to_tokens(self, track: Instrument) -> List[int]:
         """ Converts a track (miditoolkit.Instrument object) into a sequence of tokens
 
         :param track: MIDI track to convert
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
         :return: sequence of corresponding tokens
         """
-        quantize_note_times(track.notes, time_division, max(self.beat_res.values()))  # adjusts notes timings
+        quantize_note_times(track.notes, self.current_midi_metadata['time_division'], max(self.beat_res.values()))
         track.notes.sort(key=lambda x: (x.start, x.pitch))  # sort notes
         remove_duplicated_notes(track.notes)  # remove possible duplicated notes
-        events = self.track_to_events(track, time_division)  # get distinct events
+        events = self.track_to_events(track)  # get distinct events
         return self.events_to_tokens(events)
 
     def events_to_tokens(self, events: List[Event]) -> List[int]:
@@ -120,13 +135,12 @@ class MIDITokenizer:
             events.append(Event(name, None, val, None))
         return events
 
-    def track_to_events(self, track: Instrument, time_division: int) -> List[Event]:
+    def track_to_events(self, track: Instrument) -> List[Event]:
         """ Converts a track (list of Note objects) into Event objects
         NOTE: this method must take care of chord or other types of tokens, if specified
         And to sort every events in the right order!
 
         :param track: track object to convert
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
         :return: list of events
                  the events should be in the order Bar -> Position -> Chord -> Pitch -> Velocity -> Duration
         """
@@ -301,6 +315,19 @@ def quantize_note_times(notes: List[Note], time_division: int, beat_res: int):
 
         if note.start == note.end:  # if this happens to often, consider using a higher beat resolution
             note.end += ticks  # like 8 frames per beat or 24 frames per bar
+
+
+def quantize_tempos(tempos: List[TempoChange], time_division: int, beat_res: int):
+    """ Quantize the times of tempo change events.
+
+    :param tempos: tempo changes to quantize
+    :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
+    :param beat_res: number of frames (time steps, or positions) per beat
+    """
+    ticks = int(time_division / beat_res)
+    quantized_ticks = np.arange(0, max([t.time for t in tempos]) + 2 * ticks, ticks, dtype=int)
+    for tempo_change in tempos:
+        tempo_change.time = quantized_ticks[np.argmin(np.abs(quantized_ticks - tempo_change.time))]
 
 
 def remove_duplicated_notes(notes: List[Note]):

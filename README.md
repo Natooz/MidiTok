@@ -23,6 +23,10 @@ Strategy used in the first symbolic music generative transformers and RNN / LSTM
 
 Proposed in the [Pop Music Transformer](https://arxiv.org/abs/2002.00212), it is what we would call a "position-based" representation. The time is represented with "_Bar_" and "_Position_" tokens that indicate respectively when a new bar is beginning, and the current position within a bar.
 
+NOTES:
+* In the original REMI paper, the tempo information are in fact the succession of two token types: a "_Token Class_" which indicate if the tempo is fast or slow, and a "_Token Value_" which encode its value with respect to the tempo class. In MidiTok we only encode one _Tempo_ token which encode its value, quantized in a number of bins set in parameters (as done for velocities).
+* Including tempo tokens in a multitrack task with REMI is not recommended. Generating several tracks would lead to multiple and ambiguous tempo changes. So in MidiTok only the tempo changes of the first track will be kept in the final created MIDI.
+
 ![REMI figure](https://github.com/Natooz/MidiTok/blob/assets/assets/remi.png?raw=true "Time is tracked with Bar and position tokens")
 
 ### Compound Word
@@ -230,7 +234,7 @@ Contributions are gratefully welcomed, feel free to send a PR if you want to add
 ```
 
 ```bibtex
-@misc{zeng2021musicbert,
+@misc{octuple2021,
     title={MusicBERT: Symbolic Music Understanding with Large-Scale Pre-Training}, 
     author={Mingliang Zeng and Xu Tan and Rui Wang and Zeqian Ju and Tao Qin and Tie-Yan Liu},
     year={2021},

@@ -10,9 +10,9 @@ from pathlib import Path, PurePath
 from typing import List, Tuple, Dict, Optional, Union
 
 import numpy as np
-from miditoolkit import Instrument, Note, MidiFile
+from miditoolkit import MidiFile, Instrument, Note, TempoChange
 
-from .midi_tokenizer_base import MIDITokenizer, Event, quantize_note_times, remove_duplicated_notes
+from .midi_tokenizer_base import MIDITokenizer, Event, quantize_note_times, quantize_tempos, remove_duplicated_notes
 from .constants import *
 
 
@@ -70,8 +70,22 @@ class OctupleEncoding(MIDITokenizer):
             self.durations_ticks[midi.ticks_per_beat] = [(beat * res + pos) * midi.ticks_per_beat // res
                                                          for beat, pos, res in self.durations]
 
-        ticks_per_frame = midi.ticks_per_beat // max(self.beat_res.values())
-        ticks_per_bar = midi.ticks_per_beat * 4
+        self.current_midi_metadata = {'time_division': midi.ticks_per_beat,
+                                      'tempo_changes': midi.tempo_changes,
+                                      'time_sig_changes': midi.time_signature_changes,
+                                      'key_sig_changes': midi.key_signature_changes}
+        quantize_tempos(midi.tempo_changes, midi.ticks_per_beat, max(self.beat_res.values()))
+
+        # Check bar embedding limit, update if needed
+        nb_bars = ceil(midi.max_tick / (midi.ticks_per_beat * 4))
+        if self.max_bar_embedding < nb_bars:
+            count = len(self.event2token)
+            for i in range(self.max_bar_embedding, nb_bars):
+                self.event2token[f'Bar_{i}'] = count
+                self.token2event[count] = f'Bar_{i}'
+                self.token_types_indices['Bar'] += [count]
+                count += 1
+            self.max_bar_embedding = nb_bars
 
         # Process notes of every tracks
         note_events = []
@@ -79,66 +93,74 @@ class OctupleEncoding(MIDITokenizer):
             quantize_note_times(track.notes, midi.ticks_per_beat, max(self.beat_res.values()))  # adjusts notes timings
             track.notes.sort(key=lambda x: (x.start, x.pitch))  # sort notes
             remove_duplicated_notes(track.notes)  # remove possible duplicated notes
-            note_events += self.track_to_events(track, midi.ticks_per_beat)
-
-            # Check bar embedding limit, update if needed
-            nb_bars = ceil(max(note.end for note in track.notes) / ticks_per_bar)
-            if self.max_bar_embedding < nb_bars:
-                count = len(self.event2token)
-                for i in range(self.max_bar_embedding, nb_bars):
-                    self.event2token[f'Bar_{i}'] = count
-                    self.token2event[count] = f'Bar_{i}'
-                    self.token_types_indices['Bar'] += [count]
-                    count += 1
-                self.max_bar_embedding = nb_bars
+            note_events += self.track_to_events(track)
 
         note_events.sort(key=lambda x: (x[0].time, x[0].text, x[0].value))  # Sort by time then track then pitch
 
-        tokens = []
-
-        current_tick = -1
-        current_bar = -1
-        current_pos = -1
+        # Convert pitch events into tokens
         for note_event in note_events:
-            # Positions and bars
-            if note_event[0].time != current_tick:
-                pos_index = int((note_event[0].time % ticks_per_bar) / ticks_per_frame)
-                current_tick = note_event[0].time
-                current_bar = current_tick // ticks_per_bar
-                current_pos = pos_index
-
-            # Adding bar and position tokens to notes for positional encoding
             note_event[0] = self.event2token[f'{note_event[0].name}_{note_event[0].value}']
-            tokens.append(note_event + [self.event2token[f'Position_{current_pos}'],
-                                        self.event2token[f'Bar_{current_bar}']])
 
-        return tokens
+        return note_events
 
-    def track_to_events(self, track: Instrument, time_division: int) -> List[List[Event]]:
-        """ Converts a track (list of Note objects) into Event objects
-        This only create pitch, velocity and duration events
+    def track_to_events(self, track: Instrument) -> List[List[Event]]:
+        """ Converts a track (list of Note objects) into Event objects / tokens object
+        In fact only the pitch is as an Event object so the notes of every tracks
+        can then be sorted in midi_to_tokens, but the other attributes are directly
+        converted to tokens.
 
         :param track: track object to convert
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
         :return: list of events
-                 the events should be in the order Bar -> Position -> Chord -> Pitch -> Velocity -> Duration
         """
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
+        ticks_per_frame = self.current_midi_metadata['time_division'] // max(self.beat_res.values())
+        ticks_per_bar = self.current_midi_metadata['time_division'] * 4
 
         events = []
+        current_tick = -1
+        current_bar = -1
+        current_pos = -1
+        current_tempo_idx = 0
+        current_tempo = self.current_midi_metadata['tempo_changes'][current_tempo_idx].tempo
         for note in track.notes:
             if note.pitch not in self.pitch_range:  # Notes to low or to high are discarded
                 continue
-            # Note
+
+            # Positions and bars
+            if note.start != current_tick:
+                pos_index = int((note.start % ticks_per_bar) / ticks_per_frame)
+                current_tick = note.start
+                current_bar = current_tick // ticks_per_bar
+                current_pos = pos_index
+
+            # Note attributes
             velocity_index = (np.abs(self.velocity_bins - note.velocity)).argmin()
             duration = note.end - note.start
-            dur_index = np.argmin(np.abs([ticks - duration for ticks in self.durations_ticks[time_division]]))
+            dur_index = np.argmin(np.abs([ticks - duration for ticks in
+                                          self.durations_ticks[self.current_midi_metadata['time_division']]]))
+            event = [Event(name='Pitch', time=note.start, value=note.pitch, text=track.program),
+                     self.event2token[f'Velocity_{velocity_index}'],
+                     self.event2token[f'Duration_{".".join(map(str, self.durations[dur_index]))}'],
+                     self.event2token[f'Program_{-1 if track.is_drum else track.program}'],
+                     self.event2token[f'Position_{current_pos}'],
+                     self.event2token[f'Bar_{current_bar}']]
 
-            events.append([Event(name='Pitch', time=note.start, value=note.pitch, text=track.program),
-                           self.event2token[f'Velocity_{velocity_index}'],
-                           self.event2token[f'Duration_{".".join(map(str, self.durations[dur_index]))}'],
-                           self.event2token[f'Program_{-1 if track.is_drum else track.program}']])
+            # (Tempo)
+            if self.additional_tokens['Tempo']:
+                # If the current tempo is not the last one
+                if current_tempo_idx + 1 < len(self.current_midi_metadata['tempo_changes']):
+                    # Will loop over incoming tempo changes
+                    for tempo_change in self.current_midi_metadata['tempo_changes'][current_tempo_idx + 1:]:
+                        # If this tempo change happened before the current moment
+                        if tempo_change.time <= current_tick:
+                            current_tempo = tempo_change.tempo
+                            current_tempo_idx += 1  # update tempo value (might not change) and index
+                        elif tempo_change.time > current_tick:
+                            break  # this tempo change is beyond the current moment, we break the loop
+                event.append(self.event2token[f'Tempo_{(np.abs(self.tempo_bins - current_tempo)).argmin()}'])
+
+            events.append(event)
 
         return events
 
@@ -158,6 +180,10 @@ class OctupleEncoding(MIDITokenizer):
         """
         midi = MidiFile(ticks_per_beat=time_division)
         ticks_per_frame = time_division // max(self.beat_res.values())
+        if self.additional_tokens['Tempo']:
+            tempo_changes = [TempoChange(TEMPO, -1)]  # mock the first tempo change to optimize below
+        else:  # default
+            tempo_changes = [TempoChange(TEMPO, 0)] * 2  # the first will be deleted at the end of the method
 
         tracks = dict([(n, []) for n in range(-1, 128)])
         for time_step in tokens:
@@ -177,6 +203,17 @@ class OctupleEncoding(MIDITokenizer):
 
             # Append the created note
             tracks[program].append(Note(vel, pitch, current_tick, current_tick + duration))
+
+            # Tempo, adds a TempoChange if necessary
+            if self.additional_tokens['Tempo']:
+                tempo = int(self.tempo_bins[int(events[-1].value)])
+                if tempo != tempo_changes[-1].tempo:
+                    tempo_changes.append(TempoChange(tempo, current_tick))
+
+        # Tempos
+        del tempo_changes[0]
+        midi.tempo_changes = tempo_changes
+        midi.tempo_changes[0].time = 0
 
         # Appends created notes to MIDI object
         for program, notes in tracks.items():
@@ -254,14 +291,11 @@ class OctupleEncoding(MIDITokenizer):
             event_to_token[f'Position_{i}'] = count
             count += 1
 
-        # CHORD
-        if self.additional_tokens['Chord']:
-            token_type_indices['Chord'] = list(range(count, count + 3 + len(CHORD_MAPS)))
-            for i in range(3, 6):  # non recognized chords, just considers the nb of notes (between 3 and 5 only)
-                event_to_token[f'Chord_{i}'] = count
-                count += 1
-            for chord_quality in CHORD_MAPS:  # classed chords
-                event_to_token[f'Chord_{chord_quality}'] = count
+        # TEMPO
+        if self.additional_tokens['Tempo']:
+            token_type_indices['Tempo'] = list(range(count, count + len(self.tempo_bins)))
+            for i in range(len(self.tempo_bins)):
+                event_to_token[f'Tempo_{i}'] = count
                 count += 1
 
         # PROGRAM

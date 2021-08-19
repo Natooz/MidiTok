@@ -8,7 +8,7 @@ from typing import List, Tuple, Dict, Optional
 import numpy as np
 from miditoolkit import Instrument, Note
 
-from .midi_tokenizer_base import MIDITokenizer, Event, detect_chords
+from .midi_tokenizer_base import MIDITokenizer, Event
 from .constants import *
 
 
@@ -22,9 +22,6 @@ class StructuredEncoding(MIDITokenizer):
     notes without long periods of silence. If your dataset contains music with long
     pauses, you might handle them with an appropriate "time shift" dictionary
     (which values are made from the beat_res dict) or with a different encoding.
-    NOTE: the original Structured MIDI Encoding doesn't use Chords tokens as its
-    purpose is to draw uniform token types transitions, you can still use them but
-    it will "break" this property
 
     :param pitch_range: range of used MIDI pitches
     :param beat_res: beat resolutions, with the form:
@@ -32,25 +29,20 @@ class StructuredEncoding(MIDITokenizer):
             The keys of the dict are tuples indicating a range of beats, ex 0 to 3 for the first bar
             The values are the resolution, in frames per beat, of the given range, ex 8
     :param nb_velocities: number of velocity bins
-    :param additional_tokens: specifies additional tokens (chords, empty bars, tempo...)
     :param program_tokens: will add entries for MIDI programs in the dictionary, to use
             in the case of multitrack generation for instance
     :param params: can be a path to the parameter (json encoded) file or a dictionary
     """
     def __init__(self, pitch_range: range = PITCH_RANGE, beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
-                 nb_velocities: int = NB_VELOCITIES, additional_tokens: Dict[str, bool] = ADDITIONAL_TOKENS,
-                 program_tokens: bool = PROGRAM_TOKENS, params=None):
-        # Incompatible additional tokens
-        additional_tokens['Empty'] = False
-        additional_tokens['Tempo'] = False
-        additional_tokens['Ignore'] = False
+                 nb_velocities: int = NB_VELOCITIES, program_tokens: bool = PROGRAM_TOKENS, params=None):
+        # No additional tokens
+        additional_tokens = {'Chord': False, 'Empty': False, 'Tempo': False, 'Ignore': False}
         super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, program_tokens, params)
 
-    def track_to_events(self, track: Instrument, time_division: int) -> List[Event]:
+    def track_to_events(self, track: Instrument) -> List[Event]:
         """ Converts a track (list of Note objects) into Event objects
 
         :param track: track object to convert
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
         :return: list of events
                  the events should be in the order Bar -> Position -> Chord -> Pitch -> Velocity -> Duration
         """
@@ -58,13 +50,15 @@ class StructuredEncoding(MIDITokenizer):
         # notes.sort(key=lambda x: (x.start, x.pitch))  # it should have been done in quantization function
         events = []
 
+        dur_bins = self.durations_ticks[self.current_midi_metadata['time_division']]
+
         # First time shift if needed
         if track.notes[0].start != 0:
-            if track.notes[0].start > max(self.durations_ticks[time_division]):
-                time_shift = track.notes[0].start % time_division  # beat wise
+            if track.notes[0].start > max(dur_bins):
+                time_shift = track.notes[0].start % self.current_midi_metadata['time_division']  # beat wise
             else:
                 time_shift = track.notes[0].start
-            index = np.argmin(np.abs([ticks - time_shift for ticks in self.durations_ticks[time_division]]))
+            index = np.argmin(np.abs([ticks - time_shift for ticks in dur_bins]))
             events.append(Event(
                 name='Time-Shift',
                 time=0,
@@ -90,7 +84,7 @@ class StructuredEncoding(MIDITokenizer):
                 text=f'{note.velocity}/{self.velocity_bins[velocity_index]}'))
             # Duration
             duration = note.end - note.start
-            index = np.argmin(np.abs([ticks - duration for ticks in self.durations_ticks[time_division]]))
+            index = np.argmin(np.abs([ticks - duration for ticks in dur_bins]))
             events.append(Event(
                 name='Duration',
                 time=note.start,
@@ -98,7 +92,7 @@ class StructuredEncoding(MIDITokenizer):
                 text=f'{duration} ticks'))
             # Time-Shift
             time_shift = track.notes[n + 1].start - note.start
-            index = np.argmin(np.abs([ticks - time_shift for ticks in self.durations_ticks[time_division]]))
+            index = np.argmin(np.abs([ticks - time_shift for ticks in dur_bins]))
             events.append(Event(
                 name='Time-Shift',
                 time=note.start,
@@ -111,13 +105,9 @@ class StructuredEncoding(MIDITokenizer):
         events.append(Event(name='Velocity', time=track.notes[-1].start, value=velocity_index,
                             text=f'{track.notes[-1].velocity}/{self.velocity_bins[velocity_index]}'))
         duration = track.notes[-1].end - track.notes[-1].start
-        index = np.argmin(np.abs([ticks - duration for ticks in self.durations_ticks[time_division]]))
+        index = np.argmin(np.abs([ticks - duration for ticks in dur_bins]))
         events.append(Event(name='Duration', time=track.notes[-1].start,
                             value='.'.join(map(str, self.durations[index])), text=f'{duration} ticks'))
-
-        # Adds chord events if specified
-        if self.additional_tokens['Chord'] and not track.is_drum:
-            events += detect_chords(track.notes, time_division)
 
         events.sort(key=lambda x: x.time)
 
@@ -204,16 +194,6 @@ class StructuredEncoding(MIDITokenizer):
             event_to_token[f'Time-Shift_{".".join(map(str, self.durations[i]))}'] = count
             count += 1
 
-        # CHORD
-        if self.additional_tokens['Chord']:
-            token_type_indices['Chord'] = list(range(count, count + 3 + len(CHORD_MAPS)))
-            for i in range(3, 6):  # non recognized chords, just considers the nb of notes (between 3 and 5 only)
-                event_to_token[f'Chord_{i}'] = count
-                count += 1
-            for chord_quality in CHORD_MAPS:  # classed chords
-                event_to_token[f'Chord_{chord_quality}'] = count
-                count += 1
-
         # PROGRAM
         if program_tokens:
             token_type_indices['Program'] = list(range(count, count + 129))
@@ -234,9 +214,5 @@ class StructuredEncoding(MIDITokenizer):
         dic['Velocity'] = ['Duration']
         dic['Duration'] = ['Time-Shift']
         dic['Time-Shift'] = ['Pitch']
-
-        if self.additional_tokens['Chord']:
-            dic['Chord'] = ['Pitch']
-            dic['Time-Shift'] += ['Chord']
 
         return dic

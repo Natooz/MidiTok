@@ -1,7 +1,7 @@
 """ MuMIDI encoding method, as introduced in PopMag
 https://arxiv.org/abs/2008.07703
 
-"""
+"""  # TODO include empty and tempo token
 
 from math import ceil
 import json
@@ -11,7 +11,8 @@ from typing import List, Tuple, Dict, Optional, Union
 import numpy as np
 from miditoolkit import Instrument, Note, MidiFile
 
-from .midi_tokenizer_base import MIDITokenizer, Event, detect_chords, quantize_note_times, remove_duplicated_notes
+from .midi_tokenizer_base import MIDITokenizer, Event, detect_chords, quantize_note_times, quantize_tempos, \
+    remove_duplicated_notes
 from .constants import *
 
 
@@ -76,6 +77,12 @@ class MuMIDIEncoding(MIDITokenizer):
             self.durations_ticks[midi.ticks_per_beat] = [(beat * res + pos) * midi.ticks_per_beat // res
                                                          for beat, pos, res in self.durations]
 
+        self.current_midi_metadata = {'time_division': midi.ticks_per_beat,
+                                      'tempo_changes': midi.tempo_changes,
+                                      'time_sig_changes': midi.time_signature_changes,
+                                      'key_sig_changes': midi.key_signature_changes}
+        quantize_tempos(midi.tempo_changes, midi.ticks_per_beat, max(self.beat_res.values()))
+
         ticks_per_frame = midi.ticks_per_beat // max(self.beat_res.values())
         ticks_per_bar = midi.ticks_per_beat * 4
 
@@ -85,7 +92,7 @@ class MuMIDIEncoding(MIDITokenizer):
             quantize_note_times(track.notes, midi.ticks_per_beat, max(self.beat_res.values()))  # adjusts notes timings
             track.notes.sort(key=lambda x: (x.start, x.pitch))  # sort notes
             remove_duplicated_notes(track.notes)  # remove possible duplicated notes
-            note_events += self.track_to_events(track, midi.ticks_per_beat)
+            note_events += self.track_to_events(track)
 
             # Check bar embedding limit, update if needed
             nb_bars = ceil(max(note.end for note in track.notes) / ticks_per_bar)
@@ -137,12 +144,11 @@ class MuMIDIEncoding(MIDITokenizer):
 
         return tokens
 
-    def track_to_events(self, track: Instrument, time_division: int) -> List[List[Event]]:
+    def track_to_events(self, track: Instrument) -> List[List[Event]]:
         """ Converts a track (list of Note objects) into Event objects
         This only create pitch, velocity and duration events
 
         :param track: track object to convert
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
         :return: list of events
                  the events should be in the order Bar -> Position -> Chord -> Pitch -> Velocity -> Duration
         """
@@ -156,7 +162,8 @@ class MuMIDIEncoding(MIDITokenizer):
             # Note
             velocity_index = (np.abs(self.velocity_bins - note.velocity)).argmin()
             duration = note.end - note.start
-            dur_index = np.argmin(np.abs([ticks - duration for ticks in self.durations_ticks[time_division]]))
+            dur_index = np.argmin(np.abs([ticks - duration for ticks in
+                                          self.durations_ticks[self.current_midi_metadata['time_division']]]))
             if not track.is_drum:
                 events.append([Event(name='Pitch', time=note.start, value=note.pitch, text=track.program),
                                self.event2token[f'Velocity_{velocity_index}'],
@@ -168,7 +175,7 @@ class MuMIDIEncoding(MIDITokenizer):
 
         # Adds chord events if specified
         if self.additional_tokens['Chord'] and not track.is_drum:
-            chords = detect_chords(track.notes, time_division)
+            chords = detect_chords(track.notes, self.current_midi_metadata['time_division'])
             unsqueezed = []
             for c in range(len(chords)):
                 chords[c].text = track.program
@@ -312,6 +319,13 @@ class MuMIDIEncoding(MIDITokenizer):
                 count += 1
             for chord_quality in CHORD_MAPS:  # classed chords
                 event_to_token[f'Chord_{chord_quality}'] = count
+                count += 1
+
+        # TEMPO
+        if self.additional_tokens['Tempo']:
+            token_type_indices['Tempo'] = list(range(count, count + len(self.tempo_bins)))
+            for i in range(len(self.tempo_bins)):
+                event_to_token[f'Tempo_{i}'] = count
                 count += 1
 
         # EMPTY

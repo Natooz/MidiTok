@@ -29,8 +29,10 @@ from miditoolkit import MidiFile
 BEAT_RES_TEST = {(0, 16): 8}
 ADDITIONAL_TOKENS_TEST = {'Chord': False,
                           'Empty': False,
-                          'Tempo': False,
-                          'Ignore': True}  # for CP words only
+                          'Tempo': True,
+                          'Ignore': True,  # for CP words only
+                          'nb_tempos': 32,
+                          'tempo_range': (40, 250)}
 
 
 def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './Maestro_MIDIs',
@@ -49,6 +51,8 @@ def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = '.
     oct_enc = OctupleEncoding(beat_res=BEAT_RES_TEST, additional_tokens=deepcopy(ADDITIONAL_TOKENS_TEST))
 
     for i, file_path in enumerate(files):
+        if i < 2:
+            continue
         t0 = time.time()
         print(f'Converting MIDI {i} / {len(files)} - {file_path}')
 
@@ -65,10 +69,10 @@ def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = '.
         print(f'Took {t1 - t0} seconds')
 
         if saving_midi:
-            midi_cp.dump(PurePath('tests', 'test_results', f'{file_path.stem}_cp').with_suffix('.mid'))
-            midi_remi.dump(PurePath('tests', 'test_results', f'{file_path.stem}_remi').with_suffix('.mid'))
-            midi_mumidi.dump(PurePath('tests', 'test_results', f'{file_path.stem}_mumidi').with_suffix('.mid'))
-            midi_oct.dump(PurePath('tests', 'test_results', f'{file_path.stem}_octuple').with_suffix('.mid'))
+            midi_cp.dump(PurePath('tests', 'test_results', f'{file_path.stem}_cp.mid'))
+            midi_remi.dump(PurePath('tests', 'test_results', f'{file_path.stem}_remi.mid'))
+            midi_mumidi.dump(PurePath('tests', 'test_results', f'{file_path.stem}_mumidi.mid'))
+            midi_oct.dump(PurePath('tests', 'test_results', f'{file_path.stem}_octuple.mid'))
 
 
 def midi_to_tokens_to_midi(tokenizer: MIDITokenizer, midi: MidiFile) -> MidiFile:

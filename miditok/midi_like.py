@@ -1,7 +1,7 @@
 """ MIDI-like encoding method similar to ???
 Music Transformer:
 
-"""
+"""  # TODO tempo events
 
 from typing import List, Tuple, Dict, Optional
 
@@ -44,12 +44,11 @@ class MIDILikeEncoding(MIDITokenizer):
         additional_tokens['Ignore'] = False  # Incompatible additional tokens
         super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, program_tokens, params)
 
-    def track_to_events(self, track: Instrument, time_division: int) -> List[Event]:
+    def track_to_events(self, track: Instrument) -> List[Event]:
         """ Converts a track (list of Note objects) into Event objects
         (can probably be achieved faster with Mido objects)
 
         :param track: track object to convert
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
         :return: list of events
                  the events should be in the order Bar -> Position -> Chord -> Pitch -> Velocity -> Duration
         """
@@ -88,7 +87,8 @@ class MIDILikeEncoding(MIDITokenizer):
             if event.time == current_tick:
                 continue
             time_shift = event.time - current_tick
-            index = np.argmin(np.abs([ticks - time_shift for ticks in self.durations_ticks[time_division]]))
+            index = np.argmin(np.abs([ticks - time_shift for ticks in
+                                      self.durations_ticks[self.current_midi_metadata['time_division']]]))
             events.append(Event(
                 name='Time-Shift',
                 time=current_tick,
@@ -98,7 +98,7 @@ class MIDILikeEncoding(MIDITokenizer):
 
         # Adds chord events if specified
         if self.additional_tokens['Chord'] and not track.is_drum:
-            events += detect_chords(track.notes, time_division)
+            events += detect_chords(track.notes, self.current_midi_metadata['time_division'])
 
         events.sort(key=lambda x: (x.time, self._order(x)))
 
@@ -208,6 +208,13 @@ class MIDILikeEncoding(MIDITokenizer):
                 event_to_token[f'Chord_{chord_quality}'] = count
                 count += 1
 
+        # TEMPO
+        if self.additional_tokens['Tempo']:
+            token_type_indices['Tempo'] = list(range(count, count + len(self.tempo_bins)))
+            for i in range(len(self.tempo_bins)):
+                event_to_token[f'Tempo_{i}'] = count
+                count += 1
+
         # PROGRAM
         if program_tokens:
             token_type_indices['Program'] = list(range(count, count + 129))
@@ -234,6 +241,12 @@ class MIDILikeEncoding(MIDITokenizer):
             dic['Time-Shift'] += ['Chord']
             dic['Note-Off'] += ['Chord']
 
+        if self.additional_tokens['Tempo']:
+            dic['Time-Shift'] += ['Tempo']
+            dic['Tempo'] = ['Time-Shift', 'Note-On']
+            if self.additional_tokens['Chord']:
+                dic['Tempo'] += ['Chord']
+
         return dic
 
     @staticmethod
@@ -247,8 +260,10 @@ class MIDILikeEncoding(MIDITokenizer):
             return 0
         elif x.name == "Note-Off":
             return 1
-        elif x.name == "Chord":
+        elif x.name == 'Tempo':
             return 2
+        elif x.name == "Chord":
+            return 3
         elif x.name == "Time-Shift":
             return 1000  # always last
         else:  # for other types of events, the order should be handle when inserting the events in the sequence

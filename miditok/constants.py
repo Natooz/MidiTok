@@ -10,13 +10,17 @@ NB_VELOCITIES = 32  # nb of velocity bins, velocities values from 0 to 127 will 
 ADDITIONAL_TOKENS = {'Chord': True,
                      'Empty': True,
                      'Tempo': False,  # Unused for now (not implemented)
-                     'Ignore': True}  # for CP words only
+                     'Ignore': True,  # for CP words only
+                     # tempo params
+                     'nb_tempos': 32,  # nb of tempo bins for additional tempo tokens, quantized like velocities
+                     'tempo_range': (40, 250)}  # (min_tempo, max_tempo)
 
 # Used when creating the event <--> token dictionary
 PROGRAM_TOKENS = True  # will include tokens specifying the instrument of each sequence at its beginning
 
-# Defaults when writing new MIDI files, 384 and 480 are convenient as divisible by 4, 8, 12, 16, 24, 32
-TIME_DIVISION = 384
+# Defaults values when writing new MIDI files
+TIME_DIVISION = 384  # 384 and 480 are convenient as divisible by 4, 8, 12, 16, 24, 32
+TEMPO = 120
 
 CHORD_MAPS = {'min': (0, 3, 7),
               'maj': (0, 4, 7),
