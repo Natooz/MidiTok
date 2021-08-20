@@ -38,7 +38,6 @@ CHORD_MAPS = {'min': (0, 3, 7),
               '9maj': (0, 4, 7, 10, 14),
               '9min': (0, 4, 7, 10, 13)}
 
-
 # http://newt.phys.unsw.edu.au/jw/notes.html
 # https://www.midi.org/specifications
 
@@ -232,3 +231,79 @@ INSTRUMENT_CLASSES_RANGES = {'Piano': (0, 7), 'Chromatic Percussion': (8, 15), '
 # index i = program i as retrieved by packages like mido or miditoolkit
 DRUM_SETS = {0: 'Standard', 8: 'Room', 16: 'Power', 24: 'Electronic', 25: 'Analog', 32: 'Jazz', 40: 'Brush',
              48: 'Orchestra', 56: 'SFX'}
+
+# Control changes list (without specifications):
+# https://www.midi.org/specifications-old/item/table-3-control-change-messages-data-bytes-2
+# Undefined and general control changes are not considered here
+# All these attributes can take values from 0 to 127, with some of them being on/off
+CONTROL_CHANGES = {
+    # MSB
+    0: 'Bank Select',
+    1: 'Modulation Depth',
+    2: 'Breath Controller',
+    4: 'Foot Controller',
+    5: 'Portamento Time',
+    6: 'Data Entry',
+    7: 'Channel Volume',
+    8: 'Balance',
+    10: 'Pan',
+    11: 'Expression Controller',
+
+    # LSB
+    32: 'Bank Select',
+    33: 'Modulation Depth',
+    34: 'Breath Controller',
+    36: 'Foot Controller',
+    37: 'Portamento Time',
+    38: 'Data Entry',
+    39: 'Channel Volume',
+    40: 'Balance',
+    42: 'Pan',
+    43: 'Expression Controller',
+
+    # On / Off control changes, ≤63 off, ≥64 on
+    64: 'Damper Pedal',
+    65: 'Portamento',
+    66: 'Sostenuto',
+    67: 'Soft Pedal',
+    68: 'Legato Footswitch',
+    69: 'Hold 2',
+
+    # Continuous controls
+    70: 'Sound Variation',
+    71: 'Timbre/Harmonic Intensity',
+    72: 'Release Time',
+    73: 'Attack Time',
+    74: 'Brightness',
+    75: 'Decay Time',
+    76: 'Vibrato Rate',
+    77: 'Vibrato Depth',
+    78: 'Vibrato Delay',
+    84: 'Portamento Control',
+    88: 'High Resolution Velocity Prefix',
+
+    # Effects depths
+    91: 'Reverb Depth',
+    92: 'Tremolo Depth',
+    93: 'Chorus Depth',
+    94: 'Celeste Depth',
+    95: 'Phaser Depth',
+
+    # Registered parameters numbers
+    96: 'Data Increment',
+    97: 'Data Decrement',
+    #  98: 'Non-Registered Parameter Number (NRPN) - LSB',
+    #  99: 'Non-Registered Parameter Number (NRPN) - MSB',
+    100: 'Registered Parameter Number (RPN) - LSB',
+    101: 'Registered Parameter Number (RPN) - MSB',
+
+    # Channel mode controls
+    120: 'All Sound Off',
+    121: 'Reset All Controllers',
+    122: 'Local Control On/Off',
+    123: 'All Notes Off',
+    124: 'Omni Mode Off',  # + all notes off
+    125: 'Omni Mode On',  # + all notes off
+    126: 'Mono Mode On',  # + poly off, + all notes off
+    127: 'Poly Mode On'  # + mono off, +all notes off
+}

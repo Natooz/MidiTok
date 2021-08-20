@@ -59,10 +59,10 @@ Introduced with [Symbolic Music Understanding with Large-Scale Pre-Training](htt
 The main benefit is the reduction of the sequence lengths, its multitrack capabilities, and its simple structure easy to decode.
 The Bar and Position embeddings can act as a positional encoding, but the authors of the original paper still applied a token-wise positional encoding afterward.
 
-NOTES: 
+NOTES:
 * In MidiTok, the tokens are first sorted by time, then track, then pitch values.
 * This implementation uses _Program_ tokens to distinguish tracks, on their MIDI program. Hence, two tracks with the same program will be treated as being the same.
-* Time signature tokens are not implemented in MidiTok 
+* Time signature tokens are not implemented in MidiTok.
 
 ![Octuple figure](https://github.com/Natooz/MidiTok/blob/assets/assets/octuple.png?raw=true "Sequence with notes from two different tracks, with a bar and position embeddings")
 
