@@ -13,6 +13,8 @@ MidiTok uses MIDIToolkit, which itself uses Mido to read and write MIDI files.
 
 ## Encodings
 
+_In the figures, yellow tokens are additional tokens, and tokens are vertically stacked at index 0 from the bottom up to the top._
+
 ### MIDI-Like
 
 Strategy used in the first symbolic music generative transformers and RNN / LSTM models. It consists of encoding the MIDI messages (Note On, Note Off, Velocity and Time Shift) into tokens as represented in a pure "MIDI way".
