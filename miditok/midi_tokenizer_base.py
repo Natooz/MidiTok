@@ -61,7 +61,7 @@ class MIDITokenizer:
             self.tempo_bins = np.linspace(*additional_tokens['tempo_range'], additional_tokens['nb_tempos'],
                                           dtype=np.intc)
         else:
-            self.tempo_bins = None
+            self.tempo_bins = np.zeros(1)
 
         self.event2token, self.token2event, self.token_types_indices = self.create_vocabulary(program_tokens)
 

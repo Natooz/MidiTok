@@ -94,5 +94,4 @@ if __name__ == "__main__":
     parser.add_argument('--data', type=str, default='tests/Maestro_MIDIs',
                         help='directory of MIDI files to use for test')
     args = parser.parse_args()
-
     one_track_midi_to_tokens_to_midi(args.data)
