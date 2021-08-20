@@ -27,8 +27,8 @@ from miditoolkit import MidiFile
 # Special beat res for test, up to 16 beats so the duration and time-shift values are
 # long enough for MIDI-Like and Structured encodings, and with a single beat resolution
 BEAT_RES_TEST = {(0, 16): 8}
-ADDITIONAL_TOKENS_TEST = {'Chord': False,
-                          'Empty': False,
+ADDITIONAL_TOKENS_TEST = {'Chord': True,
+                          'Empty': True,
                           'Tempo': True,
                           'nb_tempos': 32,
                           'tempo_range': (40, 250)}
@@ -51,7 +51,7 @@ def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = '.
 
     for i, file_path in enumerate(files):
         t0 = time.time()
-        print(f'Converting MIDI {i} / {len(files)} - {file_path}')
+        print(f'Converting MIDI {i+1} / {len(files)} - {file_path}')
 
         # Reads the MIDI
         midi = MidiFile(file_path)

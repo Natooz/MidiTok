@@ -1,7 +1,7 @@
 """ MuMIDI encoding method, as introduced in PopMag
 https://arxiv.org/abs/2008.07703
 
-"""  # TODO include empty token
+"""
 
 from math import ceil
 import json
@@ -134,6 +134,7 @@ class MuMIDIEncoding(MIDITokenizer):
                 current_tick = note_event[0].time
                 current_pos = pos_index
                 current_track = -2  # reset
+                # (New bar)
                 if current_bar < current_tick // ticks_per_bar:
                     nb_new_bars = current_tick // ticks_per_bar - current_bar
                     for i in range(nb_new_bars):
@@ -143,7 +144,16 @@ class MuMIDIEncoding(MIDITokenizer):
                         if self.additional_tokens['Tempo']:
                             bar_token.append(self.event2token[f'Tempo_{current_tempo}'])
                         tokens.append(bar_token)
+                        # (Empty bar)
+                        if self.additional_tokens['Empty'] and i+1 != nb_new_bars and nb_new_bars > 1:
+                            empty_token = [self.event2token['Empty_None'],
+                                           self.event2token['Position_Ignore'],
+                                           self.event2token[f'Bar_{current_bar + i + 1}']]
+                            if self.additional_tokens['Tempo']:
+                                empty_token.append(self.event2token[f'Tempo_{current_tempo}'])
+                            tokens.append(empty_token)
                     current_bar += nb_new_bars
+                # Position
                 pos_token = [self.event2token['Position_None'],
                              self.event2token[f'Position_{current_pos}'],
                              self.event2token[f'Bar_{current_bar}']]
