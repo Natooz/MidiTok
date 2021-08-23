@@ -43,6 +43,7 @@ class OctupleEncoding(MIDITokenizer):
         """ Override the parent class method to include additional parameter drum pitch range
         Saves the base parameters of this encoding in a txt file
         Useful to keep track of how a dataset has been tokenized / encoded
+        It will also save the name of the class used, i.e. the encoding strategy
 
         :param out_dir: output directory to save the file
         """
@@ -50,7 +51,8 @@ class OctupleEncoding(MIDITokenizer):
         with open(PurePath(out_dir, 'config').with_suffix(".txt"), 'w') as outfile:
             json.dump({'pitch_range': (self.pitch_range.start, self.pitch_range.stop),
                        'beat_res': self.beat_res, 'nb_velocities': len(self.velocity_bins),
-                       'additional_tokens': self.additional_tokens, 'max_bar_embedding': self.max_bar_embedding},
+                       'additional_tokens': self.additional_tokens, 'encoding': self.__class__.__name__,
+                       'max_bar_embedding': self.max_bar_embedding},
                       outfile)
 
     def midi_to_tokens(self, midi: MidiFile) -> List[List[int]]:

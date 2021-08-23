@@ -1,6 +1,5 @@
 """ MIDI encoding base class and methods
 TODO Control change messages (sustain, modulation, pitch bend)
-TODO common method to add additional tokens to vocab
 
 """
 
@@ -272,6 +271,7 @@ class MIDITokenizer:
     def save_params(self, out_dir: Union[str, Path, PurePath]):
         """ Saves the base parameters of this encoding in a txt file
         Useful to keep track of how a dataset has been tokenized / encoded
+        It will also save the name of the class used, i.e. the encoding strategy
 
         :param out_dir: output directory to save the file
         """
@@ -279,7 +279,8 @@ class MIDITokenizer:
         with open(PurePath(out_dir, 'config').with_suffix(".txt"), 'w') as outfile:
             json.dump({'pitch_range': (self.pitch_range.start, self.pitch_range.stop),
                        'beat_res': self.beat_res, 'nb_velocities': len(self.velocity_bins),
-                       'additional_tokens': self.additional_tokens}, outfile)
+                       'additional_tokens': self.additional_tokens,
+                       'encoding': self.__class__.__name__}, outfile)
 
     def load_params(self, params: Union[str, Path, PurePath, Dict[str, Any]]):
         """ Load parameters and set the encoder attributes
