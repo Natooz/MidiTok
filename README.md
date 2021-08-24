@@ -121,7 +121,7 @@ These tokens bring additional information about the structure and content of MID
 ### Tokenize a MIDI
 
 ```python
-from miditok import REMIEncoding
+from miditok import REMIEncoding, get_midi_programs
 from miditoolkit import MidiFile
 
 # Our parameters
@@ -138,15 +138,16 @@ additional_tokens = {'Chord': True,
 remi_enc = REMIEncoding(pitch_range, beat_res, nb_velocities, additional_tokens)
 midi = MidiFile('path/to/your_midi.mid')
 
-# Converts MIDI to tokens
+# Converts MIDI to tokens, and back to a MIDI
 tokens = remi_enc.midi_to_tokens(midi)
+converted_back_midi = remi_enc.tokens_to_midi(tokens, get_midi_programs(midi))
 
 # Converts just a selected track
 remi_enc.current_midi_metadata = {'time_division': midi.ticks_per_beat, 'tempo_changes': midi.tempo_changes}
 piano_tokens = remi_enc.track_to_tokens(midi.instruments[0])
 
 # And convert it back (the last arg stands for (program number, is drum))
-converted_back_track = remi_enc.tokens_to_track(piano_tokens, midi.ticks_per_beat, (0, False))
+converted_back_track, tempo_changes = remi_enc.tokens_to_track(piano_tokens, midi.ticks_per_beat, (0, False))
 ```
 
 ### Tokenize a dataset
