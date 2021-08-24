@@ -55,7 +55,7 @@ class CPWordEncoding(MIDITokenizer):
         :return: sequence of corresponding tokens
         """
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
-        # notes.sort(key=lambda x: (x.start, x.pitch))  # should have been done in midi_to_tokens
+        # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
         ticks_per_frame = self.current_midi_metadata['time_division'] // max(self.beat_res.values())
         ticks_per_bar = self.current_midi_metadata['time_division'] * 4
         tokens = []  # list of lists of tokens
@@ -118,7 +118,7 @@ class CPWordEncoding(MIDITokenizer):
             for chord_event in chord_events:
                 for e, cp_token in enumerate(tokens[count:]):
                     if cp_token[0].time == chord_event.time and cp_token[0].text == 'Position':
-                        cp_token[5] = chord_event
+                        cp_token[5] = self.event2token[f'Chord_{chord_event.value}']
                         count = e
                         break
 
@@ -197,7 +197,7 @@ class CPWordEncoding(MIDITokenizer):
         :param tokens: sequence of tokens to convert
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create)
         :param program: the MIDI program of the produced track and if it drum, (default (0, False), piano)
-        :return: the miditoolkit instrument object
+        :return: the miditoolkit instrument object and tempo changes
         """
         events = [self.tokens_to_events(cp_token) for cp_token in tokens]
 

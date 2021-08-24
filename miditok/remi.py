@@ -3,11 +3,10 @@ https://arxiv.org/abs/2002.00212
 
 """
 
-from pathlib import Path
 from typing import List, Tuple, Dict, Optional, Union
 
 import numpy as np
-from miditoolkit import MidiFile, Instrument, Note, TempoChange
+from miditoolkit import Instrument, Note, TempoChange
 
 from .midi_tokenizer_base import MIDITokenizer, Event, detect_chords
 from .constants import *
@@ -33,14 +32,14 @@ class REMIEncoding(MIDITokenizer):
                  program_tokens: bool = PROGRAM_TOKENS, params=None):
         super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, program_tokens, params)
 
-    def track_to_events(self, track: Instrument) -> List[Event]:
-        """ Converts a track (list of Note objects) into Event objects
+    def track_to_tokens(self, track: Instrument) -> List[int]:
+        """ Converts a track (miditoolkit.Instrument object) into a sequence of tokens
 
-        :param track: track object to convert
-        :return: list of events
+        :param track: MIDI track to convert
+        :return: sequence of corresponding tokens
         """
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
-        # notes.sort(key=lambda x: (x.start, x.pitch))  # it should have been done in quantization function
+        # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
         ticks_per_frame = self.current_midi_metadata['time_division'] // max(self.beat_res.values())
         ticks_per_bar = self.current_midi_metadata['time_division'] * 4
         events = []
@@ -128,19 +127,20 @@ class REMIEncoding(MIDITokenizer):
 
         events.sort(key=lambda x: (x.time, self._order(x)))
 
-        return events
+        return self.events_to_tokens(events)
 
-    def events_to_track(self, events: List[Event], time_division: int,
+    def tokens_to_track(self, tokens: List[int], time_division: Optional[int] = TIME_DIVISION,
                         program: Optional[Tuple[int, bool]] = (0, False)) -> Tuple[Instrument, List[TempoChange]]:
-        """ Transform a list of Event objects into an instrument object
+        """ Converts a sequence of tokens into a track object
 
-        :param events: list of Event objects to convert to a track
+        :param tokens: sequence of tokens to convert
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create)
         :param program: the MIDI program of the produced track and if it drum, (default (0, False), piano)
-        :return: the miditoolkit instrument object
+        :return: the miditoolkit instrument object and tempo changes
         """
-        ticks_per_frame = time_division // max(self.beat_res.values())
+        events = self.tokens_to_events(tokens)
 
+        ticks_per_frame = time_division // max(self.beat_res.values())
         name = 'Drums' if program[1] else MIDI_INSTRUMENTS[program[0]]['name']
         instrument = Instrument(program[0], is_drum=program[1], name=name)
         if self.additional_tokens['Tempo']:

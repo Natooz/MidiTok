@@ -3,11 +3,10 @@ Music Transformer:
 
 """
 
-from pathlib import Path
 from typing import List, Tuple, Dict, Optional
 
 import numpy as np
-from miditoolkit import MidiFile, Instrument, Note, TempoChange
+from miditoolkit import Instrument, Note, TempoChange
 
 from .midi_tokenizer_base import MIDITokenizer, Event, detect_chords
 from .constants import *
@@ -44,15 +43,15 @@ class MIDILikeEncoding(MIDITokenizer):
         additional_tokens['Empty'] = False  # Incompatible additional tokens
         super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, program_tokens, params)
 
-    def track_to_events(self, track: Instrument) -> List[Event]:
-        """ Converts a track (list of Note objects) into Event objects
+    def track_to_tokens(self, track: Instrument) -> List[int]:
+        """ Converts a track (miditoolkit.Instrument object) into a sequence of tokens
         (can probably be achieved faster with Mido objects)
 
-        :param track: track object to convert
-        :return: list of events
+        :param track: MIDI track to convert
+        :return: sequence of corresponding tokens
         """
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
-        # notes.sort(key=lambda x: (x.start, x.pitch))  # it should have been done in quantization function
+        # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
         events = []
 
         # Creates the Note On, Note Off and Velocity events
@@ -111,21 +110,23 @@ class MIDILikeEncoding(MIDITokenizer):
 
         events.sort(key=lambda x: (x.time, self._order(x)))
 
-        return events
+        return self.events_to_tokens(events)
 
-    def events_to_track(self, events: List[Event], time_division: int, program: Optional[Tuple[int, bool]] = (0, False),
-                        default_duration: int = None) -> Tuple[Instrument, List[TempoChange]]:
-        """ Transform a list of Event objects into an instrument object
+    def tokens_to_track(self, tokens: List[int], time_division: Optional[int] = TIME_DIVISION,
+                        program: Optional[Tuple[int, bool]] = (0, False), default_duration: int = None) \
+            -> Tuple[Instrument, List[TempoChange]]:
+        """ Converts a sequence of tokens into a track object
 
-        :param events: list of Event objects to convert to a track
+        :param tokens: sequence of tokens to convert
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create)
         :param program: the MIDI program of the produced track and if it drum, (default (0, False), piano)
-        :param default_duration: default duration in case a Note On event occurs without its associated
+        :param default_duration: default duration (in ticks) in case a Note On event occurs without its associated
                                 note off event. Leave None to discard Note On with no Note Off event.
-        :return: the miditoolkit instrument object
+        :return: the miditoolkit instrument object and tempo changes
         """
-        max_duration = (self.durations[-1][0] + self.durations[-1][1]) * time_division
+        events = self.tokens_to_events(tokens)
 
+        max_duration = (self.durations[-1][0] + self.durations[-1][1]) * time_division
         name = 'Drums' if program[1] else MIDI_INSTRUMENTS[program[0]]['name']
         instrument = Instrument(program[0], is_drum=program[1], name=name)
         if self.additional_tokens['Tempo']:

@@ -15,7 +15,12 @@ from .constants import TIME_DIVISION, CHORD_MAPS
 
 
 class Event:
-    """ Event class, representing a token and its characteristics"""
+    """ Event class, representing a token and its characteristics
+    The name corresponds to the token type (e.g. Pitch, Position ...);
+    The value to its value.
+    These two attributes are used in events_to_tokens and tokens_to_events
+    methods (see below) to convert an Event object to its corresponding integer.
+    """
 
     def __init__(self, name, time, value, text):
         self.name = name

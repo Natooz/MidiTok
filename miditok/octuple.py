@@ -57,21 +57,19 @@ class OctupleEncoding(MIDITokenizer):
 
     def midi_to_tokens(self, midi: MidiFile) -> List[List[int]]:
         """ Override the parent class method
-        Converts a MIDI file in a tokens representation
+        Converts a MIDI file in a tokens representation, a sequence of "time steps".
         A time step is a list of tokens where:
-        (list index: token type)
-        0: Pitch
-        1: Velocity
-        2: Duration
-        3: Program (track)
-        4: Position
-        5: Bar
-        (6: Tempo)
+            (list index: token type)
+            0: Pitch
+            1: Velocity
+            2: Duration
+            3: Program (track)
+            4: Position
+            5: Bar
+            (6: Tempo)
 
         :param midi: the MIDI objet to convert
-        :return: the token representation :
-                  1. tracks converted into sequences of tokens
-                  2. program numbers and if it is drums, for each track
+        :return: the token representation, i.e. tracks converted into sequences of tokens
         """
         try:
             _ = self.durations_ticks[midi.ticks_per_beat]
@@ -97,29 +95,35 @@ class OctupleEncoding(MIDITokenizer):
             self.max_bar_embedding = nb_bars
 
         # Process notes of every tracks
-        note_events = []
+        tokens = []
         for track in midi.instruments:
             quantize_note_times(track.notes, midi.ticks_per_beat, max(self.beat_res.values()))  # adjusts notes timings
             track.notes.sort(key=lambda x: (x.start, x.pitch))  # sort notes
             remove_duplicated_notes(track.notes)  # remove possible duplicated notes
-            note_events += self.track_to_events(track)
+            tokens += self.track_to_tokens(track)
 
-        note_events.sort(key=lambda x: (x[0].time, x[0].text, x[0].value))  # Sort by time then track then pitch
+        tokens.sort(key=lambda x: (x[0].time, x[0].text, x[0].value))  # Sort by time then track then pitch
 
         # Convert pitch events into tokens
-        for note_event in note_events:
-            note_event[0] = self.event2token[f'{note_event[0].name}_{note_event[0].value}']
+        for time_step in tokens:
+            time_step[0] = self.event2token[f'{time_step[0].name}_{time_step[0].value}']
 
-        return note_events
+        return tokens
 
-    def track_to_events(self, track: Instrument) -> List[List[Event]]:
-        """ Converts a track (list of Note objects) into Event objects / tokens object
-        In fact only the pitch is as an Event object so the notes of every tracks
-        can then be sorted in midi_to_tokens, but the other attributes are directly
-        converted to tokens.
+    def track_to_tokens(self, track: Instrument) -> List[List[Union[Event, int]]]:
+        """ Converts a track (miditoolkit.Instrument object) into a sequence of tokens
+        A time step is a list of tokens where:
+            (list index: token type)
+            0: Pitch (as an Event object for sorting purpose afterwards)
+            1: Velocity
+            2: Duration
+            3: Program (track)
+            4: Position
+            5: Bar
+            (6: Tempo)
 
         :param track: track object to convert
-        :return: list of events
+        :return: sequence of corresponding tokens
         """
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
@@ -180,14 +184,14 @@ class OctupleEncoding(MIDITokenizer):
         Convert multiple sequences of tokens into a multitrack MIDI and save it.
         The tokens will be converted to event objects and then to a miditoolkit.MidiFile object.
         A time step is a list of tokens where:
-        (list index: token type)
-        0: Pitch
-        1: Velocity
-        2: Duration
-        3: Program (track)
-        4: Position
-        5: Bar
-        (6: Tempo)
+            (list index: token type)
+            0: Pitch
+            1: Velocity
+            2: Duration
+            3: Program (track)
+            4: Position
+            5: Bar
+            (6: Tempo)
 
         :param tokens: list of lists of tokens to convert, each list inside the
                        first list corresponds to a track
@@ -250,17 +254,17 @@ class OctupleEncoding(MIDITokenizer):
             midi.dump(output_path)
         return midi
 
-    def events_to_track(self, events: List[Event], time_division: int,
-                        program: Optional[Tuple[int, bool]] = (0, False)) -> Instrument:
-        """ NOT IMPLEMENTED, USE tokens_to_midi
-        Transform a list of Event objects into an instrument object
+    def tokens_to_track(self, tokens: List[List[int]], time_division: Optional[int] = TIME_DIVISION,
+                        program: Optional[Tuple[int, bool]] = (0, False)) -> Tuple[Instrument, List[TempoChange]]:
+        """ NOT RELEVANT / IMPLEMENTED IN OCTUPLE
+        Use tokens_to_midi instead
 
-        :param events: list of Event objects to convert to a track
+        :param tokens: sequence of tokens to convert
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create)
         :param program: the MIDI program of the produced track and if it drum, (default (0, False), piano)
-        :return: the miditoolkit instrument object
+        :return: the miditoolkit instrument object and tempo changes
         """
-        raise NotImplementedError('event_to_track not implemented for Octuple, use tokens_to_midi instead')
+        raise NotImplementedError('tokens_to_track not implemented for Octuple, use tokens_to_midi instead')
 
     def _create_vocabulary(self, _) -> Tuple[dict, dict, dict]:
         """ Create the tokens <-> event dictionaries
@@ -297,12 +301,6 @@ class OctupleEncoding(MIDITokenizer):
             event_to_token[f'Duration_{".".join(map(str, self.durations[i]))}'] = count
             count += 1
 
-        # BAR
-        token_type_indices['Bar'] = list(range(count, count + self.max_bar_embedding))
-        for i in range(self.max_bar_embedding):  # bar embeddings (positional encoding)
-            event_to_token[f'Bar_{i}'] = count
-            count += 1
-
         # POSITION
         nb_positions = max(self.beat_res.values()) * 4  # 4/4 time signature
         token_type_indices['Position'] = list(range(count, count + nb_positions))
@@ -321,6 +319,12 @@ class OctupleEncoding(MIDITokenizer):
         token_type_indices['Program'] = list(range(count, count + 129))
         for program in range(-1, 128):  # -1 is drums
             event_to_token[f'Program_{program}'] = count
+            count += 1
+
+        # BAR --- MUST BE LAST IN DIC AS THIS MIGHT BE INCREASED
+        token_type_indices['Bar'] = list(range(count, count + self.max_bar_embedding))
+        for i in range(self.max_bar_embedding):  # bar embeddings (positional encoding)
+            event_to_token[f'Bar_{i}'] = count
             count += 1
 
         token_to_event = {v: k for k, v in event_to_token.items()}  # inversion

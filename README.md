@@ -83,7 +83,7 @@ NOTES:
 
 ### Create your own
 
-You can easily create your own encoding strategy and benefit from the MidiTok framework. Just create a class inheriting from the [MIDITokenizer](miditok/midi_tokenizer_base.py#L34) base class, and override the ```events_to_tokens```, ```tokens_to_event``` and ```create_vocabulary``` methods with your tokenization strategy.
+You can easily create your own encoding strategy and benefit from the MidiTok framework. Just create a class inheriting from the [MIDITokenizer](miditok/midi_tokenizer_base.py#L34) base class, and override the ```track_to_tokens```, ```tokens_to_track``` and ```_create_vocabulary``` methods with your tokenization strategy.
 
 ## Features
 
