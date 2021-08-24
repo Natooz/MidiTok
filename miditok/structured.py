@@ -147,7 +147,7 @@ class StructuredEncoding(MIDITokenizer):
 
         return instrument
 
-    def create_vocabulary(self, program_tokens: bool) -> Tuple[dict, dict, dict]:
+    def _create_vocabulary(self, program_tokens: bool) -> Tuple[dict, dict, dict]:
         """ Create the tokens <-> event dictionaries
         These dictionaries are created arbitrary according to constants defined
         at the top of this file.
@@ -203,7 +203,7 @@ class StructuredEncoding(MIDITokenizer):
         token_to_event = {v: k for k, v in event_to_token.items()}  # inversion
         return event_to_token, token_to_event, token_type_indices
 
-    def create_token_types_graph(self) -> Dict[str, List[str]]:
+    def _create_token_types_graph(self) -> Dict[str, List[str]]:
         dic = dict()
 
         if 'Program' in self.token_types_indices:

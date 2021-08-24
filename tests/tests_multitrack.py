@@ -20,7 +20,8 @@ from copy import deepcopy
 from pathlib import Path, PurePath
 from typing import Union
 
-from miditok import REMIEncoding, CPWordEncoding, MIDITokenizer, MuMIDIEncoding, OctupleEncoding, OctupleMonoEncoding
+from miditok import REMIEncoding, CPWordEncoding, MIDITokenizer, MuMIDIEncoding, OctupleEncoding, OctupleMonoEncoding, \
+    get_midi_programs
 from miditoolkit import MidiFile
 
 
@@ -83,7 +84,8 @@ def midi_to_tokens_to_midi(tokenizer: MIDITokenizer, midi: MidiFile) -> MidiFile
     :param midi: MIDI object to convert
     :return: The converted MIDI object
     """
-    tokens, inf = tokenizer.midi_to_tokens(midi)
+    tokens = tokenizer.midi_to_tokens(midi)
+    inf = get_midi_programs(midi)  # programs of tracks
     new_midi = tokenizer.tokens_to_midi(tokens, inf, time_division=midi.ticks_per_beat)
 
     return new_midi

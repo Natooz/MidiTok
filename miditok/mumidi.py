@@ -281,19 +281,7 @@ class MuMIDIEncoding(MIDITokenizer):
             midi.dump(output_path)
         return midi
 
-    def events_to_track(self, events: List[Event], time_division: int,
-                        program: Optional[Tuple[int, bool]] = (0, False)) -> Instrument:
-        """ NOT IMPLEMENTED, USE tokens_to_midi
-        Transform a list of Event objects into an instrument object
-
-        :param events: list of Event objects to convert to a track
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create)
-        :param program: the MIDI program of the produced track and if it drum, (default (0, False), piano)
-        :return: the miditoolkit instrument object
-        """
-        raise NotImplementedError('event_to_track not implemented for MuMIDI, use tokens_to_midi instead')
-
-    def create_vocabulary(self, _) -> Tuple[dict, dict, dict]:
+    def _create_vocabulary(self, _) -> Tuple[dict, dict, dict]:
         """ Create the tokens <-> event dictionaries
         These dictionaries are created arbitrary according to constants defined
         at the top of this file.
@@ -384,7 +372,7 @@ class MuMIDIEncoding(MIDITokenizer):
         token_to_event = {v: k for k, v in event_to_token.items()}  # inversion
         return event_to_token, token_to_event, token_type_indices
 
-    def create_token_types_graph(self) -> Dict[str, List[str]]:
+    def _create_token_types_graph(self) -> Dict[str, List[str]]:
         dic = dict()
 
         dic['Bar'] = ['Bar', 'Position']
