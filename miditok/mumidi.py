@@ -65,12 +65,18 @@ class MuMIDIEncoding(MIDITokenizer):
 
     def midi_to_tokens(self, midi: MidiFile) -> List[List[int]]:
         """ Override the parent class method
-        Converts a MIDI file in a tokens representation
+        Converts a MIDI file in a tokens representation, a sequence of "time steps".
+        A time step is a list of tokens where:
+            (list index: token type)
+            0: Pitch / Position / Bar / Program / (Chord)
+            (1: Velocity)
+            (2: Duration)
+            1 or 3: Current Bar embedding
+            2 or 4: Current Position embedding
+            (-1: Tempo)
 
         :param midi: the MIDI objet to convert
-        :return: the token representation :
-                  1. tracks converted into sequences of tokens
-                  2. program numbers and if it is drums, for each track
+        :return: the token representation, i.e. tracks converted into sequences of tokens
         """
         try:
             _ = self.durations_ticks[midi.ticks_per_beat]
@@ -84,29 +90,29 @@ class MuMIDIEncoding(MIDITokenizer):
                                       'key_sig_changes': midi.key_signature_changes}
         quantize_tempos(midi.tempo_changes, midi.ticks_per_beat, max(self.beat_res.values()))
 
+        # Check bar embedding limit, update if needed
+        nb_bars = ceil(midi.max_tick / (midi.ticks_per_beat * 4))
+        if self.max_bar_embedding < nb_bars:
+            count = len(self.event2token)
+            for i in range(self.max_bar_embedding, nb_bars):
+                self.event2token[f'Bar_{i}'] = count
+                self.token2event[count] = f'Bar_{i}'
+                self.token_types_indices['Bar'] += [count]
+                count += 1
+            self.max_bar_embedding = nb_bars
+
         ticks_per_frame = midi.ticks_per_beat // max(self.beat_res.values())
         ticks_per_bar = midi.ticks_per_beat * 4
 
         # Process notes of every tracks
-        note_events = []
+        note_tokens = []
         for track in midi.instruments:
             quantize_note_times(track.notes, midi.ticks_per_beat, max(self.beat_res.values()))  # adjusts notes timings
             track.notes.sort(key=lambda x: (x.start, x.pitch))  # sort notes
             remove_duplicated_notes(track.notes)  # remove possible duplicated notes
-            note_events += self.track_to_events(track)
+            note_tokens += self.track_to_tokens(track)
 
-            # Check bar embedding limit, update if needed
-            nb_bars = ceil(max(note.end for note in track.notes) / ticks_per_bar)
-            if self.max_bar_embedding < nb_bars:
-                count = len(self.event2token)
-                for i in range(self.max_bar_embedding, nb_bars):
-                    self.event2token[f'Bar_{i}'] = count
-                    self.token2event[count] = f'Bar_{i}'
-                    self.token_types_indices['Bar'] += [count]
-                    count += 1
-                self.max_bar_embedding = nb_bars
-
-        note_events.sort(key=lambda x: (x[0].time, x[0].text, x[0].value))  # Sort by time then track then pitch
+        note_tokens.sort(key=lambda x: (x[0].time, x[0].text, x[0].value))  # Sort by time then track then pitch
 
         tokens = []
 
@@ -117,7 +123,7 @@ class MuMIDIEncoding(MIDITokenizer):
         current_tempo_idx = 0
         current_tempo = self.current_midi_metadata['tempo_changes'][current_tempo_idx].tempo
         current_tempo = (np.abs(self.tempo_bins - current_tempo)).argmin()
-        for note_event in note_events:
+        for note_event in note_tokens:
             # (Tempo) update tempo values current_tempo
             if self.additional_tokens['Tempo']:
                 # If the current tempo is not the last one
@@ -181,17 +187,21 @@ class MuMIDIEncoding(MIDITokenizer):
 
         return tokens
 
-    def track_to_events(self, track: Instrument) -> List[List[Event]]:
-        """ Converts a track (list of Note objects) into Event objects
-        This only create pitch, velocity and duration events
+    def track_to_tokens(self, track: Instrument) -> List[List[Union[Event, int]]]:
+        """ Converts a track (miditoolkit.Instrument object) into a sequence of tokens
+        For each note, it create a time step as a list of tokens where:
+            (list index: token type)
+            0: Pitch (as an Event object for sorting purpose afterwards)
+            1: Velocity
+            2: Duration
 
         :param track: track object to convert
-        :return: list of events
+        :return: sequence of corresponding tokens
         """
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
 
-        events = []
+        tokens = []
         for note in track.notes:
             if note.pitch not in self.pitch_range:  # Notes to low or to high are discarded
                 continue
@@ -201,24 +211,24 @@ class MuMIDIEncoding(MIDITokenizer):
             dur_index = np.argmin(np.abs([ticks - duration for ticks in
                                           self.durations_ticks[self.current_midi_metadata['time_division']]]))
             if not track.is_drum:
-                events.append([Event(name='Pitch', time=note.start, value=note.pitch, text=track.program),
+                tokens.append([Event(name='Pitch', time=note.start, value=note.pitch, text=track.program),
                                self.event2token[f'Velocity_{velocity_index}'],
                                self.event2token[f'Duration_{".".join(map(str, self.durations[dur_index]))}']])
             else:
-                events.append([Event(name='DrumPitch', time=note.start, value=note.pitch, text=-1),
+                tokens.append([Event(name='DrumPitch', time=note.start, value=note.pitch, text=-1),
                                self.event2token[f'Velocity_{velocity_index}'],
                                self.event2token[f'Duration_{".".join(map(str, self.durations[dur_index]))}']])
 
-        # Adds chord events if specified
+        # Adds chord tokens if specified
         if self.additional_tokens['Chord'] and not track.is_drum:
             chords = detect_chords(track.notes, self.current_midi_metadata['time_division'])
             unsqueezed = []
             for c in range(len(chords)):
                 chords[c].text = track.program
                 unsqueezed.append([chords[c]])
-            events = unsqueezed + events  # chords at the beginning to keep the good order during sorting
+            tokens = unsqueezed + tokens  # chords at the beginning to keep the good order during sorting
 
-        return events
+        return tokens
 
     def tokens_to_midi(self, tokens: List[List[int]], _=None, output_path: Optional[str] = None,
                        time_division: Optional[int] = TIME_DIVISION) -> MidiFile:
@@ -226,10 +236,10 @@ class MuMIDIEncoding(MIDITokenizer):
         Convert multiple sequences of tokens into a multitrack MIDI and save it.
         The tokens will be converted to event objects and then to a miditoolkit.MidiFile object.
         A time step is a list of tokens where:
-        (list index: token type)
-        0: Pitch / Position / Bar
-        (1: Velocity)
-        (2: Duration)
+            (list index: token type)
+            0: Pitch / Position / Bar
+            (1: Velocity)
+            (2: Duration)
 
         :param tokens: list of lists of tokens to convert, each list inside the
                        first list corresponds to a track
@@ -281,19 +291,19 @@ class MuMIDIEncoding(MIDITokenizer):
             midi.dump(output_path)
         return midi
 
-    def events_to_track(self, events: List[Event], time_division: int,
-                        program: Optional[Tuple[int, bool]] = (0, False)) -> Instrument:
-        """ NOT IMPLEMENTED, USE tokens_to_midi
-        Transform a list of Event objects into an instrument object
+    def tokens_to_track(self, tokens: List[List[int]], time_division: Optional[int] = TIME_DIVISION,
+                        program: Optional[Tuple[int, bool]] = (0, False)):
+        """ NOT RELEVANT / IMPLEMENTED IN MUMIDI
+        Use tokens_to_midi instead
 
-        :param events: list of Event objects to convert to a track
+        :param tokens: sequence of tokens to convert
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create)
         :param program: the MIDI program of the produced track and if it drum, (default (0, False), piano)
-        :return: the miditoolkit instrument object
+        :return: the miditoolkit instrument object and tempo changes
         """
-        raise NotImplementedError('event_to_track not implemented for MuMIDI, use tokens_to_midi instead')
+        raise NotImplementedError('tokens_to_track not implemented for Octuple, use tokens_to_midi instead')
 
-    def create_vocabulary(self, _) -> Tuple[dict, dict, dict]:
+    def _create_vocabulary(self, _) -> Tuple[dict, dict, dict]:
         """ Create the tokens <-> event dictionaries
         These dictionaries are created arbitrary according to constants defined
         at the top of this file.
@@ -332,14 +342,6 @@ class MuMIDIEncoding(MIDITokenizer):
         token_type_indices['Duration'] = list(range(count, count + len(self.durations)))
         for i in range(0, len(self.durations)):
             event_to_token[f'Duration_{".".join(map(str, self.durations[i]))}'] = count
-            count += 1
-
-        # BAR
-        token_type_indices['Bar'] = list(range(count, count + self.max_bar_embedding + 1))
-        event_to_token['Bar_None'] = count  # new bar token
-        count += 1
-        for i in range(self.max_bar_embedding):  # bar embeddings (positional encoding)
-            event_to_token[f'Bar_{i}'] = count
             count += 1
 
         # POSITION
@@ -381,10 +383,18 @@ class MuMIDIEncoding(MIDITokenizer):
             event_to_token[f'Program_{program}'] = count
             count += 1
 
+        # BAR --- MUST BE LAST IN DIC AS THIS MIGHT BE INCREASED
+        token_type_indices['Bar'] = list(range(count, count + self.max_bar_embedding + 1))
+        event_to_token['Bar_None'] = count  # new bar token
+        count += 1
+        for i in range(self.max_bar_embedding):  # bar embeddings (positional encoding)
+            event_to_token[f'Bar_{i}'] = count
+            count += 1
+
         token_to_event = {v: k for k, v in event_to_token.items()}  # inversion
         return event_to_token, token_to_event, token_type_indices
 
-    def create_token_types_graph(self) -> Dict[str, List[str]]:
+    def _create_token_types_graph(self) -> Dict[str, List[str]]:
         dic = dict()
 
         dic['Bar'] = ['Bar', 'Position']

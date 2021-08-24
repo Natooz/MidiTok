@@ -3,11 +3,10 @@ https://arxiv.org/abs/2101.02402
 
 """
 
-from pathlib import Path
-from typing import List, Tuple, Dict, Optional
+from typing import List, Tuple, Dict, Optional, Union
 
 import numpy as np
-from miditoolkit import MidiFile, Instrument, Note, TempoChange
+from miditoolkit import Instrument, Note, TempoChange
 
 from .midi_tokenizer_base import MIDITokenizer, Event, detect_chords
 from .constants import *
@@ -16,34 +15,21 @@ from .constants import *
 class CPWordEncoding(MIDITokenizer):
     """ MIDI encoding method, similar to Compound Word
     https://arxiv.org/abs/2101.02402
-    In this implementation the "Ignore" tokens are optional.
-    If given, each compound token will be a list of the form:
+    Each compound token will be a list of the form:
+        (index. Token type)
         0. Family
         1. Bar/Position
         2. Pitch
         3. Velocity
         4. Duration
-        5. Chord/Empty (optionals, chords occurring with positions, empty with bars)
-        6. Tempo (optional, occurring with positions)
+        (5. Chord/Empty) (optionals, chords occurring with position tokens, empty with bars)
+        (6. Tempo) optional, occurring with position tokens
     This means a "compound token" can contain between 5 to 7 elements depending on
     your encoding parameters (additional tokens).
     (the choice of using indexes instead of dictionary with keys is to reduce the memory
     and storage usage for saved token files)
 
-    With no "Ignore" tokens, the compound tokens (lists) will have the form:
-    For Metrics:
-        0. Family
-        1. Bar/Position/Empty (Empty is optional)
-        2. Chord (optional)
-        3. Tempo (optional)
-    and for Notes:
-        0. Family
-        1. Note
-        2. Velocity
-        3. Duration
-    and Programs (that you must do yourself when creating your training samples):
-        0. Family
-        1. Program
+
 
     :param pitch_range: range of used MIDI pitches
     :param beat_res: beat resolutions, with the form:
@@ -62,70 +48,19 @@ class CPWordEncoding(MIDITokenizer):
                  program_tokens: bool = PROGRAM_TOKENS, params=None):
         super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, program_tokens, params)
 
-    def events_to_tokens(self, events: List[List[Event]]) -> List[List[int]]:
-        tokens = []
-        for compound_token in events:
-            tokens.append([self.event2token[f'{event.name}_{event.value}'] for event in compound_token])
-        return tokens
+    def track_to_tokens(self, track: Instrument) -> List[List[int]]:
+        """ Converts a track (miditoolkit.Instrument object) into a sequence of tokens
 
-    def tokens_to_events(self, tokens: List[List[int]]) -> List[List[Event]]:
-        events = []
-        for compound_token in tokens:
-            time_step = []
-            for token in compound_token:
-                name, val = self.token2event[token].split('_')
-                time_step.append(Event(name, None, val, None))
-            events.append(time_step)
-        return events
-
-    def track_to_events(self, track: Instrument) -> List[List[Event]]:
-        """ Converts a track (list of Note objects) into Event objects
-
-        :param track: track object to convert
-        :return: list of events
+        :param track: MIDI track to convert
+        :return: sequence of corresponding tokens
         """
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
-        # notes.sort(key=lambda x: (x.start, x.pitch))  # it should have been done in quantization function
+        # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
         ticks_per_frame = self.current_midi_metadata['time_division'] // max(self.beat_res.values())
         ticks_per_bar = self.current_midi_metadata['time_division'] * 4
-        events = []  # list of lists of Event objects
+        tokens = []  # list of lists of tokens
 
-        def create_event(time: int, bar=False, pos=None, pitch=None, vel=None, dur=None, chord=None, empty=False,
-                         tempo=None, text='') -> List[Event]:
-            chordempty_idx = 0
-            temp_idx = -1
-            event_template = [Event(name='Family', time=time, value='Metric', text=text),
-                              Event(name='BarPosition', time=time, value='Ignore', text=text),
-                              Event(name='Pitch', time=time, value='Ignore', text=text),
-                              Event(name='Velocity', time=time, value='Ignore', text=text),
-                              Event(name='Duration', time=time, value='Ignore', text=text)]
-            if self.additional_tokens['Chord'] or self.additional_tokens['Empty']:
-                event_template += [Event(name='ChordEmpty', time=time, value='Ignore', text=text)]
-                chordempty_idx = -1
-            if self.additional_tokens['Tempo']:
-                event_template += [Event(name='Tempo', time=time, value='Ignore', text=text)]
-                if chordempty_idx == -1:
-                    chordempty_idx = -2
-
-            if bar:
-                event_template[1] = Event(name='Bar', time=time, value=None, text=text)
-                if empty:
-                    event_template[chordempty_idx] = Event(name='Empty', time=time, value=None, text=text)
-            elif pos is not None:
-                event_template[1] = Event(name='Position', time=time, value=pos, text=text)
-                if chord is not None:
-                    event_template[chordempty_idx] = Event(name='Chord', time=time, value=chord, text=text)
-                if tempo is not None:
-                    event_template[temp_idx] = Event(name='Tempo', time=time, value=tempo, text=text)
-            elif pitch is not None:
-                event_template[0].value = 'Note'
-                event_template[2].value = pitch
-                event_template[3].value = vel
-                event_template[4].value = dur
-
-            return event_template
-
-        # Creates Bar and Position events
+        # Creates Bar and Position tokens
         bar_ticks = np.arange(0, max(n.end for n in track.notes) + ticks_per_bar, ticks_per_bar)
         for t, tick in enumerate(bar_ticks):  # creating a "Bar" event at each beginning of bars
             emp = False
@@ -135,9 +70,9 @@ class CPWordEncoding(MIDITokenizer):
                 notes_in_this_bar = [note for note in track.notes if tick <= note.start < tick + ticks_per_bar]
                 if len(notes_in_this_bar) == 0:
                     emp = True
-            events.append(create_event(tick, bar=True, empty=emp, text=str(t)))
+            tokens.append(self.create_cp_token(tick, bar=True, empty=emp, text=str(t)))
 
-        # Creates the Pitch, Velocity and Duration events
+        # Creates the Pitch, Velocity and Duration tokens
         current_tick = -1
         current_tempo_idx = 0
         current_tempo = self.current_midi_metadata['tempo_changes'][current_tempo_idx].tempo
@@ -159,10 +94,10 @@ class CPWordEncoding(MIDITokenizer):
                                 current_tempo_idx += 1  # update tempo value (might not change) and index
                             elif tempo_change.time > current_tick:
                                 break  # this tempo change is beyond the current time step, we break the loop
-                    events.append(create_event(int(note.start), pos=pos_index, tempo=current_tempo,
-                                               text=str(note.start)))
+                    tokens.append(self.create_cp_token(int(note.start), pos=pos_index, tempo=current_tempo,
+                                                       text='Position'))
                 else:
-                    events.append(create_event(int(note.start), pos=pos_index, text=str(note.start)))
+                    tokens.append(self.create_cp_token(int(note.start), pos=pos_index, text='Position'))
                 current_tick = note.start
 
             # Note
@@ -171,68 +106,102 @@ class CPWordEncoding(MIDITokenizer):
             dur_index = np.argmin(np.abs([ticks - duration for ticks in
                                           self.durations_ticks[self.current_midi_metadata['time_division']]]))
             dur_value = '.'.join(map(str, self.durations[dur_index]))
-            events.append(create_event(int(note.start), pitch=note.pitch, vel=velocity_index, dur=dur_value,
-                                       text=f'{duration} ticks'))
+            tokens.append(self.create_cp_token(int(note.start), pitch=note.pitch, vel=velocity_index, dur=dur_value,
+                                               text=f'{duration} ticks'))
 
-        events.sort(key=lambda x: x[0].time)
+        tokens.sort(key=lambda x: x[0].time)
 
-        # Adds chord events if specified
+        # Adds chord tokens if specified
         if self.additional_tokens['Chord'] and not track.is_drum:
             chord_events = detect_chords(track.notes, self.current_midi_metadata['time_division'])
             count = 0
             for chord_event in chord_events:
-                for e, compound_token in enumerate(events[count:]):
-                    if compound_token[1].time == chord_event.time and compound_token[1].name == 'Position':
-                        compound_token[5] = chord_event
+                for e, cp_token in enumerate(tokens[count:]):
+                    if cp_token[0].time == chord_event.time and cp_token[0].text == 'Position':
+                        cp_token[5] = self.event2token[f'Chord_{chord_event.value}']
                         count = e
                         break
 
-        return events
+        # Convert the first element of each compound token from Event to int
+        for cp_token in tokens:
+            cp_token[0] = self.event2token[f'Family_{cp_token[0].value}']
 
-    def tokens_to_midi(self, tokens: List[List[int]], programs: Optional[List[Tuple[int, bool]]] = None,
-                       output_path: Optional[str] = None, time_division: Optional[int] = TIME_DIVISION) -> MidiFile:
-        """ Override the parent class method
-        Convert multiple sequences of tokens into a multitrack MIDI and save it.
-        The tokens will be converted to event objects and then to a miditoolkit.MidiFile object.
-        NOTE: for multitrack with tempo, only the tempo tokens of the first
-            decoded track will be used for the MIDI
+        return tokens
 
-        :param tokens: list of lists of tokens to convert, each list inside the
-                       first list corresponds to a track
-        :param programs: programs of the tracks
-        :param output_path: path to save the file (with its name, e.g. music.mid),
-                        leave None to not save the file
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create)
-        :return: the midi object (miditoolkit.MidiFile)
+    def create_cp_token(self, time: int, bar: bool = False, pos: int = None, pitch: int = None, vel: int = None,
+                        dur: str = None, chord: str = None, empty: bool = False, tempo: int = None,
+                        program: int = None, text: str = '') -> List[Union[Event, int]]:
+        """ Create a CP Word token, with the following structure:
+            (index. Token type)
+            0. Family
+            1. Bar/Position
+            2. Pitch
+            3. Velocity
+            4. Duration
+            (5. Chord/Empty) (optionals, chords occurring with position tokens, empty with bars)
+            (6. Tempo) optional, occurring with position tokens
+        NOTE: the first Family token (first in list) will be given as an Event object to keep track
+        of time easily so that other method can sort CP tokens afterwards. Only exception is when
+        creating a Program CP token (never done in MidiTok but implemented for you if needed).
+
+        :param time: the current tick
+        :param bar: True if this token represent a new bar occurring
+        :param pos: the position index
+        :param pitch: note pitch
+        :param vel: note velocity
+        :param dur: note duration
+        :param chord: chord value
+        :param empty: True if this token represents a new empty bar
+        :param tempo: tempo index
+        :param program: a program number if you want to produce a Program CP token (read note above)
+        :param text: an optional argument for debug and used to spot position tokens in track_to_tokens
+        :return: The compound token as a list of integers
         """
-        midi = MidiFile(ticks_per_beat=time_division)
-        for i, track_tokens in enumerate(tokens):
-            if programs is not None:
-                track, tempos = self.tokens_to_track(track_tokens, time_division, programs[i])
-            else:
-                track, tempos = self.tokens_to_track(track_tokens, time_division)
-            midi.instruments.append(track)
-            if i == 0:  # only keep tempo changes of the first track
-                midi.tempo_changes = tempos
-                midi.tempo_changes[0].time = 0
+        chordempty_idx = -2 if self.additional_tokens['Tempo'] else -1
+        temp_idx = -1
+        cp_token_template = [Event(name='Family', time=time, value='Metric', text=text),
+                             self.event2token['BarPosition_Ignore'],
+                             self.event2token['Pitch_Ignore'],
+                             self.event2token['Velocity_Ignore'],
+                             self.event2token['Duration_Ignore']]
+        if self.additional_tokens['Chord'] or self.additional_tokens['Empty']:
+            cp_token_template.append(self.event2token['ChordEmpty_Ignore'])
+        if self.additional_tokens['Tempo']:
+            cp_token_template.append(self.event2token['Tempo_Ignore'])
 
-        # Write MIDI file
-        if output_path:
-            Path(output_path).mkdir(parents=True, exist_ok=True)
-            midi.dump(output_path)
-        return midi
+        if bar:
+            cp_token_template[1] = self.event2token['Bar_None']
+            if empty:
+                cp_token_template[chordempty_idx] = self.event2token['Empty_None']
+        elif pos is not None:
+            cp_token_template[1] = self.event2token[f'Position_{pos}']
+            if chord is not None:
+                cp_token_template[chordempty_idx] = self.event2token[f'Chord_{chord}']
+            if tempo is not None:
+                cp_token_template[temp_idx] = self.event2token[f'Tempo_{tempo}']
+        elif pitch is not None:
+            cp_token_template[0].value = 'Note'
+            cp_token_template[2] = self.event2token[f'Pitch_{pitch}']
+            cp_token_template[3] = self.event2token[f'Velocity_{vel}']
+            cp_token_template[4] = self.event2token[f'Duration_{dur}']
+        elif program is not None:  # Exception here, the first element returned is an int
+            cp_token_template[0] = self.event2token['Family_Program']
+            cp_token_template[1] = self.event2token[f'Program_{program}']
 
-    def events_to_track(self, events: List[List[Event]], time_division: int,
+        return cp_token_template
+
+    def tokens_to_track(self, tokens: List[List[int]], time_division: Optional[int] = TIME_DIVISION,
                         program: Optional[Tuple[int, bool]] = (0, False)) -> Tuple[Instrument, List[TempoChange]]:
-        """ Transform a list of Event objects into an instrument object
+        """ Converts a sequence of tokens into a track object
 
-        :param events: list of Event objects to convert to a track
+        :param tokens: sequence of tokens to convert
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create)
         :param program: the MIDI program of the produced track and if it drum, (default (0, False), piano)
-        :return: the miditoolkit instrument object
+        :return: the miditoolkit instrument object and tempo changes
         """
-        ticks_per_frame = time_division // max(self.beat_res.values())
+        events = [self.tokens_to_events(cp_token) for cp_token in tokens]
 
+        ticks_per_frame = time_division // max(self.beat_res.values())
         name = 'Drums' if program[1] else MIDI_INSTRUMENTS[program[0]]['name']
         instrument = Instrument(program[0], is_drum=program[1], name=name)
         if self.additional_tokens['Tempo']:
@@ -263,7 +232,7 @@ class CPWordEncoding(MIDITokenizer):
         del tempo_changes[0]
         return instrument, tempo_changes
 
-    def create_vocabulary(self, program_tokens: bool) -> Tuple[dict, dict, dict]:
+    def _create_vocabulary(self, program_tokens: bool) -> Tuple[dict, dict, dict]:
         """ Create the tokens <-> event dictionaries
         These dictionaries are created arbitrary according to constants defined
         at the top of this file.
@@ -328,7 +297,7 @@ class CPWordEncoding(MIDITokenizer):
         if self.additional_tokens['Empty']:
             if 'ChordEmpty_Ignore' not in event_to_token:
                 event_to_token['ChordEmpty_Ignore'] = count
-                token_type_indices['ChordEmpty'] = [count, count+1]
+                token_type_indices['ChordEmpty'] = [count, count + 1]
                 count += 1
             else:
                 token_type_indices['ChordEmpty'] += [count]
@@ -357,7 +326,7 @@ class CPWordEncoding(MIDITokenizer):
         token_to_event = {v: k for k, v in event_to_token.items()}  # inversion
         return event_to_token, token_to_event, token_type_indices
 
-    def create_token_types_graph(self) -> Dict[str, List[str]]:
+    def _create_token_types_graph(self) -> Dict[str, List[str]]:
         """ As with CP the tokens types are "merged", each state here corresponds to
         a "compound" token, which is characterized by the token types Program, Bar,
         Position, Pitch and Empty

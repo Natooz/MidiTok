@@ -39,13 +39,13 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
     files = list(Path(data_path).glob('**/*.mid'))
 
     # Creates tokenizers
-    oct_mono_enc = OctupleMonoEncoding(beat_res=BEAT_RES_TEST, additional_tokens=deepcopy(ADDITIONAL_TOKENS_TEST))
     cp_enc = CPWordEncoding(beat_res=BEAT_RES_TEST, additional_tokens=deepcopy(ADDITIONAL_TOKENS_TEST))
     remi_enc = REMIEncoding(beat_res=BEAT_RES_TEST, additional_tokens=deepcopy(ADDITIONAL_TOKENS_TEST))
     struct_enc = StructuredEncoding(beat_res=BEAT_RES_TEST)
     midilike_enc = MIDILikeEncoding(beat_res=BEAT_RES_TEST, additional_tokens=deepcopy(ADDITIONAL_TOKENS_TEST))
     mumidi_enc = MuMIDIEncoding(beat_res=BEAT_RES_TEST, additional_tokens=deepcopy(ADDITIONAL_TOKENS_TEST))
     oct_enc = OctupleEncoding(beat_res=BEAT_RES_TEST, additional_tokens=deepcopy(ADDITIONAL_TOKENS_TEST))
+    oct_mono_enc = OctupleMonoEncoding(beat_res=BEAT_RES_TEST, additional_tokens=deepcopy(ADDITIONAL_TOKENS_TEST))
 
     for i, file_path in enumerate(files):
         t0 = time.time()
@@ -56,22 +56,22 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
         original_track = deepcopy(midi.instruments[0])
 
         # Convert the track in tokens
-        tokens_cp, _ = cp_enc.midi_to_tokens(midi)
-        tokens_remi, _ = remi_enc.midi_to_tokens(midi)
-        tokens_struct, _ = struct_enc.midi_to_tokens(midi)
-        tokens_midilike, _ = midilike_enc.midi_to_tokens(midi)
+        tokens_cp = cp_enc.midi_to_tokens(midi)
+        tokens_remi = remi_enc.midi_to_tokens(midi)
+        tokens_struct = struct_enc.midi_to_tokens(midi)
+        tokens_midilike = midilike_enc.midi_to_tokens(midi)
         tokens_mumidi = mumidi_enc.midi_to_tokens(midi)
         tokens_oct = oct_enc.midi_to_tokens(midi)
-        tokens_oct_mono, _ = oct_mono_enc.midi_to_tokens(midi)
+        tokens_oct_mono = oct_mono_enc.midi_to_tokens(midi)
 
         # Convert back tokens into a track object
-        track_cp = cp_enc.tokens_to_track(tokens_cp[0], midi.ticks_per_beat)[0]
-        track_remi = remi_enc.tokens_to_track(tokens_remi[0], midi.ticks_per_beat)[0]
-        track_struct = struct_enc.tokens_to_track(tokens_struct[0], midi.ticks_per_beat)
-        track_midilike = midilike_enc.tokens_to_track(tokens_midilike[0], midi.ticks_per_beat)[0]
+        track_cp, _ = cp_enc.tokens_to_track(tokens_cp[0], midi.ticks_per_beat)
+        track_remi, _ = remi_enc.tokens_to_track(tokens_remi[0], midi.ticks_per_beat)
+        track_struct, _ = struct_enc.tokens_to_track(tokens_struct[0], midi.ticks_per_beat)
+        track_midilike, _ = midilike_enc.tokens_to_track(tokens_midilike[0], midi.ticks_per_beat)
         track_mumidi = mumidi_enc.tokens_to_midi(tokens_mumidi, time_division=midi.ticks_per_beat).instruments[0]
         track_oct = oct_enc.tokens_to_midi(tokens_oct, time_division=midi.ticks_per_beat).instruments[0]
-        track_oct_mono = oct_mono_enc.tokens_to_track(tokens_oct_mono[0], midi.ticks_per_beat)[0]
+        track_oct_mono, _ = oct_mono_enc.tokens_to_track(tokens_oct_mono[0], midi.ticks_per_beat)
 
         t1 = time.time()
         print(f'Took {t1 - t0} seconds')

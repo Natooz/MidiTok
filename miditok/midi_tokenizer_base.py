@@ -15,7 +15,12 @@ from .constants import TIME_DIVISION, CHORD_MAPS
 
 
 class Event:
-    """ Event class, representing a token and its characteristics"""
+    """ Event class, representing a token and its characteristics
+    The name corresponds to the token type (e.g. Pitch, Position ...);
+    The value to its value.
+    These two attributes are used in events_to_tokens and tokens_to_events
+    methods (see below) to convert an Event object to its corresponding integer.
+    """
 
     def __init__(self, name, time, value, text):
         self.name = name
@@ -53,7 +58,7 @@ class MIDITokenizer:
         else:
             self.load_params(params)
 
-        self.durations = self.create_durations_tuples()
+        self.durations = self._create_durations_tuples()
         self.velocity_bins = np.linspace(0, 127, self.nb_velocities + 1, dtype=np.intc)
         np.delete(self.velocity_bins, 0)  # removes velocity 0
         if additional_tokens['Tempo']:
@@ -62,7 +67,7 @@ class MIDITokenizer:
         else:
             self.tempo_bins = np.zeros(1)
 
-        self.event2token, self.token2event, self.token_types_indices = self.create_vocabulary(program_tokens)
+        self.event2token, self.token2event, self.token_types_indices = self._create_vocabulary(program_tokens)
 
         # Keep in memory durations in ticks for seen time divisions so these values
         # are not calculated each time a MIDI is processed
@@ -72,52 +77,46 @@ class MIDITokenizer:
         # MIDI (being parsed) so that methods processing tracks can access them
         self.current_midi_metadata = {}  # needs to be updated each time a MIDI is read
 
-    def midi_to_tokens(self, midi: MidiFile) -> Tuple[List[List[int]], List[Tuple[int, bool]]]:
-        """ Converts a MIDI file in a tokens representation
+    def midi_to_tokens(self, midi: MidiFile) -> List[List[Union[int, List[int]]]]:
+        """ Converts a MIDI file in a tokens representation.
+        NOTE: if you override this method, be sure to keep every line of code below until
+        the "Convert track to token" comment in the for loop
 
         :param midi: the MIDI objet to convert
-        :return: the token representation :
-                  1. tracks converted into sequences of tokens
-                  2. program numbers and if it is drums, for each track
+        :return: the token representation, i.e. tracks converted into sequences of tokens
         """
+        # Check if the durations values have been calculated before for this time division
         try:
             _ = self.durations_ticks[midi.ticks_per_beat]
         except KeyError:
             self.durations_ticks[midi.ticks_per_beat] = [(beat * res + pos) * midi.ticks_per_beat // res
                                                          for beat, pos, res in self.durations]
 
+        # Register MIDI metadata
         self.current_midi_metadata = {'time_division': midi.ticks_per_beat,
                                       'tempo_changes': midi.tempo_changes,
                                       'time_sig_changes': midi.time_signature_changes,
                                       'key_sig_changes': midi.key_signature_changes}
+
+        # Quantize tempo changes times
         quantize_tempos(midi.tempo_changes, midi.ticks_per_beat, max(self.beat_res.values()))
 
         tokens = []
         for track in midi.instruments:
+            quantize_note_times(track.notes, self.current_midi_metadata['time_division'], max(self.beat_res.values()))
+            track.notes.sort(key=lambda x: (x.start, x.pitch))  # sort notes
+            remove_duplicated_notes(track.notes)  # remove possible duplicated notes
+
+            # Convert track to tokens
             tokens.append(self.track_to_tokens(track))
 
-        track_info = [(int(track.program), track.is_drum) for track in midi.instruments]
-        return tokens, track_info
+        return tokens
 
-    def track_to_tokens(self, track: Instrument) -> List[int]:
+    def track_to_tokens(self, track: Instrument) -> List[Union[int, List[int]]]:
         """ Converts a track (miditoolkit.Instrument object) into a sequence of tokens
 
         :param track: MIDI track to convert
         :return: sequence of corresponding tokens
-        """
-        quantize_note_times(track.notes, self.current_midi_metadata['time_division'], max(self.beat_res.values()))
-        track.notes.sort(key=lambda x: (x.start, x.pitch))  # sort notes
-        remove_duplicated_notes(track.notes)  # remove possible duplicated notes
-        events = self.track_to_events(track)  # get distinct events
-        return self.events_to_tokens(events)
-
-    def track_to_events(self, track: Instrument) -> List[Event]:
-        """ Converts a track (list of Note objects) into Event objects
-        NOTE: this method must take care of chord or other types of tokens, if specified
-        And to sort every events in the right order!
-
-        :param track: track object to convert
-        :return: list of events
         """
         raise NotImplementedError
 
@@ -143,10 +142,13 @@ class MIDITokenizer:
             events.append(Event(name, None, val, None))
         return events
 
-    def tokens_to_midi(self, tokens: List[List[int]], programs: Optional[List[Tuple[int, bool]]] = None,
-                       output_path: Optional[str] = None, time_division: Optional[int] = TIME_DIVISION) -> MidiFile:
+    def tokens_to_midi(self, tokens: List[List[Union[int, List[int]]]],
+                       programs: Optional[List[Tuple[int, bool]]] = None, output_path: Optional[str] = None,
+                       time_division: Optional[int] = TIME_DIVISION) -> MidiFile:
         """ Convert multiple sequences of tokens into a multitrack MIDI and save it.
         The tokens will be converted to event objects and then to a miditoolkit.MidiFile object.
+        NOTE: With Remi, MIDI-Like, CP Word or other encoding methods that process tracks
+        independently, only the tempo changes of the first track in tokens will be used
 
         :param tokens: list of lists of tokens to convert, each list inside the
                        first list corresponds to a track
@@ -159,9 +161,13 @@ class MIDITokenizer:
         midi = MidiFile(ticks_per_beat=time_division)
         for i, track_tokens in enumerate(tokens):
             if programs is not None:
-                midi.instruments.append(self.tokens_to_track(track_tokens, time_division, programs[i]))
+                track, tempo_changes = self.tokens_to_track(track_tokens, time_division, programs[i])
             else:
-                midi.instruments.append(self.tokens_to_track(track_tokens, time_division))
+                track, tempo_changes = self.tokens_to_track(track_tokens, time_division)
+            midi.instruments.append(track)
+            if i == 0:  # only keep tempo changes of the first track
+                midi.tempo_changes = tempo_changes
+                midi.tempo_changes[0].time = 0
 
         # Write MIDI file
         if output_path:
@@ -169,29 +175,18 @@ class MIDITokenizer:
             midi.dump(output_path)
         return midi
 
-    def tokens_to_track(self, tokens: List[int], time_division: Optional[int] = TIME_DIVISION,
-                        program: Optional[Tuple[int, bool]] = (0, False)):
+    def tokens_to_track(self, tokens: List[Union[int, List[int]]], time_division: Optional[int] = TIME_DIVISION,
+                        program: Optional[Tuple[int, bool]] = (0, False)) -> Tuple[Instrument, List[TempoChange]]:
         """ Converts a sequence of tokens into a track object
 
         :param tokens: sequence of tokens to convert
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create)
         :param program: the MIDI program of the produced track and if it drum, (default (0, False), piano)
-        :return:
-        """
-        events = self.tokens_to_events(tokens)
-        return self.events_to_track(events, time_division, program)
-
-    def events_to_track(self, events: List[Event], time_division: int, program: Optional[int] = 0) -> Instrument:
-        """ Transform a list of Event objects into an instrument object
-
-        :param events: list of Event objects to convert to a track
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create)
-        :param program: the MIDI program of the produced track, use -1 for drums (default 0, piano)
-        :return: the miditoolkit instrument object
+        :return: the miditoolkit instrument object and the possible tempo changes
         """
         raise NotImplementedError
 
-    def create_vocabulary(self, program_tokens: bool) -> Tuple[dict, dict, dict]:
+    def _create_vocabulary(self, program_tokens: bool) -> Tuple[dict, dict, dict]:
         """ Create the tokens <-> event dictionaries
         These dictionaries are created arbitrary according to constants defined
         at the top of this file.
@@ -205,11 +200,11 @@ class MIDITokenizer:
         """
         raise NotImplementedError
 
-    def create_token_types_graph(self) -> Dict[str, List[str]]:
+    def _create_token_types_graph(self) -> Dict[str, List[str]]:
         """ Creates a dictionary for the directions of the token types of the encoding"""
         raise NotImplementedError
 
-    def create_durations_tuples(self) -> List[Tuple]:
+    def _create_durations_tuples(self) -> List[Tuple]:
         """ Creates the possible durations in bar / beat units, as tuple of the form:
         (beat, pos, res) where beat is the number of beats, pos the number of "frames"
         ans res the beat resolution considered (frames per beat)
@@ -296,6 +291,16 @@ class MIDITokenizer:
 
         for key, value in params.items():
             setattr(self, key, value)
+
+
+def get_midi_programs(midi: MidiFile) -> List[Tuple[int, bool]]:
+    """ Returns the list of programs of the tracks of a MIDI, deeping the
+    same order. It returns it as a list of tuples (program, is_drum).
+
+    :param midi: the MIDI object to extract tracks programs
+    :return: the list of track programs, as a list of tuples (program, is_drum)
+    """
+    return [(int(track.program), track.is_drum) for track in midi.instruments]
 
 
 def quantize_note_times(notes: List[Note], time_division: int, beat_res: int):

@@ -9,9 +9,9 @@ from pathlib import Path, PurePath
 from typing import List, Tuple, Dict, Optional, Union
 
 import numpy as np
-from miditoolkit import MidiFile, Instrument, Note, TempoChange
+from miditoolkit import Instrument, Note, TempoChange
 
-from .midi_tokenizer_base import MIDITokenizer, Event
+from .midi_tokenizer_base import MIDITokenizer
 from .constants import *
 
 
@@ -56,22 +56,19 @@ class OctupleMonoEncoding(MIDITokenizer):
                        'max_bar_embedding': self.max_bar_embedding},
                       outfile)
 
-    def track_to_events(self, track: Instrument) -> List[List[int]]:
-        """ Override the parent class method
-        Converts a MIDI file in a tokens representation
+    def track_to_tokens(self, track: Instrument) -> List[List[int]]:
+        """ Converts a track (miditoolkit.Instrument object) into a sequence of tokens
         A time step is a list of tokens where:
-        (list index: token type)
-        0: Pitch
-        1: Velocity
-        2: Duration
-        4: Position
-        5: Bar
-        (6: Tempo)
+            (list index: token type)
+            0: Pitch
+            1: Velocity
+            2: Duration
+            4: Position
+            5: Bar
+            (6: Tempo)
 
-        :param track: track object to convert
-        :return: the token representation :
-                  1. tracks converted into sequences of tokens
-                  2. program numbers and if it is drums, for each track
+        :param track: MIDI track to convert
+        :return: sequence of corresponding tokens
         """
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
@@ -136,48 +133,25 @@ class OctupleMonoEncoding(MIDITokenizer):
 
         return tokens
 
-    def tokens_to_midi(self, tokens: List[List[int]], programs: Optional[List[Tuple[int, bool]]] = None,
-                       output_path: Optional[str] = None, time_division: Optional[int] = TIME_DIVISION) -> MidiFile:
-        """ Override the parent class method
-        Convert multiple sequences of tokens into a multitrack MIDI and save it.
-        The tokens will be converted to event objects and then to a miditoolkit.MidiFile object.
-        NOTE: for multitrack with tempo, only the tempo tokens of the first
-            decoded track will be used for the MIDI
-
-        :param tokens: list of lists of tokens to convert, each list inside the
-                       first list corresponds to a track
-        :param programs: programs of the tracks
-        :param output_path: path to save the file (with its name, e.g. music.mid),
-                        leave None to not save the file
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create)
-        :return: the midi object (miditoolkit.MidiFile)
-        """
-        midi = MidiFile(ticks_per_beat=time_division)
-        for i, track_tokens in enumerate(tokens):
-            if programs is not None:
-                track, tempos = self.tokens_to_track(track_tokens, time_division, programs[i])
-            else:
-                track, tempos = self.tokens_to_track(track_tokens, time_division)
-            midi.instruments.append(track)
-            if i == 0:  # only keep tempo changes of the first track
-                midi.tempo_changes = tempos
-                midi.tempo_changes[0].time = 0
-
-        # Write MIDI file
-        if output_path:
-            Path(output_path).mkdir(parents=True, exist_ok=True)
-            midi.dump(output_path)
-        return midi
-
-    def events_to_track(self, events: List[List[Event]], time_division: int,
+    def tokens_to_track(self, tokens: List[List[int]], time_division: Optional[int] = TIME_DIVISION,
                         program: Optional[Tuple[int, bool]] = (0, False)) -> Tuple[Instrument, List[TempoChange]]:
-        """ Transform a list of Event objects into an instrument object
+        """ Converts a sequence of tokens into a track object
+        A time step is a list of tokens where:
+            (list index: token type)
+            0: Pitch
+            1: Velocity
+            2: Duration
+            4: Position
+            5: Bar
+            (6: Tempo)
 
-        :param events: list of Event objects to convert to a track
+        :param tokens: sequence of tokens to convert
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create)
         :param program: the MIDI program of the produced track and if it drum, (default (0, False), piano)
-        :return: the miditoolkit instrument object
+        :return: the miditoolkit instrument object and tempo changes
         """
+        events = [self.tokens_to_events(time_step) for time_step in tokens]
+
         ticks_per_frame = time_division // max(self.beat_res.values())
         name = 'Drums' if program[1] else MIDI_INSTRUMENTS[program[0]]['name']
         instrument = Instrument(program[0], is_drum=program[1], name=name)
@@ -212,20 +186,7 @@ class OctupleMonoEncoding(MIDITokenizer):
         del tempo_changes[0]
         return instrument, tempo_changes
 
-    def events_to_tokens(self, events: List[List[List[int]]]) -> List[List[List[int]]]:
-        return events
-
-    def tokens_to_events(self, tokens: List[List[int]]) -> List[List[Event]]:
-        events = []
-        for compound_token in tokens:
-            time_step = []
-            for token in compound_token:
-                name, val = self.token2event[token].split('_')
-                time_step.append(Event(name, None, val, None))
-            events.append(time_step)
-        return events
-
-    def create_vocabulary(self, program_tokens) -> Tuple[dict, dict, dict]:
+    def _create_vocabulary(self, program_tokens) -> Tuple[dict, dict, dict]:
         """ Create the tokens <-> event dictionaries
         These dictionaries are created arbitrary according to constants defined
         at the top of this file.
@@ -263,12 +224,6 @@ class OctupleMonoEncoding(MIDITokenizer):
             event_to_token[f'Duration_{".".join(map(str, self.durations[i]))}'] = count
             count += 1
 
-        # BAR
-        token_type_indices['Bar'] = list(range(count, count + self.max_bar_embedding))
-        for i in range(self.max_bar_embedding):  # bar embeddings (positional encoding)
-            event_to_token[f'Bar_{i}'] = count
-            count += 1
-
         # POSITION
         nb_positions = max(self.beat_res.values()) * 4  # 4/4 time signature
         token_type_indices['Position'] = list(range(count, count + nb_positions))
@@ -290,8 +245,14 @@ class OctupleMonoEncoding(MIDITokenizer):
                 event_to_token[f'Program_{program}'] = count
                 count += 1
 
+        # BAR --- MUST BE LAST IN DIC AS THIS MIGHT BE INCREASED
+        token_type_indices['Bar'] = list(range(count, count + self.max_bar_embedding))
+        for i in range(self.max_bar_embedding):  # bar embeddings (positional encoding)
+            event_to_token[f'Bar_{i}'] = count
+            count += 1
+
         token_to_event = {v: k for k, v in event_to_token.items()}  # inversion
         return event_to_token, token_to_event, token_type_indices
 
-    def create_token_types_graph(self) -> Dict[str, List[str]]:
+    def _create_token_types_graph(self) -> Dict[str, List[str]]:
         return {}  # not relevant for this encoding
