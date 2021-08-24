@@ -111,6 +111,16 @@ class MIDITokenizer:
         events = self.track_to_events(track)  # get distinct events
         return self.events_to_tokens(events)
 
+    def track_to_events(self, track: Instrument) -> List[Event]:
+        """ Converts a track (list of Note objects) into Event objects
+        NOTE: this method must take care of chord or other types of tokens, if specified
+        And to sort every events in the right order!
+
+        :param track: track object to convert
+        :return: list of events
+        """
+        raise NotImplementedError
+
     def events_to_tokens(self, events: List[Event]) -> List[int]:
         """ Converts a list of Event objects into a list of tokens
         You can override this method if necessary (e.g. CP Word)
@@ -132,16 +142,6 @@ class MIDITokenizer:
             name, val = self.token2event[token].split('_')
             events.append(Event(name, None, val, None))
         return events
-
-    def track_to_events(self, track: Instrument) -> List[Event]:
-        """ Converts a track (list of Note objects) into Event objects
-        NOTE: this method must take care of chord or other types of tokens, if specified
-        And to sort every events in the right order!
-
-        :param track: track object to convert
-        :return: list of events
-        """
-        raise NotImplementedError
 
     def tokens_to_midi(self, tokens: List[List[int]], programs: Optional[List[Tuple[int, bool]]] = None,
                        output_path: Optional[str] = None, time_division: Optional[int] = TIME_DIVISION) -> MidiFile:

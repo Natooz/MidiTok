@@ -15,7 +15,8 @@ from copy import deepcopy
 from pathlib import Path, PurePath
 from typing import Union
 
-from miditok import REMIEncoding, StructuredEncoding, MIDILikeEncoding, CPWordEncoding, MuMIDIEncoding, OctupleEncoding
+from miditok import REMIEncoding, StructuredEncoding, MIDILikeEncoding, CPWordEncoding, MuMIDIEncoding,\
+    OctupleEncoding, OctupleMonoEncoding
 from miditoolkit import MidiFile
 
 # Special beat res for test, up to 32 beats so the duration and time-shift values are
@@ -38,6 +39,7 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
     files = list(Path(data_path).glob('**/*.mid'))
 
     # Creates tokenizers
+    oct_mono_enc = OctupleMonoEncoding(beat_res=BEAT_RES_TEST, additional_tokens=deepcopy(ADDITIONAL_TOKENS_TEST))
     cp_enc = CPWordEncoding(beat_res=BEAT_RES_TEST, additional_tokens=deepcopy(ADDITIONAL_TOKENS_TEST))
     remi_enc = REMIEncoding(beat_res=BEAT_RES_TEST, additional_tokens=deepcopy(ADDITIONAL_TOKENS_TEST))
     struct_enc = StructuredEncoding(beat_res=BEAT_RES_TEST)
@@ -60,6 +62,7 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
         tokens_midilike, _ = midilike_enc.midi_to_tokens(midi)
         tokens_mumidi = mumidi_enc.midi_to_tokens(midi)
         tokens_oct = oct_enc.midi_to_tokens(midi)
+        tokens_oct_mono, _ = oct_mono_enc.midi_to_tokens(midi)
 
         # Convert back tokens into a track object
         track_cp = cp_enc.tokens_to_track(tokens_cp[0], midi.ticks_per_beat)[0]
@@ -68,6 +71,7 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
         track_midilike = midilike_enc.tokens_to_track(tokens_midilike[0], midi.ticks_per_beat)[0]
         track_mumidi = mumidi_enc.tokens_to_midi(tokens_mumidi, time_division=midi.ticks_per_beat).instruments[0]
         track_oct = oct_enc.tokens_to_midi(tokens_oct, time_division=midi.ticks_per_beat).instruments[0]
+        track_oct_mono = oct_mono_enc.tokens_to_track(tokens_oct_mono[0], midi.ticks_per_beat)[0]
 
         t1 = time.time()
         print(f'Took {t1 - t0} seconds')
@@ -79,12 +83,13 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
             track_midilike.name = 'encoded with midi-like'
             track_mumidi.name = 'encoded with mumidi'
             track_oct.name = 'encoded with octuple'
+            track_oct_mono.name = 'encoded with octuple mono'
             midi.instruments[0].name = 'original quantized'
             original_track.name = 'original not quantized'
 
             # Updates the MIDI and save it
             midi.instruments += [track_cp, track_remi, track_struct, track_midilike, track_mumidi, track_oct,
-                                 original_track]
+                                 track_oct_mono, original_track]
             midi.dump(PurePath('tests', 'test_results', file_path.name))
 
 

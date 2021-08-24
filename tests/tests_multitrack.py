@@ -20,7 +20,7 @@ from copy import deepcopy
 from pathlib import Path, PurePath
 from typing import Union
 
-from miditok import REMIEncoding, CPWordEncoding, MIDITokenizer, MuMIDIEncoding, OctupleEncoding
+from miditok import REMIEncoding, CPWordEncoding, MIDITokenizer, MuMIDIEncoding, OctupleEncoding, OctupleMonoEncoding
 from miditoolkit import MidiFile
 
 
@@ -48,6 +48,7 @@ def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = '.
     remi_enc = REMIEncoding(beat_res=BEAT_RES_TEST, additional_tokens=deepcopy(ADDITIONAL_TOKENS_TEST))
     mumidi_enc = MuMIDIEncoding(beat_res=BEAT_RES_TEST, additional_tokens=deepcopy(ADDITIONAL_TOKENS_TEST))
     oct_enc = OctupleEncoding(beat_res=BEAT_RES_TEST, additional_tokens=deepcopy(ADDITIONAL_TOKENS_TEST))
+    oct_mono_enc = OctupleMonoEncoding(beat_res=BEAT_RES_TEST, additional_tokens=deepcopy(ADDITIONAL_TOKENS_TEST))
 
     for i, file_path in enumerate(files):
         t0 = time.time()
@@ -61,6 +62,7 @@ def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = '.
         midi_remi = midi_to_tokens_to_midi(remi_enc, midi)
         midi_mumidi = mumidi_enc.tokens_to_midi(mumidi_enc.midi_to_tokens(midi), time_division=midi.ticks_per_beat)
         midi_oct = oct_enc.tokens_to_midi(oct_enc.midi_to_tokens(midi), time_division=midi.ticks_per_beat)
+        midi_oct_mono = midi_to_tokens_to_midi(oct_mono_enc, midi)
 
         t1 = time.time()
         print(f'Took {t1 - t0} seconds')
@@ -70,6 +72,7 @@ def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = '.
             midi_remi.dump(PurePath('tests', 'test_results', f'{file_path.stem}_remi.mid'))
             midi_mumidi.dump(PurePath('tests', 'test_results', f'{file_path.stem}_mumidi.mid'))
             midi_oct.dump(PurePath('tests', 'test_results', f'{file_path.stem}_octuple.mid'))
+            midi_oct_mono.dump(PurePath('tests', 'test_results', f'{file_path.stem}_octuple_mono.mid'))
 
 
 def midi_to_tokens_to_midi(tokenizer: MIDITokenizer, midi: MidiFile) -> MidiFile:
