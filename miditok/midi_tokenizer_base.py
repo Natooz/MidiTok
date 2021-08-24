@@ -234,7 +234,11 @@ class MIDITokenizer:
         :param logging: logs a progress bar
         """
         Path(out_dir).mkdir(parents=True, exist_ok=True)
-
+        
+        # Making a directory of the parent folders for the JSON file
+#         parent_dir = PurePath(midi_paths[0]).parent[0]
+#         PurePath(out_dir, parent_dir).mkdir(parents=True, exist_ok=True)
+            
         for m, midi_path in enumerate(midi_paths):
             if logging:
                 bar_len = 60
@@ -258,9 +262,8 @@ class MIDITokenizer:
 
             # Converting the MIDI to tokens and saving them as json
             tokens, track_info = self.midi_to_tokens(midi)
-            # Making a directory for the JSON file
-            PurePath(out_dir, midi_path).mkdir(parents=True, exist_ok=True)
-            with open(PurePath(out_dir, midi_path).with_suffix(".json"), 'w') as outfile:
+            midi_name = PurePath(midi_path).stem
+            with open(PurePath(out_dir, midi_name).with_suffix(".json"), 'w') as outfile:
                 json.dump([tokens[0], track_info[0]], outfile)
 
         self.save_params(out_dir)  # Saves the parameters with which the MIDIs are converted
