@@ -236,8 +236,8 @@ class MIDITokenizer:
         Path(out_dir).mkdir(parents=True, exist_ok=True)
         
         # Making a directory of the parent folders for the JSON file
-#         parent_dir = PurePath(midi_paths[0]).parent[0]
-#         PurePath(out_dir, parent_dir).mkdir(parents=True, exist_ok=True)
+        # parent_dir = PurePath(midi_paths[0]).parent[0]
+        # PurePath(out_dir, parent_dir).mkdir(parents=True, exist_ok=True)
             
         for m, midi_path in enumerate(midi_paths):
             if logging:
