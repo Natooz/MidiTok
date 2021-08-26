@@ -261,7 +261,7 @@ class MIDITokenizer:
                     continue
 
             # Converting the MIDI to tokens and saving them as json
-            tokens, track_info = self.midi_to_tokens(midi)
+            tokens = self.midi_to_tokens(midi)
             midi_name = PurePath(midi_path).stem
             with open(PurePath(out_dir, midi_name).with_suffix(".json"), 'w') as outfile:
                 json.dump([tokens[0], track_info[0]], outfile)
