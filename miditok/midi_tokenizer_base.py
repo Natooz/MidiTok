@@ -273,15 +273,18 @@ class MIDITokenizer:
         """ Saves the base parameters of this encoding in a txt file
         Useful to keep track of how a dataset has been tokenized / encoded
         It will also save the name of the class used, i.e. the encoding strategy
+        NOTE: as json cant save tuples as keys, the beat ranges are saved as strings
+        with the form startingBeat_endingBeat (underscore separating these two values)
 
         :param out_dir: output directory to save the file
         """
         Path(out_dir).mkdir(parents=True, exist_ok=True)
         with open(PurePath(out_dir, 'config').with_suffix(".txt"), 'w') as outfile:
             json.dump({'pitch_range': (self.pitch_range.start, self.pitch_range.stop),
-                       'beat_res': self.beat_res, 'nb_velocities': len(self.velocity_bins),
+                       'beat_res': {f'{k1}_{k2}': v for (k1, k2), v in self.beat_res.items()},
+                       'nb_velocities': len(self.velocity_bins),
                        'additional_tokens': self.additional_tokens,
-                       'encoding': self.__class__.__name__}, outfile)
+                       'encoding': self.__class__.__name__}, outfile, indent=4)
 
     def load_params(self, params: Union[str, Path, PurePath, Dict[str, Any]]):
         """ Load parameters and set the encoder attributes
@@ -296,6 +299,8 @@ class MIDITokenizer:
             params['pitch_range'] = range(*params['pitch_range'])
 
         for key, value in params.items():
+            if key == 'beat_res':
+                value = {tuple(map(int, beat_range.split('_'))): res for beat_range, res in value.items()}
             setattr(self, key, value)
 
 

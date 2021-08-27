@@ -4,6 +4,7 @@
 
 from typing import List
 
+from miditok import REMIEncoding
 from miditoolkit import Instrument, Note
 
 
@@ -22,3 +23,11 @@ def strict_valid(expected_notes: List[Note], produced_notes: List[Note]):
             return False
         elif exp_note.velocity != prod_note.velocity:
             return False
+
+
+def save_and_load_params():
+    enc = REMIEncoding(beat_res={(0, 3): 5})
+    enc.save_params('')
+
+    enc2 = REMIEncoding()
+    enc2.load_params('config.txt')
