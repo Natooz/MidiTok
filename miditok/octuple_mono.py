@@ -51,7 +51,8 @@ class OctupleMonoEncoding(MIDITokenizer):
         Path(out_dir).mkdir(parents=True, exist_ok=True)
         with open(PurePath(out_dir, 'config').with_suffix(".txt"), 'w') as outfile:
             json.dump({'pitch_range': (self.pitch_range.start, self.pitch_range.stop),
-                       'beat_res': self.beat_res, 'nb_velocities': len(self.velocity_bins),
+                       'beat_res': {f'{k1}_{k2}': v for (k1, k2), v in self.beat_res.items()},
+                       'nb_velocities': len(self.velocity_bins),
                        'additional_tokens': self.additional_tokens, 'encoding': self.__class__.__name__,
                        'max_bar_embedding': self.max_bar_embedding},
                       outfile)

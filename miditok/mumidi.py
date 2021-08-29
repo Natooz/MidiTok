@@ -26,7 +26,6 @@ class MuMIDIEncoding(MIDITokenizer):
     https://arxiv.org/abs/2008.07703
 
     :param pitch_range: range of used MIDI pitches
-    :param drum_pitch_range: range of used MIDI pitches for drums exclusively
     :param beat_res: beat resolutions, with the form:
             {(beat_x1, beat_x2): beat_res_1, (beat_x2, beat_x3): beat_res_2, ...}
             The keys of the dict are tuples indicating a range of beats, ex 0 to 3 for the first bar
@@ -36,11 +35,11 @@ class MuMIDIEncoding(MIDITokenizer):
     :param program_tokens: will add entries for MIDI programs in the dictionary, to use
             in the case of multitrack generation for instance
     :param params: can be a path to the parameter (json encoded) file or a dictionary
+    :param drum_pitch_range: range of used MIDI pitches for drums exclusively
     """
-    def __init__(self, pitch_range: range = PITCH_RANGE, drum_pitch_range: range = DRUM_PITCH_RANGE,
-                 beat_res: Dict[Tuple[int, int], int] = BEAT_RES, nb_velocities: int = NB_VELOCITIES,
-                 additional_tokens: Dict[str, bool] = ADDITIONAL_TOKENS, program_tokens: bool = PROGRAM_TOKENS,
-                 params=None):
+    def __init__(self, pitch_range: range = PITCH_RANGE, beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
+                 nb_velocities: int = NB_VELOCITIES, additional_tokens: Dict[str, bool] = ADDITIONAL_TOKENS,
+                 program_tokens: bool = PROGRAM_TOKENS, params=None, drum_pitch_range: range = DRUM_PITCH_RANGE):
         self.drum_pitch_range = drum_pitch_range
         # used in place of positional encoding
         self.max_bar_embedding = 60  # this attribute might increase during encoding
@@ -58,7 +57,8 @@ class MuMIDIEncoding(MIDITokenizer):
         with open(PurePath(out_dir, 'config').with_suffix(".txt"), 'w') as outfile:
             json.dump({'pitch_range': (self.pitch_range.start, self.pitch_range.stop),
                        'drum_pitch_range': (self.drum_pitch_range.start, self.drum_pitch_range.stop),
-                       'beat_res': self.beat_res, 'nb_velocities': len(self.velocity_bins),
+                       'beat_res': {f'{k1}_{k2}': v for (k1, k2), v in self.beat_res.items()},
+                       'nb_velocities': len(self.velocity_bins),
                        'additional_tokens': self.additional_tokens, 'encoding': self.__class__.__name__,
                        'max_bar_embedding': self.max_bar_embedding},
                       outfile)
