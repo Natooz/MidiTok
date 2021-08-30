@@ -101,7 +101,7 @@ class MuMIDIEncoding(MIDITokenizer):
                 count += 1
             self.max_bar_embedding = nb_bars
 
-        ticks_per_frame = midi.ticks_per_beat // max(self.beat_res.values())
+        ticks_per_frame = midi.ticks_per_beat / max(self.beat_res.values())
         ticks_per_bar = midi.ticks_per_beat * 4
 
         # Process notes of every tracks
@@ -249,6 +249,8 @@ class MuMIDIEncoding(MIDITokenizer):
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create)
         :return: the midi object (miditoolkit.MidiFile)
         """
+        assert time_division % max(self.beat_res.values()) == 0, \
+            f'Invalid time division, please give one divisible by {max(self.beat_res.values())}'
         midi = MidiFile(ticks_per_beat=time_division)
         ticks_per_frame = time_division // max(self.beat_res.values())
 

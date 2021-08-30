@@ -73,7 +73,7 @@ class OctupleMonoEncoding(MIDITokenizer):
         """
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
-        ticks_per_frame = self.current_midi_metadata['time_division'] // max(self.beat_res.values())
+        ticks_per_frame = self.current_midi_metadata['time_division'] / max(self.beat_res.values())
         ticks_per_bar = self.current_midi_metadata['time_division'] * 4
 
         # Check bar embedding limit, update if needed
@@ -151,6 +151,8 @@ class OctupleMonoEncoding(MIDITokenizer):
         :param program: the MIDI program of the produced track and if it drum, (default (0, False), piano)
         :return: the miditoolkit instrument object and tempo changes
         """
+        assert time_division % max(self.beat_res.values()) == 0, \
+            f'Invalid time division, please give one divisible by {max(self.beat_res.values())}'
         events = [self.tokens_to_events(time_step) for time_step in tokens]
 
         ticks_per_frame = time_division // max(self.beat_res.values())

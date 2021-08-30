@@ -128,7 +128,7 @@ class OctupleEncoding(MIDITokenizer):
         """
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
-        ticks_per_frame = self.current_midi_metadata['time_division'] // max(self.beat_res.values())
+        ticks_per_frame = self.current_midi_metadata['time_division'] / max(self.beat_res.values())
         ticks_per_bar = self.current_midi_metadata['time_division'] * 4
 
         events = []
@@ -202,6 +202,8 @@ class OctupleEncoding(MIDITokenizer):
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create)
         :return: the midi object (miditoolkit.MidiFile)
         """
+        assert time_division % max(self.beat_res.values()) == 0, \
+            f'Invalid time division, please give one divisible by {max(self.beat_res.values())}'
         midi = MidiFile(ticks_per_beat=time_division)
         ticks_per_frame = time_division // max(self.beat_res.values())
         if self.additional_tokens['Tempo']:
