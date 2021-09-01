@@ -203,7 +203,9 @@ class MuMIDIEncoding(MIDITokenizer):
 
         tokens = []
         for note in track.notes:
-            if note.pitch not in self.pitch_range or (track.is_drum and note.pitch not in self.drum_pitch_range):
+            if not track.is_drum and note.pitch not in self.pitch_range:
+                continue
+            if track.is_drum and note.pitch not in self.drum_pitch_range:
                 continue
             # Note
             velocity_index = (np.abs(self.velocity_bins - note.velocity)).argmin()
