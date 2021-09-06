@@ -183,14 +183,15 @@ import torch
 # Creates the tokenizer and list the file paths
 remi_enc = REMIEncoding()  # uses defaults parameters
 
-# The tokens, let's say produced by your Transformer
-tokens = torch.rand(4, 500).tolist()  # 4 tracks of 500 tokens
+# The tokens, let's say produced by your Transformer, 4 tracks of 500 tokens
+tokens = torch.randint(low=0, high=len(remi_enc.event2token), size=(4, 500)).tolist()
+
 # The instruments, here piano, violin, french horn and drums
 programs = [(0, False), (41, False), (61, False), (0, True)]
 
 # Convert to MIDI and save it
 generated_midi = remi_enc.tokens_to_midi(tokens, programs)
-generated_midi.dump('path/to/save')  # could have been done above by giving the path argument
+generated_midi.dump('path/to/save/file.mid')  # could have been done above by giving the path argument
 ```
 
 ## Contributions
