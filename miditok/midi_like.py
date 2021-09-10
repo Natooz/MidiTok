@@ -110,7 +110,7 @@ class MIDILikeEncoding(MIDITokenizer):
 
         events.sort(key=lambda x: (x.time, self._order(x)))
 
-        return self.events_to_tokens(events)
+        return self._events_to_tokens(events)
 
     def tokens_to_track(self, tokens: List[int], time_division: Optional[int] = TIME_DIVISION,
                         program: Optional[Tuple[int, bool]] = (0, False), default_duration: int = None) \
@@ -124,7 +124,7 @@ class MIDILikeEncoding(MIDITokenizer):
                                 note off event. Leave None to discard Note On with no Note Off event.
         :return: the miditoolkit instrument object and tempo changes
         """
-        events = self.tokens_to_events(tokens)
+        events = self._tokens_to_events(tokens)
 
         max_duration = (self.durations[-1][0] + self.durations[-1][1]) * time_division
         name = 'Drums' if program[1] else MIDI_INSTRUMENTS[program[0]]['name']

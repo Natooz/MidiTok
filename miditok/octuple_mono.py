@@ -153,7 +153,7 @@ class OctupleMonoEncoding(MIDITokenizer):
         """
         assert time_division % max(self.beat_res.values()) == 0, \
             f'Invalid time division, please give one divisible by {max(self.beat_res.values())}'
-        events = [self.tokens_to_events(time_step) for time_step in tokens]
+        events = [self._tokens_to_events(time_step) for time_step in tokens]
 
         ticks_per_frame = time_division // max(self.beat_res.values())
         name = 'Drums' if program[1] else MIDI_INSTRUMENTS[program[0]]['name']

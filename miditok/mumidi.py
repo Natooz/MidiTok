@@ -261,7 +261,7 @@ class MuMIDIEncoding(MIDITokenizer):
         current_bar = -1
         current_track = -2
         for time_step in tokens:
-            events = self.tokens_to_events(time_step)
+            events = self._tokens_to_events(time_step)
             if events[0].name == 'Bar':
                 current_bar += 1
                 current_tick = current_bar * time_division * 4

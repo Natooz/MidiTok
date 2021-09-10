@@ -99,7 +99,8 @@ class MIDITokenizer:
                                       'key_sig_changes': midi.key_signature_changes}
 
         # Quantize tempo changes times
-        quantize_tempos(midi.tempo_changes, midi.ticks_per_beat, max(self.beat_res.values()))
+        if self.additional_tokens['Tempo']:
+            quantize_tempos(midi.tempo_changes, midi.ticks_per_beat, max(self.beat_res.values()))
 
         tokens = []
         for track in midi.instruments:
@@ -120,7 +121,7 @@ class MIDITokenizer:
         """
         raise NotImplementedError
 
-    def events_to_tokens(self, events: List[Event]) -> List[int]:
+    def _events_to_tokens(self, events: List[Event]) -> List[int]:
         """ Converts a list of Event objects into a list of tokens
         You can override this method if necessary (e.g. CP Word)
 
@@ -129,7 +130,7 @@ class MIDITokenizer:
         """
         return [self.event2token[f'{event.name}_{event.value}'] for event in events]
 
-    def tokens_to_events(self, tokens: List[int]) -> List[Event]:
+    def _tokens_to_events(self, tokens: List[int]) -> List[Event]:
         """ Convert a sequence of tokens in their respective event objects
         You can override this method if necessary (e.g. CP Word)
 
@@ -255,6 +256,9 @@ class MIDITokenizer:
             except Exception as _:  # ValueError, OSError, FileNotFoundError, IOError, EOFError, mido.KeySignatureError
                 continue
 
+            # Checks the time division is valid
+            if midi.ticks_per_beat < max(self.beat_res.values()):
+                continue
             # Passing the MIDI to validation tests if given
             if validation_fn is not None:
                 if not validation_fn(midi):

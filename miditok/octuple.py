@@ -213,7 +213,7 @@ class OctupleEncoding(MIDITokenizer):
 
         tracks = dict([(n, []) for n in range(-1, 128)])
         for time_step in tokens:
-            events = self.tokens_to_events(time_step)
+            events = self._tokens_to_events(time_step)
 
             # Note attributes
             pitch = int(events[0].value)
