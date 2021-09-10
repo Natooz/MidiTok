@@ -123,7 +123,7 @@ class MIDITokenizer:
 
     def _events_to_tokens(self, events: List[Event]) -> List[int]:
         """ Converts a list of Event objects into a list of tokens
-        You can override this method if necessary (e.g. CP Word)
+        You can override this method if necessary
 
         :param events: list of Events objects to convert
         :return: list of corresponding tokens
@@ -132,7 +132,7 @@ class MIDITokenizer:
 
     def _tokens_to_events(self, tokens: List[int]) -> List[Event]:
         """ Convert a sequence of tokens in their respective event objects
-        You can override this method if necessary (e.g. CP Word)
+        You can override this method if necessary
 
         :param tokens: sequence of tokens to convert
         :return: the sequence of corresponding events
@@ -326,14 +326,15 @@ def quantize_note_times(notes: List[Note], time_division: int, beat_res: int):
     :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
     :param beat_res: number of frames (time steps, or positions) per beat
     """
-    ticks = int(time_division / beat_res)
-    quantized_ticks = np.arange(0, max([n.end for n in notes]) + 2 * ticks, ticks, dtype=int)
+    ticks_per_frame = int(time_division / beat_res)
     for i, note in enumerate(notes):  # items are notes
-        note.start = quantized_ticks[np.argmin(np.abs(quantized_ticks - note.start))]
-        note.end = quantized_ticks[np.argmin(np.abs(quantized_ticks - note.end))]
+        start_rest = note.start % ticks_per_frame
+        end_rest = note.end % ticks_per_frame
+        note.start += -start_rest if start_rest <= ticks_per_frame / 2 else ticks_per_frame - start_rest
+        note.end += -end_rest if end_rest <= ticks_per_frame / 2 else ticks_per_frame - end_rest
 
         if note.start == note.end:  # if this happens to often, consider using a higher beat resolution
-            note.end += ticks  # like 8 frames per beat or 24 frames per bar
+            note.end += ticks_per_frame  # like 8 frames per beat or 24 frames per bar
 
 
 def quantize_tempos(tempos: List[TempoChange], time_division: int, beat_res: int):
@@ -343,10 +344,10 @@ def quantize_tempos(tempos: List[TempoChange], time_division: int, beat_res: int
     :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
     :param beat_res: number of frames (time steps, or positions) per beat
     """
-    ticks = int(time_division / beat_res)
-    quantized_ticks = np.arange(0, max([t.time for t in tempos]) + 2 * ticks, ticks, dtype=int)
+    ticks_per_frame = int(time_division / beat_res)
     for tempo_change in tempos:
-        tempo_change.time = quantized_ticks[np.argmin(np.abs(quantized_ticks - tempo_change.time))]
+        rest = tempo_change.time % ticks_per_frame
+        tempo_change.time += -rest if rest <= ticks_per_frame / 2 else ticks_per_frame - rest
 
 
 def remove_duplicated_notes(notes: List[Note]):
