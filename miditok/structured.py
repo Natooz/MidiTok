@@ -98,15 +98,18 @@ class StructuredEncoding(MIDITokenizer):
                 value='.'.join(map(str, self.durations[index])) if time_shift != 0 else '0.0.1',
                 text=f'{time_shift} ticks'))
         # Adds the last note
-        events.append(Event(name='Pitch', time=track.notes[-1].start, value=track.notes[-1].pitch,
-                            text=track.notes[-1].pitch))
-        velocity_index = (np.abs(self.velocity_bins - track.notes[-1].velocity)).argmin()
-        events.append(Event(name='Velocity', time=track.notes[-1].start, value=velocity_index,
-                            text=f'{track.notes[-1].velocity}/{self.velocity_bins[velocity_index]}'))
-        duration = track.notes[-1].end - track.notes[-1].start
-        index = np.argmin(np.abs([ticks - duration for ticks in dur_bins]))
-        events.append(Event(name='Duration', time=track.notes[-1].start,
-                            value='.'.join(map(str, self.durations[index])), text=f'{duration} ticks'))
+        if track.notes[-1].pitch not in self.pitch_range:
+            del events[-1]
+        else:
+            events.append(Event(name='Pitch', time=track.notes[-1].start, value=track.notes[-1].pitch,
+                                text=track.notes[-1].pitch))
+            velocity_index = (np.abs(self.velocity_bins - track.notes[-1].velocity)).argmin()
+            events.append(Event(name='Velocity', time=track.notes[-1].start, value=velocity_index,
+                                text=f'{track.notes[-1].velocity}/{self.velocity_bins[velocity_index]}'))
+            duration = track.notes[-1].end - track.notes[-1].start
+            index = np.argmin(np.abs([ticks - duration for ticks in dur_bins]))
+            events.append(Event(name='Duration', time=track.notes[-1].start,
+                                value='.'.join(map(str, self.durations[index])), text=f'{duration} ticks'))
 
         events.sort(key=lambda x: x.time)
 
