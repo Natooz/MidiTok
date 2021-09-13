@@ -113,7 +113,7 @@ class CPWordEncoding(MIDITokenizer):
 
         # Adds chord tokens if specified
         if self.additional_tokens['Chord'] and not track.is_drum:
-            chord_events = detect_chords(track.notes, self.current_midi_metadata['time_division'])
+            chord_events = detect_chords(track.notes, self.current_midi_metadata['time_division'], self._first_beat_res)
             count = 0
             for chord_event in chord_events:
                 for e, cp_token in enumerate(tokens[count:]):
@@ -328,7 +328,7 @@ class CPWordEncoding(MIDITokenizer):
         token_to_event = {v: k for k, v in event_to_token.items()}  # inversion
         return event_to_token, token_to_event, token_type_indices
 
-    def _create_token_types_graph(self) -> Dict[str, List[str]]:
+    def create_token_types_graph(self) -> Dict[str, List[str]]:
         """ As with CP the tokens types are "merged", each state here corresponds to
         a "compound" token, which is characterized by the token types Program, Bar,
         Position, Pitch and Empty

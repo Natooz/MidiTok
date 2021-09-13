@@ -48,8 +48,9 @@ class MIDITokenizer:
     :param params: can be a path to the parameter (json encoded) file or a dictionary
     """
     def __init__(self, pitch_range: range, beat_res: Dict[Tuple[int, int], int], nb_velocities: int,
-                 additional_tokens: Dict[str, bool], program_tokens: bool,
+                 additional_tokens: Dict[str, Union[bool, int, Tuple[int, int]]], program_tokens: bool,
                  params: Union[str, Path, PurePath, Dict[str, Any]] = None):
+        # Initialize params
         if params is None:
             self.pitch_range = pitch_range
             self.beat_res = beat_res
@@ -58,15 +59,25 @@ class MIDITokenizer:
         else:
             self.load_params(params)
 
-        self.durations = self._create_durations_tuples()
+        # Init duration and velocity values
+        self.durations = self.__create_durations_tuples()
         self.velocity_bins = np.linspace(0, 127, self.nb_velocities + 1, dtype=np.intc)
         np.delete(self.velocity_bins, 0)  # removes velocity 0
+        self._first_beat_res = list(beat_res.values())[0]
+        for beat_range, res in beat_res.items():
+            if 0 in beat_range:
+                self._first_beat_res = res
+                break
+
+        # Tempos
+        self.tempo_bins = np.zeros(1)
         if additional_tokens['Tempo']:
             self.tempo_bins = np.linspace(*additional_tokens['tempo_range'], additional_tokens['nb_tempos'],
                                           dtype=np.intc)
         else:
             self.tempo_bins = np.zeros(1)
 
+        # Vocabulary
         self.event2token, self.token2event, self.token_types_indices = self._create_vocabulary(program_tokens)
 
         # Keep in memory durations in ticks for seen time divisions so these values
@@ -201,12 +212,12 @@ class MIDITokenizer:
         """
         raise NotImplementedError
 
-    def _create_token_types_graph(self) -> Dict[str, List[str]]:
+    def create_token_types_graph(self) -> Dict[str, List[str]]:
         """ Creates a dictionary for the directions of the token types of the encoding"""
         raise NotImplementedError
 
-    def _create_durations_tuples(self) -> List[Tuple]:
-        """ Creates the possible durations in bar / beat units, as tuple of the form:
+    def __create_durations_tuples(self) -> List[Tuple]:
+        """ Creates the possible durations in beat / position units, as tuple of the form:
         (beat, pos, res) where beat is the number of beats, pos the number of "samples"
         ans res the beat resolution considered (samples per beat)
         Example: (2, 5, 8) means the duration is 2 beat long + position 5 / 8 of the ongoing beat
@@ -363,29 +374,40 @@ def remove_duplicated_notes(notes: List[Note]):
             del notes[i]
 
 
-def detect_chords(notes: List[Note], time_division: int) -> List[Event]:
+def detect_chords(notes: List[Note], time_division: int, beat_res: int = 4, simul_notes_limit: int = 20) -> List[Event]:
     """ Chord detection method.
-    NOTE: on very large tracks with high note density this method can be very slow !
+    NOTE: make sure to sort notes by start time then pitch before: notes.sort(key=lambda x: (x.start, x.pitch))
+    NOTE2: on very large tracks with high note density this method can be very slow !
     If you plan to use it with the Maestro or GiantMIDI datasets, it can take up to
     hundreds of seconds per MIDI depending on your cpu.
     One time step at a time, it will analyse the notes played together
     and detect possible chords.
 
-    :param notes: notes to analyse
+    :param notes: notes to analyse (sorted by starting time, them pitch)
     :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
+    :param beat_res: beat resolution, i.e. nb of samples per beat (default 4)
+    :param simul_notes_limit: nb of simultaneous notes being processed when looking for a chord
+            this parameter allows to speed up the chord detection (default 20)
     :return: the detected chords as Event objects
     """
+    assert simul_notes_limit >= 5, 'simul_notes_limit must be higher than 5, chords can be made up to 5 notes'
     tuples = []
     for note in notes:
         tuples.append((note.pitch, int(note.start), int(note.end)))
     notes = np.asarray(tuples)
 
     count = 0
+    previous_tick = -1
     chords = []
     while count < len(notes):
-        # Gather the notes around the same time step
-        onset_notes = notes[count:]
-        onset_notes = onset_notes[np.where(onset_notes[:, 1] <= notes[count][1] + time_division / 4)]
+        # Checks we moved in time after last step, otherwise discard this tick
+        if notes[count, 1] == previous_tick:
+            count += 1
+            continue
+
+        # Gathers the notes around the same time step
+        onset_notes = notes[count:count+simul_notes_limit]  # reduces the scope
+        onset_notes = onset_notes[np.where(onset_notes[:, 1] <= onset_notes[0, 1] + time_division / beat_res)]
 
         # If it is ambiguous, e.g. the notes lengths are too different
         if np.any(np.abs(onset_notes[:, 2] - onset_notes[0, 2]) > time_division / 2):
@@ -393,8 +415,8 @@ def detect_chords(notes: List[Note], time_division: int) -> List[Event]:
             continue
 
         # Selects the possible chords notes
-        if notes[count][2] - notes[count][1] <= time_division / 2:
-            onset_notes = onset_notes[np.where(onset_notes[:, 1] == onset_notes[0][1])]
+        if notes[count, 2] - notes[count, 1] <= time_division / 2:
+            onset_notes = onset_notes[np.where(onset_notes[:, 1] == onset_notes[0, 1])]
         chord = onset_notes[np.where(onset_notes[:, 2] - onset_notes[0, 2] <= time_division / 2)]
 
         # Creates the "chord map" and see if it has a "known" quality, append a chord event if it is valid
@@ -406,50 +428,13 @@ def detect_chords(notes: List[Note], time_division: int) -> List[Event]:
                     chord_quality = quality
                     break
             chords.append((chord_quality, min(chord[:, 1]), chord_map))
+        previous_tick = max(onset_notes[:, 1])
         count += len(onset_notes)  # Move to the next notes
 
     events = []
     for chord in chords:
         events.append(Event('Chord', chord[1], chord[0], chord[2]))
     return events
-
-
-def _detect_chords_python(notes: List[Note], time_division: int) -> List[Event]:
-    """ DEPRECIATED
-    Old chord detection method, equivalent to detect_chords but 100% python
-    The code is more elegant but slower
-
-    :param notes: notes to analyse
-    :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
-    :return: the detected chords as Event objects
-    """
-    count = 0
-    chords = []
-    while count < len(notes):
-        # Gather the notes around the same time step
-        # onset_notes = [note for note in notes if abs(note.start - notes[count].start) <= time_division / 4]
-        onset_notes = [note for note in notes[count:] if note.start - notes[count].start <= time_division / 4]
-
-        # If it is ambiguous, e.g. the notes lengths are too different
-        if any(abs(note.end - notes[count].end) > time_division / 2 for note in onset_notes):
-            count += len(onset_notes)
-            continue
-
-        # Selects the possible chords notes
-        if notes[count].end - notes[count].start <= time_division / 2:
-            onset_notes = [note for note in notes[count:] if note.start == notes[count].start]
-        chord = [note for note in onset_notes if abs(note.end - notes[count].end) <= time_division / 2]
-
-        # Creates the "chord map" and see if it has a "known" quality, append a chord event if it is valid
-        chord_map = [chord[i].pitch - chord[0].pitch for i in range(len(chord))]
-        if 3 <= len(chord_map) <= 5 and chord_map[-1] <= 24:  # max interval between the root and highest degree
-            if chord_map in CHORD_MAPS.values():
-                chord_quality = list(CHORD_MAPS.keys())[list(CHORD_MAPS.values()).index(chord_map)]
-                chords.append(Event('Chord', min(note.start for note in chord), chord_quality, chord_map))
-            else:
-                chords.append(Event('Chord', min(note.start for note in chord), len(chord), chord_map))
-        count += len(onset_notes)  # Move to the next notes
-    return chords
 
 
 def merge_tracks(tracks: List[Instrument]) -> Instrument:

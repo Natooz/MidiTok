@@ -209,7 +209,7 @@ class StructuredEncoding(MIDITokenizer):
         token_to_event = {v: k for k, v in event_to_token.items()}  # inversion
         return event_to_token, token_to_event, token_type_indices
 
-    def _create_token_types_graph(self) -> Dict[str, List[str]]:
+    def create_token_types_graph(self) -> Dict[str, List[str]]:
         dic = dict()
 
         if 'Program' in self.token_types_indices:

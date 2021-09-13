@@ -223,7 +223,7 @@ class MuMIDIEncoding(MIDITokenizer):
 
         # Adds chord tokens if specified
         if self.additional_tokens['Chord'] and not track.is_drum:
-            chords = detect_chords(track.notes, self.current_midi_metadata['time_division'])
+            chords = detect_chords(track.notes, self.current_midi_metadata['time_division'], self._first_beat_res)
             unsqueezed = []
             for c in range(len(chords)):
                 chords[c].text = track.program
@@ -398,7 +398,7 @@ class MuMIDIEncoding(MIDITokenizer):
         token_to_event = {v: k for k, v in event_to_token.items()}  # inversion
         return event_to_token, token_to_event, token_type_indices
 
-    def _create_token_types_graph(self) -> Dict[str, List[str]]:
+    def create_token_types_graph(self) -> Dict[str, List[str]]:
         dic = dict()
 
         dic['Bar'] = ['Bar', 'Position']
