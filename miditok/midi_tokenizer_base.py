@@ -374,7 +374,8 @@ def remove_duplicated_notes(notes: List[Note]):
             del notes[i]
 
 
-def detect_chords(notes: List[Note], time_division: int, beat_res: int = 4, simul_notes_limit: int = 20) -> List[Event]:
+def detect_chords(notes: List[Note], time_division: int, beat_res: int = 4, samples_scopes: int = 1,
+                  simul_notes_limit: int = 20) -> List[Event]:
     """ Chord detection method.
     NOTE: make sure to sort notes by start time then pitch before: notes.sort(key=lambda x: (x.start, x.pitch))
     NOTE2: on very large tracks with high note density this method can be very slow !
@@ -386,6 +387,8 @@ def detect_chords(notes: List[Note], time_division: int, beat_res: int = 4, simu
     :param notes: notes to analyse (sorted by starting time, them pitch)
     :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
     :param beat_res: beat resolution, i.e. nb of samples per beat (default 4)
+    :param samples_scopes: maximum offset (in samples) ∈ N separating notes starts to consider them
+                            starting at the same time / onset (default is 1)
     :param simul_notes_limit: nb of simultaneous notes being processed when looking for a chord
             this parameter allows to speed up the chord detection (default 20)
     :return: the detected chords as Event objects
@@ -395,6 +398,9 @@ def detect_chords(notes: List[Note], time_division: int, beat_res: int = 4, simu
     for note in notes:
         tuples.append((note.pitch, int(note.start), int(note.end)))
     notes = np.asarray(tuples)
+
+    time_div_half = time_division // 2
+    onset_offset = time_division * samples_scopes / beat_res
 
     count = 0
     previous_tick = -1
@@ -407,17 +413,17 @@ def detect_chords(notes: List[Note], time_division: int, beat_res: int = 4, simu
 
         # Gathers the notes around the same time step
         onset_notes = notes[count:count+simul_notes_limit]  # reduces the scope
-        onset_notes = onset_notes[np.where(onset_notes[:, 1] <= onset_notes[0, 1] + time_division / beat_res)]
+        onset_notes = onset_notes[np.where(onset_notes[:, 1] <= onset_notes[0, 1] + onset_offset)]
 
         # If it is ambiguous, e.g. the notes lengths are too different
-        if np.any(np.abs(onset_notes[:, 2] - onset_notes[0, 2]) > time_division / 2):
+        if np.any(np.abs(onset_notes[:, 2] - onset_notes[0, 2]) > time_div_half):
             count += len(onset_notes)
             continue
 
         # Selects the possible chords notes
-        if notes[count, 2] - notes[count, 1] <= time_division / 2:
+        if notes[count, 2] - notes[count, 1] <= time_div_half:
             onset_notes = onset_notes[np.where(onset_notes[:, 1] == onset_notes[0, 1])]
-        chord = onset_notes[np.where(onset_notes[:, 2] - onset_notes[0, 2] <= time_division / 2)]
+        chord = onset_notes[np.where(onset_notes[:, 2] - onset_notes[0, 2] <= time_div_half)]
 
         # Creates the "chord map" and see if it has a "known" quality, append a chord event if it is valid
         chord_map = (chord[:, 0] - chord[0, 0]).tolist()
