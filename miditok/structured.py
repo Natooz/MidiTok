@@ -27,7 +27,7 @@ class StructuredEncoding(MIDITokenizer):
     :param beat_res: beat resolutions, with the form:
             {(beat_x1, beat_x2): beat_res_1, (beat_x2, beat_x3): beat_res_2, ...}
             The keys of the dict are tuples indicating a range of beats, ex 0 to 3 for the first bar
-            The values are the resolution, in frames per beat, of the given range, ex 8
+            The values are the resolution, in samples per beat, of the given range, ex 8
     :param nb_velocities: number of velocity bins
     :param program_tokens: will add entries for MIDI programs in the dictionary, to use
             in the case of multitrack generation for instance
@@ -99,7 +99,8 @@ class StructuredEncoding(MIDITokenizer):
                 text=f'{time_shift} ticks'))
         # Adds the last note
         if track.notes[-1].pitch not in self.pitch_range:
-            del events[-1]
+            if len(events) > 0:
+                del events[-1]
         else:
             events.append(Event(name='Pitch', time=track.notes[-1].start, value=track.notes[-1].pitch,
                                 text=track.notes[-1].pitch))

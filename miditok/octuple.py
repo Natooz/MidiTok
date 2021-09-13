@@ -23,7 +23,7 @@ class OctupleEncoding(MIDITokenizer):
     :param beat_res: beat resolutions, with the form:
             {(beat_x1, beat_x2): beat_res_1, (beat_x2, beat_x3): beat_res_2, ...}
             The keys of the dict are tuples indicating a range of beats, ex 0 to 3 for the first bar
-            The values are the resolution, in frames per beat, of the given range, ex 8
+            The values are the resolution, in samples per beat, of the given range, ex 8
     :param nb_velocities: number of velocity bins
     :param additional_tokens: specifies additional tokens (chords, empty bars, tempo...)
     :param program_tokens: will add entries for MIDI programs in the dictionary, to use
@@ -128,7 +128,7 @@ class OctupleEncoding(MIDITokenizer):
         """
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
-        ticks_per_frame = self.current_midi_metadata['time_division'] / max(self.beat_res.values())
+        ticks_per_sample = self.current_midi_metadata['time_division'] / max(self.beat_res.values())
         ticks_per_bar = self.current_midi_metadata['time_division'] * 4
 
         events = []
@@ -144,7 +144,7 @@ class OctupleEncoding(MIDITokenizer):
 
             # Positions and bars
             if note.start != current_tick:
-                pos_index = int((note.start % ticks_per_bar) / ticks_per_frame)
+                pos_index = int((note.start % ticks_per_bar) / ticks_per_sample)
                 current_tick = note.start
                 current_bar = current_tick // ticks_per_bar
                 current_pos = pos_index
@@ -205,7 +205,7 @@ class OctupleEncoding(MIDITokenizer):
         assert time_division % max(self.beat_res.values()) == 0, \
             f'Invalid time division, please give one divisible by {max(self.beat_res.values())}'
         midi = MidiFile(ticks_per_beat=time_division)
-        ticks_per_frame = time_division // max(self.beat_res.values())
+        ticks_per_sample = time_division // max(self.beat_res.values())
         if self.additional_tokens['Tempo']:
             tempo_changes = [TempoChange(TEMPO, -1)]  # mock the first tempo change to optimize below
         else:  # default
@@ -225,7 +225,7 @@ class OctupleEncoding(MIDITokenizer):
             program = int(events[3].value)
             current_pos = int(events[4].value)
             current_bar = int(events[5].value)
-            current_tick = current_bar * time_division * 4 + current_pos * ticks_per_frame
+            current_tick = current_bar * time_division * 4 + current_pos * ticks_per_sample
 
             # Append the created note
             tracks[program].append(Note(vel, pitch, current_tick, current_tick + duration))

@@ -29,7 +29,7 @@ class MuMIDIEncoding(MIDITokenizer):
     :param beat_res: beat resolutions, with the form:
             {(beat_x1, beat_x2): beat_res_1, (beat_x2, beat_x3): beat_res_2, ...}
             The keys of the dict are tuples indicating a range of beats, ex 0 to 3 for the first bar
-            The values are the resolution, in frames per beat, of the given range, ex 8
+            The values are the resolution, in samples per beat, of the given range, ex 8
     :param nb_velocities: number of velocity bins
     :param additional_tokens: specifies additional tokens (chords, empty bars, tempo...)
     :param program_tokens: will add entries for MIDI programs in the dictionary, to use
@@ -101,7 +101,7 @@ class MuMIDIEncoding(MIDITokenizer):
                 count += 1
             self.max_bar_embedding = nb_bars
 
-        ticks_per_frame = midi.ticks_per_beat / max(self.beat_res.values())
+        ticks_per_sample = midi.ticks_per_beat / max(self.beat_res.values())
         ticks_per_bar = midi.ticks_per_beat * 4
 
         # Process notes of every tracks
@@ -138,7 +138,7 @@ class MuMIDIEncoding(MIDITokenizer):
                             break  # this tempo change is beyond the current time step, we break the loop
             # Positions and bars
             if note_event[0].time != current_tick:
-                pos_index = int((note_event[0].time % ticks_per_bar) / ticks_per_frame)
+                pos_index = int((note_event[0].time % ticks_per_bar) / ticks_per_sample)
                 current_tick = note_event[0].time
                 current_pos = pos_index
                 current_track = -2  # reset
@@ -254,7 +254,7 @@ class MuMIDIEncoding(MIDITokenizer):
         assert time_division % max(self.beat_res.values()) == 0, \
             f'Invalid time division, please give one divisible by {max(self.beat_res.values())}'
         midi = MidiFile(ticks_per_beat=time_division)
-        ticks_per_frame = time_division // max(self.beat_res.values())
+        ticks_per_sample = time_division // max(self.beat_res.values())
 
         tracks = {}
         current_tick = 0
@@ -266,7 +266,7 @@ class MuMIDIEncoding(MIDITokenizer):
                 current_bar += 1
                 current_tick = current_bar * time_division * 4
             elif events[0].name == 'Position':
-                current_tick = current_bar * time_division * 4 + int(events[1].value) * ticks_per_frame
+                current_tick = current_bar * time_division * 4 + int(events[1].value) * ticks_per_sample
             elif events[0].name == 'Program':
                 current_track = events[0].value
                 try:

@@ -40,9 +40,9 @@ class MIDITokenizer:
     :param beat_res: beat resolutions, with the form:
             {(beat_x1, beat_x2): beat_res_1, (beat_x2, beat_x3): beat_res_2, ...}
             The keys of the dict are tuples indicating a range of beats, ex 0 to 3 for the first bar
-            The values are the resolution, in frames per beat, of the given range, ex 8
+            The values are the resolution, in samples per beat, of the given range, ex 8
     :param nb_velocities: number of velocity bins
-    :param additional_tokens: specifies additional tokens (chords, empty bars, tempo...)
+    :param additional_tokens: specifies additional tokens (chords, rests, tempo...)
     :param program_tokens: will add entries for MIDI programs in the dictionary, to use
             in the case of multitrack generation for instance
     :param params: can be a path to the parameter (json encoded) file or a dictionary
@@ -207,11 +207,11 @@ class MIDITokenizer:
 
     def _create_durations_tuples(self) -> List[Tuple]:
         """ Creates the possible durations in bar / beat units, as tuple of the form:
-        (beat, pos, res) where beat is the number of beats, pos the number of "frames"
-        ans res the beat resolution considered (frames per beat)
+        (beat, pos, res) where beat is the number of beats, pos the number of "samples"
+        ans res the beat resolution considered (samples per beat)
         Example: (2, 5, 8) means the duration is 2 beat long + position 5 / 8 of the ongoing beat
         In pure ticks we have: duration = (beat * res + pos) * time_division // res
-            Is equivalent to: duration = nb_of_frames * ticks_per_frame
+            Is equivalent to: duration = nb_of_samples * ticks_per_sample
         So in the last example, if time_division is 384: duration = (2 * 8 + 5) * 384 // 8 = 1008 ticks
 
         :return: the duration bins
@@ -320,21 +320,21 @@ def get_midi_programs(midi: MidiFile) -> List[Tuple[int, bool]]:
 
 def quantize_note_times(notes: List[Note], time_division: int, beat_res: int):
     """ Quantize the notes items start and end values.
-    It shifts the notes so they start at times that match the quantization (e.g. 16 frames per bar)
+    It shifts the notes so they start at times that match the quantization (e.g. 16 samples per bar)
 
     :param notes: notes to quantize
     :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
-    :param beat_res: number of frames (time steps, or positions) per beat
+    :param beat_res: number of samples (time steps, or positions) per beat
     """
-    ticks_per_frame = int(time_division / beat_res)
+    ticks_per_sample = int(time_division / beat_res)
     for i, note in enumerate(notes):  # items are notes
-        start_rest = note.start % ticks_per_frame
-        end_rest = note.end % ticks_per_frame
-        note.start += -start_rest if start_rest <= ticks_per_frame / 2 else ticks_per_frame - start_rest
-        note.end += -end_rest if end_rest <= ticks_per_frame / 2 else ticks_per_frame - end_rest
+        start_rest = note.start % ticks_per_sample
+        end_rest = note.end % ticks_per_sample
+        note.start += -start_rest if start_rest <= ticks_per_sample / 2 else ticks_per_sample - start_rest
+        note.end += -end_rest if end_rest <= ticks_per_sample / 2 else ticks_per_sample - end_rest
 
         if note.start == note.end:  # if this happens to often, consider using a higher beat resolution
-            note.end += ticks_per_frame  # like 8 frames per beat or 24 frames per bar
+            note.end += ticks_per_sample  # like 8 samples per beat or 24 samples per bar
 
 
 def quantize_tempos(tempos: List[TempoChange], time_division: int, beat_res: int):
@@ -342,12 +342,12 @@ def quantize_tempos(tempos: List[TempoChange], time_division: int, beat_res: int
 
     :param tempos: tempo changes to quantize
     :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
-    :param beat_res: number of frames (time steps, or positions) per beat
+    :param beat_res: number of samples (time steps, or positions) per beat
     """
-    ticks_per_frame = int(time_division / beat_res)
+    ticks_per_sample = int(time_division / beat_res)
     for tempo_change in tempos:
-        rest = tempo_change.time % ticks_per_frame
-        tempo_change.time += -rest if rest <= ticks_per_frame / 2 else ticks_per_frame - rest
+        rest = tempo_change.time % ticks_per_sample
+        tempo_change.time += -rest if rest <= ticks_per_sample / 2 else ticks_per_sample - rest
 
 
 def remove_duplicated_notes(notes: List[Note]):

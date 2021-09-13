@@ -20,7 +20,7 @@ class REMIEncoding(MIDITokenizer):
     :param beat_res: beat resolutions, with the form:
             {(beat_x1, beat_x2): beat_res_1, (beat_x2, beat_x3): beat_res_2, ...}
             The keys of the dict are tuples indicating a range of beats, ex 0 to 3 for the first bar
-            The values are the resolution, in frames per beat, of the given range, ex 8
+            The values are the resolution, in samples per beat, of the given range, ex 8
     :param nb_velocities: number of velocity bins
     :param additional_tokens: specifies additional tokens (chords, empty bars, tempo...)
     :param program_tokens: will add entries for MIDI programs in the dictionary, to use
@@ -40,7 +40,7 @@ class REMIEncoding(MIDITokenizer):
         """
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
-        ticks_per_frame = self.current_midi_metadata['time_division'] / max(self.beat_res.values())
+        ticks_per_sample = self.current_midi_metadata['time_division'] / max(self.beat_res.values())
         ticks_per_bar = self.current_midi_metadata['time_division'] * 4
         events = []
 
@@ -74,7 +74,7 @@ class REMIEncoding(MIDITokenizer):
                 continue
             # Position
             if note.start != current_tick:
-                pos_index = int((note.start % ticks_per_bar) / ticks_per_frame)
+                pos_index = int((note.start % ticks_per_bar) / ticks_per_sample)
                 events.append(Event(
                     name='Position',
                     time=note.start,
@@ -142,7 +142,7 @@ class REMIEncoding(MIDITokenizer):
             f'Invalid time division, please give one divisible by {max(self.beat_res.values())}'
         events = self._tokens_to_events(tokens)
 
-        ticks_per_frame = time_division // max(self.beat_res.values())
+        ticks_per_sample = time_division // max(self.beat_res.values())
         name = 'Drums' if program[1] else MIDI_INSTRUMENTS[program[0]]['name']
         instrument = Instrument(program[0], is_drum=program[1], name=name)
         if self.additional_tokens['Tempo']:
@@ -157,7 +157,7 @@ class REMIEncoding(MIDITokenizer):
                 current_bar += 1
                 current_tick = current_bar * time_division * 4
             elif event.name == 'Position':
-                current_tick = current_bar * time_division * 4 + int(event.value) * ticks_per_frame
+                current_tick = current_bar * time_division * 4 + int(event.value) * ticks_per_sample
             elif event.name == 'Tempo':
                 # If your encoding include tempo tokens, each Position token should be followed by
                 # a tempo token, but if it is not the case this method will skip this step
