@@ -71,8 +71,6 @@ class CPWordEncoding(MIDITokenizer):
         current_tempo = self.current_midi_metadata['tempo_changes'][current_tempo_idx].tempo
         current_tempo = (np.abs(self.tempo_bins - current_tempo)).argmin()
         for note in track.notes:
-            if note.pitch not in self.pitch_range:  # Notes to low or to high are discarded
-                continue
             # Position
             if note.start != current_tick:
                 pos_index = int((note.start % ticks_per_bar) / ticks_per_sample)
@@ -94,12 +92,11 @@ class CPWordEncoding(MIDITokenizer):
                 current_tick = note.start
 
             # Note
-            velocity_index = (np.abs(self.velocity_bins - note.velocity)).argmin()
             duration = note.end - note.start
             dur_index = np.argmin(np.abs([ticks - duration for ticks in
                                           self.durations_ticks[self.current_midi_metadata['time_division']]]))
             dur_value = '.'.join(map(str, self.durations[dur_index]))
-            tokens.append(self.create_cp_token(int(note.start), pitch=note.pitch, vel=velocity_index, dur=dur_value,
+            tokens.append(self.create_cp_token(int(note.start), pitch=note.pitch, vel=note.velocity, dur=dur_value,
                                                text=f'{duration} ticks'))
 
         tokens.sort(key=lambda x: x[0].time)
@@ -207,7 +204,7 @@ class CPWordEncoding(MIDITokenizer):
             token_type = compound_token[0].value
             if token_type == 'Note':
                 pitch = int(compound_token[2].value)
-                vel = int(self.velocity_bins[int(compound_token[3].value)])
+                vel = int(compound_token[3].value)
                 beat, pos, res = map(int, compound_token[4].value.split('.'))
                 duration = (beat * res + pos) * time_division // res
                 instrument.notes.append(Note(vel, pitch, current_tick, current_tick + duration))
@@ -250,9 +247,9 @@ class CPWordEncoding(MIDITokenizer):
 
         # VELOCITY
         event_to_token['Velocity_Ignore'] = count
-        token_type_indices['Velocity'] = list(range(count, count + len(self.velocity_bins) + 1))
+        token_type_indices['Velocity'] = list(range(count, count + len(self.velocities) + 1))
         count += 1
-        for i in range(len(self.velocity_bins)):
+        for i in self.velocities:
             event_to_token[f'Velocity_{i}'] = count
             count += 1
 

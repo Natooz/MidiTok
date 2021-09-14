@@ -51,7 +51,7 @@ class OctupleMonoEncoding(MIDITokenizer):
         with open(PurePath(out_dir, 'config').with_suffix(".txt"), 'w') as outfile:
             json.dump({'pitch_range': (self.pitch_range.start, self.pitch_range.stop),
                        'beat_res': {f'{k1}_{k2}': v for (k1, k2), v in self.beat_res.items()},
-                       'nb_velocities': len(self.velocity_bins),
+                       'nb_velocities': len(self.velocities),
                        'additional_tokens': self.additional_tokens, 'encoding': self.__class__.__name__,
                        'max_bar_embedding': self.max_bar_embedding},
                       outfile)
@@ -94,9 +94,6 @@ class OctupleMonoEncoding(MIDITokenizer):
         current_tempo = self.current_midi_metadata['tempo_changes'][current_tempo_idx].tempo
         current_tempo = (np.abs(self.tempo_bins - current_tempo)).argmin()
         for note in track.notes:
-            if note.pitch not in self.pitch_range:  # Notes to low or to high are discarded
-                continue
-
             # Positions and bars
             if note.start != current_tick:
                 pos_index = int((note.start % ticks_per_bar) / ticks_per_sample)
@@ -105,12 +102,11 @@ class OctupleMonoEncoding(MIDITokenizer):
                 current_pos = pos_index
 
             # Note attributes
-            velocity_index = (np.abs(self.velocity_bins - note.velocity)).argmin()
             duration = note.end - note.start
             dur_index = np.argmin(np.abs([ticks - duration for ticks in
                                           self.durations_ticks[self.current_midi_metadata['time_division']]]))
             token_ts = [self.event2token[f'Pitch_{note.pitch}'],
-                        self.event2token[f'Velocity_{velocity_index}'],
+                        self.event2token[f'Velocity_{note.velocity}'],
                         self.event2token[f'Duration_{".".join(map(str, self.durations[dur_index]))}'],
                         self.event2token[f'Position_{current_pos}'],
                         self.event2token[f'Bar_{current_bar}']]
@@ -166,7 +162,7 @@ class OctupleMonoEncoding(MIDITokenizer):
         for time_step in events:
             # Note attributes
             pitch = int(time_step[0].value)
-            vel = int(self.velocity_bins[int(time_step[1].value)])
+            vel = int(time_step[1].value)
             beat, pos, res = map(int, time_step[2].value.split('.'))
             duration = (beat * res + pos) * time_division // res
 
@@ -215,8 +211,8 @@ class OctupleMonoEncoding(MIDITokenizer):
             count += 1
 
         # VELOCITY
-        token_type_indices['Velocity'] = list(range(count, count + len(self.velocity_bins)))
-        for i in range(len(self.velocity_bins)):
+        token_type_indices['Velocity'] = list(range(count, count + len(self.velocities)))
+        for i in self.velocities:
             event_to_token[f'Velocity_{i}'] = count
             count += 1
 

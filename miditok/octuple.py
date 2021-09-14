@@ -11,7 +11,7 @@ from typing import List, Tuple, Dict, Optional, Union
 import numpy as np
 from miditoolkit import MidiFile, Instrument, Note, TempoChange
 
-from .midi_tokenizer_base import MIDITokenizer, Event, quantize_note_times, quantize_tempos, remove_duplicated_notes
+from .midi_tokenizer_base import MIDITokenizer, Event, remove_duplicated_notes
 from .constants import *
 
 
@@ -50,7 +50,7 @@ class OctupleEncoding(MIDITokenizer):
         with open(PurePath(out_dir, 'config').with_suffix(".txt"), 'w') as outfile:
             json.dump({'pitch_range': (self.pitch_range.start, self.pitch_range.stop),
                        'beat_res': {f'{k1}_{k2}': v for (k1, k2), v in self.beat_res.items()},
-                       'nb_velocities': len(self.velocity_bins),
+                       'nb_velocities': len(self.velocities),
                        'additional_tokens': self.additional_tokens, 'encoding': self.__class__.__name__,
                        'max_bar_embedding': self.max_bar_embedding},
                       outfile)
@@ -77,11 +77,16 @@ class OctupleEncoding(MIDITokenizer):
             self.durations_ticks[midi.ticks_per_beat] = [(beat * res + pos) * midi.ticks_per_beat // res
                                                          for beat, pos, res in self.durations]
 
+        # Quantize time signature and tempo changes times
+        # quantize_time_signatures(midi.time_signature_changes, midi.ticks_per_beat)
+        if self.additional_tokens['Tempo']:
+            self.quantize_tempos(midi.tempo_changes, midi.ticks_per_beat)
+
+        # Register MIDI metadata
         self.current_midi_metadata = {'time_division': midi.ticks_per_beat,
                                       'tempo_changes': midi.tempo_changes,
                                       'time_sig_changes': midi.time_signature_changes,
                                       'key_sig_changes': midi.key_signature_changes}
-        quantize_tempos(midi.tempo_changes, midi.ticks_per_beat, max(self.beat_res.values()))
 
         # Check bar embedding limit, update if needed
         nb_bars = ceil(midi.max_tick / (midi.ticks_per_beat * 4))
@@ -97,8 +102,8 @@ class OctupleEncoding(MIDITokenizer):
         # Process notes of every tracks
         tokens = []
         for track in midi.instruments:
-            quantize_note_times(track.notes, midi.ticks_per_beat, max(self.beat_res.values()))  # adjusts notes timings
-            track.notes.sort(key=lambda x: (x.start, x.pitch))  # sort notes
+            self.quantize_notes(track.notes, midi.ticks_per_beat)
+            track.notes.sort(key=lambda x: (x.start, x.pitch, x.end))  # sort notes
             remove_duplicated_notes(track.notes)  # remove possible duplicated notes
             tokens += self.track_to_tokens(track)
 
@@ -138,9 +143,6 @@ class OctupleEncoding(MIDITokenizer):
         current_tempo = self.current_midi_metadata['tempo_changes'][current_tempo_idx].tempo
         current_tempo = (np.abs(self.tempo_bins - current_tempo)).argmin()
         for note in track.notes:
-            if note.pitch not in self.pitch_range:  # Notes to low or to high are discarded
-                continue
-
             # Positions and bars
             if note.start != current_tick:
                 pos_index = int((note.start % ticks_per_bar) / ticks_per_sample)
@@ -149,12 +151,11 @@ class OctupleEncoding(MIDITokenizer):
                 current_pos = pos_index
 
             # Note attributes
-            velocity_index = (np.abs(self.velocity_bins - note.velocity)).argmin()
             duration = note.end - note.start
             dur_index = np.argmin(np.abs([ticks - duration for ticks in
                                           self.durations_ticks[self.current_midi_metadata['time_division']]]))
             event = [Event(name='Pitch', time=note.start, value=note.pitch, text=track.program),
-                     self.event2token[f'Velocity_{velocity_index}'],
+                     self.event2token[f'Velocity_{note.velocity}'],
                      self.event2token[f'Duration_{".".join(map(str, self.durations[dur_index]))}'],
                      self.event2token[f'Program_{-1 if track.is_drum else track.program}'],
                      self.event2token[f'Position_{current_pos}'],
@@ -216,7 +217,7 @@ class OctupleEncoding(MIDITokenizer):
 
             # Note attributes
             pitch = int(events[0].value)
-            vel = int(self.velocity_bins[int(events[1].value)])
+            vel = int(events[1].value)
             beat, pos, res = map(int, events[2].value.split('.'))
             duration = (beat * res + pos) * time_division // res
 
@@ -292,8 +293,8 @@ class OctupleEncoding(MIDITokenizer):
             count += 1
 
         # VELOCITY
-        token_type_indices['Velocity'] = list(range(count, count + len(self.velocity_bins)))
-        for i in range(len(self.velocity_bins)):
+        token_type_indices['Velocity'] = list(range(count, count + len(self.velocities)))
+        for i in self.velocities:
             event_to_token[f'Velocity_{i}'] = count
             count += 1
 

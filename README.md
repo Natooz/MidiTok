@@ -11,6 +11,83 @@ pip install miditok
 ```
 MidiTok uses MIDIToolkit, which itself uses Mido to read and write MIDI files.
 
+## Examples
+
+### Tokenize a MIDI
+
+```python
+from miditok import REMIEncoding, get_midi_programs
+from miditoolkit import MidiFile
+
+# Our parameters
+pitch_range = range(21, 109)
+beat_res = {(0, 4): 8, (4, 12): 4}
+nb_velocities = 32
+additional_tokens = {'Chord': True,
+                     'Tempo': True,
+                     'nb_tempos': 32,  # nb of tempo bins
+                     'tempo_range': (40, 250)}  # (min_tempo, max_tempo)
+
+# Creates the tokenizer and loads a MIDI
+remi_enc = REMIEncoding(pitch_range, beat_res, nb_velocities, additional_tokens)
+midi = MidiFile('path/to/your_midi.mid')
+
+# Converts MIDI to tokens, and back to a MIDI
+tokens = remi_enc.midi_to_tokens(midi)
+converted_back_midi = remi_enc.tokens_to_midi(tokens, get_midi_programs(midi))
+
+# Converts just a selected track
+remi_enc.current_midi_metadata = {'time_division': midi.ticks_per_beat, 'tempo_changes': midi.tempo_changes}
+piano_tokens = remi_enc.track_to_tokens(midi.instruments[0])
+
+# And convert it back (the last arg stands for (program number, is drum))
+converted_back_track, tempo_changes = remi_enc.tokens_to_track(piano_tokens, midi.ticks_per_beat, (0, False))
+```
+
+### Tokenize a dataset
+
+MidiTok will save your encoding parameters in a ```config.txt``` file to keep track of how they were converted.
+
+```python
+from miditok import REMIEncoding
+from pathlib import Path
+
+# Creates the tokenizer and list the file paths
+remi_enc = REMIEncoding()  # uses defaults parameters in constants.py
+files_paths = list(Path('path', 'to', 'your', 'dataset').glob('**/*.mid'))
+
+# A validation method to make sure to discard MIDIs we do not want
+def midi_valid(midi) -> bool:
+    if any(ts.numerator != 4 or ts.denominator !=4 for ts in midi.time_signature_changes):
+        return False  # time signature different from 4/4
+    if max(note.end for note in midi.instruments[0].notes) < 10 * midi.ticks_per_beat:
+        return False  # this MIDI is too short
+    return True
+
+# Converts MIDI files to tokens saved as JSON files
+remi_enc.tokenize_midi_dataset(files_paths, 'path/to/save', midi_valid)
+```
+
+### Write a MIDI file from tokens
+
+```python
+from miditok import REMIEncoding
+import torch
+
+# Creates the tokenizer and list the file paths
+remi_enc = REMIEncoding()  # uses defaults parameters in constants.py
+
+# The tokens, let's say produced by your Transformer, 4 tracks of 500 tokens
+tokens = torch.randint(low=0, high=len(remi_enc.event2token), size=(4, 500)).tolist()
+
+# The instruments, here piano, violin, french horn and drums
+programs = [(0, False), (41, False), (61, False), (0, True)]
+
+# Convert to MIDI and save it
+generated_midi = remi_enc.tokens_to_midi(tokens, programs)
+generated_midi.dump('path/to/save/file.mid')  # could have been done above by giving the path argument
+```
+
 ## Encodings
 
 _In the figures, yellow tokens are additional tokens, and tokens are vertically stacked at index 0 from the bottom up to the top._
@@ -105,95 +182,22 @@ These tokens bring additional information about the structure and content of MID
 
 * **Chords:** indicate the presence of a chord at a certain time step. MidiTok uses a chord detection method based on onset times and duration. This allows MidiTok to detect precisely chords without ambiguity, whereas most chord detection methods in symbolic music based on chroma features can't.
 * **Tempo:** specify the current tempo. Tempo values are quantized on the range and number of bins you want. This allows to also train a model to predict tempo changes alongside with the notes, unless specified in the chart below.
-* **WIP Time signature changes:** 
 * **WIP Rests:**
 
 |       | MIDI-Like     | REMI          | Compound Word | Structured | Octuple | MuMIDI        |
 |-------|:-------------:|:-------------:|:-------------:|:----------:|:-------:|:-------------:|
 | Chord | ✅             | ✅             | ✅             | ❌          | ❌       | ✅             |
 | WIP Rest| ✅           | ✅             | ✅             | ❌          | ✅       | ✅             |
-| WIP Time signature | ✅<sup>1</sup>| ✅<sup>1</sup>| ✅<sup>1</sup>| ❌| ❌       | ❌             |
 | Tempo | ✅<sup>1</sup> | ✅<sup>1</sup> | ✅<sup>1</sup> | ❌          | ✅       | ✅<sup>2</sup> |
 
 <sup>1</sup> Should not be used with multiple tracks. Otherwise, at decoding, only the events of the first track will be considered.\
 <sup>2</sup> Only used in the input as additional information. At decoding no tempo tokens should be predicted, _i.e_ will be considered.
 
-## Examples
+## Limitations
 
-### Tokenize a MIDI
+For every tokenization method, MidiTok only support a 4/4 time signature for now.
 
-```python
-from miditok import REMIEncoding, get_midi_programs
-from miditoolkit import MidiFile
-
-# Our parameters
-pitch_range = range(21, 109)
-beat_res = {(0, 4): 8, (4, 12): 4}
-nb_velocities = 32
-additional_tokens = {'Chord': True,
-                     'Tempo': True,
-                     'nb_tempos': 32,  # nb of tempo bins
-                     'tempo_range': (40, 250)}  # (min_tempo, max_tempo)
-
-# Creates the tokenizer and loads a MIDI
-remi_enc = REMIEncoding(pitch_range, beat_res, nb_velocities, additional_tokens)
-midi = MidiFile('path/to/your_midi.mid')
-
-# Converts MIDI to tokens, and back to a MIDI
-tokens = remi_enc.midi_to_tokens(midi)
-converted_back_midi = remi_enc.tokens_to_midi(tokens, get_midi_programs(midi))
-
-# Converts just a selected track
-remi_enc.current_midi_metadata = {'time_division': midi.ticks_per_beat, 'tempo_changes': midi.tempo_changes}
-piano_tokens = remi_enc.track_to_tokens(midi.instruments[0])
-
-# And convert it back (the last arg stands for (program number, is drum))
-converted_back_track, tempo_changes = remi_enc.tokens_to_track(piano_tokens, midi.ticks_per_beat, (0, False))
-```
-
-### Tokenize a dataset
-
-MidiTok will save your encoding parameters in a ```config.txt``` file to keep track of how they were converted.
-
-```python
-from miditok import REMIEncoding
-from pathlib import Path
-
-# Creates the tokenizer and list the file paths
-remi_enc = REMIEncoding()  # uses defaults parameters in constants.py
-files_paths = list(Path('path', 'to', 'your', 'dataset').glob('**/*.mid'))
-
-# A validation method to make sure to discard MIDIs we do not want
-def midi_valid(midi) -> bool:
-    if any(ts.numerator != 4 or ts.denominator !=4 for ts in midi.time_signature_changes):
-        return False  # time signature different from 4/4
-    if max(note.end for note in midi.instruments[0].notes) < 10 * midi.ticks_per_beat:
-        return False  # this MIDI is too short
-    return True
-
-# Converts MIDI files to tokens saved as JSON files
-remi_enc.tokenize_midi_dataset(files_paths, 'path/to/save', midi_valid)
-```
-
-### Write a MIDI file from tokens
-
-```python
-from miditok import REMIEncoding
-import torch
-
-# Creates the tokenizer and list the file paths
-remi_enc = REMIEncoding()  # uses defaults parameters in constants.py
-
-# The tokens, let's say produced by your Transformer, 4 tracks of 500 tokens
-tokens = torch.randint(low=0, high=len(remi_enc.event2token), size=(4, 500)).tolist()
-
-# The instruments, here piano, violin, french horn and drums
-programs = [(0, False), (41, False), (61, False), (0, True)]
-
-# Convert to MIDI and save it
-generated_midi = remi_enc.tokens_to_midi(tokens, programs)
-generated_midi.dump('path/to/save/file.mid')  # could have been done above by giving the path argument
-```
+Future updates will support other time signatures, and time signature changes for compatible tokenizations.
 
 ## Contributions
 
@@ -206,9 +210,6 @@ Contributions are gratefully welcomed, feel free to send a PR if you want to add
     title={This time with feeling: Learning expressive musical performance},
     author={Oore, Sageev and Simon, Ian and Dieleman, Sander and Eck, Douglas and Simonyan, Karen},
     journal={Neural Computing and Applications},
-    volume={32},
-    number={4},
-    pages={955--967},
     year={2018},
     publisher={Springer}
 }
@@ -249,8 +250,7 @@ Contributions are gratefully welcomed, feel free to send a PR if you want to add
     title = {PopMAG: Pop Music Accompaniment Generation},
     year = {2020},
     publisher = {Association for Computing Machinery},
-    booktitle = {Proceedings of the 28th ACM International Conference on Multimedia},
-    pages = {1198–1206}
+    booktitle = {Proceedings of the 28th ACM International Conference on Multimedia}
 }
 ```
 

@@ -27,6 +27,7 @@ class REMIEncoding(MIDITokenizer):
             in the case of multitrack generation for instance
     :param params: can be a path to the parameter (json encoded) file or a dictionary
     """
+
     def __init__(self, pitch_range: range = PITCH_RANGE, beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
                  nb_velocities: int = NB_VELOCITIES, additional_tokens: Dict[str, Union[bool, int]] = ADDITIONAL_TOKENS,
                  program_tokens: bool = PROGRAM_TOKENS, params=None):
@@ -59,9 +60,7 @@ class REMIEncoding(MIDITokenizer):
         current_tempo = self.current_midi_metadata['tempo_changes'][current_tempo_idx].tempo
         current_tempo = (np.abs(self.tempo_bins - current_tempo)).argmin()
         for note in track.notes:
-            if note.pitch not in self.pitch_range:  # Notes to low or to high are discarded
-                continue
-            # Position
+            # Position / Tempo
             if note.start != current_tick:
                 pos_index = int((note.start % ticks_per_bar) / ticks_per_sample)
                 events.append(Event(
@@ -69,7 +68,6 @@ class REMIEncoding(MIDITokenizer):
                     time=note.start,
                     value=pos_index,
                     text=note.start))
-                current_tick = note.start
                 # (Tempo)
                 if self.additional_tokens['Tempo']:
                     # If the current tempo is not the last one
@@ -77,7 +75,7 @@ class REMIEncoding(MIDITokenizer):
                         # Will loop over incoming tempo changes
                         for tempo_change in self.current_midi_metadata['tempo_changes'][current_tempo_idx + 1:]:
                             # If this tempo change happened before the current moment
-                            if tempo_change.time <= current_tick:
+                            if tempo_change.time <= note.start:
                                 current_tempo = (np.abs(self.tempo_bins - tempo_change.tempo)).argmin()
                                 current_tempo_idx += 1  # update tempo value (might not change) and index
                             else:  # <==> elif tempo_change.time > current_tick:
@@ -87,6 +85,7 @@ class REMIEncoding(MIDITokenizer):
                         time=note.start,
                         value=current_tempo,
                         text=note.start))
+                current_tick = note.start
             # Pitch
             events.append(Event(
                 name='Pitch',
@@ -94,12 +93,11 @@ class REMIEncoding(MIDITokenizer):
                 value=note.pitch,
                 text=note.pitch))
             # Velocity
-            velocity_index = (np.abs(self.velocity_bins - note.velocity)).argmin()
             events.append(Event(
                 name='Velocity',
                 time=note.start,
-                value=velocity_index,
-                text=f'{note.velocity}/{self.velocity_bins[velocity_index]}'))
+                value=note.velocity,
+                text=f'{note.velocity}'))
             # Duration
             duration = note.end - note.start
             index = np.argmin(np.abs([ticks - duration for ticks in
@@ -157,7 +155,7 @@ class REMIEncoding(MIDITokenizer):
                 try:
                     if events[ei + 1].name == 'Velocity' and events[ei + 2].name == 'Duration':
                         pitch = int(events[ei].value)
-                        vel = int(self.velocity_bins[int(events[ei + 1].value)])
+                        vel = int(events[ei + 1].value)
                         beat, pos, res = map(int, events[ei + 2].value.split('.'))
                         duration = (beat * res + pos) * time_division // res
                         instrument.notes.append(Note(vel, pitch, current_tick, current_tick + duration))
@@ -189,8 +187,8 @@ class REMIEncoding(MIDITokenizer):
             count += 1
 
         # VELOCITY
-        token_type_indices['Velocity'] = list(range(count, count + len(self.velocity_bins)))
-        for i in range(len(self.velocity_bins)):
+        token_type_indices['Velocity'] = list(range(count, count + len(self.velocities)))
+        for i in self.velocities:
             event_to_token[f'Velocity_{i}'] = count
             count += 1
 
@@ -215,6 +213,13 @@ class REMIEncoding(MIDITokenizer):
                 count += 1
             for chord_quality in CHORD_MAPS:  # classed chords
                 event_to_token[f'Chord_{chord_quality}'] = count
+                count += 1
+
+        # REST
+        if self.additional_tokens['Rest']:
+            token_type_indices['Rest'] = list(range(count, count + len(self.rests)))
+            for i in range(0, len(self.rests)):
+                event_to_token[f'Rest_{".".join(map(str, self.rests[i]))}'] = count
                 count += 1
 
         # TEMPO

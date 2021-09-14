@@ -66,8 +66,6 @@ class StructuredEncoding(MIDITokenizer):
 
         # Creates the Pitch, Velocity, Duration and Time Shift events
         for n, note in enumerate(track.notes[:-1]):
-            if note.pitch not in self.pitch_range:  # Notes to low or to high are discarded
-                continue
             # Pitch
             events.append(Event(
                 name='Pitch',
@@ -75,12 +73,11 @@ class StructuredEncoding(MIDITokenizer):
                 value=note.pitch,
                 text=note.pitch))
             # Velocity
-            velocity_index = (np.abs(self.velocity_bins - note.velocity)).argmin()
             events.append(Event(
                 name='Velocity',
                 time=note.start,
-                value=velocity_index,
-                text=f'{note.velocity}/{self.velocity_bins[velocity_index]}'))
+                value=note.velocity,
+                text=f'{note.velocity}'))
             # Duration
             duration = note.end - note.start
             index = np.argmin(np.abs([ticks - duration for ticks in dur_bins]))
@@ -104,9 +101,8 @@ class StructuredEncoding(MIDITokenizer):
         else:
             events.append(Event(name='Pitch', time=track.notes[-1].start, value=track.notes[-1].pitch,
                                 text=track.notes[-1].pitch))
-            velocity_index = (np.abs(self.velocity_bins - track.notes[-1].velocity)).argmin()
-            events.append(Event(name='Velocity', time=track.notes[-1].start, value=velocity_index,
-                                text=f'{track.notes[-1].velocity}/{self.velocity_bins[velocity_index]}'))
+            events.append(Event(name='Velocity', time=track.notes[-1].start, value=track.notes[-1].velocity,
+                                text=f'{track.notes[-1].velocity}'))
             duration = track.notes[-1].end - track.notes[-1].start
             index = np.argmin(np.abs([ticks - duration for ticks in dur_bins]))
             events.append(Event(name='Duration', time=track.notes[-1].start,
@@ -137,7 +133,7 @@ class StructuredEncoding(MIDITokenizer):
                 try:
                     if events[count + 1].name == 'Velocity' and events[count + 2].name == 'Duration':
                         pitch = int(events[count].value)
-                        vel = int(self.velocity_bins[int(events[count + 1].value)])
+                        vel = int(events[count + 1].value)
                         beat, pos, res = map(int, events[count + 2].value.split('.'))
                         duration = (beat * res + pos) * time_division // res
                         instrument.notes.append(Note(vel, pitch, current_tick, current_tick + duration))
@@ -179,8 +175,8 @@ class StructuredEncoding(MIDITokenizer):
             count += 1
 
         # VELOCITY
-        token_type_indices['Velocity'] = list(range(count, count + len(self.velocity_bins)))
-        for i in range(len(self.velocity_bins)):
+        token_type_indices['Velocity'] = list(range(count, count + len(self.velocities)))
+        for i in self.velocities:
             event_to_token[f'Velocity_{i}'] = count
             count += 1
 

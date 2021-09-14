@@ -11,8 +11,7 @@ from typing import List, Tuple, Dict, Optional, Union
 import numpy as np
 from miditoolkit import MidiFile, Instrument, Note
 
-from .midi_tokenizer_base import MIDITokenizer, Event, detect_chords, quantize_note_times, quantize_tempos, \
-    remove_duplicated_notes
+from .midi_tokenizer_base import MIDITokenizer, Event, detect_chords, remove_duplicated_notes
 from .constants import *
 
 
@@ -58,7 +57,7 @@ class MuMIDIEncoding(MIDITokenizer):
             json.dump({'pitch_range': (self.pitch_range.start, self.pitch_range.stop),
                        'drum_pitch_range': (self.drum_pitch_range.start, self.drum_pitch_range.stop),
                        'beat_res': {f'{k1}_{k2}': v for (k1, k2), v in self.beat_res.items()},
-                       'nb_velocities': len(self.velocity_bins),
+                       'nb_velocities': len(self.velocities),
                        'additional_tokens': self.additional_tokens, 'encoding': self.__class__.__name__,
                        'max_bar_embedding': self.max_bar_embedding},
                       outfile)
@@ -84,11 +83,16 @@ class MuMIDIEncoding(MIDITokenizer):
             self.durations_ticks[midi.ticks_per_beat] = [(beat * res + pos) * midi.ticks_per_beat // res
                                                          for beat, pos, res in self.durations]
 
+        # Quantize time signature and tempo changes times
+        # quantize_time_signatures(midi.time_signature_changes, midi.ticks_per_beat)
+        if self.additional_tokens['Tempo']:
+            self.quantize_tempos(midi.tempo_changes, midi.ticks_per_beat)
+
+        # Register MIDI metadata
         self.current_midi_metadata = {'time_division': midi.ticks_per_beat,
                                       'tempo_changes': midi.tempo_changes,
                                       'time_sig_changes': midi.time_signature_changes,
                                       'key_sig_changes': midi.key_signature_changes}
-        quantize_tempos(midi.tempo_changes, midi.ticks_per_beat, max(self.beat_res.values()))
 
         # Check bar embedding limit, update if needed
         nb_bars = ceil(midi.max_tick / (midi.ticks_per_beat * 4))
@@ -101,19 +105,19 @@ class MuMIDIEncoding(MIDITokenizer):
                 count += 1
             self.max_bar_embedding = nb_bars
 
-        ticks_per_sample = midi.ticks_per_beat / max(self.beat_res.values())
-        ticks_per_bar = midi.ticks_per_beat * 4
-
-        # Process notes of every tracks
+        # Convert tracks to tokens
         note_tokens = []
         for track in midi.instruments:
-            quantize_note_times(track.notes, midi.ticks_per_beat, max(self.beat_res.values()))  # adjusts notes timings
-            track.notes.sort(key=lambda x: (x.start, x.pitch))  # sort notes
+            self.quantize_notes(track.notes, midi.ticks_per_beat,
+                                self.drum_pitch_range if track.is_drum else self.pitch_range)
+            track.notes.sort(key=lambda x: (x.start, x.pitch, x.end))  # sort notes
             remove_duplicated_notes(track.notes)  # remove possible duplicated notes
             note_tokens += self.track_to_tokens(track)
 
         note_tokens.sort(key=lambda x: (x[0].time, x[0].text, x[0].value))  # Sort by time then track then pitch
 
+        ticks_per_sample = midi.ticks_per_beat / max(self.beat_res.values())
+        ticks_per_bar = midi.ticks_per_beat * 4
         tokens = []
 
         current_tick = -1
@@ -195,22 +199,17 @@ class MuMIDIEncoding(MIDITokenizer):
 
         tokens = []
         for note in track.notes:
-            if not track.is_drum and note.pitch not in self.pitch_range:
-                continue
-            if track.is_drum and note.pitch not in self.drum_pitch_range:
-                continue
             # Note
-            velocity_index = (np.abs(self.velocity_bins - note.velocity)).argmin()
             duration = note.end - note.start
             dur_index = np.argmin(np.abs([ticks - duration for ticks in
                                           self.durations_ticks[self.current_midi_metadata['time_division']]]))
             if not track.is_drum:
                 tokens.append([Event(name='Pitch', time=note.start, value=note.pitch, text=track.program),
-                               self.event2token[f'Velocity_{velocity_index}'],
+                               self.event2token[f'Velocity_{note.velocity}'],
                                self.event2token[f'Duration_{".".join(map(str, self.durations[dur_index]))}']])
             else:
                 tokens.append([Event(name='DrumPitch', time=note.start, value=note.pitch, text=-1),
-                               self.event2token[f'Velocity_{velocity_index}'],
+                               self.event2token[f'Velocity_{note.velocity}'],
                                self.event2token[f'Duration_{".".join(map(str, self.durations[dur_index]))}']])
 
         # Adds chord tokens if specified
@@ -267,7 +266,7 @@ class MuMIDIEncoding(MIDITokenizer):
                     tracks[current_track] = []
             elif events[0].name == 'Pitch' or events[0].name == 'DrumPitch':
                 pitch = int(events[0].value)
-                vel = int(self.velocity_bins[int(events[1].value)])
+                vel = int(events[1].value)
                 beat, pos, res = map(int, events[2].value.split('.'))
                 duration = (beat * res + pos) * time_division // res
 
@@ -329,8 +328,8 @@ class MuMIDIEncoding(MIDITokenizer):
             count += 1
 
         # VELOCITY
-        token_type_indices['Velocity'] = list(range(count, count + len(self.velocity_bins)))
-        for i in range(len(self.velocity_bins)):
+        token_type_indices['Velocity'] = list(range(count, count + len(self.velocities)))
+        for i in self.velocities:
             event_to_token[f'Velocity_{i}'] = count
             count += 1
 

@@ -55,8 +55,6 @@ class MIDILikeEncoding(MIDITokenizer):
 
         # Creates the Note On, Note Off and Velocity events
         for n, note in enumerate(track.notes):
-            if note.pitch not in self.pitch_range:  # Notes to low or to high are discarded
-                continue
             # Note On
             events.append(Event(
                 name='Note-On',
@@ -64,12 +62,11 @@ class MIDILikeEncoding(MIDITokenizer):
                 value=note.pitch,
                 text=note.pitch))
             # Velocity
-            velocity_index = (np.abs(self.velocity_bins - note.velocity)).argmin()
             events.append(Event(
                 name='Velocity',
                 time=note.start,
-                value=velocity_index,
-                text=f'{note.velocity}/{self.velocity_bins[velocity_index]}'))
+                value=note.velocity,
+                text=f'{note.velocity}'))
             # Note Off
             events.append(Event(
                 name='Note-Off',
@@ -90,7 +87,7 @@ class MIDILikeEncoding(MIDITokenizer):
 
         # Time Shift
         current_tick = 0
-        for e, event in enumerate(events[:-1].copy()):
+        for e, event in enumerate(events.copy()):
             if event.time == current_tick:
                 continue
             time_shift = event.time - current_tick
@@ -140,7 +137,7 @@ class MIDILikeEncoding(MIDITokenizer):
                 try:
                     if events[count + 1].name == 'Velocity':
                         pitch = int(events[count].value)
-                        vel = int(self.velocity_bins[int(events[count + 1].value)])
+                        vel = int(events[count + 1].value)
 
                         # look for an associated note off event to get duration
                         offset_tick = 0
@@ -205,8 +202,8 @@ class MIDILikeEncoding(MIDITokenizer):
             count += 1
 
         # VELOCITY
-        token_type_indices['Velocity'] = list(range(count, count + len(self.velocity_bins)))
-        for i in range(len(self.velocity_bins)):
+        token_type_indices['Velocity'] = list(range(count, count + len(self.velocities)))
+        for i in self.velocities:
             event_to_token[f'Velocity_{i}'] = count
             count += 1
 

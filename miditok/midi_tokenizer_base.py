@@ -64,8 +64,8 @@ class MIDITokenizer:
 
         # Init duration and velocity values
         self.durations = self.__create_durations_tuples()
-        self.velocity_bins = np.linspace(0, 127, self.nb_velocities + 1, dtype=np.intc)
-        np.delete(self.velocity_bins, 0)  # removes velocity 0
+        self.velocities = list(np.linspace(0, 127, self.nb_velocities + 1, dtype=np.intc))
+        del self.velocities[0]  # removes velocity 0
         self._first_beat_res = list(beat_res.values())[0]
         for beat_range, res in beat_res.items():
             if 0 in beat_range:
@@ -106,9 +106,9 @@ class MIDITokenizer:
                                                          for beat, pos, res in self.durations]
 
         # Quantize time signature and tempo changes times
-        quantize_time_signatures(midi.time_signature_changes, midi.ticks_per_beat)
+        # quantize_time_signatures(midi.time_signature_changes, midi.ticks_per_beat)
         if self.additional_tokens['Tempo']:
-            quantize_tempos(midi.tempo_changes, midi.ticks_per_beat, max(self.beat_res.values()))
+            self.quantize_tempos(midi.tempo_changes, midi.ticks_per_beat)
 
         # Register MIDI metadata
         self.current_midi_metadata = {'time_division': midi.ticks_per_beat,
@@ -116,10 +116,11 @@ class MIDITokenizer:
                                       'time_sig_changes': midi.time_signature_changes,
                                       'key_sig_changes': midi.key_signature_changes}
 
+        # Convert each track to tokens
         tokens = []
         for track in midi.instruments:
-            quantize_note_times(track.notes, self.current_midi_metadata['time_division'], max(self.beat_res.values()))
-            track.notes.sort(key=lambda x: (x.start, x.pitch))  # sort notes
+            self.quantize_notes(track.notes, midi.ticks_per_beat)
+            track.notes.sort(key=lambda x: (x.start, x.pitch, x.end))  # sort notes
             remove_duplicated_notes(track.notes)  # remove possible duplicated notes
 
             # **************** OVERRIDE FROM HERE, KEEP THE LINES ABOVE IN YOUR METHOD ****************
@@ -202,6 +203,66 @@ class MIDITokenizer:
         :return: the miditoolkit instrument object and the possible tempo changes
         """
         raise NotImplementedError
+
+    def quantize_notes(self, notes: List[Note], time_division: int, pitch_range: range = None):
+        """ Quantize the notes items, i.e. their pitch, velocity, start and end values.
+        It shifts the notes so they start at times that match the quantization (e.g. 16 samples per bar)
+        Notes with pitches outside of self.pitch_range will simply be deleted.
+
+        :param notes: notes to quantize
+        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
+        :param pitch_range: pitch range from within notes should be (default None -> self.pitch_range)
+        """
+        if pitch_range is None:
+            pitch_range = self.pitch_range
+        ticks_per_sample = int(time_division / max(self.beat_res.values()))
+        for i, note in enumerate(notes):  # items are notes
+            if note.pitch not in pitch_range:
+                notes.remove(note)
+            start_rest = note.start % ticks_per_sample
+            end_rest = note.end % ticks_per_sample
+            note.start += -start_rest if start_rest <= ticks_per_sample / 2 else ticks_per_sample - start_rest
+            note.end += -end_rest if end_rest <= ticks_per_sample / 2 else ticks_per_sample - end_rest
+
+            if note.start == note.end:  # if this happens to often, consider using a higher beat resolution
+                note.end += ticks_per_sample  # like 8 samples per beat or 24 samples per bar
+
+            note.velocity = min(self.velocities, key=lambda x: abs(x - note.velocity))
+
+    def quantize_tempos(self, tempos: List[TempoChange], time_division: int):
+        """ Quantize the times of tempo change events.
+
+        :param tempos: tempo changes to quantize
+        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
+        """
+        ticks_per_sample = int(time_division / max(self.beat_res.values()))
+        for tempo_change in tempos:
+            rest = tempo_change.time % ticks_per_sample
+            tempo_change.time += -rest if rest <= ticks_per_sample / 2 else ticks_per_sample - rest
+
+    @staticmethod
+    def quantize_time_signatures(time_sigs: List[TimeSignature], time_division: int):
+        """ Quantize the time signature changes, delayed to the next bar.
+        See MIDI 1.0 Detailed specifications, pages 54 - 56, for more information on
+        delayed time signature messages.
+
+        :param time_sigs: time signature changes to quantize
+        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
+        """
+        ticks_per_bar = time_division * time_sigs[0].numerator
+        current_bar = 0
+        previous_tick = 0  # first time signature change is always at tick 0
+        for time_sig in time_sigs[1:]:
+            # determine the current bar of time sig
+            bar_offset, rest = divmod(time_sig.time - previous_tick, ticks_per_bar)
+            if rest > 0:  # time sig doesn't happen on a new bar, we update it to the next bar
+                bar_offset += 1
+                time_sig.time = previous_tick + bar_offset * ticks_per_bar
+
+            # Update values
+            ticks_per_bar = time_division * time_sig.numerator
+            previous_tick = time_sig.time
+            current_bar += bar_offset
 
     def _create_vocabulary(self, program_tokens: bool) -> Tuple[dict, dict, dict]:
         """ Create the tokens <-> event dictionaries
@@ -302,7 +363,7 @@ class MIDITokenizer:
         with open(PurePath(out_dir, 'config').with_suffix(".txt"), 'w') as outfile:
             json.dump({'pitch_range': (self.pitch_range.start, self.pitch_range.stop),
                        'beat_res': {f'{k1}_{k2}': v for (k1, k2), v in self.beat_res.items()},
-                       'nb_velocities': len(self.velocity_bins),
+                       'nb_velocities': len(self.velocities),
                        'additional_tokens': self.additional_tokens,
                        'encoding': self.__class__.__name__}, outfile, indent=4)
 
@@ -334,72 +395,16 @@ def get_midi_programs(midi: MidiFile) -> List[Tuple[int, bool]]:
     return [(int(track.program), track.is_drum) for track in midi.instruments]
 
 
-def quantize_note_times(notes: List[Note], time_division: int, beat_res: int):
-    """ Quantize the notes items start and end values.
-    It shifts the notes so they start at times that match the quantization (e.g. 16 samples per bar)
-
-    :param notes: notes to quantize
-    :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
-    :param beat_res: number of samples (time steps, or positions) per beat
-    """
-    ticks_per_sample = int(time_division / beat_res)
-    for i, note in enumerate(notes):  # items are notes
-        start_rest = note.start % ticks_per_sample
-        end_rest = note.end % ticks_per_sample
-        note.start += -start_rest if start_rest <= ticks_per_sample / 2 else ticks_per_sample - start_rest
-        note.end += -end_rest if end_rest <= ticks_per_sample / 2 else ticks_per_sample - end_rest
-
-        if note.start == note.end:  # if this happens to often, consider using a higher beat resolution
-            note.end += ticks_per_sample  # like 8 samples per beat or 24 samples per bar
-
-
-def quantize_tempos(tempos: List[TempoChange], time_division: int, beat_res: int):
-    """ Quantize the times of tempo change events.
-
-    :param tempos: tempo changes to quantize
-    :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
-    :param beat_res: number of samples (time steps, or positions) per beat
-    """
-    ticks_per_sample = int(time_division / beat_res)
-    for tempo_change in tempos:
-        rest = tempo_change.time % ticks_per_sample
-        tempo_change.time += -rest if rest <= ticks_per_sample / 2 else ticks_per_sample - rest
-
-
-def quantize_time_signatures(time_sigs: List[TimeSignature], time_division: int):
-    """ Quantize the time signature changes, delayed to the next bar.
-    See MIDI 1.0 Detailed specifications, pages 54 - 56, for more information on
-    delayed time signature messages.
-
-    :param time_sigs: time signature changes to quantize
-    :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
-    """
-    ticks_per_bar = time_division * time_sigs[0].numerator
-    current_bar = 0
-    previous_tick = 0  # first time signature change is always at tick 0
-    for time_sig in time_sigs[1:]:
-        # determine the current bar of time sig
-        bar_offset, rest = divmod(time_sig.time - previous_tick, ticks_per_bar)
-        if rest > 0:  # time sig doesn't happen on a new bar, we update it to the next bar
-            bar_offset += 1
-            time_sig.time = previous_tick + bar_offset * ticks_per_bar
-
-        # Update values
-        ticks_per_bar = time_division * time_sig.numerator
-        previous_tick = time_sig.time
-        current_bar += bar_offset
-
-
 def remove_duplicated_notes(notes: List[Note]):
     """ Remove possible duplicated notes, i.e. with the same pitch, starting and ending times.
-    Before running this function make sure the notes has been sorted by start and pitch:
-    notes.sort(key=lambda x: (x.start, x.pitch))
+    Before running this function make sure the notes has been sorted by start then pitch then end values:
+    notes.sort(key=lambda x: (x.start, x.pitch, x.end))
 
     :param notes: notes to analyse
     """
     for i in range(len(notes) - 1, 0, -1):  # removing possible duplicated notes
         if notes[i].pitch == notes[i - 1].pitch and notes[i].start == notes[i - 1].start and \
-                notes[i].end == notes[i - 1].end:
+                notes[i].end >= notes[i - 1].end:
             del notes[i]
 
 
