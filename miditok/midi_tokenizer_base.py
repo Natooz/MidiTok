@@ -73,12 +73,17 @@ class MIDITokenizer:
                 break
 
         # Tempos
-        self.tempo_bins = np.zeros(1)
+        self.tempos = np.zeros(1)
         if additional_tokens['Tempo']:
-            self.tempo_bins = np.linspace(*additional_tokens['tempo_range'], additional_tokens['nb_tempos'],
-                                          dtype=np.intc)
-        else:
-            self.tempo_bins = np.zeros(1)
+            self.tempos = np.linspace(*additional_tokens['tempo_range'], additional_tokens['nb_tempos'],
+                                      dtype=np.intc)
+
+        # Rests
+        self.rests = []
+        if additional_tokens['Rest']:
+            assert additional_tokens['rest_range'][0] // 4 <= self._first_beat_res, \
+                'The minimum rest value must be equal or superior to the initial beat resolution'
+            self.rests = self.__create_rests()
 
         # Vocabulary
         self.event2token, self.token2event, self.token_types_indices = self._create_vocabulary(program_tokens)
@@ -230,7 +235,7 @@ class MIDITokenizer:
             note.velocity = min(self.velocities, key=lambda x: abs(x - note.velocity))
 
     def quantize_tempos(self, tempos: List[TempoChange], time_division: int):
-        """ Quantize the times of tempo change events.
+        """ Quantize the times and tempo values of tempo change events.
 
         :param tempos: tempo changes to quantize
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
@@ -239,6 +244,7 @@ class MIDITokenizer:
         for tempo_change in tempos:
             rest = tempo_change.time % ticks_per_sample
             tempo_change.time += -rest if rest <= ticks_per_sample / 2 else ticks_per_sample - rest
+            tempo_change.tempo = min(self.tempos, key=lambda x: abs(x - tempo_change.tempo))
 
     @staticmethod
     def quantize_time_signatures(time_sigs: List[TimeSignature], time_division: int):
@@ -299,6 +305,29 @@ class MIDITokenizer:
         durations += [(max(max(self.beat_res)), 0, self.beat_res[max(self.beat_res)])]  # the last one
         del durations[0]  # removes duration of 0
         return durations
+
+    def __create_rests(self) -> List[Tuple]:
+        """ Creates the possible rests in beat / position units, as tuple of the form:
+        (beat, pos) where beat is the number of beats, pos the number of "samples"
+        The rests are calculated based from the value of self.additional_tokens[rest_range],
+        which first value divide a whole note/rest to determine the minimum rest represented,
+        and the second the maximum rest in beats !
+        Note that the values of the rests in positions will be determined by the beat
+        resolution of the first range (self.beat_res)
+        https://en.wikipedia.org/wiki/Rest_(music)
+
+        Example: (16, 6) and a first beat resolution of 8 will give the rests:
+            [(0, 2), (0, 4), (1, 0), (2, 0), (3, 0), (4, 0), (5, 0), (6, 0)]
+
+        :return: the rests
+        """
+        rests = []
+        div, max_beat = self.additional_tokens['rest_range']
+        while div > 4:
+            rests.append((0, 4 * self._first_beat_res // div))
+            div //= 2
+        rests += [(i, 0) for i in range(1, max_beat + 1)]
+        return rests
 
     def tokenize_midi_dataset(self, midi_paths: Union[List[str], List[Path], List[PurePath]],
                               out_dir: Union[str, Path, PurePath], validation_fn: Callable[[MidiFile], bool] = None,

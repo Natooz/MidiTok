@@ -18,7 +18,7 @@ from typing import Union
 import miditok
 from miditoolkit import MidiFile, Marker
 
-from tests_utils import track_equals
+from tests_utils import track_equals, tempo_changes_equals
 
 # Special beat res for test, up to 64 beats so the duration and time-shift values are
 # long enough for MIDI-Like and Structured encodings, and with a single beat resolution
@@ -63,10 +63,14 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
             tokens = tokenizer.midi_to_tokens(midi)
 
             # Convert back tokens into a track object
+            tempo_changes = None
             if encoding == 'OctupleEncoding' or encoding == 'MuMIDIEncoding':
-                track = tokenizer.tokens_to_midi(tokens, time_division=midi.ticks_per_beat).instruments[0]
+                new_midi = tokenizer.tokens_to_midi(tokens, time_division=midi.ticks_per_beat)
+                track = new_midi.instruments[0]
+                if encoding == 'OctupleEncoding':
+                    tempo_changes = new_midi.tempo_changes
             else:
-                track, _ = tokenizer.tokens_to_track(tokens[0], midi.ticks_per_beat)
+                track, tempo_changes = tokenizer.tokens_to_track(tokens[0], midi.ticks_per_beat)
 
             # Checks its good
             equals, errors = track_equals(midi.instruments[0], track)
@@ -75,10 +79,16 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
                     for err, note in errors:
                         midi.markers.append(Marker(f'ERR {encoding[:-8]} with note {err} (pitch {note.pitch})',
                                                    note.start))
-                print(f'Failed to encode/decode MIDI {file_path} with {encoding[:-8]} ({len(errors)} errors)')
+                print(f'Failed to encode/decode MIDI with {encoding[:-8]} ({len(errors)} errors)')
                 # return False
             track.name = f'encoded with {encoding[:-8]}'
             tracks.append(track)
+
+            # Checks tempos
+            if tempo_changes is not None and tokenizer.additional_tokens['Tempo']:
+                tempo_equals, errors = tempo_changes_equals(midi.tempo_changes, tempo_changes)
+                if not tempo_equals:
+                    print(f'Failed to encode/decode TEMPO changes with {encoding[:-8]} ({len(errors)} errors)')
 
         t1 = time.time()
         print(f'Took {t1 - t0} seconds')

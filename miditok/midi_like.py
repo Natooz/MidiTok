@@ -79,7 +79,7 @@ class MIDILikeEncoding(MIDITokenizer):
                 events.append(Event(
                     name='Tempo',
                     time=tempo_change.time,
-                    value=(np.abs(self.tempo_bins - tempo_change.tempo)).argmin(),
+                    value=tempo_change.tempo,
                     text=tempo_change.tempo))
 
         # Sorts events in the good order
@@ -164,7 +164,7 @@ class MIDILikeEncoding(MIDITokenizer):
                 current_tick += (beat * res + pos) * time_division // res
                 count += 1
             elif events[count].name == 'Tempo':
-                tempo = int(self.tempo_bins[int(events[count].value)])
+                tempo = int(events[count].value)
                 if tempo != tempo_changes[-1].tempo:
                     tempo_changes.append(TempoChange(tempo, current_tick))
                 count += 1
@@ -225,8 +225,8 @@ class MIDILikeEncoding(MIDITokenizer):
 
         # TEMPO
         if self.additional_tokens['Tempo']:
-            token_type_indices['Tempo'] = list(range(count, count + len(self.tempo_bins)))
-            for i in range(len(self.tempo_bins)):
+            token_type_indices['Tempo'] = list(range(count, count + len(self.tempos)))
+            for i in self.tempos:
                 event_to_token[f'Tempo_{i}'] = count
                 count += 1
 

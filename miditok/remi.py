@@ -45,7 +45,7 @@ class REMIEncoding(MIDITokenizer):
         ticks_per_bar = self.current_midi_metadata['time_division'] * 4
         events = []
 
-        # Creates Bar and Position events
+        # Creates Bar events
         bar_ticks = np.arange(0, max(n.end for n in track.notes) + ticks_per_bar, ticks_per_bar)
         for t, tick in enumerate(bar_ticks):  # creating a "Bar" event at each beginning of bars
             events.append(Event(
@@ -54,11 +54,10 @@ class REMIEncoding(MIDITokenizer):
                 value=None,
                 text=t))
 
-        # Creates the Pitch, Velocity and Duration events
+        # Creates the Position, Pitch, Velocity and Duration events
         current_tick = -1
         current_tempo_idx = 0
         current_tempo = self.current_midi_metadata['tempo_changes'][current_tempo_idx].tempo
-        current_tempo = (np.abs(self.tempo_bins - current_tempo)).argmin()
         for note in track.notes:
             # Position / Tempo
             if note.start != current_tick:
@@ -76,7 +75,7 @@ class REMIEncoding(MIDITokenizer):
                         for tempo_change in self.current_midi_metadata['tempo_changes'][current_tempo_idx + 1:]:
                             # If this tempo change happened before the current moment
                             if tempo_change.time <= note.start:
-                                current_tempo = (np.abs(self.tempo_bins - tempo_change.tempo)).argmin()
+                                current_tempo = tempo_change.tempo
                                 current_tempo_idx += 1  # update tempo value (might not change) and index
                             else:  # <==> elif tempo_change.time > current_tick:
                                 break  # this tempo change is beyond the current time step, we break the loop
@@ -148,7 +147,7 @@ class REMIEncoding(MIDITokenizer):
             elif event.name == 'Tempo':
                 # If your encoding include tempo tokens, each Position token should be followed by
                 # a tempo token, but if it is not the case this method will skip this step
-                tempo = int(self.tempo_bins[int(event.value)])
+                tempo = int(event.value)
                 if tempo != tempo_changes[-1].tempo:
                     tempo_changes.append(TempoChange(tempo, current_tick))
             elif event.name == 'Pitch':
@@ -162,6 +161,7 @@ class REMIEncoding(MIDITokenizer):
                 except IndexError as _:  # A well constituted sequence should not raise an exception
                     pass  # However with generated sequences this can happen, or if the sequence isn't finished
         del tempo_changes[0]
+        tempo_changes[0].time = 0
         return instrument, tempo_changes
 
     def _create_vocabulary(self, program_tokens: bool) -> Tuple[dict, dict, dict]:
@@ -224,8 +224,8 @@ class REMIEncoding(MIDITokenizer):
 
         # TEMPO
         if self.additional_tokens['Tempo']:
-            token_type_indices['Tempo'] = list(range(count, count + len(self.tempo_bins)))
-            for i in range(len(self.tempo_bins)):
+            token_type_indices['Tempo'] = list(range(count, count + len(self.tempos)))
+            for i in self.tempos:
                 event_to_token[f'Tempo_{i}'] = count
                 count += 1
 

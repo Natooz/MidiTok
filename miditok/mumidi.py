@@ -9,7 +9,7 @@ from pathlib import Path, PurePath
 from typing import List, Tuple, Dict, Optional, Union
 
 import numpy as np
-from miditoolkit import MidiFile, Instrument, Note
+from miditoolkit import MidiFile, Instrument, Note, TempoChange
 
 from .midi_tokenizer_base import MIDITokenizer, Event, detect_chords, remove_duplicated_notes
 from .constants import *
@@ -126,7 +126,6 @@ class MuMIDIEncoding(MIDITokenizer):
         current_track = -2  # doesnt exist
         current_tempo_idx = 0
         current_tempo = self.current_midi_metadata['tempo_changes'][current_tempo_idx].tempo
-        current_tempo = (np.abs(self.tempo_bins - current_tempo)).argmin()
         for note_event in note_tokens:
             # (Tempo) update tempo values current_tempo
             if self.additional_tokens['Tempo']:
@@ -135,10 +134,10 @@ class MuMIDIEncoding(MIDITokenizer):
                     # Will loop over incoming tempo changes
                     for tempo_change in self.current_midi_metadata['tempo_changes'][current_tempo_idx + 1:]:
                         # If this tempo change happened before the current moment
-                        if tempo_change.time <= current_tick:
-                            current_tempo = (np.abs(self.tempo_bins - tempo_change.tempo)).argmin()
+                        if tempo_change.time <= note_event[0].time:
+                            current_tempo = tempo_change.tempo
                             current_tempo_idx += 1  # update tempo value (might not change) and index
-                        elif tempo_change.time > current_tick:
+                        elif tempo_change.time > note_event[0].time:
                             break  # this tempo change is beyond the current time step, we break the loop
             # Positions and bars
             if note_event[0].time != current_tick:
@@ -245,6 +244,7 @@ class MuMIDIEncoding(MIDITokenizer):
         assert time_division % max(self.beat_res.values()) == 0, \
             f'Invalid time division, please give one divisible by {max(self.beat_res.values())}'
         midi = MidiFile(ticks_per_beat=time_division)
+        midi.tempo_changes.append(TempoChange(TEMPO, 0))
         ticks_per_sample = time_division // max(self.beat_res.values())
 
         tracks = {}
@@ -361,8 +361,8 @@ class MuMIDIEncoding(MIDITokenizer):
 
         # TEMPO
         if self.additional_tokens['Tempo']:
-            token_type_indices['Tempo'] = list(range(count, count + len(self.tempo_bins)))
-            for i in range(len(self.tempo_bins)):
+            token_type_indices['Tempo'] = list(range(count, count + len(self.tempos)))
+            for i in self.tempos:
                 event_to_token[f'Tempo_{i}'] = count
                 count += 1
 

@@ -92,7 +92,6 @@ class OctupleMonoEncoding(MIDITokenizer):
         current_pos = -1
         current_tempo_idx = 0
         current_tempo = self.current_midi_metadata['tempo_changes'][current_tempo_idx].tempo
-        current_tempo = (np.abs(self.tempo_bins - current_tempo)).argmin()
         for note in track.notes:
             # Positions and bars
             if note.start != current_tick:
@@ -118,10 +117,10 @@ class OctupleMonoEncoding(MIDITokenizer):
                     # Will loop over incoming tempo changes
                     for tempo_change in self.current_midi_metadata['tempo_changes'][current_tempo_idx + 1:]:
                         # If this tempo change happened before the current moment
-                        if tempo_change.time <= current_tick:
-                            current_tempo = (np.abs(self.tempo_bins - tempo_change.tempo)).argmin()
+                        if tempo_change.time <= note.start:
+                            current_tempo = tempo_change.tempo
                             current_tempo_idx += 1  # update tempo value (might not change) and index
-                        elif tempo_change.time > current_tick:
+                        elif tempo_change.time > note.start:
                             break  # this tempo change is beyond the current time step, we break the loop
                 token_ts.append(self.event2token[f'Tempo_{current_tempo}'])
 
@@ -176,12 +175,13 @@ class OctupleMonoEncoding(MIDITokenizer):
 
             # Tempo, adds a TempoChange if necessary
             if self.additional_tokens['Tempo']:
-                tempo = int(self.tempo_bins[int(time_step[-1].value)])
+                tempo = int(time_step[-1].value)
                 if tempo != tempo_changes[-1].tempo:
                     tempo_changes.append(TempoChange(tempo, current_tick))
 
         # Tempos
         del tempo_changes[0]
+        tempo_changes[0].time = 0
         return instrument, tempo_changes
 
     def _create_vocabulary(self, program_tokens) -> Tuple[dict, dict, dict]:
@@ -231,8 +231,8 @@ class OctupleMonoEncoding(MIDITokenizer):
 
         # TEMPO
         if self.additional_tokens['Tempo']:
-            token_type_indices['Tempo'] = list(range(count, count + len(self.tempo_bins)))
-            for i in range(len(self.tempo_bins)):
+            token_type_indices['Tempo'] = list(range(count, count + len(self.tempos)))
+            for i in self.tempos:
                 event_to_token[f'Tempo_{i}'] = count
                 count += 1
 
