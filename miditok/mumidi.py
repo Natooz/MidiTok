@@ -31,7 +31,7 @@ class MuMIDIEncoding(MIDITokenizer):
             The keys of the dict are tuples indicating a range of beats, ex 0 to 3 for the first bar
             The values are the resolution, in samples per beat, of the given range, ex 8
     :param nb_velocities: number of velocity bins
-    :param additional_tokens: specifies additional tokens (chords, empty bars, tempo...)
+    :param additional_tokens: specifies additional tokens (chords, time signature, rests, tempo)
     :param program_tokens: will add entries for MIDI programs in the dictionary, to use
             in the case of multitrack generation for instance
     :param params: can be a path to the parameter (json encoded) file or a dictionary
@@ -152,14 +152,6 @@ class MuMIDIEncoding(MIDITokenizer):
                         if self.additional_tokens['Tempo']:
                             bar_token.append(self.event2token[f'Tempo_{current_tempo}'])
                         tokens.append(bar_token)
-                        # (Empty bar)
-                        if self.additional_tokens['Empty'] and i+1 != nb_new_bars and nb_new_bars > 1:
-                            empty_token = [self.event2token['Empty_None'],
-                                           self.event2token['Position_Ignore'],
-                                           self.event2token[f'Bar_{current_bar + i + 1}']]
-                            if self.additional_tokens['Tempo']:
-                                empty_token.append(self.event2token[f'Tempo_{current_tempo}'])
-                            tokens.append(empty_token)
                     current_bar += nb_new_bars
                 # Position
                 pos_token = [self.event2token['Position_None'],
@@ -374,12 +366,6 @@ class MuMIDIEncoding(MIDITokenizer):
             for i in range(len(self.tempo_bins)):
                 event_to_token[f'Tempo_{i}'] = count
                 count += 1
-
-        # EMPTY
-        if self.additional_tokens['Empty']:
-            event_to_token['Empty_None'] = count
-            token_type_indices['Empty'] = [count]
-            count += 1
 
         # PROGRAM
         token_type_indices['Program'] = list(range(count, count + 129))

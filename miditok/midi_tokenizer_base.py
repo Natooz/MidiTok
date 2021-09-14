@@ -1,5 +1,7 @@
 """ MIDI encoding base class and methods
 TODO Control change messages (sustain, modulation, pitch bend)
+TODO time signature changes tokens
+TODO rest tokens
 
 """
 
@@ -9,7 +11,7 @@ import json
 from typing import List, Tuple, Dict, Union, Callable, Optional, Any
 
 import numpy as np
-from miditoolkit import MidiFile, Instrument, Note, TempoChange
+from miditoolkit import MidiFile, Instrument, Note, TempoChange, TimeSignature
 
 from .constants import TIME_DIVISION, CHORD_MAPS
 
@@ -47,6 +49,7 @@ class MIDITokenizer:
             in the case of multitrack generation for instance
     :param params: can be a path to the parameter (json encoded) file or a dictionary
     """
+
     def __init__(self, pitch_range: range, beat_res: Dict[Tuple[int, int], int], nb_velocities: int,
                  additional_tokens: Dict[str, Union[bool, int, Tuple[int, int]]], program_tokens: bool,
                  params: Union[str, Path, PurePath, Dict[str, Any]] = None):
@@ -90,8 +93,7 @@ class MIDITokenizer:
 
     def midi_to_tokens(self, midi: MidiFile) -> List[List[Union[int, List[int]]]]:
         """ Converts a MIDI file in a tokens representation.
-        NOTE: if you override this method, be sure to keep every line of code below until
-        the "Convert track to token" comment in the for loop
+        NOTE: if you override this method, be sure to keep the first lines in your method
 
         :param midi: the MIDI objet to convert
         :return: the token representation, i.e. tracks converted into sequences of tokens
@@ -103,21 +105,24 @@ class MIDITokenizer:
             self.durations_ticks[midi.ticks_per_beat] = [(beat * res + pos) * midi.ticks_per_beat // res
                                                          for beat, pos, res in self.durations]
 
+        # Quantize time signature and tempo changes times
+        quantize_time_signatures(midi.time_signature_changes, midi.ticks_per_beat)
+        if self.additional_tokens['Tempo']:
+            quantize_tempos(midi.tempo_changes, midi.ticks_per_beat, max(self.beat_res.values()))
+
         # Register MIDI metadata
         self.current_midi_metadata = {'time_division': midi.ticks_per_beat,
                                       'tempo_changes': midi.tempo_changes,
                                       'time_sig_changes': midi.time_signature_changes,
                                       'key_sig_changes': midi.key_signature_changes}
 
-        # Quantize tempo changes times
-        if self.additional_tokens['Tempo']:
-            quantize_tempos(midi.tempo_changes, midi.ticks_per_beat, max(self.beat_res.values()))
-
         tokens = []
         for track in midi.instruments:
             quantize_note_times(track.notes, self.current_midi_metadata['time_division'], max(self.beat_res.values()))
             track.notes.sort(key=lambda x: (x.start, x.pitch))  # sort notes
             remove_duplicated_notes(track.notes)  # remove possible duplicated notes
+
+            # **************** OVERRIDE FROM HERE, KEEP THE LINES ABOVE IN YOUR METHOD ****************
 
             # Convert track to tokens
             tokens.append(self.track_to_tokens(track))
@@ -246,11 +251,11 @@ class MIDITokenizer:
         :param logging: logs a progress bar
         """
         Path(out_dir).mkdir(parents=True, exist_ok=True)
-        
+
         # Making a directory of the parent folders for the JSON file
         # parent_dir = PurePath(midi_paths[0]).parent[0]
         # PurePath(out_dir, parent_dir).mkdir(parents=True, exist_ok=True)
-            
+
         for m, midi_path in enumerate(midi_paths):
             if logging:
                 bar_len = 60
@@ -361,6 +366,30 @@ def quantize_tempos(tempos: List[TempoChange], time_division: int, beat_res: int
         tempo_change.time += -rest if rest <= ticks_per_sample / 2 else ticks_per_sample - rest
 
 
+def quantize_time_signatures(time_sigs: List[TimeSignature], time_division: int):
+    """ Quantize the time signature changes, delayed to the next bar.
+    See MIDI 1.0 Detailed specifications, pages 54 - 56, for more information on
+    delayed time signature messages.
+
+    :param time_sigs: time signature changes to quantize
+    :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
+    """
+    ticks_per_bar = time_division * time_sigs[0].numerator
+    current_bar = 0
+    previous_tick = 0  # first time signature change is always at tick 0
+    for time_sig in time_sigs[1:]:
+        # determine the current bar of time sig
+        bar_offset, rest = divmod(time_sig.time - previous_tick, ticks_per_bar)
+        if rest > 0:  # time sig doesn't happen on a new bar, we update it to the next bar
+            bar_offset += 1
+            time_sig.time = previous_tick + bar_offset * ticks_per_bar
+
+        # Update values
+        ticks_per_bar = time_division * time_sig.numerator
+        previous_tick = time_sig.time
+        current_bar += bar_offset
+
+
 def remove_duplicated_notes(notes: List[Note]):
     """ Remove possible duplicated notes, i.e. with the same pitch, starting and ending times.
     Before running this function make sure the notes has been sorted by start and pitch:
@@ -374,8 +403,8 @@ def remove_duplicated_notes(notes: List[Note]):
             del notes[i]
 
 
-def detect_chords(notes: List[Note], time_division: int, beat_res: int = 4, samples_scopes: int = 1,
-                  simul_notes_limit: int = 20) -> List[Event]:
+def detect_chords(notes: List[Note], time_division: int, beat_res: int = 4, onset_offset: int = 1,
+                  only_known_chord: bool = False, simul_notes_limit: int = 20) -> List[Event]:
     """ Chord detection method.
     NOTE: make sure to sort notes by start time then pitch before: notes.sort(key=lambda x: (x.start, x.pitch))
     NOTE2: on very large tracks with high note density this method can be very slow !
@@ -387,8 +416,10 @@ def detect_chords(notes: List[Note], time_division: int, beat_res: int = 4, samp
     :param notes: notes to analyse (sorted by starting time, them pitch)
     :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
     :param beat_res: beat resolution, i.e. nb of samples per beat (default 4)
-    :param samples_scopes: maximum offset (in samples) ∈ N separating notes starts to consider them
+    :param onset_offset: maximum offset (in samples) ∈ N separating notes starts to consider them
                             starting at the same time / onset (default is 1)
+    :param only_known_chord: will select only known chords. If set to False, non recognized chords of
+                            n notes will give a chord_n event (default False)
     :param simul_notes_limit: nb of simultaneous notes being processed when looking for a chord
             this parameter allows to speed up the chord detection (default 20)
     :return: the detected chords as Event objects
@@ -400,7 +431,7 @@ def detect_chords(notes: List[Note], time_division: int, beat_res: int = 4, samp
     notes = np.asarray(tuples)
 
     time_div_half = time_division // 2
-    onset_offset = time_division * samples_scopes / beat_res
+    onset_offset = time_division * onset_offset / beat_res
 
     count = 0
     previous_tick = -1
@@ -412,7 +443,7 @@ def detect_chords(notes: List[Note], time_division: int, beat_res: int = 4, samp
             continue
 
         # Gathers the notes around the same time step
-        onset_notes = notes[count:count+simul_notes_limit]  # reduces the scope
+        onset_notes = notes[count:count + simul_notes_limit]  # reduces the scope
         onset_notes = onset_notes[np.where(onset_notes[:, 1] <= onset_notes[0, 1] + onset_offset)]
 
         # If it is ambiguous, e.g. the notes lengths are too different
@@ -433,6 +464,8 @@ def detect_chords(notes: List[Note], time_division: int, beat_res: int = 4, samp
                 if known_chord == chord_map:
                     chord_quality = quality
                     break
+            if only_known_chord and isinstance(chord_quality, int):
+                continue  # this chords was not recognize and we don't want it
             chords.append((chord_quality, min(chord[:, 1]), chord_map))
         previous_tick = max(onset_notes[:, 1])
         count += len(onset_notes)  # Move to the next notes

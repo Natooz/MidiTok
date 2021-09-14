@@ -36,7 +36,7 @@ class StructuredEncoding(MIDITokenizer):
     def __init__(self, pitch_range: range = PITCH_RANGE, beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
                  nb_velocities: int = NB_VELOCITIES, program_tokens: bool = PROGRAM_TOKENS, params=None):
         # No additional tokens
-        additional_tokens = {'Chord': False, 'Empty': False, 'Tempo': False}
+        additional_tokens = {'Chord': False, 'Time signature': False, 'Rest': False, 'Tempo': False}
         super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, program_tokens, params)
 
     def track_to_tokens(self, track: Instrument) -> List[int]:
@@ -169,7 +169,7 @@ class StructuredEncoding(MIDITokenizer):
         :return: the dictionaries, one for each translation
         """
         event_to_token = {'PAD_None': 0}  # starting at 1, token 0 is for padding
-        token_type_indices = {'Pad': [0]}  # Empty is for empty bars
+        token_type_indices = {'Pad': [0]}
         count = 1
 
         # PITCH

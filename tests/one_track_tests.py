@@ -15,16 +15,17 @@ from copy import deepcopy
 from pathlib import Path, PurePath
 from typing import Union
 
-from miditok import REMIEncoding, StructuredEncoding, MIDILikeEncoding, CPWordEncoding, MuMIDIEncoding,\
+from miditok import REMIEncoding, StructuredEncoding, MIDILikeEncoding, CPWordEncoding, MuMIDIEncoding, \
     OctupleEncoding, OctupleMonoEncoding
 from miditoolkit import MidiFile
 
 # Special beat res for test, up to 32 beats so the duration and time-shift values are
 # long enough for MIDI-Like and Structured encodings, and with a single beat resolution
 BEAT_RES_TEST = {(0, 32): 8}
-ADDITIONAL_TOKENS_TEST = {'Chord': False,  # set to false to speed up tests as it takes some time on maestro MIDIs
-                          'Empty': True,
+ADDITIONAL_TOKENS_TEST = {'Chord': True,  # set to false to speed up tests as it takes some time on maestro MIDIs
+                          'Rest': True,
                           'Tempo': True,
+                          'rest_range': (16, 16),
                           'nb_tempos': 32,
                           'tempo_range': (40, 250)}
 
@@ -49,7 +50,7 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
 
     for i, file_path in enumerate(files):
         t0 = time.time()
-        print(f'Converting MIDI {i+1} / {len(files)} - {file_path}')
+        print(f'Converting MIDI {i + 1} / {len(files)} - {file_path}')
 
         # Reads the midi
         midi = MidiFile(file_path)

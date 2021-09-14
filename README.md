@@ -105,15 +105,17 @@ These tokens bring additional information about the structure and content of MID
 
 * **Chords:** indicate the presence of a chord at a certain time step. MidiTok uses a chord detection method based on onset times and duration. This allows MidiTok to detect precisely chords without ambiguity, whereas most chord detection methods in symbolic music based on chroma features can't.
 * **Tempo:** specify the current tempo. Tempo values are quantized on the range and number of bins you want. This allows to also train a model to predict tempo changes alongside with the notes, unless specified in the chart below.
-* **Empty:** indicate if a bar is empty, _i.e._ no note is starting within. An absence of note is an information that in some cases can be useful to express explicitly.
+* **WIP Time signature changes:** 
+* **WIP Rests:**
 
 |       | MIDI-Like     | REMI          | Compound Word | Structured | Octuple | MuMIDI        |
 |-------|:-------------:|:-------------:|:-------------:|:----------:|:-------:|:-------------:|
 | Chord | ✅             | ✅             | ✅             | ❌          | ❌       | ✅             |
+| WIP Rest| ✅           | ✅             | ✅             | ❌          | ✅       | ✅             |
+| WIP Time signature | ✅<sup>1</sup>| ✅<sup>1</sup>| ✅<sup>1</sup>| ❌| ❌       | ❌             |
 | Tempo | ✅<sup>1</sup> | ✅<sup>1</sup> | ✅<sup>1</sup> | ❌          | ✅       | ✅<sup>2</sup> |
-| Empty | ❌             | ✅             | ✅             | ❌          | ❌       | ✅             |
 
-<sup>1</sup> Should not be used with multiple tracks. At decoding, only the tempo changes of the first track will be considered.\
+<sup>1</sup> Should not be used with multiple tracks. Otherwise, at decoding, only the events of the first track will be considered.\
 <sup>2</sup> Only used in the input as additional information. At decoding no tempo tokens should be predicted, _i.e_ will be considered.
 
 ## Examples
@@ -129,7 +131,6 @@ pitch_range = range(21, 109)
 beat_res = {(0, 4): 8, (4, 12): 4}
 nb_velocities = 32
 additional_tokens = {'Chord': True,
-                     'Empty': True,
                      'Tempo': True,
                      'nb_tempos': 32,  # nb of tempo bins
                      'tempo_range': (40, 250)}  # (min_tempo, max_tempo)
@@ -181,7 +182,7 @@ from miditok import REMIEncoding
 import torch
 
 # Creates the tokenizer and list the file paths
-remi_enc = REMIEncoding()  # uses defaults parameters
+remi_enc = REMIEncoding()  # uses defaults parameters in constants.py
 
 # The tokens, let's say produced by your Transformer, 4 tracks of 500 tokens
 tokens = torch.randint(low=0, high=len(remi_enc.event2token), size=(4, 500)).tolist()

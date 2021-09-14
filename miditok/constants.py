@@ -8,8 +8,11 @@ PITCH_RANGE = range(21, 109)  # the recommended pitches for piano in the GM2 spe
 BEAT_RES = {(0, 4): 8, (4, 12): 4}  # samples per beat
 NB_VELOCITIES = 32  # nb of velocity bins, velocities values from 0 to 127 will be quantized
 ADDITIONAL_TOKENS = {'Chord': True,
-                     'Empty': True,
+                     'Time signature': False,
+                     'Rest': True,
                      'Tempo': False,  # Unused for now (not implemented)
+                     # rest params, see multipliers: https://en.wikipedia.org/wiki/Rest_(music)
+                     'rest_range': (16, 16),  # (/min_rest, max_rest_in_BEAT), first divides a whole note/rest
                      # tempo params
                      'nb_tempos': 32,  # nb of tempo bins for additional tempo tokens, quantized like velocities
                      'tempo_range': (40, 250)}  # (min_tempo, max_tempo)

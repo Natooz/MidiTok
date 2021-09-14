@@ -29,8 +29,9 @@ from miditoolkit import MidiFile
 # long enough for MIDI-Like and Structured encodings, and with a single beat resolution
 BEAT_RES_TEST = {(0, 16): 8}
 ADDITIONAL_TOKENS_TEST = {'Chord': True,
-                          'Empty': True,
+                          'Rest': True,
                           'Tempo': True,
+                          'rest_range': (16, 16),
                           'nb_tempos': 32,
                           'tempo_range': (40, 250)}
 

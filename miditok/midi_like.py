@@ -32,7 +32,7 @@ class MIDILikeEncoding(MIDITokenizer):
             The keys of the dict are tuples indicating a range of beats, ex 0 to 3 for the first bar
             The values are the resolution, in samples per beat, of the given range, ex 8
     :param nb_velocities: number of velocity bins
-    :param additional_tokens: specifies additional tokens (chords, empty bars, tempo...)
+    :param additional_tokens: specifies additional tokens (chords, time signature, rests, tempo...)
     :param program_tokens: will add entries for MIDI programs in the dictionary, to use
             in the case of multitrack generation for instance
     :param params: can be a path to the parameter (json encoded) file or a dictionary
@@ -40,7 +40,6 @@ class MIDILikeEncoding(MIDITokenizer):
     def __init__(self, pitch_range: range = PITCH_RANGE, beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
                  nb_velocities: int = NB_VELOCITIES, additional_tokens: Dict[str, bool] = ADDITIONAL_TOKENS,
                  program_tokens: bool = PROGRAM_TOKENS, params=None):
-        additional_tokens['Empty'] = False  # Incompatible additional tokens
         super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, program_tokens, params)
 
     def track_to_tokens(self, track: Instrument) -> List[int]:
@@ -190,7 +189,7 @@ class MIDILikeEncoding(MIDITokenizer):
         :return: the dictionaries, one for each translation
         """
         event_to_token = {'PAD_None': 0}  # starting at 1, token 0 is for padding
-        token_type_indices = {'Pad': [0]}  # Empty is for empty bars
+        token_type_indices = {'Pad': [0]}
         count = 1
 
         # NOTE ON

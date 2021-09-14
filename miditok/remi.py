@@ -22,7 +22,7 @@ class REMIEncoding(MIDITokenizer):
             The keys of the dict are tuples indicating a range of beats, ex 0 to 3 for the first bar
             The values are the resolution, in samples per beat, of the given range, ex 8
     :param nb_velocities: number of velocity bins
-    :param additional_tokens: specifies additional tokens (chords, empty bars, tempo...)
+    :param additional_tokens: specifies additional tokens (chords, time signature, rests, tempo...)
     :param program_tokens: will add entries for MIDI programs in the dictionary, to use
             in the case of multitrack generation for instance
     :param params: can be a path to the parameter (json encoded) file or a dictionary
@@ -53,17 +53,6 @@ class REMIEncoding(MIDITokenizer):
                 value=None,
                 text=t))
 
-            if self.additional_tokens['Empty']:
-                # We consider a note inside a bar when its onset time is within the bar
-                # as it is how the note messages will be put in the sequence
-                notes_in_this_bar = [note for note in track.notes if tick <= note.start < tick + ticks_per_bar]
-                if len(notes_in_this_bar) == 0:
-                    events.append(Event(  # marks an empty bar
-                        name='Empty',
-                        time=tick,
-                        value=None,
-                        text=t))
-
         # Creates the Pitch, Velocity and Duration events
         current_tick = -1
         current_tempo_idx = 0
@@ -91,7 +80,7 @@ class REMIEncoding(MIDITokenizer):
                             if tempo_change.time <= current_tick:
                                 current_tempo = (np.abs(self.tempo_bins - tempo_change.tempo)).argmin()
                                 current_tempo_idx += 1  # update tempo value (might not change) and index
-                            elif tempo_change.time > current_tick:
+                            else:  # <==> elif tempo_change.time > current_tick:
                                 break  # this tempo change is beyond the current time step, we break the loop
                     events.append(Event(
                         name='Tempo',
@@ -192,10 +181,6 @@ class REMIEncoding(MIDITokenizer):
         event_to_token = {'PAD_None': 0, 'Bar_None': 1}  # starting at 1, token 0 for padding
         token_type_indices = {'Pad': [0], 'Bar': [1]}
         count = 2
-        if self.additional_tokens['Empty']:
-            event_to_token['Empty_None'] = count
-            token_type_indices['Empty'] = [count]
-            count += 1
 
         # PITCH
         token_type_indices['Pitch'] = list(range(count, count + len(self.pitch_range)))
@@ -256,9 +241,6 @@ class REMIEncoding(MIDITokenizer):
             dic['Program'] = ['Bar']
 
         dic['Bar'] = ['Position']
-        if self.additional_tokens['Empty']:
-            dic['Bar'] += ['Empty']
-            dic['Empty'] = ['Bar']
 
         dic['Position'] = ['Pitch']
         dic['Pitch'] = ['Velocity']
@@ -281,15 +263,15 @@ class REMIEncoding(MIDITokenizer):
         """ Helper function to sort events in the right order
 
         :param x: event to get order index
-        :return: an order int
+        :return: an order int TODO rests
         """
         if x.name == "Program":
             return 0
         elif x.name == "Bar":
             return 1
-        elif x.name == "Position" or x.name == "Empty":
+        elif x.name == "Position":
             return 2
-        elif x.name == "Chord" or x.name == "Tempo":  # actually tempos will be before chords
+        elif x.name == "Chord" or x.name == "Tempo":  # actually object_list will be before chords
             return 3
         else:  # for other types of events, the order should be handle when inserting the events in the sequence
             return 4

@@ -22,7 +22,7 @@ class CPWordEncoding(MIDITokenizer):
         2. Pitch
         3. Velocity
         4. Duration
-        (5. Chord/Empty) (optionals, chords occurring with position tokens, empty with bars)
+        (5. Chord) (optionals, chords occurring with position tokens)
         (6. Tempo) optional, occurring with position tokens
     This means a "compound token" can contain between 5 to 7 elements depending on
     your encoding parameters (additional tokens).
@@ -37,7 +37,7 @@ class CPWordEncoding(MIDITokenizer):
             The keys of the dict are tuples indicating a range of beats, ex 0 to 3 for the first bar
             The values are the resolution, in samples per beat, of the given range, ex 8
     :param nb_velocities: number of velocity bins
-    :param additional_tokens: specifies additional tokens (chords, empty bars, tempo...)
+    :param additional_tokens: specifies additional tokens (chords, time signature, rests, tempo...)
     :param program_tokens: will add entries for MIDI programs in the dictionary, to use
             in the case of multitrack generation for instance
     :param params: can be a path to the parameter (json encoded) file or a dictionary
@@ -63,14 +63,7 @@ class CPWordEncoding(MIDITokenizer):
         # Creates Bar and Position tokens
         bar_ticks = np.arange(0, max(n.end for n in track.notes) + ticks_per_bar, ticks_per_bar)
         for t, tick in enumerate(bar_ticks):  # creating a "Bar" event at each beginning of bars
-            emp = False
-            if self.additional_tokens['Empty']:
-                # We consider a note inside a bar when its onset time is within the bar
-                # as it is how the note messages will be put in the sequence
-                notes_in_this_bar = [note for note in track.notes if tick <= note.start < tick + ticks_per_bar]
-                if len(notes_in_this_bar) == 0:
-                    emp = True
-            tokens.append(self.create_cp_token(tick, bar=True, empty=emp, text=str(t)))
+            tokens.append(self.create_cp_token(tick, bar=True, text=str(t)))
 
         # Creates the Pitch, Velocity and Duration tokens
         current_tick = -1
@@ -129,8 +122,8 @@ class CPWordEncoding(MIDITokenizer):
         return tokens
 
     def create_cp_token(self, time: int, bar: bool = False, pos: int = None, pitch: int = None, vel: int = None,
-                        dur: str = None, chord: str = None, empty: bool = False, tempo: int = None,
-                        program: int = None, text: str = '') -> List[Union[Event, int]]:
+                        dur: str = None, chord: str = None, tempo: int = None, program: int = None, text: str = '') \
+            -> List[Union[Event, int]]:
         """ Create a CP Word token, with the following structure:
             (index. Token type)
             0. Family
@@ -138,7 +131,7 @@ class CPWordEncoding(MIDITokenizer):
             2. Pitch
             3. Velocity
             4. Duration
-            (5. Chord/Empty) (optionals, chords occurring with position tokens, empty with bars)
+            (5. Chord) (optionals, chords occurring with position tokens)
             (6. Tempo) optional, occurring with position tokens
         NOTE: the first Family token (first in list) will be given as an Event object to keep track
         of time easily so that other method can sort CP tokens afterwards. Only exception is when
@@ -151,32 +144,29 @@ class CPWordEncoding(MIDITokenizer):
         :param vel: note velocity
         :param dur: note duration
         :param chord: chord value
-        :param empty: True if this token represents a new empty bar
         :param tempo: tempo index
         :param program: a program number if you want to produce a Program CP token (read note above)
         :param text: an optional argument for debug and used to spot position tokens in track_to_tokens
         :return: The compound token as a list of integers
         """
-        chordempty_idx = -2 if self.additional_tokens['Tempo'] else -1
+        chord_idx = -2 if self.additional_tokens['Tempo'] else -1
         temp_idx = -1
         cp_token_template = [Event(name='Family', time=time, value='Metric', text=text),
                              self.event2token['BarPosition_Ignore'],
                              self.event2token['Pitch_Ignore'],
                              self.event2token['Velocity_Ignore'],
                              self.event2token['Duration_Ignore']]
-        if self.additional_tokens['Chord'] or self.additional_tokens['Empty']:
-            cp_token_template.append(self.event2token['ChordEmpty_Ignore'])
+        if self.additional_tokens['Chord']:
+            cp_token_template.append(self.event2token['Chord_Ignore'])
         if self.additional_tokens['Tempo']:
             cp_token_template.append(self.event2token['Tempo_Ignore'])
 
         if bar:
             cp_token_template[1] = self.event2token['Bar_None']
-            if empty:
-                cp_token_template[chordempty_idx] = self.event2token['Empty_None']
         elif pos is not None:
             cp_token_template[1] = self.event2token[f'Position_{pos}']
             if chord is not None:
-                cp_token_template[chordempty_idx] = self.event2token[f'Chord_{chord}']
+                cp_token_template[chord_idx] = self.event2token[f'Chord_{chord}']
             if tempo is not None:
                 cp_token_template[temp_idx] = self.event2token[f'Tempo_{tempo}']
         elif pitch is not None:
@@ -285,8 +275,8 @@ class CPWordEncoding(MIDITokenizer):
 
         # CHORD
         if self.additional_tokens['Chord']:
-            event_to_token['ChordEmpty_Ignore'] = count
-            token_type_indices['ChordEmpty'] = list(range(count, count + 3 + len(CHORD_MAPS) + 1))
+            event_to_token['Chord_Ignore'] = count
+            token_type_indices['Chord'] = list(range(count, count + 3 + len(CHORD_MAPS) + 1))
             count += 1
             for i in range(3, 6):  # non recognized chords, just considers the nb of notes (between 3 and 5 only)
                 event_to_token[f'Chord_{i}'] = count
@@ -294,17 +284,6 @@ class CPWordEncoding(MIDITokenizer):
             for chord_quality in CHORD_MAPS:  # classed chords
                 event_to_token[f'Chord_{chord_quality}'] = count
                 count += 1
-
-        # EMPTY
-        if self.additional_tokens['Empty']:
-            if 'ChordEmpty_Ignore' not in event_to_token:
-                event_to_token['ChordEmpty_Ignore'] = count
-                token_type_indices['ChordEmpty'] = [count, count + 1]
-                count += 1
-            else:
-                token_type_indices['ChordEmpty'] += [count]
-            event_to_token['Empty_None'] = count
-            count += 1
 
         # TEMPO
         if self.additional_tokens['Tempo']:
@@ -331,7 +310,7 @@ class CPWordEncoding(MIDITokenizer):
     def create_token_types_graph(self) -> Dict[str, List[str]]:
         """ As with CP the tokens types are "merged", each state here corresponds to
         a "compound" token, which is characterized by the token types Program, Bar,
-        Position, Pitch and Empty
+        Position/Chord/Tempo and Pitch/Velocity/Duration
 
         :return: the token types transitions dictionary
         """

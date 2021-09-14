@@ -25,7 +25,7 @@ class OctupleMonoEncoding(MIDITokenizer):
             The keys of the dict are tuples indicating a range of beats, ex 0 to 3 for the first bar
             The values are the resolution, in samples per beat, of the given range, ex 8
     :param nb_velocities: number of velocity bins
-    :param additional_tokens: specifies additional tokens (chords, empty bars, tempo...)
+    :param additional_tokens: specifies additional tokens (time signature, tempo)
     :param program_tokens: will add entries for MIDI programs in the dictionary, to use
             in the case of multitrack generation for instance
     :param params: can be a path to the parameter (json encoded) file or a dictionary
@@ -35,7 +35,6 @@ class OctupleMonoEncoding(MIDITokenizer):
                  nb_velocities: int = NB_VELOCITIES, additional_tokens: Dict[str, bool] = ADDITIONAL_TOKENS,
                  program_tokens: bool = PROGRAM_TOKENS, params=None):
         additional_tokens['Chord'] = False  # Incompatible additional token
-        additional_tokens['Empty'] = False  # could be done with special tokens for pitch/velocity/duration
         # used in place of positional encoding
         self.max_bar_embedding = 60  # this attribute might increase during encoding
         super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, program_tokens, params)
