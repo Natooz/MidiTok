@@ -556,7 +556,7 @@ def merge_same_program_tracks(tracks: List[Instrument]):
         idx = [i for i in range(len(tracks)) if (tracks[i].is_drum if program == -1 else tracks[i].program == program)]
         tracks[idx[0]].name += ''.join([' / ' + tracks[i].name for i in idx[1:]])
         tracks[idx[0]].notes = sum((tracks[i].notes for i in idx), [])
-        tracks[idx[0]].notes.sort(key=lambda note: note.start)
+        tracks[idx[0]].notes.sort(key=lambda note: (note.start, note.pitch))
         for i in list(reversed(idx[1:])):
             del tracks[i]
 

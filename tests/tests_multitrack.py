@@ -18,10 +18,10 @@ NOTE: encoded tracks has to be compared with the quantized original track.
 import time
 from copy import deepcopy
 from pathlib import Path, PurePath
-from typing import Union
+from typing import List, Union
 
 import miditok
-from miditoolkit import MidiFile
+from miditoolkit import MidiFile, Note
 
 from tests_utils import midis_equals, tempo_changes_equals
 
@@ -59,19 +59,19 @@ def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = '.
 
             # MIDI -> Tokens -> MIDI
             new_midi = midi_to_tokens_to_midi(tokenizer, midi)
-            midi_to_compare = deepcopy(midi)  # midi is quantized after line above
 
+            # Process the MIDI
+            midi_to_compare = deepcopy(midi)  # midi notes / tempos quantized by the line above
+            for track in midi_to_compare.instruments:  # reduce the duration of notes to long
+                reduce_note_durations(track.notes, max(tu[1] for tu in BEAT_RES_TEST) * midi.ticks_per_beat)
+                if track.is_drum:
+                    track.program = 0
             # Sort and merge tracks if needed
             # MIDI produced with Octuple contains tracks ordered by program
             if encoding == 'OctupleEncoding' or encoding == 'MuMIDIEncoding':
                 miditok.merge_same_program_tracks(midi_to_compare.instruments)  # merge tracks
-            if encoding == 'OctupleEncoding':
-                sorted_instruments = []  # sort tracks
-                for track in midi_to_compare.instruments:
-                    for new_track in new_midi.instruments:
-                        if new_track.program == track.program:
-                            sorted_instruments.append(new_track)
-                new_midi.instruments = sorted_instruments
+                midi_to_compare.instruments.sort(key=lambda x: (x.program, x.is_drum))  # sort tracks
+                new_midi.instruments.sort(key=lambda x: (x.program, x.is_drum))
 
             # Checks notes
             errors = midis_equals(midi_to_compare, new_midi)
@@ -107,6 +107,12 @@ def midi_to_tokens_to_midi(tokenizer: miditok.MIDITokenizer, midi: MidiFile) -> 
     new_midi = tokenizer.tokens_to_midi(tokens, inf, time_division=midi.ticks_per_beat)
 
     return new_midi
+
+
+def reduce_note_durations(notes: List[Note], max_note_duration: int):
+    for note in notes:
+        if note.end - note.start > max_note_duration:
+            note.end = note.start + max_note_duration
 
 
 if __name__ == "__main__":

@@ -153,7 +153,8 @@ class OctupleEncoding(MIDITokenizer):
             duration = note.end - note.start
             dur_index = np.argmin(np.abs([ticks - duration for ticks in
                                           self.durations_ticks[self.current_midi_metadata['time_division']]]))
-            event = [Event(name='Pitch', time=note.start, value=note.pitch, text=track.program),
+            event = [Event(name='Pitch', time=note.start, value=note.pitch,
+                           text=-1 if track.is_drum else track.program),
                      self.event2token[f'Velocity_{note.velocity}'],
                      self.event2token[f'Duration_{".".join(map(str, self.durations[dur_index]))}'],
                      self.event2token[f'Program_{-1 if track.is_drum else track.program}'],
