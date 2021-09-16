@@ -73,8 +73,8 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
                 track, tempo_changes = tokenizer.tokens_to_track(tokens[0], midi.ticks_per_beat)
 
             # Checks its good
-            equals, errors = track_equals(midi.instruments[0], track)
-            if not equals:
+            errors = track_equals(midi.instruments[0], track)
+            if len(errors) > 0:
                 if errors[0][0] != 'len':
                     for err, note in errors:
                         midi.markers.append(Marker(f'ERR {encoding[:-8]} with note {err} (pitch {note.pitch})',
@@ -86,9 +86,9 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
 
             # Checks tempos
             if tempo_changes is not None and tokenizer.additional_tokens['Tempo']:
-                tempo_equals, errors = tempo_changes_equals(midi.tempo_changes, tempo_changes)
-                if not tempo_equals:
-                    print(f'Failed to encode/decode TEMPO changes with {encoding[:-8]} ({len(errors)} errors)')
+                tempo_errors = tempo_changes_equals(midi.tempo_changes, tempo_changes)
+                if len(tempo_errors) > 0:
+                    print(f'Failed to encode/decode TEMPO changes with {encoding[:-8]} ({len(tempo_errors)} errors)')
 
         t1 = time.time()
         print(f'Took {t1 - t0} seconds')

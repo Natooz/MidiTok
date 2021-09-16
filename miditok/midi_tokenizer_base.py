@@ -8,6 +8,7 @@ TODO rest tokens
 from sys import stdout
 from pathlib import Path, PurePath
 import json
+from collections import Counter
 from typing import List, Tuple, Dict, Union, Callable, Optional, Any
 
 import numpy as np
@@ -221,30 +222,42 @@ class MIDITokenizer:
         if pitch_range is None:
             pitch_range = self.pitch_range
         ticks_per_sample = int(time_division / max(self.beat_res.values()))
-        for i, note in enumerate(notes):  # items are notes
-            if note.pitch not in pitch_range:
-                notes.remove(note)
-            start_rest = note.start % ticks_per_sample
-            end_rest = note.end % ticks_per_sample
-            note.start += -start_rest if start_rest <= ticks_per_sample / 2 else ticks_per_sample - start_rest
-            note.end += -end_rest if end_rest <= ticks_per_sample / 2 else ticks_per_sample - end_rest
+        i = 0
+        while i < len(notes):
+            if notes[i].pitch not in pitch_range:
+                del notes[i]
+                continue
+            start_rest = notes[i].start % ticks_per_sample
+            end_rest = notes[i].end % ticks_per_sample
+            notes[i].start += -start_rest if start_rest <= ticks_per_sample / 2 else ticks_per_sample - start_rest
+            notes[i].end += -end_rest if end_rest <= ticks_per_sample / 2 else ticks_per_sample - end_rest
 
-            if note.start == note.end:  # if this happens to often, consider using a higher beat resolution
-                note.end += ticks_per_sample  # like 8 samples per beat or 24 samples per bar
+            if notes[i].start == notes[i].end:  # if this happens to often, consider using a higher beat resolution
+                notes[i].end += ticks_per_sample  # like 8 samples per beat or 24 samples per bar
 
-            note.velocity = min(self.velocities, key=lambda x: abs(x - note.velocity))
+            notes[i].velocity = min(self.velocities, key=lambda x: abs(x - notes[i].velocity))
+            i += 1
 
     def quantize_tempos(self, tempos: List[TempoChange], time_division: int):
         """ Quantize the times and tempo values of tempo change events.
+        Consecutive identical tempo changes will be removed.
 
         :param tempos: tempo changes to quantize
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
         """
         ticks_per_sample = int(time_division / max(self.beat_res.values()))
-        for tempo_change in tempos:
-            rest = tempo_change.time % ticks_per_sample
-            tempo_change.time += -rest if rest <= ticks_per_sample / 2 else ticks_per_sample - rest
-            tempo_change.tempo = min(self.tempos, key=lambda x: abs(x - tempo_change.tempo))
+        prev_tempo = -1
+        i = 0
+        while i < len(tempos):
+            # Quantize tempo value
+            tempos[i].tempo = min(self.tempos, key=lambda x: abs(x - tempos[i].tempo))
+            if tempos[i].tempo == prev_tempo:
+                del tempos[i]
+                continue
+            rest = tempos[i].time % ticks_per_sample
+            tempos[i].time += -rest if rest <= ticks_per_sample / 2 else ticks_per_sample - rest
+            prev_tempo = tempos[i].tempo
+            i += 1
 
     @staticmethod
     def quantize_time_signatures(time_sigs: List[TimeSignature], time_division: int):
@@ -267,8 +280,8 @@ class MIDITokenizer:
 
             # Update values
             ticks_per_bar = time_division * time_sig.numerator
-            previous_tick = time_sig.time
             current_bar += bar_offset
+            previous_tick = time_sig.time
 
     def _create_vocabulary(self, program_tokens: bool) -> Tuple[dict, dict, dict]:
         """ Create the tokens <-> event dictionaries
@@ -512,7 +525,9 @@ def detect_chords(notes: List[Note], time_division: int, beat_res: int = 4, onse
 
 def merge_tracks(tracks: List[Instrument]) -> Instrument:
     """ Merge several miditoolkit Instrument objects
-    It will take the first object, and concat the notes of the others
+    All the tracks will be merged into the first Instrument object (notes concatenated and sorted),
+    beware of giving tracks with the same program (no assessment is performed)
+    The other tracks will be deleted.
 
     :param tracks: list of tracks to merge
     :return: the merged track
@@ -520,7 +535,30 @@ def merge_tracks(tracks: List[Instrument]) -> Instrument:
     tracks[0].name += ''.join([' / ' + t.name for t in tracks[1:]])
     tracks[0].notes = sum((t.notes for t in tracks), [])
     tracks[0].notes.sort(key=lambda note: note.start)
+    tracks = [tracks[0]]
     return tracks[0]
+
+
+def merge_same_program_tracks(tracks: List[Instrument]):
+    """ Takes a list of tracks and merge the ones with the same programs.
+    NOTE: Control change messages are not considered
+
+    :param tracks: list of tracks
+    """
+    # Gathers tracks programs and indexes
+    tracks_programs = [int(track.program) if not track.is_drum else -1 for track in tracks]
+
+    # Detects duplicated programs
+    duplicated_programs = [k for k, v in Counter(tracks_programs).items() if v > 1]
+
+    # Merges duplicated tracks
+    for program in duplicated_programs:
+        idx = [i for i in range(len(tracks)) if (tracks[i].is_drum if program == -1 else tracks[i].program == program)]
+        tracks[idx[0]].name += ''.join([' / ' + tracks[i].name for i in idx[1:]])
+        tracks[idx[0]].notes = sum((tracks[i].notes for i in idx), [])
+        tracks[idx[0]].notes.sort(key=lambda note: note.start)
+        for i in list(reversed(idx[1:])):
+            del tracks[i]
 
 
 def current_bar_pos(seq: List[int], bar_token: int, position_tokens: List[int], pitch_tokens: List[int],
