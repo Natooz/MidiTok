@@ -48,3 +48,42 @@ def tempo_changes_equals(tempo_changes1: List[TempoChange], tempo_changes2: List
         if tempo_change1.tempo != tempo_change2.tempo:
             errors.append(('tempo', tempo_change2.time))
     return errors
+
+
+def reduce_note_durations(notes: List[Note], max_note_duration: int):
+    """ Reduce the durations of too long notes.
+    Each tokenization can only represent a limited duration value.
+    This method ensure the notes durations do not exceed the maximum value.
+
+    :param notes: notes to analyze
+    :param max_note_duration: the maximum duration value, in ticks
+    """
+    for note in notes:
+        if note.end - note.start > max_note_duration:
+            note.end = note.start + max_note_duration
+
+
+def adapt_tempo_changes_times(tracks: List[Instrument], tempo_changes: List[TempoChange]):
+    """ Will adapt the times of tempo changes depending on the
+    onset times of the notes of the MIDI.
+    This is needed to pass the tempo tests for Octuple as the tempos
+    will be decoded only from the notes.
+
+    :param tracks: tracks of the MIDI to adapt the tempo changes
+    :param tempo_changes: tempo changes to adapt
+    """
+    notes = sum((t.notes for t in tracks), [])
+    notes.sort(key=lambda x: x.start)
+
+    current_note_idx = 0
+    tempo_idx = 1
+    while tempo_idx < len(tempo_changes):
+        for n, note in enumerate(notes[current_note_idx:]):
+            if note.start >= tempo_changes[tempo_idx].time:
+                tempo_changes[tempo_idx].time = note.start
+                current_note_idx += n
+                break
+        if tempo_changes[tempo_idx].time == tempo_changes[tempo_idx - 1].time:
+            del tempo_changes[tempo_idx - 1]
+            continue
+        tempo_idx += 1
