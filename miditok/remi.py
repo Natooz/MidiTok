@@ -48,7 +48,7 @@ class REMIEncoding(MIDITokenizer):
 
         events = []
 
-        # Creates the Position, Pitch, Velocity and Duration events
+        # Creates events
         previous_tick = -1
         previous_note_end = track.notes[0].start + 1  # so that no rest is created before the first note
         current_bar = -1

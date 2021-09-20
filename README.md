@@ -182,13 +182,13 @@ MidiTok offers the possibility to insert additional tokens in the encodings.
 These tokens bring additional information about the structure and content of MIDI tracks to explicitly use them to train a neural network.
 
 * **Chords:** indicate the presence of a chord at a certain time step. MidiTok uses a chord detection method based on onset times and duration. This allows MidiTok to detect precisely chords without ambiguity, whereas most chord detection methods in symbolic music based on chroma features can't.
-* **Tempo:** specify the current tempo. This allows to train a model to predict tempo changes alongside with the notes, unless specified in the chart below. Tempo values are quantized on your specified range and number (default is 32 tempos from 40 to 250).
 * **WIP Rests:** include "Rest" events whenever a segment of time is silent, i.e. no note is played within. This token type is decoded as a "Time-Shift" event, meaning the time will be shifted according to its value. You can choose the minimum and maximum rests values to represent (default is 1/2 beat to 8 beats).
+* **Tempo:** specify the current tempo. This allows to train a model to predict tempo changes alongside with the notes, unless specified in the chart below. Tempo values are quantized on your specified range and number (default is 32 tempos from 40 to 250).
 
 |       | MIDI-Like     | REMI          | Compound Word | Structured | Octuple | MuMIDI        |
-|-------|:-------------:|:-------------:|:-------------:|:----------:|:-------:|:-------------:|
+|-------|:-------------:|:--------------:|:--------------:|:----------:|:--------:|:-------------:|
 | Chord | ✅             | ✅             | ✅             | ❌          | ❌       | ✅             |
-| **WIP** Rest| ✅           | ✅             | ✅             | ❌          | ❌       | ✅             |
+| Rest  | ✅             | ✅             | ✅             | ❌          | ❌       | ❌             |
 | Tempo | ✅<sup>1</sup> | ✅<sup>1</sup> | ✅<sup>1</sup> | ❌          | ✅       | ✅<sup>2</sup> |
 
 <sup>1</sup> Should not be used with multiple tracks. Otherwise, at decoding, only the events of the first track will be considered.\

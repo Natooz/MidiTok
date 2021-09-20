@@ -39,6 +39,7 @@ class MuMIDIEncoding(MIDITokenizer):
     def __init__(self, pitch_range: range = PITCH_RANGE, beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
                  nb_velocities: int = NB_VELOCITIES, additional_tokens: Dict[str, bool] = ADDITIONAL_TOKENS,
                  program_tokens: bool = PROGRAM_TOKENS, params=None, drum_pitch_range: range = DRUM_PITCH_RANGE):
+        additional_tokens['Rest'] = False
         self.drum_pitch_range = drum_pitch_range
         # used in place of positional encoding
         self.max_bar_embedding = 60  # this attribute might increase during encoding
