@@ -274,7 +274,7 @@ class REMIEncoding(MIDITokenizer):
             dic['Position'] += ['Tempo']
 
         if self.additional_tokens['Rest']:
-            dic['Rest'] = ['Position', 'Bar']
+            dic['Rest'] = ['Rest', 'Position', 'Bar']
             dic['Duration'] += ['Rest']
 
         return dic
@@ -286,15 +286,15 @@ class REMIEncoding(MIDITokenizer):
         :param x: event to get order index
         :return: an order int
         """
-        if x.name == "Program":
+        if x.name == 'Program':
             return 0
-        elif x.name == "Bar":
+        elif x.name == 'Bar':
             return 1
-        elif x.name == "Position":
+        elif x.name == 'Position':
             return 2
-        elif x.name == "Chord" or x.name == "Tempo":  # actually object_list will be before chords
+        elif x.name == 'Chord' or x.name == 'Tempo':  # actually object_list will be before chords
             return 3
-        elif x.name == "Rest":
+        elif x.name == 'Rest':
             return 5
         else:  # for other types of events, the order should be handle when inserting the events in the sequence
             return 4

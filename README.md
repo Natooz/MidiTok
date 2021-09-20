@@ -96,6 +96,9 @@ _In the figures, yellow tokens are additional tokens, and tokens are vertically 
 
 Strategy used in the first symbolic music generative transformers and RNN / LSTM models. It consists of encoding the MIDI messages (Note On, Note Off, Velocity and Time Shift) into tokens as represented in a pure "MIDI way".
 
+NOTES:
+* Rests act exactly like Time-shifts. It is then recommended choosing a minimum rest range of the same first beat resolution so the time is shifted with the same accuracy. For instance if your first beat resolution is ```(0, 4): 8```, you should choose a minimum rest of ```8```.
+
 ![MIDI-Like figure](https://github.com/Natooz/MidiTok/blob/assets/assets/midi_like.png?raw=true "Three notes played together with different durations")
 
 ### REMI
@@ -185,7 +188,7 @@ These tokens bring additional information about the structure and content of MID
 |       | MIDI-Like     | REMI          | Compound Word | Structured | Octuple | MuMIDI        |
 |-------|:-------------:|:-------------:|:-------------:|:----------:|:-------:|:-------------:|
 | Chord | ✅             | ✅             | ✅             | ❌          | ❌       | ✅             |
-| **WIP** Rest| ✅           | ✅             | ✅             | ❌          | ✅       | ✅             |
+| **WIP** Rest| ✅           | ✅             | ✅             | ❌          | ❌       | ✅             |
 | Tempo | ✅<sup>1</sup> | ✅<sup>1</sup> | ✅<sup>1</sup> | ❌          | ✅       | ✅<sup>2</sup> |
 
 <sup>1</sup> Should not be used with multiple tracks. Otherwise, at decoding, only the events of the first track will be considered.\
