@@ -7,7 +7,7 @@ from typing import Tuple, List, Union
 from miditoolkit import MidiFile, Instrument, Note, TempoChange
 
 
-def midis_equals(midi1: MidiFile, midi2: MidiFile) -> List[List[Tuple[str, Union[Note, int]]]]:
+def midis_equals(midi1: MidiFile, midi2: MidiFile) -> List[List[Tuple[str, Union[Note, int], int]]]:
     errors = []
     for track1, track2 in zip(midi1.instruments, midi2.instruments):
         track_errors = track_equals(track1, track2)
@@ -16,14 +16,14 @@ def midis_equals(midi1: MidiFile, midi2: MidiFile) -> List[List[Tuple[str, Union
     return errors
 
 
-def track_equals(track1: Instrument, track2: Instrument) -> List[Tuple[str, Union[Note, int]]]:
+def track_equals(track1: Instrument, track2: Instrument) -> List[Tuple[str, Union[Note, int], int]]:
     if len(track1.notes) != len(track2.notes):
-        return [('len', 0)]
+        return [('len', len(track2.notes), len(track1.notes))]
     errors = []
     for note1, note2 in zip(track1.notes, track2.notes):
         err = notes_equals(note1, note2)
         if err != '':
-            errors.append((err, note2))
+            errors.append((err, note2, getattr(note1, err)))
     return errors
 
 

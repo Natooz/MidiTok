@@ -103,8 +103,9 @@ Strategy used in the first symbolic music generative transformers and RNN / LSTM
 Proposed in the [Pop Music Transformer](https://arxiv.org/abs/2002.00212), it is what we would call a "position-based" representation. The time is represented with "_Bar_" and "_Position_" tokens that indicate respectively when a new bar is beginning, and the current position within a bar.
 
 NOTES:
-* In the original REMI paper, the tempo information are in fact the succession of two token types: a "_Token Class_" which indicate if the tempo is fast or slow, and a "_Token Value_" which encode its value with respect to the tempo class. In MidiTok we only encode one _Tempo_ token which encode its value, quantized in a number of bins set in parameters (as done for velocities).
+* In the original REMI paper, the tempo information are in fact the succession of two token types: a "_Token Class_" which indicate if the tempo is fast or slow, and a "_Token Value_" which represents its value with respect to the tempo class. In MidiTok we only encode one _Tempo_ token which encode its value, quantized in a number of bins set in parameters (as done for velocities).
 * Including tempo tokens in a multitrack task with REMI is not recommended. Generating several tracks would lead to multiple and ambiguous tempo changes. So in MidiTok only the tempo changes of the first track will be kept in the final created MIDI.
+* Position tokens are always following Rest tokens to make sure the position of the following notes are explicitly stated. Bar tokens can follow Rest tokens depending on their respective value and your parameters.
 
 ![REMI figure](https://github.com/Natooz/MidiTok/blob/assets/assets/remi.png?raw=true "Time is tracked with Bar and position tokens")
 
@@ -116,9 +117,6 @@ _Pitch_, _Velocity_ and _Durations_ tokens of a same note will be combined for i
 You can combine them in your model the way you want. CP Word authors concatenated each embeddings and projected the sequence with a projection matrix, resulting in a _d_-dimensional vector (_d_ being the model size).
 
 At decoding, the easiest way to predict multiple tokens (employed by the original authors) is to project the output vector of your model with several projection matrices, one for each token type.
-
-NOTES:
-* In the original REMI paper, the tempo information are in fact the succession of two token types: a "_Token Class_" which indicate if the tempo is fast or slow, and a "_Token Value_" which encode its value with respect to the tempo class. In MidiTok we only encode one _Tempo_ token which encode its value, quantized in a number of bins set in parameters (as done for velocities).
 
 ![Compound Word figure](https://github.com/Natooz/MidiTok/blob/assets/assets/cp_word.png?raw=true "Tokens of the same family are grouped together")
 
@@ -181,13 +179,13 @@ MidiTok offers the possibility to insert additional tokens in the encodings.
 These tokens bring additional information about the structure and content of MIDI tracks to explicitly use them to train a neural network.
 
 * **Chords:** indicate the presence of a chord at a certain time step. MidiTok uses a chord detection method based on onset times and duration. This allows MidiTok to detect precisely chords without ambiguity, whereas most chord detection methods in symbolic music based on chroma features can't.
-* **Tempo:** specify the current tempo. Tempo values are quantized on the range and number of bins you want. This allows to also train a model to predict tempo changes alongside with the notes, unless specified in the chart below.
-* **WIP Rests:**
+* **Tempo:** specify the current tempo. This allows to train a model to predict tempo changes alongside with the notes, unless specified in the chart below. Tempo values are quantized on your specified range and number (default is 32 tempos from 40 to 250).
+* **WIP Rests:** include "Rest" events whenever a segment of time is silent, i.e. no note is played within. This token type is decoded as a "Time-Shift" event, meaning the time will be shifted according to its value. You can choose the minimum and maximum rests values to represent (default is 1/2 beat to 8 beats).
 
 |       | MIDI-Like     | REMI          | Compound Word | Structured | Octuple | MuMIDI        |
 |-------|:-------------:|:-------------:|:-------------:|:----------:|:-------:|:-------------:|
 | Chord | ✅             | ✅             | ✅             | ❌          | ❌       | ✅             |
-| WIP Rest| ✅           | ✅             | ✅             | ❌          | ✅       | ✅             |
+| **WIP** Rest| ✅           | ✅             | ✅             | ❌          | ✅       | ✅             |
 | Tempo | ✅<sup>1</sup> | ✅<sup>1</sup> | ✅<sup>1</sup> | ❌          | ✅       | ✅<sup>2</sup> |
 
 <sup>1</sup> Should not be used with multiple tracks. Otherwise, at decoding, only the events of the first track will be considered.\

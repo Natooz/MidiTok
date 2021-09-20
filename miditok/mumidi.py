@@ -123,7 +123,7 @@ class MuMIDIEncoding(MIDITokenizer):
         current_tick = -1
         current_bar = -1
         current_pos = -1
-        current_track = -2  # doesnt exist
+        current_track = -2  # because -2 doesnt exist
         current_tempo_idx = 0
         current_tempo = self.current_midi_metadata['tempo_changes'][current_tempo_idx].tempo
         for note_event in note_tokens:

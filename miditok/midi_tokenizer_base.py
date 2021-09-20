@@ -322,22 +322,24 @@ class MIDITokenizer:
     def __create_rests(self) -> List[Tuple]:
         """ Creates the possible rests in beat / position units, as tuple of the form:
         (beat, pos) where beat is the number of beats, pos the number of "samples"
-        The rests are calculated based from the value of self.additional_tokens[rest_range],
-        which first value divide a whole note/rest to determine the minimum rest represented,
-        and the second the maximum rest in beats !
+        The rests are calculated from the value of self.additional_tokens[rest_range],
+        which first value divide a beat to determine the minimum rest represented,
+        and the second the maximum rest in beats.
+        The rests shorter than 1 beat will scale x2, as rests in music theory (semiquaver, quaver, crotchet...)
         Note that the values of the rests in positions will be determined by the beat
         resolution of the first range (self.beat_res)
-        https://en.wikipedia.org/wiki/Rest_(music)
 
-        Example: (16, 6) and a first beat resolution of 8 will give the rests:
+        Example: (4, 6) and a first beat resolution of 8 will give the rests:
             [(0, 2), (0, 4), (1, 0), (2, 0), (3, 0), (4, 0), (5, 0), (6, 0)]
 
         :return: the rests
         """
-        rests = []
         div, max_beat = self.additional_tokens['rest_range']
-        while div > 4:
-            rests.append((0, 4 * self._first_beat_res // div))
+        assert div % 2 == 0 and div <= self._first_beat_res, \
+            f'The minimum rest must be divisible by 2 and lower than the first beat resolution ({self._first_beat_res})'
+        rests = []
+        while div > 1:
+            rests.append((0, self._first_beat_res // div))
             div //= 2
         rests += [(i, 0) for i in range(1, max_beat + 1)]
         return rests
