@@ -299,7 +299,7 @@ class MuMIDIEncoding(MIDITokenizer):
         """
         raise NotImplementedError('tokens_to_track not implemented for Octuple, use tokens_to_midi instead')
 
-    def _create_vocabulary(self, _) -> Tuple[dict, dict, dict]:
+    def _create_vocabulary(self, _) -> Tuple[Dict[str, int], Dict[int, str], Dict[str, List[int]]]:
         """ Create the tokens <-> event dictionaries
         These dictionaries are created arbitrary according to constants defined
         at the top of this file.
@@ -312,75 +312,65 @@ class MuMIDIEncoding(MIDITokenizer):
 
         :return: the dictionaries, one for each translation
         """
-        event_to_token = {'PAD_None': 0}  # token 0 for padding
         token_type_indices = {'Pad': [0]}
-        count = 1
+        event_to_token = {'PAD_None': 0}  # token 0 for padding
 
         # PITCH
-        token_type_indices['Pitch'] = list(range(count, count + len(self.pitch_range)))
+        token_type_indices['Pitch'] = list(range(len(event_to_token), len(event_to_token) + len(self.pitch_range)))
         for i in self.pitch_range:
-            event_to_token[f'Pitch_{i}'] = count
-            count += 1
+            event_to_token[f'Pitch_{i}'] = len(event_to_token)
 
         # DRUM PITCHES
-        token_type_indices['DrumPitch'] = list(range(count, count + len(self.drum_pitch_range)))
+        token_type_indices['DrumPitch'] = list(range(len(event_to_token),
+                                                     len(event_to_token) + len(self.drum_pitch_range)))
         for i in self.drum_pitch_range:
-            event_to_token[f'DrumPitch_{i}'] = count
-            count += 1
+            event_to_token[f'DrumPitch_{i}'] = len(event_to_token)
 
         # VELOCITY
-        token_type_indices['Velocity'] = list(range(count, count + len(self.velocities)))
+        token_type_indices['Velocity'] = list(range(len(event_to_token), len(event_to_token) + len(self.velocities)))
         for i in self.velocities:
-            event_to_token[f'Velocity_{i}'] = count
-            count += 1
+            event_to_token[f'Velocity_{i}'] = len(event_to_token)
 
         # DURATION
-        token_type_indices['Duration'] = list(range(count, count + len(self.durations)))
+        token_type_indices['Duration'] = list(range(len(event_to_token), len(event_to_token) + len(self.durations)))
         for i in range(0, len(self.durations)):
-            event_to_token[f'Duration_{".".join(map(str, self.durations[i]))}'] = count
-            count += 1
+            event_to_token[f'Duration_{".".join(map(str, self.durations[i]))}'] = len(event_to_token)
 
         # POSITION
         nb_positions = max(self.beat_res.values()) * 4  # 4/4 time signature
-        token_type_indices['Position'] = list(range(count, count + nb_positions + 2))
-        event_to_token['Position_None'] = count  # new position token
-        event_to_token['Position_Ignore'] = count + 1  # special embedding associated with 'Bar_None' tokens
-        count += 2
+        token_type_indices['Position'] = list(range(len(event_to_token), len(event_to_token) + nb_positions + 2))
+        event_to_token['Position_None'] = len(event_to_token)  # new position token
+        event_to_token['Position_Ignore'] = len(event_to_token) + 1  # special embedding for 'Bar_None' tokens
         for i in range(0, nb_positions):  # position embeddings (positional encoding)
-            event_to_token[f'Position_{i}'] = count
-            count += 1
+            event_to_token[f'Position_{i}'] = len(event_to_token)
 
         # CHORD
         if self.additional_tokens['Chord']:
-            token_type_indices['Chord'] = list(range(count, count + 3 + len(CHORD_MAPS)))
+            token_type_indices['Chord'] = list(range(len(event_to_token), len(event_to_token) + 3 + len(CHORD_MAPS)))
             for i in range(3, 6):  # non recognized chords, just considers the nb of notes (between 3 and 5 only)
-                event_to_token[f'Chord_{i}'] = count
-                count += 1
+                event_to_token[f'Chord_{i}'] = len(event_to_token)
             for chord_quality in CHORD_MAPS:  # classed chords
-                event_to_token[f'Chord_{chord_quality}'] = count
-                count += 1
+                event_to_token[f'Chord_{chord_quality}'] = len(event_to_token)
 
         # TEMPO
         if self.additional_tokens['Tempo']:
-            token_type_indices['Tempo'] = list(range(count, count + len(self.tempos)))
+            token_type_indices['Tempo'] = list(range(len(event_to_token), len(event_to_token) + len(self.tempos)))
             for i in self.tempos:
-                event_to_token[f'Tempo_{i}'] = count
-                count += 1
+                event_to_token[f'Tempo_{i}'] = len(event_to_token)
 
         # PROGRAM
-        token_type_indices['Program'] = list(range(count, count + 129))
+        token_type_indices['Program'] = list(range(len(event_to_token), len(event_to_token) + 129))
         for program in range(-1, 128):  # -1 is drums
-            event_to_token[f'Program_{program}'] = count
-            count += 1
+            event_to_token[f'Program_{program}'] = len(event_to_token)
 
         # BAR --- MUST BE LAST IN DIC AS THIS MIGHT BE INCREASED
-        token_type_indices['Bar'] = list(range(count, count + self.max_bar_embedding + 1))
-        event_to_token['Bar_None'] = count  # new bar token
-        count += 1
+        token_type_indices['Bar'] = list(range(len(event_to_token), len(event_to_token) + self.max_bar_embedding + 1))
+        event_to_token['Bar_None'] = len(event_to_token)  # new bar token
         for i in range(self.max_bar_embedding):  # bar embeddings (positional encoding)
-            event_to_token[f'Bar_{i}'] = count
-            count += 1
+            event_to_token[f'Bar_{i}'] = len(event_to_token)
 
+        event_to_token[len(event_to_token)] = 'SOS_None'
+        event_to_token[len(event_to_token)] = 'EOS_None'
         token_to_event = {v: k for k, v in event_to_token.items()}  # inversion
         return event_to_token, token_to_event, token_type_indices
 

@@ -183,7 +183,7 @@ class MIDILikeEncoding(MIDITokenizer):
         del tempo_changes[0]
         return instrument, tempo_changes
 
-    def _create_vocabulary(self, program_tokens: bool) -> Tuple[dict, dict, dict]:
+    def _create_vocabulary(self, program_tokens: bool) -> Tuple[Dict[str, int], Dict[int, str], Dict[str, List[int]]]:
         """ Create the tokens <-> event dictionaries
         These dictionaries are created arbitrary according to constants defined
         at the top of this file.
@@ -195,65 +195,57 @@ class MIDILikeEncoding(MIDITokenizer):
         :param program_tokens: creates tokens for MIDI programs in the dictionary
         :return: the dictionaries, one for each translation
         """
-        event_to_token = {'PAD_None': 0}  # starting at 1, token 0 is for padding
         token_type_indices = {'Pad': [0]}
-        count = 1
+        event_to_token = {'PAD_None': 0}  # starting at 1, token 0 is for padding
 
         # NOTE ON
-        token_type_indices['Note-On'] = list(range(count, count + len(self.pitch_range)))
+        token_type_indices['Note-On'] = list(range(len(event_to_token), len(event_to_token) + len(self.pitch_range)))
         for i in self.pitch_range:
-            event_to_token[f'Note-On_{i}'] = count
-            count += 1
+            event_to_token[f'Note-On_{i}'] = len(event_to_token)
 
         # NOTE OFF
-        token_type_indices['Note-Off'] = list(range(count, count + len(self.pitch_range)))
+        token_type_indices['Note-Off'] = list(range(len(event_to_token), len(event_to_token) + len(self.pitch_range)))
         for i in self.pitch_range:
-            event_to_token[f'Note-Off_{i}'] = count
-            count += 1
+            event_to_token[f'Note-Off_{i}'] = len(event_to_token)
 
         # VELOCITY
-        token_type_indices['Velocity'] = list(range(count, count + len(self.velocities)))
+        token_type_indices['Velocity'] = list(range(len(event_to_token), len(event_to_token) + len(self.velocities)))
         for i in self.velocities:
-            event_to_token[f'Velocity_{i}'] = count
-            count += 1
+            event_to_token[f'Velocity_{i}'] = len(event_to_token)
 
         # TIME SHIFTS
-        token_type_indices['Time-Shift'] = list(range(count, count + len(self.durations)))
+        token_type_indices['Time-Shift'] = list(range(len(event_to_token), len(event_to_token) + len(self.durations)))
         for i in range(0, len(self.durations)):
-            event_to_token[f'Time-Shift_{".".join(map(str, self.durations[i]))}'] = count
-            count += 1
+            event_to_token[f'Time-Shift_{".".join(map(str, self.durations[i]))}'] = len(event_to_token)
 
         # CHORD
         if self.additional_tokens['Chord']:
-            token_type_indices['Chord'] = list(range(count, count + 3 + len(CHORD_MAPS)))
+            token_type_indices['Chord'] = list(range(len(event_to_token), len(event_to_token) + 3 + len(CHORD_MAPS)))
             for i in range(3, 6):  # non recognized chords, just considers the nb of notes (between 3 and 5 only)
-                event_to_token[f'Chord_{i}'] = count
-                count += 1
+                event_to_token[f'Chord_{i}'] = len(event_to_token)
             for chord_quality in CHORD_MAPS:  # classed chords
-                event_to_token[f'Chord_{chord_quality}'] = count
-                count += 1
+                event_to_token[f'Chord_{chord_quality}'] = len(event_to_token)
 
         # REST
         if self.additional_tokens['Rest']:
-            token_type_indices['Rest'] = list(range(count, count + len(self.rests)))
+            token_type_indices['Rest'] = list(range(len(event_to_token), len(event_to_token) + len(self.rests)))
             for i in range(0, len(self.rests)):
-                event_to_token[f'Rest_{".".join(map(str, self.rests[i]))}'] = count
-                count += 1
+                event_to_token[f'Rest_{".".join(map(str, self.rests[i]))}'] = len(event_to_token)
 
         # TEMPO
         if self.additional_tokens['Tempo']:
-            token_type_indices['Tempo'] = list(range(count, count + len(self.tempos)))
+            token_type_indices['Tempo'] = list(range(len(event_to_token), len(event_to_token) + len(self.tempos)))
             for i in self.tempos:
-                event_to_token[f'Tempo_{i}'] = count
-                count += 1
+                event_to_token[f'Tempo_{i}'] = len(event_to_token)
 
         # PROGRAM
         if program_tokens:
-            token_type_indices['Program'] = list(range(count, count + 129))
+            token_type_indices['Program'] = list(range(len(event_to_token), len(event_to_token) + 129))
             for program in range(-1, 128):  # -1 is drums
-                event_to_token[f'Program_{program}'] = count
-                count += 1
+                event_to_token[f'Program_{program}'] = len(event_to_token)
 
+        event_to_token[len(event_to_token)] = 'SOS_None'
+        event_to_token[len(event_to_token)] = 'EOS_None'
         token_to_event = {v: k for k, v in event_to_token.items()}  # inversion
         return event_to_token, token_to_event, token_type_indices
 

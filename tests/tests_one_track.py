@@ -78,7 +78,7 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
             errors = track_equals(midi.instruments[0], track)
             if len(errors) > 0:
                 if errors[0][0] != 'len':
-                    for err, note in errors:
+                    for err, note, exp in errors:
                         midi.markers.append(Marker(f'ERR {encoding[:-8]} with note {err} (pitch {note.pitch})',
                                                    note.start))
                 print(f'Failed to encode/decode MIDI with {encoding[:-8]} ({len(errors)} errors)')

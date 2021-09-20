@@ -283,7 +283,16 @@ class MIDITokenizer:
             current_bar += bar_offset
             previous_tick = time_sig.time
 
-    def _create_vocabulary(self, program_tokens: bool) -> Tuple[dict, dict, dict]:
+    def add_sos_eos_to_seq(self, seq: List[int]):
+        """ Adds Start Of Sequence (SOS) and End Of Sequence EOS tokens to a sequence of tokens:
+        SOS at the beginning, EOS at the end.
+
+        :param seq: sequence of tokens
+        """
+        seq.insert(0, self.event2token['SOS_None'])
+        seq.append(self.event2token['EOS_None'])
+
+    def _create_vocabulary(self, program_tokens: bool) -> Tuple[Dict[str, int], Dict[int, str], Dict[str, List[int]]]:
         """ Create the tokens <-> event dictionaries
         These dictionaries are created arbitrary according to constants defined
         at the top of this file.
