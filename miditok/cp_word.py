@@ -119,7 +119,7 @@ class CPWordEncoding(MIDITokenizer):
                 # Position
                 pos_index = int((note.start % ticks_per_bar) / ticks_per_sample)
                 tokens.append(self.create_cp_token(int(note.start), pos=pos_index,
-                                                   tempo=current_tempo if self.additional_tokens['Tempo'] else 'Ignore',
+                                                   tempo=current_tempo if self.additional_tokens['Tempo'] else None,
                                                    text='Position'))
                 previous_tick = note.start
 
