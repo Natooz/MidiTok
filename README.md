@@ -90,7 +90,11 @@ generated_midi.dump('path/to/save/file.mid')  # could have been done above by gi
 
 ## Encodings
 
-_In the figures, yellow tokens are additional tokens, and tokens are vertically stacked at index 0 from the bottom up to the top._
+The figures represent the following music sheet as its corresponding token sequences.
+
+![Music sheet example](https://github.com/Natooz/MidiTok/blob/assets/assets/music_sheet.png?raw=true "Music sheet example")
+
+_Tokens are vertically stacked at index 0 from the bottom up to the top._
 
 ### MIDI-Like
 
@@ -99,7 +103,7 @@ Strategy used in the first symbolic music generative transformers and RNN / LSTM
 NOTES:
 * Rests act exactly like Time-shifts. It is then recommended choosing a minimum rest range of the same first beat resolution so the time is shifted with the same accuracy. For instance if your first beat resolution is ```(0, 4): 8```, you should choose a minimum rest of ```8```.
 
-![MIDI-Like figure](https://github.com/Natooz/MidiTok/blob/assets/assets/midi_like.png?raw=true "Three notes played together with different durations")
+![MIDI-Like figure](https://github.com/Natooz/MidiTok/blob/assets/assets/midi_like.png?raw=true "MIDI-Like token sequence, with Time-Shifts and Note-Off tokens")
 
 ### REMI
 
@@ -110,7 +114,7 @@ NOTES:
 * Including tempo tokens in a multitrack task with REMI is not recommended. Generating several tracks would lead to multiple and ambiguous tempo changes. So in MidiTok only the tempo changes of the first track will be kept in the final created MIDI.
 * Position tokens are always following Rest tokens to make sure the position of the following notes are explicitly stated. Bar tokens can follow Rest tokens depending on their respective value and your parameters.
 
-![REMI figure](https://github.com/Natooz/MidiTok/blob/assets/assets/remi.png?raw=true "Time is tracked with Bar and position tokens")
+![REMI figure](https://github.com/Natooz/MidiTok/blob/assets/assets/remi.png?raw=true "REMI sequence, time is tracked with Bar and position tokens")
 
 ### Compound Word
 
@@ -121,7 +125,7 @@ You can combine them in your model the way you want. CP Word authors concatenate
 
 At decoding, the easiest way to predict multiple tokens (employed by the original authors) is to project the output vector of your model with several projection matrices, one for each token type.
 
-![Compound Word figure](https://github.com/Natooz/MidiTok/blob/assets/assets/cp_word.png?raw=true "Tokens of the same family are grouped together")
+![Compound Word figure](https://github.com/Natooz/MidiTok/blob/assets/assets/cp_word.png?raw=true "CP Word sequence, tokens of the same family are grouped together")
 
 ### Structured
 
@@ -129,7 +133,7 @@ Presented with the [Piano Inpainting Application](https://arxiv.org/abs/2107.059
 The main advantage of this encoding is the consistent token type transitions it imposes, which can greatly speed up training. The structure is as: _Pitch_ -> _Velocity_ -> _Duration_ -> _Time Shift_ -> ... (pitch again)
 To keep this property, no additional token can be inserted in MidiTok's implementation.
 
-![Structured figure](https://github.com/Natooz/MidiTok/blob/assets/assets/structured.png?raw=true "The token types always follow the same transition pattern")
+![Structured figure](https://github.com/Natooz/MidiTok/blob/assets/assets/structured.png?raw=true "Structured MIDI encoding, the token types always follow the same transition pattern")
 
 ### Octuple
 
@@ -143,7 +147,7 @@ NOTES:
 * Time signature tokens are not implemented in MidiTok.
 * [Octuple Mono](miditok/octuple_mono.py) is a modified version with no program embedding at each time step.
 
-![Octuple figure](https://github.com/Natooz/MidiTok/blob/assets/assets/octuple.png?raw=true "Sequence with notes from two different tracks, with a bar and position embeddings")
+![Octuple figure](https://github.com/Natooz/MidiTok/blob/assets/assets/octuple.png?raw=true "Octuple sequence, with a bar and position embeddings")
 
 ### MuMIDI
 
@@ -157,7 +161,7 @@ NOTES:
 * This implementation uses _Program_ tokens to distinguish tracks, on their MIDI program. Hence, two tracks with the same program will be treated as being the same.
 * As in the original MuMIDI implementation, MidiTok distinguishes pitch tokens of drums from pitch tokens of other instruments. More details in the [code](miditok/mumidi.py).
 
-![MuMIDI figure](https://github.com/Natooz/MidiTok/blob/assets/assets/mumidi.png?raw=true "Sequence with notes from two different tracks, with a bar and position embeddings")
+![MuMIDI figure](https://github.com/Natooz/MidiTok/blob/assets/assets/mumidi.png?raw=true "MuMIDI sequence, with a bar and position embeddings")
 
 ### Create your own
 

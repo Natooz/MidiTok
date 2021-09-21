@@ -15,7 +15,7 @@ NOTE: encoded tracks has to be compared with the quantized original track.
 
 """
 
-import time
+from sys import stdout
 from copy import deepcopy
 from pathlib import Path, PurePath
 from typing import Union
@@ -37,7 +37,7 @@ ADDITIONAL_TOKENS_TEST = {'Chord': True,
 
 
 def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './Maestro_MIDIs',
-                                      saving_midi: bool = True):
+                                      saving_erroneous_midis: bool = True):
     """ Reads a few MIDI files, convert them into token sequences, convert them back to MIDI files.
     The converted back MIDI files should identical to original one, expect with note starting and ending
     times quantized, and maybe a some duplicated notes removed
@@ -47,12 +47,22 @@ def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = '.
     files = list(Path(data_path).glob('**/*.mid'))
 
     for i, file_path in enumerate(files):
-        print(f'Converting MIDI {i+1} / {len(files)} - {file_path}')
+        bar_len = 60
+        filled_len = int(round(bar_len * i / len(files)))
+        percents = round(100.0 * i / len(files), 2)
+        bar = '=' * filled_len + '-' * (bar_len - filled_len)
+        prog = f'\r{i} / {len(files)} [{bar}] {percents:.1f}% ...Converting MIDIs to tokens: {file_path}'
+        stdout.write(prog)
+        stdout.flush()
 
         # Reads the MIDI
-        midi = MidiFile(file_path)
+        try:
+            midi = MidiFile(PurePath(file_path))
+        except Exception as _:  # ValueError, OSError, FileNotFoundError, IOError, EOFError, mido.KeySignatureError
+            continue
+        if midi.ticks_per_beat % max(BEAT_RES_TEST.values()) != 0:
+            continue
 
-        t0 = time.time()
         for encoding in encodings:
             tokenizer = getattr(miditok, encoding)(beat_res=BEAT_RES_TEST,
                                                    additional_tokens=deepcopy(ADDITIONAL_TOKENS_TEST))
@@ -78,21 +88,22 @@ def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = '.
             # Checks notes
             errors = midis_equals(midi_to_compare, new_midi)
             if len(errors) > 0:
-                print(f'Failed to encode/decode MIDI with {encoding[:-8]} ({sum(len(t) for t in errors)} errors)')
+                print(f'MIDI {i} - {file_path} failed to encode/decode with '
+                      f'{encoding[:-8]} ({sum(len(t) for t in errors)} errors)')
                 # return False
 
             # Checks tempos
+            tempo_errors = []
             if tokenizer.additional_tokens['Tempo'] and encoding != 'MuMIDIEncoding':  # MuMIDI doesn't decode tempos
                 tempo_errors = tempo_changes_equals(midi_to_compare.tempo_changes, new_midi.tempo_changes)
                 if len(tempo_errors) > 0:
-                    print(f'Failed to encode/decode TEMPO changes with {encoding[:-8]} ({len(tempo_errors)} errors)')
+                    '''print(f'MIDI {i} - {file_path} failed to encode/decode TEMPO changes with '
+                          f'{encoding[:-8]} ({len(tempo_errors)} errors)')'''
 
-            if saving_midi:
+            if saving_erroneous_midis and (len(errors) > 0 or len(tempo_errors) > 0):
                 new_midi.dump(PurePath('tests', 'test_results', f'{file_path.stem}_{encoding[:-8]}')
                               .with_suffix('.mid'))
 
-        t1 = time.time()
-        print(f'Took {t1 - t0} seconds')
     return True
 
 
@@ -105,6 +116,8 @@ def midi_to_tokens_to_midi(tokenizer: miditok.MIDITokenizer, midi: MidiFile) -> 
     :return: The converted MIDI object
     """
     tokens = tokenizer.midi_to_tokens(midi)
+    if len(tokens) == 0:  # no track after notes quantization, this can happen
+        return MidiFile()
     inf = miditok.get_midi_programs(midi)  # programs of tracks
     new_midi = tokenizer.tokens_to_midi(tokens, inf, time_division=midi.ticks_per_beat)
 

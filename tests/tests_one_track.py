@@ -10,7 +10,7 @@ NOTE: encoded tracks has to be compared with the quantized original track.
 
 """
 
-import time
+from sys import stdout
 from copy import deepcopy
 from pathlib import Path, PurePath
 from typing import Union
@@ -32,26 +32,32 @@ ADDITIONAL_TOKENS_TEST = {'Chord': True,  # set to false to speed up tests as it
 
 
 def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './Maestro_MIDIs',
-                                     saving_midi: bool = True) -> bool:
+                                     saving_erroneous_midis: bool = True) -> bool:
     """ Reads a few MIDI files, convert them into token sequences, convert them back to MIDI files.
     The converted back MIDI files should identical to original one, expect with note starting and ending
     times quantized, and maybe a some duplicated notes removed
 
     :param data_path: root path to the data to test
-    :param saving_midi: whether to save the results in a MIDI file
+    :param saving_erroneous_midis: will save MIDIs converted back with errors, to be used to debug
     """
     encodings = ['MIDILikeEncoding', 'StructuredEncoding', 'REMIEncoding', 'CPWordEncoding', 'OctupleEncoding',
                  'OctupleMonoEncoding', 'MuMIDIEncoding']
     files = list(Path(data_path).glob('**/*.mid'))
 
     for i, file_path in enumerate(files):
-        print(f'Converting MIDI {i + 1} / {len(files)} - {file_path}')
+        bar_len = 60
+        filled_len = int(round(bar_len * i / len(files)))
+        percents = round(100.0 * i / len(files), 2)
+        bar = '=' * filled_len + '-' * (bar_len - filled_len)
+        prog = f'\r{i} / {len(files)} [{bar}] {percents:.1f}% ...Converting MIDIs to tokens: {file_path}'
+        stdout.write(prog)
+        stdout.flush()
 
         # Reads the midi
         midi = MidiFile(file_path)
         tracks = [deepcopy(midi.instruments[0])]
+        has_errors = True
 
-        t0 = time.time()
         for encoding in encodings:
             add_tokens = deepcopy(ADDITIONAL_TOKENS_TEST)
             if encoding == 'MIDILikeEncoding':
@@ -77,11 +83,13 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
             # Checks its good
             errors = track_equals(midi.instruments[0], track)
             if len(errors) > 0:
+                has_errors = True
                 if errors[0][0] != 'len':
                     for err, note, exp in errors:
                         midi.markers.append(Marker(f'ERR {encoding[:-8]} with note {err} (pitch {note.pitch})',
                                                    note.start))
-                print(f'Failed to encode/decode MIDI with {encoding[:-8]} ({len(errors)} errors)')
+                print(f'MIDI {i} - {file_path} failed to encode/decode MIDI with '
+                      f'{encoding[:-8]} ({len(errors)} errors)')
                 # return False
             track.name = f'encoded with {encoding[:-8]}'
             tracks.append(track)
@@ -90,12 +98,11 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
             if tempo_changes is not None and tokenizer.additional_tokens['Tempo']:
                 tempo_errors = tempo_changes_equals(midi.tempo_changes, tempo_changes)
                 if len(tempo_errors) > 0:
-                    print(f'Failed to encode/decode TEMPO changes with {encoding[:-8]} ({len(tempo_errors)} errors)')
+                    has_errors = True
+                    print(f'MIDI {i} - {file_path} failed to encode/decode TEMPO changes with '
+                          f'{encoding[:-8]} ({len(tempo_errors)} errors)')
 
-        t1 = time.time()
-        print(f'Took {t1 - t0} seconds')
-
-        if saving_midi:
+        if saving_erroneous_midis and has_errors:
             midi.instruments[0].name = 'original quantized'
             tracks[0].name = 'original not quantized'
 
