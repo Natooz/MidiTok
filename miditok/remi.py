@@ -41,7 +41,7 @@ class REMIEncoding(MIDITokenizer):
         """
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
-        ticks_per_sample = int(self.current_midi_metadata['time_division'] / max(self.beat_res.values()))
+        ticks_per_sample = self.current_midi_metadata['time_division'] / max(self.beat_res.values())
         ticks_per_bar = self.current_midi_metadata['time_division'] * 4
         min_rest = self.current_midi_metadata['time_division']*(self.rests[0][0]*self._first_beat_res+self.rests[0][1])\
             if self.additional_tokens['Rest'] else 0
@@ -62,7 +62,7 @@ class REMIEncoding(MIDITokenizer):
                         note.start - previous_tick > min_rest:
                     rest_beat, rest_pos = divmod(note.start-previous_tick, self.current_midi_metadata['time_division'])
                     rest_beat = min(rest_beat, max([r[0] for r in self.rests]))
-                    rest_pos /= ticks_per_sample
+                    rest_pos = round(rest_pos / ticks_per_sample)
 
                     if rest_beat > 0:
                         events.append(Event(name='Rest', time=previous_tick, value=f'{rest_beat}.0',
@@ -73,7 +73,7 @@ class REMIEncoding(MIDITokenizer):
                         rest_pos_temp = min([r[1] for r in self.rests], key=lambda x: abs(x - rest_pos))
                         events.append(Event(name='Rest', time=previous_tick, value=f'0.{rest_pos_temp}',
                                             text=f'0.{rest_pos_temp}'))
-                        previous_tick += rest_pos_temp * ticks_per_sample
+                        previous_tick += round(rest_pos_temp * ticks_per_sample)
                         rest_pos -= rest_pos_temp
 
                     current_bar = previous_tick // ticks_per_bar  # updates current bar value

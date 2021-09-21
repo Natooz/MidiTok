@@ -72,16 +72,15 @@ class OctupleEncoding(MIDITokenizer):
         :param midi: the MIDI objet to convert
         :return: the token representation, i.e. tracks converted into sequences of tokens
         """
+        # Check if the durations values have been calculated before for this time division
         try:
             _ = self.durations_ticks[midi.ticks_per_beat]
         except KeyError:
             self.durations_ticks[midi.ticks_per_beat] = [(beat * res + pos) * midi.ticks_per_beat // res
                                                          for beat, pos, res in self.durations]
 
-        # Quantize time signature and tempo changes times
-        # quantize_time_signatures(midi.time_signature_changes, midi.ticks_per_beat)
-        if self.additional_tokens['Tempo']:
-            self.quantize_tempos(midi.tempo_changes, midi.ticks_per_beat)
+        # Preprocess the MIDI file
+        self.preprocess_midi(midi)
 
         # Register MIDI metadata
         self.current_midi_metadata = {'time_division': midi.ticks_per_beat,
@@ -100,12 +99,9 @@ class OctupleEncoding(MIDITokenizer):
                 count += 1
             self.max_bar_embedding = nb_bars
 
-        # Process notes of every tracks
+        # Convert each track to tokens
         tokens = []
         for track in midi.instruments:
-            self.quantize_notes(track.notes, midi.ticks_per_beat)
-            track.notes.sort(key=lambda x: (x.start, x.pitch, x.end))  # sort notes
-            remove_duplicated_notes(track.notes)  # remove possible duplicated notes
             tokens += self.track_to_tokens(track)
 
         tokens.sort(key=lambda x: (x[0].time, x[0].text, x[0].value))  # Sort by time then track then pitch
@@ -208,9 +204,9 @@ class OctupleEncoding(MIDITokenizer):
         midi = MidiFile(ticks_per_beat=time_division)
         ticks_per_sample = time_division // max(self.beat_res.values())
         if self.additional_tokens['Tempo']:
-            tempo_changes = [TempoChange(TEMPO, -1)]  # mock the first tempo change to optimize below
+            tempo_changes = [TempoChange(int(self._tokens_to_events(tokens[0])[-1].value), 0)]
         else:  # default
-            tempo_changes = [TempoChange(TEMPO, 0)] * 2  # the first will be deleted at the end of the method
+            tempo_changes = [TempoChange(TEMPO, 0)]
 
         tracks = dict([(n, []) for n in range(-1, 128)])
         for time_step in tokens:
@@ -238,9 +234,7 @@ class OctupleEncoding(MIDITokenizer):
                     tempo_changes.append(TempoChange(tempo, current_tick))
 
         # Tempos
-        del tempo_changes[0]
         midi.tempo_changes = tempo_changes
-        midi.tempo_changes[0].time = 0
 
         # Appends created notes to MIDI object
         for program, notes in tracks.items():

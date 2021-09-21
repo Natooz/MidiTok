@@ -51,7 +51,7 @@ class MIDILikeEncoding(MIDITokenizer):
         """
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
-        ticks_per_sample = int(self.current_midi_metadata['time_division'] / max(self.beat_res.values()))
+        ticks_per_sample = self.current_midi_metadata['time_division'] / max(self.beat_res.values())
         events = []
 
         # Creates the Note On, Note Off and Velocity events
@@ -86,7 +86,7 @@ class MIDILikeEncoding(MIDITokenizer):
             if self.additional_tokens['Rest'] and event.time > previous_note_end:
                 rest_beat, rest_pos = divmod(time_shift, self.current_midi_metadata['time_division'])
                 rest_beat = min(rest_beat, max([r[0] for r in self.rests]))
-                rest_pos /= ticks_per_sample
+                rest_pos = round(rest_pos / ticks_per_sample)
                 if rest_beat > 0:
                     events.append(Event(name='Rest', time=previous_tick, value=f'{rest_beat}.0',
                                         text=f'{rest_beat}.0'))
@@ -96,7 +96,7 @@ class MIDILikeEncoding(MIDITokenizer):
                     rest_pos_temp = min([r[1] for r in self.rests], key=lambda x: abs(x - rest_pos))
                     events.append(Event(name='Rest', time=previous_tick, value=f'0.{rest_pos_temp}',
                                         text=f'0.{rest_pos_temp}'))
-                    previous_tick += rest_pos_temp * ticks_per_sample
+                    previous_tick += round(rest_pos_temp * ticks_per_sample)
                     rest_pos -= rest_pos_temp
 
             else:
@@ -132,10 +132,7 @@ class MIDILikeEncoding(MIDITokenizer):
         max_duration = (self.durations[-1][0] + self.durations[-1][1]) * time_division
         name = 'Drums' if program[1] else MIDI_INSTRUMENTS[program[0]]['name']
         instrument = Instrument(program[0], is_drum=program[1], name=name)
-        if self.additional_tokens['Tempo']:
-            tempo_changes = [TempoChange(TEMPO, -1)]  # mock the first tempo change to optimize below
-        else:  # default
-            tempo_changes = [TempoChange(TEMPO, 0)] * 2  # the first will be deleted at the end of the method
+        tempo_changes = [TempoChange(TEMPO, -1)]  # mock the first tempo change to optimize below
 
         current_tick = 0
         ei = 0
@@ -180,7 +177,9 @@ class MIDILikeEncoding(MIDITokenizer):
                 if tempo != tempo_changes[-1].tempo:
                     tempo_changes.append(TempoChange(tempo, current_tick))
             ei += 1
-        del tempo_changes[0]
+        if len(tempo_changes) > 1:
+            del tempo_changes[0]  # delete mocked tempo change
+        tempo_changes[0].time = 0
         return instrument, tempo_changes
 
     def _create_vocabulary(self, program_tokens: bool) -> Tuple[Dict[str, int], Dict[int, str], Dict[str, List[int]]]:

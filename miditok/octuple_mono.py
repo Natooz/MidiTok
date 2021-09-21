@@ -155,9 +155,9 @@ class OctupleMonoEncoding(MIDITokenizer):
         instrument = Instrument(program[0], is_drum=program[1], name=name)
 
         if self.additional_tokens['Tempo']:
-            tempo_changes = [TempoChange(TEMPO, -1)]  # mock the first tempo change to optimize below
+            tempo_changes = [TempoChange(int(self._tokens_to_events(tokens[0])[-1].value), 0)]
         else:  # default
-            tempo_changes = [TempoChange(TEMPO, 0)] * 2  # the first will be deleted at the end of the method
+            tempo_changes = [TempoChange(TEMPO, 0)]
 
         for time_step in events:
             # Note attributes
@@ -180,9 +180,6 @@ class OctupleMonoEncoding(MIDITokenizer):
                 if tempo != tempo_changes[-1].tempo:
                     tempo_changes.append(TempoChange(tempo, current_tick))
 
-        # Tempos
-        del tempo_changes[0]
-        tempo_changes[0].time = 0
         return instrument, tempo_changes
 
     def _create_vocabulary(self, program_tokens) -> Tuple[Dict[str, int], Dict[int, str], Dict[str, List[int]]]:

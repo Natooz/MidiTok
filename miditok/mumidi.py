@@ -78,14 +78,24 @@ class MuMIDIEncoding(MIDITokenizer):
         :param midi: the MIDI objet to convert
         :return: the token representation, i.e. tracks converted into sequences of tokens
         """
+        # Check if the durations values have been calculated before for this time division
         try:
             _ = self.durations_ticks[midi.ticks_per_beat]
         except KeyError:
             self.durations_ticks[midi.ticks_per_beat] = [(beat * res + pos) * midi.ticks_per_beat // res
                                                          for beat, pos, res in self.durations]
 
-        # Quantize time signature and tempo changes times
-        # quantize_time_signatures(midi.time_signature_changes, midi.ticks_per_beat)
+        # Preprocess the MIDI file
+        t = 0
+        while t < len(midi.instruments):
+            self.quantize_notes(midi.instruments[t].notes, midi.ticks_per_beat,
+                                self.pitch_range if not midi.instruments[t].is_drum else self.drum_pitch_range)
+            midi.instruments[t].notes.sort(key=lambda x: (x.start, x.pitch, x.end))  # sort notes
+            remove_duplicated_notes(midi.instruments[t].notes)  # remove possible duplicated notes
+            if len(midi.instruments[t].notes) == 0:
+                del midi.instruments[t]
+                continue
+            t += 1
         if self.additional_tokens['Tempo']:
             self.quantize_tempos(midi.tempo_changes, midi.ticks_per_beat)
 
@@ -106,13 +116,9 @@ class MuMIDIEncoding(MIDITokenizer):
                 count += 1
             self.max_bar_embedding = nb_bars
 
-        # Convert tracks to tokens
+        # Convert each track to tokens
         note_tokens = []
         for track in midi.instruments:
-            self.quantize_notes(track.notes, midi.ticks_per_beat,
-                                self.drum_pitch_range if track.is_drum else self.pitch_range)
-            track.notes.sort(key=lambda x: (x.start, x.pitch, x.end))  # sort notes
-            remove_duplicated_notes(track.notes)  # remove possible duplicated notes
             note_tokens += self.track_to_tokens(track)
 
         note_tokens.sort(key=lambda x: (x[0].time, x[0].text, x[0].value))  # Sort by time then track then pitch

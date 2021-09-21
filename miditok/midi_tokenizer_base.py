@@ -111,10 +111,8 @@ class MIDITokenizer:
             self.durations_ticks[midi.ticks_per_beat] = [(beat * res + pos) * midi.ticks_per_beat // res
                                                          for beat, pos, res in self.durations]
 
-        # Quantize time signature and tempo changes times
-        # quantize_time_signatures(midi.time_signature_changes, midi.ticks_per_beat)
-        if self.additional_tokens['Tempo']:
-            self.quantize_tempos(midi.tempo_changes, midi.ticks_per_beat)
+        # Preprocess the MIDI file
+        self.preprocess_midi(midi)
 
         # Register MIDI metadata
         self.current_midi_metadata = {'time_division': midi.ticks_per_beat,
@@ -122,19 +120,34 @@ class MIDITokenizer:
                                       'time_sig_changes': midi.time_signature_changes,
                                       'key_sig_changes': midi.key_signature_changes}
 
+        # **************** OVERRIDE FROM HERE, KEEP THE LINES ABOVE IN YOUR METHOD ****************
+
         # Convert each track to tokens
-        tokens = []
-        for track in midi.instruments:
-            self.quantize_notes(track.notes, midi.ticks_per_beat)
-            track.notes.sort(key=lambda x: (x.start, x.pitch, x.end))  # sort notes
-            remove_duplicated_notes(track.notes)  # remove possible duplicated notes
-
-            # **************** OVERRIDE FROM HERE, KEEP THE LINES ABOVE IN YOUR METHOD ****************
-
-            # Convert track to tokens
-            tokens.append(self.track_to_tokens(track))
+        tokens = [self.track_to_tokens(track) for track in midi.instruments]
 
         return tokens
+
+    def preprocess_midi(self, midi: MidiFile):
+        """ Will process a MIDI file so it can be used to train a model.
+        Its notes attributes (times, pitches, velocities) will be quantized and sorted, duplicated
+        notes removed, as well as tempos.
+        NOTE: empty tracks (with no note) will be removed from the MIDI object
+
+        :param midi: MIDI object to preprocess
+        """
+        t = 0
+        while t < len(midi.instruments):
+            self.quantize_notes(midi.instruments[t].notes, midi.ticks_per_beat)  # quantize notes attributes
+            midi.instruments[t].notes.sort(key=lambda x: (x.start, x.pitch, x.end))  # sort notes
+            remove_duplicated_notes(midi.instruments[t].notes)  # remove possible duplicated notes
+            if len(midi.instruments[t].notes) == 0:
+                del midi.instruments[t]
+                continue
+            t += 1
+
+        if self.additional_tokens['Tempo']:
+            self.quantize_tempos(midi.tempo_changes, midi.ticks_per_beat)
+        # quantize_time_signatures(midi.time_signature_changes, midi.ticks_per_beat)
 
     def track_to_tokens(self, track: Instrument) -> List[Union[int, List[int]]]:
         """ Converts a track (miditoolkit.Instrument object) into a sequence of tokens
@@ -357,6 +370,7 @@ class MIDITokenizer:
                               out_dir: Union[str, Path, PurePath], validation_fn: Callable[[MidiFile], bool] = None,
                               logging: bool = True):
         """ Converts a dataset / list of MIDI files, into their token version and save them as json files
+        NOTE: MIDIs with a time division lower than 4 times the beat resolution will be discarded.
 
         :param midi_paths: paths of the MIDI files
         :param out_dir: output directory to save the converted files
@@ -387,7 +401,7 @@ class MIDITokenizer:
                 continue
 
             # Checks the time division is valid
-            if midi.ticks_per_beat < max(self.beat_res.values()):
+            if midi.ticks_per_beat < max(self.beat_res.values()) * 4:
                 continue
             # Passing the MIDI to validation tests if given
             if validation_fn is not None:
@@ -564,7 +578,8 @@ def merge_same_program_tracks(tracks: List[Instrument]):
 
     # Merges duplicated tracks
     for program in duplicated_programs:
-        idx = [i for i in range(len(tracks)) if (tracks[i].is_drum if program == -1 else tracks[i].program == program)]
+        idx = [i for i in range(len(tracks)) if
+               (tracks[i].is_drum if program == -1 else tracks[i].program == program and not tracks[i].is_drum)]
         tracks[idx[0]].name += ''.join([' / ' + tracks[i].name for i in idx[1:]])
         tracks[idx[0]].notes = sum((tracks[i].notes for i in idx), [])
         tracks[idx[0]].notes.sort(key=lambda note: (note.start, note.pitch))
