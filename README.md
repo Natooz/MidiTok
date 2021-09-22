@@ -24,24 +24,26 @@ pitch_range = range(21, 109)
 beat_res = {(0, 4): 8, (4, 12): 4}
 nb_velocities = 32
 additional_tokens = {'Chord': True,
+                     'Rest': True,
                      'Tempo': True,
+                     'rest_range': (2, 8),  # (half, 8 beats)
                      'nb_tempos': 32,  # nb of tempo bins
-                     'tempo_range': (40, 250)}  # (min_tempo, max_tempo)
+                     'tempo_range': (40, 250)}  # (min, max)
 
 # Creates the tokenizer and loads a MIDI
-remi_enc = REMIEncoding(pitch_range, beat_res, nb_velocities, additional_tokens)
+tokenizer = REMIEncoding(pitch_range, beat_res, nb_velocities, additional_tokens)
 midi = MidiFile('path/to/your_midi.mid')
 
 # Converts MIDI to tokens, and back to a MIDI
-tokens = remi_enc.midi_to_tokens(midi)
-converted_back_midi = remi_enc.tokens_to_midi(tokens, get_midi_programs(midi))
+tokens = tokenizer.midi_to_tokens(midi)
+converted_back_midi = tokenizer.tokens_to_midi(tokens, get_midi_programs(midi))
 
 # Converts just a selected track
-remi_enc.current_midi_metadata = {'time_division': midi.ticks_per_beat, 'tempo_changes': midi.tempo_changes}
-piano_tokens = remi_enc.track_to_tokens(midi.instruments[0])
+tokenizer.current_midi_metadata = {'time_division': midi.ticks_per_beat, 'tempo_changes': midi.tempo_changes}
+piano_tokens = tokenizer.track_to_tokens(midi.instruments[0])
 
 # And convert it back (the last arg stands for (program number, is drum))
-converted_back_track, tempo_changes = remi_enc.tokens_to_track(piano_tokens, midi.ticks_per_beat, (0, False))
+converted_back_track, tempo_changes = tokenizer.tokens_to_track(piano_tokens, midi.ticks_per_beat, (0, False))
 ```
 
 ### Tokenize a dataset
@@ -53,10 +55,10 @@ from miditok import REMIEncoding
 from pathlib import Path
 
 # Creates the tokenizer and list the file paths
-remi_enc = REMIEncoding()  # uses defaults parameters in constants.py
-files_paths = list(Path('path', 'to', 'your', 'dataset').glob('**/*.mid'))
+tokenizer = REMIEncoding()  # uses defaults parameters
+paths = list(Path('path', 'to', 'dataset').glob('**/*.mid'))
 
-# A validation method to make sure to discard MIDIs we do not want
+# A validation method to discard MIDIs we do not want
 def midi_valid(midi) -> bool:
     if any(ts.numerator != 4 or ts.denominator !=4 for ts in midi.time_signature_changes):
         return False  # time signature different from 4/4
@@ -65,7 +67,7 @@ def midi_valid(midi) -> bool:
     return True
 
 # Converts MIDI files to tokens saved as JSON files
-remi_enc.tokenize_midi_dataset(files_paths, 'path/to/save', midi_valid)
+tokenizer.tokenize_midi_dataset(paths, 'path/to/save', midi_valid)
 ```
 
 ### Write a MIDI file from tokens

@@ -412,10 +412,32 @@ class MIDITokenizer:
             tokens = self.midi_to_tokens(midi)
             midi_programs = get_midi_programs(midi)
             midi_name = PurePath(midi_path).stem
-            with open(PurePath(out_dir, midi_name).with_suffix(".json"), 'w') as outfile:
-                json.dump([tokens, midi_programs], outfile)
+            self.save_tokens(tokens, PurePath(out_dir, midi_name).with_suffix(".json"), midi_programs)
 
         self.save_params(out_dir)  # Saves the parameters with which the MIDIs are converted
+
+    @staticmethod
+    def save_tokens(tokens, path: Union[str, Path, PurePath], programs=None):
+        """ Saves tokens as a JSON file.
+
+        :param tokens: tokens, as any format
+        :param path: path of the file to save
+        :param programs: (optional), programs of the associated tokens, should be
+                        given as a tuples (int, bool) for (program, is_drum)
+        """
+        with open(path, 'w') as outfile:
+            json.dump([tokens, programs] if programs is not None else [tokens], outfile)
+
+    @staticmethod
+    def load_tokens(path: Union[str, Path, PurePath]) -> Tuple[Any, Any]:
+        """ Loads tokens saved as JSON files.
+
+        :param path: path of the file to load
+        :return: the tokens, with the associated programs if saved with
+        """
+        with open(path) as file:
+            data = json.load(file)
+            return data[0], data[1] if len(data) > 1 else None
 
     def save_params(self, out_dir: Union[str, Path, PurePath]):
         """ Saves the base parameters of this encoding in a txt file
@@ -537,6 +559,7 @@ def detect_chords(notes: List[Note], time_division: int, beat_res: int = 4, onse
                     chord_quality = quality
                     break
             if only_known_chord and isinstance(chord_quality, int):
+                count += len(onset_notes)  # Move to the next notes
                 continue  # this chords was not recognize and we don't want it
             chords.append((chord_quality, min(chord[:, 1]), chord_map))
         previous_tick = max(onset_notes[:, 1])
