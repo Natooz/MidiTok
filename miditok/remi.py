@@ -176,20 +176,29 @@ class REMIEncoding(MIDITokenizer):
         tempo_changes[0].time = 0
         return instrument, tempo_changes
 
-    def _create_vocabulary(self, program_tokens: bool) -> Tuple[Dict[str, int], Dict[int, str], Dict[str, List[int]]]:
+    def _create_vocabulary(self, program_tokens: bool, sos_eos: bool = False) \
+            -> Tuple[Dict[str, int], Dict[int, str], Dict[str, List[int]]]:
         """ Create the tokens <-> event dictionaries
         These dictionaries are created arbitrary according to constants defined
         at the top of this file.
         Note that when using them (prepare_data method), there is no error-handling
         so you must be sure that every case is covered by the dictionaries.
-        NOTE: token index 0 is often used as a padding index during training, it might
-        be preferable to leave it as it to pad your batch sequences
+        NOTE: token 0 (PAD) is used as a padding index for batch sequences during training
+        NOTE 2: SOS and EOS tokens are set to -1 and -2 respectively
 
         :param program_tokens: creates tokens for MIDI programs in the dictionary
+        :param sos_eos: will include Start Of Sequence (SOS) and End Of Sequence (tokens)
         :return: the dictionaries, one for each translation
         """
         token_type_indices = {'Pad': [0], 'Bar': [1]}
         event_to_token = {'PAD_None': 0, 'Bar_None': 1}  # starting at 1, token 0 for padding
+
+        # SOS & EOS
+        if sos_eos:
+            token_type_indices['SOS'] = [-1]
+            event_to_token['SOS_None'] = -1
+            token_type_indices['EOS'] = [-2]
+            event_to_token['EOS_None'] = -2
 
         # PITCH
         token_type_indices['Pitch'] = list(range(len(event_to_token), len(event_to_token) + len(self.pitch_range)))
@@ -238,8 +247,6 @@ class REMIEncoding(MIDITokenizer):
             for program in range(-1, 128):  # -1 is drums
                 event_to_token[f'Program_{program}'] = len(event_to_token)
 
-        event_to_token[len(event_to_token)] = 'SOS_None'
-        event_to_token[len(event_to_token)] = 'EOS_None'
         token_to_event = {v: k for k, v in event_to_token.items()}  # inversion
         return event_to_token, token_to_event, token_type_indices
 

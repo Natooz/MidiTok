@@ -305,7 +305,18 @@ class MIDITokenizer:
         seq.insert(0, self.event2token['SOS_None'])
         seq.append(self.event2token['EOS_None'])
 
-    def _create_vocabulary(self, program_tokens: bool) -> Tuple[Dict[str, int], Dict[int, str], Dict[str, List[int]]]:
+    def add_sos_eos_to_vocab(self):
+        """ Adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens
+        to the vocabulary, respectively to -1 and -2.
+        """
+        self.event2token['SOS_None'] = -1
+        self.event2token['EOS_None'] = -2
+        self.token2event[-1] = 'SOS_None'
+        self.token2event[-2] = 'EOS_None'
+        self.token_types_indices['SOS'] = [-1]
+        self.token_types_indices['EOS'] = [-2]
+
+    def _create_vocabulary(self, *args, **kwargs) -> Tuple[Dict[str, int], Dict[int, str], Dict[str, List[int]]]:
         """ Create the tokens <-> event dictionaries
         These dictionaries are created arbitrary according to constants defined
         at the top of this file.
@@ -313,8 +324,8 @@ class MIDITokenizer:
         so you must be sure that every case is covered by the dictionaries.
         NOTE: token index 0 is often used as a padding index during training, it might
         be preferable to leave it as it to pad your batch sequences
+        NOTE 2: SOS and EOS tokens should be set to -1 and -2 respectively
 
-        :param program_tokens: creates tokens for MIDI programs in the dictionary
         :return: the dictionaries, one for each translation
         """
         raise NotImplementedError
