@@ -8,7 +8,7 @@ from typing import List, Tuple, Dict, Optional
 import numpy as np
 from miditoolkit import Instrument, Note, TempoChange
 
-from .midi_tokenizer_base import MIDITokenizer, Event
+from .midi_tokenizer_base import MIDITokenizer, Vocabulary, Event
 from .constants import *
 
 
@@ -31,13 +31,16 @@ class StructuredEncoding(MIDITokenizer):
     :param nb_velocities: number of velocity bins
     :param program_tokens: will add entries for MIDI programs in the dictionary, to use
             in the case of multitrack generation for instance
+    :param sos_eos_tokens: Adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens to the vocabulary
     :param params: can be a path to the parameter (json encoded) file or a dictionary
     """
     def __init__(self, pitch_range: range = PITCH_RANGE, beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
-                 nb_velocities: int = NB_VELOCITIES, program_tokens: bool = PROGRAM_TOKENS, params=None):
+                 nb_velocities: int = NB_VELOCITIES, program_tokens: bool = PROGRAM_TOKENS,
+                 sos_eos_tokens: bool = False, params=None):
         # No additional tokens
         additional_tokens = {'Chord': False, 'Rest': False, 'Tempo': False}
-        super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, program_tokens, params)
+        super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens,
+                         {'program_tokens': program_tokens, 'sos_eos_tokens': sos_eos_tokens}, params)
 
     def track_to_tokens(self, track: Instrument) -> List[int]:
         """ Converts a track (miditoolkit.Instrument object) into a sequence of tokens
@@ -58,55 +61,38 @@ class StructuredEncoding(MIDITokenizer):
             else:
                 time_shift = track.notes[0].start
             index = np.argmin(np.abs([ticks - time_shift for ticks in dur_bins]))
-            events.append(Event(
-                name='Time-Shift',
-                time=0,
-                value='.'.join(map(str, self.durations[index])),
-                text=f'{time_shift} ticks'))
+            events.append(Event(type_='Time-Shift', time=0, value='.'.join(map(str, self.durations[index])),
+                                desc=f'{time_shift} ticks'))
 
         # Creates the Pitch, Velocity, Duration and Time Shift events
         for n, note in enumerate(track.notes[:-1]):
             # Pitch
-            events.append(Event(
-                name='Pitch',
-                time=note.start,
-                value=note.pitch,
-                text=note.pitch))
+            events.append(Event(type_='Pitch', time=note.start, value=note.pitch, desc=note.pitch))
             # Velocity
-            events.append(Event(
-                name='Velocity',
-                time=note.start,
-                value=note.velocity,
-                text=f'{note.velocity}'))
+            events.append(Event(type_='Velocity', time=note.start, value=note.velocity, desc=f'{note.velocity}'))
             # Duration
             duration = note.end - note.start
             index = np.argmin(np.abs([ticks - duration for ticks in dur_bins]))
-            events.append(Event(
-                name='Duration',
-                time=note.start,
-                value='.'.join(map(str, self.durations[index])),
-                text=f'{duration} ticks'))
+            events.append(Event(type_='Duration', time=note.start, value='.'.join(map(str, self.durations[index])),
+                                desc=f'{duration} ticks'))
             # Time-Shift
             time_shift = track.notes[n + 1].start - note.start
             index = np.argmin(np.abs([ticks - time_shift for ticks in dur_bins]))
-            events.append(Event(
-                name='Time-Shift',
-                time=note.start,
-                value='.'.join(map(str, self.durations[index])) if time_shift != 0 else '0.0.1',
-                text=f'{time_shift} ticks'))
+            events.append(Event(type_='Time-Shift', time=note.start, desc=f'{time_shift} ticks',
+                                value='.'.join(map(str, self.durations[index])) if time_shift != 0 else '0.0.1'))
         # Adds the last note
         if track.notes[-1].pitch not in self.pitch_range:
             if len(events) > 0:
                 del events[-1]
         else:
-            events.append(Event(name='Pitch', time=track.notes[-1].start, value=track.notes[-1].pitch,
-                                text=track.notes[-1].pitch))
-            events.append(Event(name='Velocity', time=track.notes[-1].start, value=track.notes[-1].velocity,
-                                text=f'{track.notes[-1].velocity}'))
+            events.append(Event(type_='Pitch', time=track.notes[-1].start, value=track.notes[-1].pitch,
+                                desc=track.notes[-1].pitch))
+            events.append(Event(type_='Velocity', time=track.notes[-1].start, value=track.notes[-1].velocity,
+                                desc=f'{track.notes[-1].velocity}'))
             duration = track.notes[-1].end - track.notes[-1].start
             index = np.argmin(np.abs([ticks - duration for ticks in dur_bins]))
-            events.append(Event(name='Duration', time=track.notes[-1].start,
-                                value='.'.join(map(str, self.durations[index])), text=f'{duration} ticks'))
+            events.append(Event(type_='Duration', time=track.notes[-1].start,
+                                value='.'.join(map(str, self.durations[index])), desc=f'{duration} ticks'))
 
         events.sort(key=lambda x: x.time)
 
@@ -129,9 +115,9 @@ class StructuredEncoding(MIDITokenizer):
         count = 0
 
         while count < len(events):
-            if events[count].name == 'Pitch':
+            if events[count].type == 'Pitch':
                 try:
-                    if events[count + 1].name == 'Velocity' and events[count + 2].name == 'Duration':
+                    if events[count + 1].type == 'Velocity' and events[count + 2].type == 'Duration':
                         pitch = int(events[count].value)
                         vel = int(events[count + 1].value)
                         beat, pos, res = map(int, events[count + 2].value.split('.'))
@@ -140,7 +126,7 @@ class StructuredEncoding(MIDITokenizer):
                         count += 3
                 except IndexError as _:
                     count += 1
-            elif events[count].name == 'Time-Shift':
+            elif events[count].type == 'Time-Shift':
                 beat, pos, res = map(int, events[count].value.split('.'))
                 current_tick += (beat * res + pos) * time_division // res  # time shift
                 count += 1
@@ -149,66 +135,48 @@ class StructuredEncoding(MIDITokenizer):
 
         return instrument, [TempoChange(TEMPO, 0)]
 
-    def _create_vocabulary(self, program_tokens: bool, sos_eos: bool = False) -> \
-            Tuple[Dict[str, int], Dict[int, str], Dict[str, List[int]]]:
-        """ Create the tokens <-> event dictionaries
-        These dictionaries are created arbitrary according to constants defined
-        at the top of this file.
-        Note that when using them (prepare_data method), there is no error-handling
-        so you must be sure that every case is covered by the dictionaries.
-        NOTE: token 0 (PAD) is used as a padding index for batch sequences during training
-        NOTE 2: SOS and EOS tokens are set to -1 and -2 respectively
+    def _create_vocabulary(self, program_tokens: bool, sos_eos_tokens: bool = False) -> Vocabulary:
+        """ Creates the Vocabulary object of the tokenizer.
+        See the docstring of the Vocabulary class for more details about how to use it.
+        NOTE: token index 0 is often used as a padding index during training
 
-        :param program_tokens: creates tokens for MIDI programs in the dictionary
-        :param sos_eos: will include Start Of Sequence (SOS) and End Of Sequence (tokens)
-        :return: the dictionaries, one for each translation
+        :param program_tokens: will include tokens for MIDI programs
+        :param sos_eos_tokens: will include Start Of Sequence (SOS) and End Of Sequence (tokens)
+        :return: the vocabulary object
         """
-        token_type_indices = {'Pad': [0]}
-        event_to_token = {'PAD_None': 0}  # starting at 1, token 0 is for padding
-
-        # SOS & EOS
-        if sos_eos:
-            token_type_indices['SOS'] = [-1]
-            event_to_token['SOS_None'] = -1
-            token_type_indices['EOS'] = [-2]
-            event_to_token['EOS_None'] = -2
+        vocab = Vocabulary({'PAD_None': 0, 'Bar_None': 1})
 
         # PITCH
-        token_type_indices['Pitch'] = list(range(len(event_to_token), len(event_to_token) + len(self.pitch_range)))
-        for i in self.pitch_range:
-            event_to_token[f'Pitch_{i}'] = len(event_to_token)
+        vocab.add_event(f'Pitch_{i}' for i in self.pitch_range)
 
         # VELOCITY
-        token_type_indices['Velocity'] = list(range(len(event_to_token), len(event_to_token) + len(self.velocities)))
-        for i in self.velocities:
-            event_to_token[f'Velocity_{i}'] = len(event_to_token)
+        vocab.add_event(f'Velocity_{i}' for i in self.velocities)
 
         # DURATION
-        token_type_indices['Duration'] = list(range(len(event_to_token), len(event_to_token) + len(self.durations)))
-        for i in range(0, len(self.durations)):
-            event_to_token[f'Duration_{".".join(map(str, self.durations[i]))}'] = len(event_to_token)
+        vocab.add_event(f'Duration_{".".join(map(str, duration))}' for duration in self.durations)
 
-        # TIME SHIFT
-        # same as durations but with 0.0.1 (1, this value is not important)
-        event_to_token['Time-Shift_0.0.1'] = len(event_to_token)
-        token_type_indices['Time-Shift'] = list(range(len(event_to_token), len(event_to_token) + len(self.durations)+1))
-        for i in range(0, len(self.durations)):
-            event_to_token[f'Time-Shift_{".".join(map(str, self.durations[i]))}'] = len(event_to_token)
+        # TIME SHIFT (same as durations)
+        vocab.add_event('Time-Shift_0.0.1')  # for a time shift of 0
+        vocab.add_event(f'Time-Shift_{".".join(map(str, self.durations[i]))}' for i in range(len(self.durations)))
 
         # PROGRAM
         if program_tokens:
-            token_type_indices['Program'] = list(range(len(event_to_token), len(event_to_token) + 129))
-            for program in range(-1, 128):  # -1 is drums
-                event_to_token[f'Program_{program}'] = len(event_to_token)
+            vocab.add_event(f'Program_{program}' for program in range(-1, 128))
 
-        token_to_event = {v: k for k, v in event_to_token.items()}  # inversion
-        return event_to_token, token_to_event, token_type_indices
+        # SOS & EOS
+        if sos_eos_tokens:
+            vocab.add_sos_eos_to_vocab()
+
+        return vocab
 
     def create_token_types_graph(self) -> Dict[str, List[str]]:
         dic = dict()
 
-        if 'Program' in self.token_types_indices:
+        try:
+            _ = self.vocab.tokens_of_type('Program')
             dic['Program'] = ['Bar']
+        except KeyError:
+            pass
 
         dic['Pitch'] = ['Velocity']
         dic['Velocity'] = ['Duration']

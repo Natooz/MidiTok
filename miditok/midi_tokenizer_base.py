@@ -1,7 +1,6 @@
 """ MIDI encoding base class and methods
 TODO Control change messages (sustain, modulation, pitch bend)
 TODO time signature changes tokens
-TODO rest tokens
 
 """
 
@@ -14,25 +13,8 @@ from typing import List, Tuple, Dict, Union, Callable, Optional, Any
 import numpy as np
 from miditoolkit import MidiFile, Instrument, Note, TempoChange, TimeSignature
 
+from .vocabulary import Vocabulary, Event
 from .constants import TIME_DIVISION, CHORD_MAPS
-
-
-class Event:
-    """ Event class, representing a token and its characteristics
-    The name corresponds to the token type (e.g. Pitch, Position ...);
-    The value to its value.
-    These two attributes are used in events_to_tokens and tokens_to_events
-    methods (see below) to convert an Event object to its corresponding integer.
-    """
-
-    def __init__(self, name, time, value, text):
-        self.name = name
-        self.time = time
-        self.value = value
-        self.text = text
-
-    def __repr__(self):
-        return f'Event(name={self.name}, time={self.time}, value={self.value}, text={self.text})'
 
 
 class MIDITokenizer:
@@ -46,13 +28,12 @@ class MIDITokenizer:
             The values are the resolution, in samples per beat, of the given range, ex 8
     :param nb_velocities: number of velocity bins
     :param additional_tokens: specifies additional tokens (chords, rests, tempo...)
-    :param program_tokens: will add entries for MIDI programs in the dictionary, to use
-            in the case of multitrack generation for instance
+    :param vocab_args: arguments for the _create_vocabulary method
     :param params: can be a path to the parameter (json encoded) file or a dictionary
     """
 
     def __init__(self, pitch_range: range, beat_res: Dict[Tuple[int, int], int], nb_velocities: int,
-                 additional_tokens: Dict[str, Union[bool, int, Tuple[int, int]]], program_tokens: bool,
+                 additional_tokens: Dict[str, Union[bool, int, Tuple[int, int]]], vocab_args: Dict[str, any],
                  params: Union[str, Path, PurePath, Dict[str, Any]] = None):
         # Initialize params
         if params is None:
@@ -87,7 +68,7 @@ class MIDITokenizer:
             self.rests = self.__create_rests()
 
         # Vocabulary
-        self.event2token, self.token2event, self.token_types_indices = self._create_vocabulary(program_tokens)
+        self.vocab = self._create_vocabulary(**vocab_args)
 
         # Keep in memory durations in ticks for seen time divisions so these values
         # are not calculated each time a MIDI is processed
@@ -164,7 +145,7 @@ class MIDITokenizer:
         :param events: list of Events objects to convert
         :return: list of corresponding tokens
         """
-        return [self.event2token[f'{event.name}_{event.value}'] for event in events]
+        return [self.vocab.event_to_token[str(event)] for event in events]
 
     def _tokens_to_events(self, tokens: List[int]) -> List[Event]:
         """ Convert a sequence of tokens in their respective event objects
@@ -175,7 +156,7 @@ class MIDITokenizer:
         """
         events = []
         for token in tokens:
-            name, val = self.token2event[token].split('_')
+            name, val = self.vocab.token_to_event[token].split('_')
             events.append(Event(name, None, val, None))
         return events
 
@@ -302,31 +283,17 @@ class MIDITokenizer:
 
         :param seq: sequence of tokens
         """
-        seq.insert(0, self.event2token['SOS_None'])
-        seq.append(self.event2token['EOS_None'])
+        seq.insert(0, self.vocab['SOS_None'])
+        seq.append(self.vocab['EOS_None'])
 
-    def add_sos_eos_to_vocab(self):
-        """ Adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens
-        to the vocabulary, respectively to -1 and -2.
-        """
-        self.event2token['SOS_None'] = -1
-        self.event2token['EOS_None'] = -2
-        self.token2event[-1] = 'SOS_None'
-        self.token2event[-2] = 'EOS_None'
-        self.token_types_indices['SOS'] = [-1]
-        self.token_types_indices['EOS'] = [-2]
+    def _create_vocabulary(self, *args, **kwargs) -> Vocabulary:
+        """ Creates the Vocabulary object of the tokenizer.
+        See the docstring of the Vocabulary class for more details about how to use it.
+        NOTE: token index 0 is often used as a padding index during training
+        NOTE 2: SOS and EOS tokens should be set to -1 and -2 respectively.
+                use Vocabulary.add_sos_eos_to_vocab to add them
 
-    def _create_vocabulary(self, *args, **kwargs) -> Tuple[Dict[str, int], Dict[int, str], Dict[str, List[int]]]:
-        """ Create the tokens <-> event dictionaries
-        These dictionaries are created arbitrary according to constants defined
-        at the top of this file.
-        Note that when using them (prepare_data method), there is no error-handling
-        so you must be sure that every case is covered by the dictionaries.
-        NOTE: token index 0 is often used as a padding index during training, it might
-        be preferable to leave it as it to pad your batch sequences
-        NOTE 2: SOS and EOS tokens should be set to -1 and -2 respectively
-
-        :return: the dictionaries, one for each translation
+        :return: the vocabulary object
         """
         raise NotImplementedError
 

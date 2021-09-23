@@ -8,7 +8,7 @@ from typing import List, Tuple, Dict, Optional
 import numpy as np
 from miditoolkit import Instrument, Note, TempoChange
 
-from .midi_tokenizer_base import MIDITokenizer, Event, detect_chords
+from .midi_tokenizer_base import MIDITokenizer, Vocabulary, Event, detect_chords
 from .constants import *
 
 
@@ -35,12 +35,14 @@ class MIDILikeEncoding(MIDITokenizer):
     :param additional_tokens: specifies additional tokens (chords, time signature, rests, tempo...)
     :param program_tokens: will add entries for MIDI programs in the dictionary, to use
             in the case of multitrack generation for instance
+    :param sos_eos_tokens: Adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens to the vocabulary
     :param params: can be a path to the parameter (json encoded) file or a dictionary
     """
     def __init__(self, pitch_range: range = PITCH_RANGE, beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
                  nb_velocities: int = NB_VELOCITIES, additional_tokens: Dict[str, bool] = ADDITIONAL_TOKENS,
-                 program_tokens: bool = PROGRAM_TOKENS, params=None):
-        super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, program_tokens, params)
+                 program_tokens: bool = PROGRAM_TOKENS, sos_eos_tokens: bool = False, params=None):
+        super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens,
+                         {'program_tokens': program_tokens, 'sos_eos_tokens': sos_eos_tokens}, params)
 
     def track_to_tokens(self, track: Instrument) -> List[int]:
         """ Converts a track (miditoolkit.Instrument object) into a sequence of tokens
@@ -57,16 +59,16 @@ class MIDILikeEncoding(MIDITokenizer):
         # Creates the Note On, Note Off and Velocity events
         for n, note in enumerate(track.notes):
             # Note On
-            events.append(Event(name='Note-On', time=note.start, value=note.pitch, text=note.end))
+            events.append(Event(type_='Note-On', time=note.start, value=note.pitch, desc=note.end))
             # Velocity
-            events.append(Event(name='Velocity', time=note.start, value=note.velocity, text=f'{note.velocity}'))
+            events.append(Event(type_='Velocity', time=note.start, value=note.velocity, desc=f'{note.velocity}'))
             # Note Off
-            events.append(Event(name='Note-Off', time=note.end, value=note.pitch, text=note.end))
+            events.append(Event(type_='Note-Off', time=note.end, value=note.pitch, desc=note.end))
         # Adds tempo events if specified
         if self.additional_tokens['Tempo']:
             for tempo_change in self.current_midi_metadata['tempo_changes']:
-                events.append(Event(name='Tempo', time=tempo_change.time, value=tempo_change.tempo,
-                                    text=tempo_change.tempo))
+                events.append(Event(type_='Tempo', time=tempo_change.time, value=tempo_change.tempo,
+                                    desc=tempo_change.tempo))
 
         # Sorts events in the good order
         events.sort(key=lambda x: x.time)
@@ -75,8 +77,8 @@ class MIDILikeEncoding(MIDITokenizer):
         previous_tick = 0
         previous_note_end = track.notes[0].start + 1
         for e, event in enumerate(events.copy()):
-            if event.name == 'Note-On':
-                previous_note_end = max(previous_note_end, event.text)
+            if event.type == 'Note-On':
+                previous_note_end = max(previous_note_end, event.desc)
 
             if event.time == previous_tick:
                 continue
@@ -88,22 +90,22 @@ class MIDILikeEncoding(MIDITokenizer):
                 rest_beat = min(rest_beat, max([r[0] for r in self.rests]))
                 rest_pos = round(rest_pos / ticks_per_sample)
                 if rest_beat > 0:
-                    events.append(Event(name='Rest', time=previous_tick, value=f'{rest_beat}.0',
-                                        text=f'{rest_beat}.0'))
+                    events.append(Event(type_='Rest', time=previous_tick, value=f'{rest_beat}.0',
+                                        desc=f'{rest_beat}.0'))
                     previous_tick += rest_beat * self.current_midi_metadata['time_division']
 
                 while rest_pos >= self.rests[0][1]:
                     rest_pos_temp = min([r[1] for r in self.rests], key=lambda x: abs(x - rest_pos))
-                    events.append(Event(name='Rest', time=previous_tick, value=f'0.{rest_pos_temp}',
-                                        text=f'0.{rest_pos_temp}'))
+                    events.append(Event(type_='Rest', time=previous_tick, value=f'0.{rest_pos_temp}',
+                                        desc=f'0.{rest_pos_temp}'))
                     previous_tick += round(rest_pos_temp * ticks_per_sample)
                     rest_pos -= rest_pos_temp
 
             else:
                 index = np.argmin(np.abs([ticks - time_shift for ticks in
                                           self.durations_ticks[self.current_midi_metadata['time_division']]]))
-                events.append(Event(name='Time-Shift', time=previous_tick,
-                                    value='.'.join(map(str, self.durations[index])), text=f'{time_shift} ticks'))
+                events.append(Event(type_='Time-Shift', time=previous_tick,
+                                    value='.'.join(map(str, self.durations[index])), desc=f'{time_shift} ticks'))
             previous_tick = event.time
 
         # Adds chord events if specified
@@ -137,9 +139,9 @@ class MIDILikeEncoding(MIDITokenizer):
         current_tick = 0
         ei = 0
         while ei < len(events):
-            if events[ei].name == 'Note-On':
+            if events[ei].type == 'Note-On':
                 try:
-                    if events[ei + 1].name == 'Velocity':
+                    if events[ei + 1].type == 'Velocity':
                         pitch = int(events[ei].value)
                         vel = int(events[ei + 1].value)
 
@@ -147,13 +149,13 @@ class MIDILikeEncoding(MIDITokenizer):
                         offset_tick = 0
                         duration = 0
                         for i in range(ei+1, len(events)):
-                            if events[i].name == 'Note-Off' and int(events[i].value) == pitch:
+                            if events[i].type == 'Note-Off' and int(events[i].value) == pitch:
                                 duration = offset_tick
                                 break
-                            elif events[i].name == 'Time-Shift':
+                            elif events[i].type == 'Time-Shift':
                                 beat, pos, res = map(int, events[i].value.split('.'))
                                 offset_tick += (beat * res + pos) * time_division // res
-                            elif events[ei].name == 'Rest':
+                            elif events[ei].type == 'Rest':
                                 beat, pos = map(int, events[ei].value.split('.'))
                                 current_tick += beat * time_division + pos * ticks_per_sample
                             if offset_tick > max_duration:  # will not look for Note Off beyond
@@ -166,13 +168,13 @@ class MIDILikeEncoding(MIDITokenizer):
                         ei += 1
                 except IndexError as _:
                     pass
-            elif events[ei].name == 'Time-Shift':
+            elif events[ei].type == 'Time-Shift':
                 beat, pos, res = map(int, events[ei].value.split('.'))
                 current_tick += (beat * res + pos) * time_division // res
-            elif events[ei].name == 'Rest':
+            elif events[ei].type == 'Rest':
                 beat, pos = map(int, events[ei].value.split('.'))
                 current_tick += beat * time_division + pos * ticks_per_sample
-            elif events[ei].name == 'Tempo':
+            elif events[ei].type == 'Tempo':
                 tempo = int(events[ei].value)
                 if tempo != tempo_changes[-1].tempo:
                     tempo_changes.append(TempoChange(tempo, current_tick))
@@ -182,84 +184,60 @@ class MIDILikeEncoding(MIDITokenizer):
         tempo_changes[0].time = 0
         return instrument, tempo_changes
 
-    def _create_vocabulary(self, program_tokens: bool, sos_eos: bool = False) \
-            -> Tuple[Dict[str, int], Dict[int, str], Dict[str, List[int]]]:
-        """ Create the tokens <-> event dictionaries
-        These dictionaries are created arbitrary according to constants defined
-        at the top of this file.
-        Note that when using them (prepare_data method), there is no error-handling
-        so you must be sure that every case is covered by the dictionaries.
-        NOTE: token 0 (PAD) is used as a padding index for batch sequences during training
-        NOTE 2: SOS and EOS tokens are set to -1 and -2 respectively
+    def _create_vocabulary(self, program_tokens: bool, sos_eos_tokens: bool = False) -> Vocabulary:
+        """ Creates the Vocabulary object of the tokenizer.
+        See the docstring of the Vocabulary class for more details about how to use it.
+        NOTE: token index 0 is often used as a padding index during training
 
-        :param program_tokens: creates tokens for MIDI programs in the dictionary
-        :param sos_eos: will include Start Of Sequence (SOS) and End Of Sequence (tokens)
-        :return: the dictionaries, one for each translation
+        :param program_tokens: will include tokens for MIDI programs
+        :param sos_eos_tokens: will include Start Of Sequence (SOS) and End Of Sequence (tokens)
+        :return: the vocabulary object
         """
-        token_type_indices = {'Pad': [0]}
-        event_to_token = {'PAD_None': 0}  # starting at 1, token 0 is for padding
-
-        # SOS & EOS
-        if sos_eos:
-            token_type_indices['SOS'] = [-1]
-            event_to_token['SOS_None'] = -1
-            token_type_indices['EOS'] = [-2]
-            event_to_token['EOS_None'] = -2
+        vocab = Vocabulary({'PAD_None': 0})
 
         # NOTE ON
-        token_type_indices['Note-On'] = list(range(len(event_to_token), len(event_to_token) + len(self.pitch_range)))
-        for i in self.pitch_range:
-            event_to_token[f'Note-On_{i}'] = len(event_to_token)
+        vocab.add_event(f'Note-On_{i}' for i in self.pitch_range)
 
         # NOTE OFF
-        token_type_indices['Note-Off'] = list(range(len(event_to_token), len(event_to_token) + len(self.pitch_range)))
-        for i in self.pitch_range:
-            event_to_token[f'Note-Off_{i}'] = len(event_to_token)
+        vocab.add_event(f'Note-Off_{i}' for i in self.pitch_range)
 
         # VELOCITY
-        token_type_indices['Velocity'] = list(range(len(event_to_token), len(event_to_token) + len(self.velocities)))
-        for i in self.velocities:
-            event_to_token[f'Velocity_{i}'] = len(event_to_token)
+        vocab.add_event(f'Velocity_{i}' for i in self.velocities)
 
         # TIME SHIFTS
-        token_type_indices['Time-Shift'] = list(range(len(event_to_token), len(event_to_token) + len(self.durations)))
-        for i in range(0, len(self.durations)):
-            event_to_token[f'Time-Shift_{".".join(map(str, self.durations[i]))}'] = len(event_to_token)
+        vocab.add_event(f'Time-Shift_{".".join(map(str, self.durations[i]))}' for i in range(len(self.durations)))
 
         # CHORD
         if self.additional_tokens['Chord']:
-            token_type_indices['Chord'] = list(range(len(event_to_token), len(event_to_token) + 3 + len(CHORD_MAPS)))
-            for i in range(3, 6):  # non recognized chords, just considers the nb of notes (between 3 and 5 only)
-                event_to_token[f'Chord_{i}'] = len(event_to_token)
-            for chord_quality in CHORD_MAPS:  # classed chords
-                event_to_token[f'Chord_{chord_quality}'] = len(event_to_token)
+            vocab.add_event(f'Chord_{i}' for i in range(3, 6))  # non recognized chords (between 3 and 5 notes only)
+            vocab.add_event(f'Chord_{chord_quality}' for chord_quality in CHORD_MAPS)
 
         # REST
         if self.additional_tokens['Rest']:
-            token_type_indices['Rest'] = list(range(len(event_to_token), len(event_to_token) + len(self.rests)))
-            for i in range(0, len(self.rests)):
-                event_to_token[f'Rest_{".".join(map(str, self.rests[i]))}'] = len(event_to_token)
+            vocab.add_event(f'Rest_{".".join(map(str, rest))}' for rest in self.rests)
 
         # TEMPO
         if self.additional_tokens['Tempo']:
-            token_type_indices['Tempo'] = list(range(len(event_to_token), len(event_to_token) + len(self.tempos)))
-            for i in self.tempos:
-                event_to_token[f'Tempo_{i}'] = len(event_to_token)
+            vocab.add_event(f'Tempo_{i}' for i in self.tempos)
 
         # PROGRAM
         if program_tokens:
-            token_type_indices['Program'] = list(range(len(event_to_token), len(event_to_token) + 129))
-            for program in range(-1, 128):  # -1 is drums
-                event_to_token[f'Program_{program}'] = len(event_to_token)
+            vocab.add_event(f'Program_{program}' for program in range(-1, 128))
 
-        token_to_event = {v: k for k, v in event_to_token.items()}  # inversion
-        return event_to_token, token_to_event, token_type_indices
+        # SOS & EOS
+        if sos_eos_tokens:
+            vocab.add_sos_eos_to_vocab()
+
+        return vocab
 
     def create_token_types_graph(self) -> Dict[str, List[str]]:
         dic = dict()
 
-        if 'Program' in self.token_types_indices:
+        try:
+            _ = self.vocab.tokens_of_type('Program')
             dic['Program'] = ['Note-On', 'Time-Shift']
+        except KeyError:
+            pass
 
         dic['Note-On'] = ['Velocity']
         dic['Velocity'] = ['Note-On', 'Time-Shift']
@@ -292,15 +270,15 @@ class MIDILikeEncoding(MIDITokenizer):
         :param x: event to get order index
         :return: an order int
         """
-        if x.name == 'Program':
+        if x.type == 'Program':
             return 0
-        elif x.name == 'Note-Off':
+        elif x.type == 'Note-Off':
             return 1
-        elif x.name == 'Tempo':
+        elif x.type == 'Tempo':
             return 2
-        elif x.name == "Chord":
+        elif x.type == "Chord":
             return 3
-        elif x.name == 'Time-Shift' or x.name == 'Rest':
+        elif x.type == 'Time-Shift' or x.type == 'Rest':
             return 1000  # always last
         else:  # for other types of events, the order should be handle when inserting the events in the sequence
             return 4
