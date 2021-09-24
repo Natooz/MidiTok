@@ -126,6 +126,10 @@ class MIDITokenizer:
                 continue
             t += 1
 
+        # Recalculate max_tick is this could have change after notes quantization
+        if len(midi.instruments) > 0:
+            midi.max_tick = max([max([note.end for note in track.notes]) for track in midi.instruments])
+
         if self.additional_tokens['Tempo']:
             self.quantize_tempos(midi.tempo_changes, midi.ticks_per_beat)
         # quantize_time_signatures(midi.time_signature_changes, midi.ticks_per_beat)
