@@ -225,7 +225,12 @@ class REMIEncoding(MIDITokenizer):
 
         return vocab
 
-    def create_token_types_graph(self) -> Dict[str, List[str]]:
+    def _create_token_types_graph(self) -> Dict[str, List[str]]:
+        """ Returns a graph (as a dictionary) of the possible token
+        types successions.
+
+        :return: the token types transitions dictionary
+        """
         dic = dict()
 
         try:

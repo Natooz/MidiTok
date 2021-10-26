@@ -23,9 +23,7 @@ from miditoolkit import MidiFile
 pitch_range = range(21, 109)
 beat_res = {(0, 4): 8, (4, 12): 4}
 nb_velocities = 32
-additional_tokens = {'Chord': True,
-                     'Rest': True,
-                     'Tempo': True,
+additional_tokens = {'Chord': True, 'Rest': True, 'Tempo': True,
                      'rest_range': (2, 8),  # (half, 8 beats)
                      'nb_tempos': 32,  # nb of tempo bins
                      'tempo_range': (40, 250)}  # (min, max)
@@ -60,9 +58,9 @@ paths = list(Path('path', 'to', 'dataset').glob('**/*.mid'))
 
 # A validation method to discard MIDIs we do not want
 def midi_valid(midi) -> bool:
-    if any(ts.numerator != 4 or ts.denominator !=4 for ts in midi.time_signature_changes):
+    if any(ts.numerator != 4 or ts.denominator != 4 for ts in midi.time_signature_changes):
         return False  # time signature different from 4/4
-    if max(note.end for note in midi.instruments[0].notes) < 10 * midi.ticks_per_beat:
+    if midi.max_tick < 10 * midi.ticks_per_beat:
         return False  # this MIDI is too short
     return True
 

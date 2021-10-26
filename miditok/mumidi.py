@@ -356,13 +356,20 @@ class MuMIDIEncoding(MIDITokenizer):
 
         return vocab
 
-    def create_token_types_graph(self) -> Dict[str, List[str]]:
+    def _create_token_types_graph(self) -> Dict[str, List[str]]:
+        """ Returns a graph (as a dictionary) of the possible token
+        types successions.
+        Here the combination of Pitch, Velocity and Duration tokens is represented by
+        "Pitch" in the graph.
+
+        :return: the token types transitions dictionary
+        """
         dic = dict()
 
         dic['Bar'] = ['Bar', 'Position']
         dic['Position'] = ['Program']
-        dic['Program'] = ['PitchVelDur']
-        dic['PitchVelDur'] = ['PitchVelDur', 'Program', 'Bar', 'Position']
+        dic['Program'] = ['Pitch']
+        dic['Pitch'] = ['Pitch', 'Program', 'Bar', 'Position']
 
         if self.additional_tokens['Chord']:
             dic['Position'] += ['Chord']

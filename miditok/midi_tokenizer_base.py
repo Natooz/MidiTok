@@ -67,8 +67,9 @@ class MIDITokenizer:
                 'The minimum rest value must be equal or superior to the initial beat resolution'
             self.rests = self.__create_rests()
 
-        # Vocabulary
+        # Vocabulary and token types graph
         self.vocab = self._create_vocabulary(**vocab_args)
+        self.tokens_types_graph = self._create_token_types_graph()
 
         # Keep in memory durations in ticks for seen time divisions so these values
         # are not calculated each time a MIDI is processed
@@ -301,8 +302,9 @@ class MIDITokenizer:
         """
         raise NotImplementedError
 
-    def create_token_types_graph(self) -> Dict[str, List[str]]:
-        """ Creates a dictionary for the directions of the token types of the encoding"""
+    def _create_token_types_graph(self) -> Dict[str, List[str]]:
+        """ Creates a dictionary for the directions of the token types of the encoding
+        See other classes (RemiEncoding, MIDILikeEncoding ...) for examples of how to implement it."""
         raise NotImplementedError
 
     def __create_durations_tuples(self) -> List[Tuple]:
@@ -368,7 +370,7 @@ class MIDITokenizer:
 
         for m, midi_path in enumerate(midi_paths):
             if logging:
-                bar_len = 60
+                bar_len = 30
                 filled_len = int(round(bar_len * m / len(midi_paths)))
                 percents = round(100.0 * m / len(midi_paths), 2)
                 bar = '=' * filled_len + '-' * (bar_len - filled_len)

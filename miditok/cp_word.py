@@ -319,10 +319,14 @@ class CPWordEncoding(MIDITokenizer):
 
         return vocab
 
-    def create_token_types_graph(self) -> Dict[str, List[str]]:
-        """ As with CP the tokens types are "merged", each state here corresponds to
+    def _create_token_types_graph(self) -> Dict[str, List[str]]:
+        """ Returns a graph (as a dictionary) of the possible token
+        types successions.
+        As with CP the tokens types are "merged", each state here corresponds to
         a "compound" token, which is characterized by the token types Program, Bar,
         Position/Chord/Tempo and Pitch/Velocity/Duration
+        Here the combination of Pitch, Velocity and Duration tokens is represented by
+        "Pitch" in the graph.
 
         :return: the token types transitions dictionary
         """
