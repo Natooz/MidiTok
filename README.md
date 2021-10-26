@@ -190,22 +190,25 @@ These tokens bring additional information about the structure and content of MID
 * **Chords:** indicate the presence of a chord at a certain time step. MidiTok uses a chord detection method based on onset times and duration. This allows MidiTok to detect precisely chords without ambiguity, whereas most chord detection methods in symbolic music based on chroma features can't.
 * **Rests:** include "Rest" events whenever a segment of time is silent, i.e. no note is played within. This token type is decoded as a "Time-Shift" event, meaning the time will be shifted according to its value. You can choose the minimum and maximum rests values to represent (default is 1/2 beat to 8 beats). Note that rests shorter than one beat are only divisible by the first beat resolution, e.g. a rest of 5/8th of a beat will be a succession of ```Rest_0.4``` and ```Rest_0.1```, where the first number indicate the rest duration in beats and the second in samples / positions.
 * **Tempos:** specify the current tempo. This allows to train a model to predict tempo changes alongside with the notes, unless specified in the chart below. Tempo values are quantized on your specified range and number (default is 32 tempos from 40 to 250).
+* **Programs:** used to specify an instrument / MIDI program. MidiTok only offers the possibility to include these tokens in the vocabulary for you, but won't use them. If you need model multitrack symbolic music with other methods than Octuple / MuMIDI, MidiTok leaves you the choice / task to represent the track information the way you want. You can do it as in [LakhNES](https://github.com/chrisdonahue/LakhNES) or [MMM](https://metacreation.net/mmm-multi-track-music-machine/).
 
 Additionally, MidiTok offers to include *Program* tokens in the vocabulary of MIDI-Like, REMI and CP Word.
 We do not consider them additional tokens though as they are not used anywhere in MidiTok, but intended for you to insert them at the beginning of each sequence as *Start Of Sequence* tokens.
 
-|       | MIDI-Like     | REMI          | Compound Word | Structured | Octuple | MuMIDI        |
-|-------|:-------------:|:--------------:|:--------------:|:----------:|:--------:|:-------------:|
-| Chord | ✅             | ✅             | ✅             | ❌          | ❌       | ✅             |
-| Rest  | ✅             | ✅             | ✅             | ❌          | ❌       | ❌             |
-| Tempo | ✅<sup>1</sup> | ✅<sup>1</sup> | ✅<sup>1</sup> | ❌          | ✅       | ✅<sup>2</sup> |
+|       | MIDI-Like     | REMI          | Compound Word | Structured | Octuple | MuMIDI |
+|-------|:-------------:|:--------------:|:--------------:|:--------:|:-------:|:------:|
+| Chord | ✅             | ✅             | ✅             | ❌        | ❌      | ✅     |
+| Rest  | ✅             | ✅             | ✅             | ❌        | ❌      | ❌     |
+| Tempo | ✅<sup>1</sup> | ✅<sup>1</sup> | ✅<sup>1</sup> | ❌        | ✅      | ✅     |
+| Program | ✅           | ✅             | ✅             | ✅        | ✅<sup>3</sup>| ✅<sup>3</sup>|
 
 <sup>1</sup> Should not be used with multiple tracks. Otherwise, at decoding, only the events of the first track will be considered.\
-<sup>2</sup> Only used in the input as additional information. At decoding no tempo tokens should be predicted, _i.e_ will be considered.
+<sup>2</sup> Only used in the input as additional information. At decoding no tempo tokens should be predicted, _i.e_ will be considered.\
+<sup>3</sup> Integrated by default.
 
 ## Limitations
 
-For every tokenization method, MidiTok only support a 4/4 time signature for now.
+For the concerned tokenization methods, MidiTok only consider a 4/4 time signature for now. This means that each bar is considered covering 4 beats, and each beat is the duration of a quarter note.
 
 Future updates will support other time signatures, and time signature changes for compatible tokenizations.
 

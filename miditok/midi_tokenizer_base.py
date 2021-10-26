@@ -28,12 +28,12 @@ class MIDITokenizer:
             The values are the resolution, in samples per beat, of the given range, ex 8
     :param nb_velocities: number of velocity bins
     :param additional_tokens: specifies additional tokens (chords, rests, tempo...)
-    :param vocab_args: arguments for the _create_vocabulary method
+    :param sos_eos_tokens: adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens to the vocabulary
     :param params: can be a path to the parameter (json encoded) file or a dictionary
     """
 
     def __init__(self, pitch_range: range, beat_res: Dict[Tuple[int, int], int], nb_velocities: int,
-                 additional_tokens: Dict[str, Union[bool, int, Tuple[int, int]]], vocab_args: Dict[str, any],
+                 additional_tokens: Dict[str, Union[bool, int, Tuple[int, int]]], sos_eos_tokens: bool = False,
                  params: Union[str, Path, PurePath, Dict[str, Any]] = None):
         # Initialize params
         if params is None:
@@ -68,7 +68,7 @@ class MIDITokenizer:
             self.rests = self.__create_rests()
 
         # Vocabulary and token types graph
-        self.vocab = self._create_vocabulary(**vocab_args)
+        self.vocab = self._create_vocabulary(sos_eos_tokens)
         self.tokens_types_graph = self._create_token_types_graph()
 
         # Keep in memory durations in ticks for seen time divisions so these values
@@ -401,7 +401,7 @@ class MIDITokenizer:
         self.save_params(out_dir)  # Saves the parameters with which the MIDIs are converted
 
     @staticmethod
-    def save_tokens(tokens, path: Union[str, Path, PurePath], programs=None):
+    def save_tokens(tokens, path: Union[str, Path, PurePath], programs: List[Tuple[int, bool]] = None):
         """ Saves tokens as a JSON file.
 
         :param tokens: tokens, as any format

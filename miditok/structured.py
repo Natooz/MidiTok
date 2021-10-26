@@ -35,12 +35,11 @@ class StructuredEncoding(MIDITokenizer):
     :param params: can be a path to the parameter (json encoded) file or a dictionary
     """
     def __init__(self, pitch_range: range = PITCH_RANGE, beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
-                 nb_velocities: int = NB_VELOCITIES, program_tokens: bool = PROGRAM_TOKENS,
+                 nb_velocities: int = NB_VELOCITIES, program_tokens: bool = ADDITIONAL_TOKENS['Program'],
                  sos_eos_tokens: bool = False, params=None):
         # No additional tokens
-        additional_tokens = {'Chord': False, 'Rest': False, 'Tempo': False}
-        super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens,
-                         {'program_tokens': program_tokens, 'sos_eos_tokens': sos_eos_tokens}, params)
+        additional_tokens = {'Chord': False, 'Rest': False, 'Tempo': False, 'Program': program_tokens}
+        super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, sos_eos_tokens, params)
 
     def track_to_tokens(self, track: Instrument) -> List[int]:
         """ Converts a track (miditoolkit.Instrument object) into a sequence of tokens
@@ -135,12 +134,11 @@ class StructuredEncoding(MIDITokenizer):
 
         return instrument, [TempoChange(TEMPO, 0)]
 
-    def _create_vocabulary(self, program_tokens: bool, sos_eos_tokens: bool = False) -> Vocabulary:
+    def _create_vocabulary(self, sos_eos_tokens: bool = False) -> Vocabulary:
         """ Creates the Vocabulary object of the tokenizer.
         See the docstring of the Vocabulary class for more details about how to use it.
         NOTE: token index 0 is often used as a padding index during training
 
-        :param program_tokens: will include tokens for MIDI programs
         :param sos_eos_tokens: will include Start Of Sequence (SOS) and End Of Sequence (tokens)
         :return: the vocabulary object
         """
@@ -160,7 +158,7 @@ class StructuredEncoding(MIDITokenizer):
         vocab.add_event(f'Time-Shift_{".".join(map(str, self.durations[i]))}' for i in range(len(self.durations)))
 
         # PROGRAM
-        if program_tokens:
+        if self.additional_tokens['Program']:
             vocab.add_event(f'Program_{program}' for program in range(-1, 128))
 
         # SOS & EOS
@@ -172,20 +170,9 @@ class StructuredEncoding(MIDITokenizer):
     def _create_token_types_graph(self) -> Dict[str, List[str]]:
         """ Returns a graph (as a dictionary) of the possible token
         types successions.
+        NOTE: Program type is not referenced here, you can add it manually by
+        modifying the tokens_types_graph class attribute following your strategy.
 
         :return: the token types transitions dictionary
         """
-        dic = dict()
-
-        try:
-            _ = self.vocab.tokens_of_type('Program')
-            dic['Program'] = ['Bar']
-        except KeyError:
-            pass
-
-        dic['Pitch'] = ['Velocity']
-        dic['Velocity'] = ['Duration']
-        dic['Duration'] = ['Time-Shift']
-        dic['Time-Shift'] = ['Pitch']
-
-        return dic
+        return {'Pitch': ['Velocity'], 'Velocity': ['Duration'], 'Duration': ['Time-Shift'], 'Time-Shift': ['Pitch']}

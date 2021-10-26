@@ -31,7 +31,7 @@ class MuMIDIEncoding(MIDITokenizer):
             The values are the resolution, in samples per beat, of the given range, ex 8
     :param nb_velocities: number of velocity bins
     :param additional_tokens: specifies additional tokens (chords, time signature, rests, tempo)
-    :param sos_eos_tokens: Adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens to the vocabulary
+    :param sos_eos_tokens: adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens to the vocabulary
     :param params: can be a path to the parameter (json encoded) file or a dictionary
     :param drum_pitch_range: range of used MIDI pitches for drums exclusively
     """
@@ -42,8 +42,7 @@ class MuMIDIEncoding(MIDITokenizer):
         self.drum_pitch_range = drum_pitch_range
         # used in place of positional encoding
         self.max_bar_embedding = 60  # this attribute might increase during encoding
-        super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens,
-                         {'sos_eos_tokens': sos_eos_tokens}, params)
+        super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, sos_eos_tokens, params)
 
     def save_params(self, out_dir: Union[str, Path, PurePath]):
         """ Override the parent class method to include additional parameter drum pitch range
@@ -373,6 +372,6 @@ class MuMIDIEncoding(MIDITokenizer):
 
         if self.additional_tokens['Chord']:
             dic['Position'] += ['Chord']
-            dic['Chord'] += ['Program']
+            dic['Chord'] = ['Program']
 
         return dic

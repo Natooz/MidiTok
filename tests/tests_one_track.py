@@ -26,6 +26,7 @@ BEAT_RES_TEST = {(0, 64): 8}
 ADDITIONAL_TOKENS_TEST = {'Chord': True,  # set to false to speed up tests as it takes some time on maestro MIDIs
                           'Rest': True,
                           'Tempo': True,
+                          'Program': False,
                           'rest_range': (4, 16),
                           'nb_tempos': 32,
                           'tempo_range': (40, 250)}

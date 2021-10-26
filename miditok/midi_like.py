@@ -33,16 +33,13 @@ class MIDILikeEncoding(MIDITokenizer):
             The values are the resolution, in samples per beat, of the given range, ex 8
     :param nb_velocities: number of velocity bins
     :param additional_tokens: specifies additional tokens (chords, time signature, rests, tempo...)
-    :param program_tokens: will add entries for MIDI programs in the dictionary, to use
-            in the case of multitrack generation for instance
-    :param sos_eos_tokens: Adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens to the vocabulary
+    :param sos_eos_tokens: adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens to the vocabulary
     :param params: can be a path to the parameter (json encoded) file or a dictionary
     """
     def __init__(self, pitch_range: range = PITCH_RANGE, beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
                  nb_velocities: int = NB_VELOCITIES, additional_tokens: Dict[str, bool] = ADDITIONAL_TOKENS,
-                 program_tokens: bool = PROGRAM_TOKENS, sos_eos_tokens: bool = False, params=None):
-        super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens,
-                         {'program_tokens': program_tokens, 'sos_eos_tokens': sos_eos_tokens}, params)
+                 sos_eos_tokens: bool = False, params=None):
+        super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, sos_eos_tokens, params)
 
     def track_to_tokens(self, track: Instrument) -> List[int]:
         """ Converts a track (miditoolkit.Instrument object) into a sequence of tokens
@@ -184,12 +181,11 @@ class MIDILikeEncoding(MIDITokenizer):
         tempo_changes[0].time = 0
         return instrument, tempo_changes
 
-    def _create_vocabulary(self, program_tokens: bool, sos_eos_tokens: bool = False) -> Vocabulary:
+    def _create_vocabulary(self, sos_eos_tokens: bool = False) -> Vocabulary:
         """ Creates the Vocabulary object of the tokenizer.
         See the docstring of the Vocabulary class for more details about how to use it.
         NOTE: token index 0 is often used as a padding index during training
 
-        :param program_tokens: will include tokens for MIDI programs
         :param sos_eos_tokens: will include Start Of Sequence (SOS) and End Of Sequence (tokens)
         :return: the vocabulary object
         """
@@ -221,7 +217,7 @@ class MIDILikeEncoding(MIDITokenizer):
             vocab.add_event(f'Tempo_{i}' for i in self.tempos)
 
         # PROGRAM
-        if program_tokens:
+        if self.additional_tokens['Program']:
             vocab.add_event(f'Program_{program}' for program in range(-1, 128))
 
         # SOS & EOS
@@ -233,16 +229,12 @@ class MIDILikeEncoding(MIDITokenizer):
     def _create_token_types_graph(self) -> Dict[str, List[str]]:
         """ Returns a graph (as a dictionary) of the possible token
         types successions.
+        NOTE: Program type is not referenced here, you can add it manually by
+        modifying the tokens_types_graph class attribute following your strategy.
 
         :return: the token types transitions dictionary
         """
         dic = dict()
-
-        try:
-            _ = self.vocab.tokens_of_type('Program')
-            dic['Program'] = ['Note-On', 'Time-Shift']
-        except KeyError:
-            pass
 
         dic['Note-On'] = ['Velocity']
         dic['Velocity'] = ['Note-On', 'Time-Shift']
