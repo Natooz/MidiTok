@@ -379,7 +379,8 @@ class MuMIDIEncoding(MIDITokenizer):
         """ Checks if a sequence of tokens is constituted of good token types
         successions and returns the error ratio (lower is better).
         The Pitch and Position values are also analyzed:
-            - a position token cannot have a value <= to the current position (it would go back in time)
+            - a bar token value cannot be < to the current bar (it would go back in time)
+            - same for positions
             - a pitch token should not be present if the same pitch is already played at the current position
 
         :param tokens: sequence of tokens to check

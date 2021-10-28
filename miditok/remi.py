@@ -265,7 +265,7 @@ class REMIEncoding(MIDITokenizer):
 
     def token_types_errors(self, tokens: List[int]) -> float:
         """ Checks if a sequence of tokens is constituted of good token types
-        successions and returns the error ratio (lower is better). todo doc
+        successions and returns the error ratio (lower is better).
         The Pitch and Position values are also analyzed:
             - a position token cannot have a value <= to the current position (it would go back in time)
             - a pitch token should not be present if the same pitch is already played at the current position
