@@ -150,11 +150,10 @@ class MIDILikeEncoding(MIDITokenizer):
                                 duration = offset_tick
                                 break
                             elif events[i].type == 'Time-Shift':
-                                beat, pos, res = map(int, events[i].value.split('.'))
-                                offset_tick += (beat * res + pos) * time_division // res
+                                offset_tick += self._token_duration_to_ticks(events[i].value, time_division)
                             elif events[ei].type == 'Rest':
                                 beat, pos = map(int, events[ei].value.split('.'))
-                                current_tick += beat * time_division + pos * ticks_per_sample
+                                offset_tick += beat * time_division + pos * ticks_per_sample
                             if offset_tick > max_duration:  # will not look for Note Off beyond
                                 break
 
@@ -166,8 +165,7 @@ class MIDILikeEncoding(MIDITokenizer):
                 except IndexError as _:
                     pass
             elif events[ei].type == 'Time-Shift':
-                beat, pos, res = map(int, events[ei].value.split('.'))
-                current_tick += (beat * res + pos) * time_division // res
+                current_tick += self._token_duration_to_ticks(events[ei].value, time_division)
             elif events[ei].type == 'Rest':
                 beat, pos = map(int, events[ei].value.split('.'))
                 current_tick += beat * time_division + pos * ticks_per_sample
@@ -248,7 +246,7 @@ class MIDILikeEncoding(MIDITokenizer):
 
         if self.additional_tokens['Tempo']:
             dic['Time-Shift'] += ['Tempo']
-            dic['Tempo'] = ['Note-On']
+            dic['Tempo'] = ['Note-On', 'Time-Shift']
             if self.additional_tokens['Chord']:
                 dic['Tempo'] += ['Chord']
 
@@ -256,9 +254,45 @@ class MIDILikeEncoding(MIDITokenizer):
             dic['Rest'] = ['Rest', 'Note-On']
             if self.additional_tokens['Chord']:
                 dic['Rest'] += ['Chord']
-            dic['Note-Off'] = ['Rest']
+            dic['Note-Off'] += ['Rest']
 
         return dic
+
+    def token_types_errors(self, tokens: List[List[int]]) -> float:
+        """ Checks if a sequence of tokens is constituted of good token types
+        successions and returns the error ratio (lower is better).
+        The Pitch and Position values are also analyzed:
+            - a Note-On token should not be present if the same pitch is already being played
+            - a Note-Off token should not be present the note is not being played
+
+        :param tokens: sequence of tokens to check
+        :return: the error ratio (lower is better)
+        """
+        err = 0
+        previous_type = self.vocab.token_type(tokens[0])
+        current_pitches = []
+
+        for token in tokens[1:]:
+            token_type, token_value = self.vocab.token_to_event[token].split('_')
+
+            # Good token type
+            if token_type in self.tokens_types_graph[previous_type]:
+                if token_type == 'Note-On':
+                    if int(token_value) in current_pitches:
+                        err += 1  # pitch already being played
+                    else:
+                        current_pitches.append(int(token_value))
+                elif token_type == 'Note-Off':
+                    if int(token_value) not in current_pitches:
+                        err += 1  # this pitch wasn't being played
+                    else:
+                        current_pitches.remove(int(token_value))
+            # Bad token type
+            else:
+                err += 1
+
+            previous_type = token_type
+        return err / len(tokens)
 
     @staticmethod
     def _order(x: Event) -> int:

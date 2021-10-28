@@ -164,8 +164,7 @@ class REMIEncoding(MIDITokenizer):
                     if events[ei + 1].type == 'Velocity' and events[ei + 2].type == 'Duration':
                         pitch = int(events[ei].value)
                         vel = int(events[ei + 1].value)
-                        beat, pos, res = map(int, events[ei + 2].value.split('.'))
-                        duration = (beat * res + pos) * time_division // res
+                        duration = self._token_duration_to_ticks(events[ei + 2].value, time_division)
                         instrument.notes.append(Note(vel, pitch, current_tick, current_tick + duration))
                 except IndexError as _:  # A well constituted sequence should not raise an exception
                     pass  # However with generated sequences this can happen, or if the sequence isn't finished
@@ -258,6 +257,48 @@ class REMIEncoding(MIDITokenizer):
             dic['Duration'] += ['Rest']
 
         return dic
+
+    def token_types_errors(self, tokens: List[int]) -> float:
+        """ Checks if a sequence of tokens is constituted of good token types
+        successions and returns the error ratio (lower is better). todo doc
+        The Pitch and Position values are also analyzed:
+            - a position token cannot have a value <= to the current position (it would go back in time)
+            - a pitch token should not be present if the same pitch is already played at the current position
+
+        :param tokens: sequence of tokens to check
+        :return: the error ratio (lower is better)
+        """
+        err = 0
+        previous_type = self.vocab.token_type(tokens[0])
+        current_pos = -1
+        current_pitches = []
+
+        for t, token in enumerate(tokens[1:]):  # todo remove enum
+            token_type, token_value = self.vocab.token_to_event[token].split('_')
+
+            # Good token type
+            if token_type in self.tokens_types_graph[previous_type]:
+                if token_type == 'Bar':  # reset
+                    current_pos = -1
+                    current_pitches = []
+                elif token_type == 'Pitch':
+                    if int(token_value) in current_pitches:
+                        err += 1  # pitch already played at current position
+                    else:
+                        current_pitches.append(int(token_value))
+                elif token_type == 'Position':
+                    if int(token_value) <= current_pos:
+                        toto = [self.vocab.token_to_event[to].split('_') for to in tokens[t-4:t+4]]
+                        err += 1  # token position value <= to the current position
+                    else:
+                        current_pos = int(token_value)
+                        current_pitches = []
+            # Bad token type
+            else:
+                err += 1
+
+            previous_type = token_type
+        return err / len(tokens)
 
     @staticmethod
     def _order(x: Event) -> int:

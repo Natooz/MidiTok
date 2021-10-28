@@ -239,8 +239,7 @@ class CPWordEncoding(MIDITokenizer):
             if token_family == 'Note':
                 pitch = int(compound_token[2].value)
                 vel = int(compound_token[3].value)
-                beat, pos, res = map(int, compound_token[4].value.split('.'))
-                duration = (beat * res + pos) * time_division // res
+                duration = self._token_duration_to_ticks(compound_token[4].value, time_division)
                 instrument.notes.append(Note(vel, pitch, current_tick, current_tick + duration))
             elif token_family == 'Metric':
                 if compound_token[1].type == 'Bar':
@@ -333,8 +332,69 @@ class CPWordEncoding(MIDITokenizer):
         dic['Bar'] = ['Position']
         dic['Position'] = ['Pitch']
         dic['Pitch'] = ['Pitch', 'Bar', 'Position']
+        if self.additional_tokens['Chord']:
+            dic['Rest'] = ['Rest', 'Position']
+            dic['Pitch'] += ['Rest']
         if self.additional_tokens['Rest']:
             dic['Rest'] = ['Rest', 'Position']
             dic['Pitch'] += ['Rest']
 
         return dic
+
+    def token_types_errors(self, tokens: List[List[int]]) -> float:
+        """ Checks if a sequence of tokens is constituted of good token types
+        successions and returns the error ratio (lower is better).
+        The Pitch and Position values are also analyzed:
+            - a position token cannot have a value <= to the current position (it would go back in time)
+            - a pitch token should not be present if the same pitch is already played at the current position
+
+        :param tokens: sequence of tokens to check
+        :return: the error ratio (lower is better)
+        """
+        def cp_token_type(tok: List[int]) -> Tuple[str, str]:
+            family = self.vocab.token_to_event[tok[0]].split('_')[1]
+            if family == 'Note':
+                return self.vocab.token_to_event[tok[2]].split('_')
+            elif family == 'Metric':
+                bar_pos = self.vocab.token_to_event[tok[1]].split('_')
+                if bar_pos[1] != 'Ignore':
+                    return bar_pos
+                else:
+                    for i in range(1, 4):
+                        decoded_token = self.vocab.token_to_event[tok[-i]].split('_')
+                        if decoded_token[1] != 'Ignore':
+                            return decoded_token
+                raise RuntimeError('No token type found, unknown error to fix')
+            else:  # Program
+                return self.vocab.token_to_event[tok[1]].split('_')
+
+        err = 0
+        previous_type = cp_token_type(tokens[0])[0]
+        current_pos = -1
+        current_pitches = []
+
+        for token in tokens[1:]:
+            token_type, token_value = cp_token_type(token)
+
+            # Good token type
+            if token_type in self.tokens_types_graph[previous_type]:
+                if token_type == 'Bar':  # reset
+                    current_pos = -1
+                    current_pitches = []
+                elif token_type == 'Pitch':
+                    if int(token_value) in current_pitches:
+                        err += 1  # pitch already played at current position
+                    else:
+                        current_pitches.append(int(token_value))
+                elif token_type == 'Position':
+                    if int(token_value) <= current_pos:
+                        err += 1  # token position value <= to the current position
+                    else:
+                        current_pos = int(token_value)
+                        current_pitches = []
+            # Bad token type
+            else:
+                err += 1
+
+            previous_type = token_type
+        return err / len(tokens)

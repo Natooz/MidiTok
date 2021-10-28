@@ -159,7 +159,7 @@ class MuMIDIEncoding(MIDITokenizer):
                         tokens.append(bar_token)
                     current_bar += nb_new_bars
                 # Position
-                pos_token = [self.vocab.event_to_token['Position_None'],
+                pos_token = [self.vocab.event_to_token[f'Position_{current_pos}'],
                              self.vocab.event_to_token[f'Position_{current_pos}'],
                              self.vocab.event_to_token[f'Bar_{current_bar}']]
                 if self.additional_tokens['Tempo']:
@@ -270,8 +270,7 @@ class MuMIDIEncoding(MIDITokenizer):
             elif events[0].type == 'Pitch' or events[0].type == 'DrumPitch':
                 pitch = int(events[0].value)
                 vel = int(events[1].value)
-                beat, pos, res = map(int, events[2].value.split('.'))
-                duration = (beat * res + pos) * time_division // res
+                duration = self._token_duration_to_ticks(events[2].value, time_division)
 
                 tracks[current_track].append(Note(vel, pitch, current_tick, current_tick + duration))
 
@@ -325,7 +324,6 @@ class MuMIDIEncoding(MIDITokenizer):
 
         # POSITION
         nb_positions = max(self.beat_res.values()) * 4  # 4/4 time signature
-        vocab.add_event('Position_None')  # new position token
         vocab.add_event('Position_Ignore')  # special embedding for 'Bar_None' tokens
         vocab.add_event(f'Position_{i}' for i in range(nb_positions))
 
@@ -367,11 +365,66 @@ class MuMIDIEncoding(MIDITokenizer):
 
         dic['Bar'] = ['Bar', 'Position']
         dic['Position'] = ['Program']
-        dic['Program'] = ['Pitch']
+        dic['Program'] = ['Pitch', 'DrumPitch']
         dic['Pitch'] = ['Pitch', 'Program', 'Bar', 'Position']
+        dic['DrumPitch'] = ['DrumPitch', 'Program', 'Bar', 'Position']
 
         if self.additional_tokens['Chord']:
             dic['Position'] += ['Chord']
             dic['Chord'] = ['Program']
 
         return dic
+
+    def token_types_errors(self, tokens: List[List[int]]) -> float:
+        """ Checks if a sequence of tokens is constituted of good token types
+        successions and returns the error ratio (lower is better).
+        The Pitch and Position values are also analyzed:
+            - a position token cannot have a value <= to the current position (it would go back in time)
+            - a pitch token should not be present if the same pitch is already played at the current position
+
+        :param tokens: sequence of tokens to check
+        :return: the error ratio (lower is better)
+        """
+        err = 0
+        previous_type = self.vocab.token_type(tokens[0][0])
+        current_pitches = []
+        bar_idx = -1 if not self.additional_tokens['Tempo'] else -2
+        pos_idx = -2 if not self.additional_tokens['Tempo'] else -3
+        current_bar = int(self.vocab.token_to_event[tokens[0][bar_idx]].split('_')[1])
+        current_pos = self.vocab.token_to_event[tokens[0][pos_idx]].split('_')[1]
+        current_pos = int(current_pos) if current_pos != 'Ignore' else -1
+
+        for token in tokens[1:]:
+            bar_value = int(self.vocab.token_to_event[token[bar_idx]].split('_')[1])
+            pos_value = self.vocab.token_to_event[tokens[0][pos_idx]].split('_')[1]
+            pos_value = int(pos_value) if pos_value != 'Ignore' else -1
+            token_type, token_value = self.vocab.token_to_event[token[0]].split('_')
+
+            # Good token type
+            if token_type in self.tokens_types_graph[previous_type]:
+                if token_type == 'Bar':  # reset
+                    current_bar += 1
+                    current_pos = -1
+                    current_pitches = []
+                elif token_type == 'Pitch':
+                    if int(token_value) in current_pitches:
+                        err += 1  # pitch already played at current position
+                        continue
+                    else:
+                        current_pitches.append(int(token_value))
+                elif token_type == 'Position':
+                    if int(token_value) <= current_pos or int(token_value) != pos_value:
+                        err += 1  # token position value <= to the current position
+                        continue
+                    else:
+                        current_pos = int(token_value)
+                        current_pitches = []
+
+                if pos_value < current_pos or bar_value < current_bar:
+                    err += 1
+            # Bad token type
+            else:
+                err += 1
+
+            previous_type = token_type
+        return err / len(tokens)

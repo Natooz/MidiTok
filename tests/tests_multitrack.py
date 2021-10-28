@@ -48,7 +48,7 @@ def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = '.
     files = list(Path(data_path).glob('**/*.mid'))
 
     for i, file_path in enumerate(files):
-        bar_len = 60
+        bar_len = 30
         filled_len = int(round(bar_len * i / len(files)))
         percents = round(100.0 * i / len(files), 2)
         bar = '=' * filled_len + '-' * (bar_len - filled_len)

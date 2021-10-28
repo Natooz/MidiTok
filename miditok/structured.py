@@ -119,8 +119,7 @@ class StructuredEncoding(MIDITokenizer):
                     if events[count + 1].type == 'Velocity' and events[count + 2].type == 'Duration':
                         pitch = int(events[count].value)
                         vel = int(events[count + 1].value)
-                        beat, pos, res = map(int, events[count + 2].value.split('.'))
-                        duration = (beat * res + pos) * time_division // res
+                        duration = self._token_duration_to_ticks(events[count + 2].value, time_division)
                         instrument.notes.append(Note(vel, pitch, current_tick, current_tick + duration))
                         count += 3
                 except IndexError as _:
@@ -176,3 +175,36 @@ class StructuredEncoding(MIDITokenizer):
         :return: the token types transitions dictionary
         """
         return {'Pitch': ['Velocity'], 'Velocity': ['Duration'], 'Duration': ['Time-Shift'], 'Time-Shift': ['Pitch']}
+
+    def token_types_errors(self, tokens: List[int]) -> float:
+        """ Checks if a sequence of tokens is constituted of good token types
+        successions and returns the error ratio (lower is better).
+        The Pitch values are also analyzed:
+            - a pitch token should not be present if the same pitch is already played at the time
+
+        :param tokens: sequence of tokens to check
+        :return: the error ratio (lower is better)
+        """
+        err = 0
+        previous_type = self.vocab.token_type(tokens[0])
+        current_pitches = []
+
+        for token in tokens[1:]:
+            token_type, token_value = self.vocab.token_to_event[token].split('_')
+
+            # Good token type
+            if token_type in self.tokens_types_graph[previous_type]:
+                if token_type == 'Pitch':
+                    if int(token_value) in current_pitches:
+                        err += 1  # pitch already played at current position
+                    else:
+                        current_pitches.append(int(token_value))
+                elif token_type == 'Time-Shift':
+                    if self._token_duration_to_ticks(token_value, 48) > 0:
+                        current_pitches = []  # moving in time, list reset
+            # Bad token type
+            else:
+                err += 1
+
+            previous_type = token_type
+        return err / len(tokens)

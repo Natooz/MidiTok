@@ -159,8 +159,7 @@ class OctupleMonoEncoding(MIDITokenizer):
             # Note attributes
             pitch = int(time_step[0].value)
             vel = int(time_step[1].value)
-            beat, pos, res = map(int, time_step[2].value.split('.'))
-            duration = (beat * res + pos) * time_division // res
+            duration = self._token_duration_to_ticks(time_step[2].value, time_division)
 
             # Time and track values
             current_pos = int(time_step[3].value)
@@ -223,3 +222,51 @@ class OctupleMonoEncoding(MIDITokenizer):
         :return: the token types transitions dictionary
         """
         return {}  # not relevant for this encoding
+
+    def token_types_errors(self, tokens: List[List[int]]) -> float:
+        """ Checks if a sequence of tokens is constituted of good token values and
+        returns the error ratio (lower is better).
+        The token types are always the same in Octuple so this methods only checks
+        if their values are correct:
+            - a bar token value cannot be < to the current bar (it would go back in time)
+            - same for positions
+            - a pitch token should not be present if the same pitch is already played at the current position
+
+        :param tokens: sequence of tokens to check
+        :return: the error ratio (lower is better)
+        """
+        err = 0
+        current_bar = current_pos = -1
+        current_pitches = []
+
+        for token in tokens:
+            has_error = False
+            bar_value = int(self.vocab.token_to_event[token[4]].split('_')[1])
+            pos_value = int(self.vocab.token_to_event[token[3]].split('_')[1])
+            pitch_value = int(self.vocab.token_to_event[token[0]].split('_')[1])
+
+            # Bar
+            if bar_value < current_bar:
+                has_error = True
+            elif bar_value > current_bar:
+                current_bar = bar_value
+                current_pos = -1
+                current_pitches = []
+
+            # Position
+            if pos_value < current_pos:
+                has_error = True
+            elif pos_value > current_pos:
+                current_pos = pos_value
+                current_pitches = []
+
+            # Pitch
+            if pitch_value in current_pitches:
+                has_error = True
+            else:
+                current_pitches.append(pitch_value)
+
+            if has_error:
+                err += 1
+
+        return err / len(tokens)

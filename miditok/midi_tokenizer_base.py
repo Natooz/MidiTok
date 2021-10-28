@@ -325,6 +325,19 @@ class MIDITokenizer:
         del durations[0]  # removes duration of 0
         return durations
 
+    @staticmethod
+    def _token_duration_to_ticks(token_duration: str, time_division: int) -> int:
+        """ Converts a duration token value of the form x.x.x, for beat.position.resolution,
+        in ticks.
+        Is also used for Time-Shifts.
+
+        :param token_duration: Duration / Time-Shift token value
+        :param time_division: time division
+        :return: the duration / time-shift in ticks
+        """
+        beat, pos, res = map(int, token_duration.split('.'))
+        return (beat * res + pos) * time_division // res
+
     def __create_rests(self) -> List[Tuple]:
         """ Creates the possible rests in beat / position units, as tuple of the form:
         (beat, pos) where beat is the number of beats, pos the number of "samples"
@@ -399,6 +412,23 @@ class MIDITokenizer:
             self.save_tokens(tokens, PurePath(out_dir, midi_name).with_suffix(".json"), midi_programs)
 
         self.save_params(out_dir)  # Saves the parameters with which the MIDIs are converted
+
+    def token_types_errors(self, tokens: List[int]) -> float:
+        """ Checks if a sequence of tokens is constituted of good token types
+        successions and returns the error ratio (lower is better).
+        The implementation in MIDITokenizer class only checks the token types,
+        in child class the methods also consider the position and pitch values.
+
+        :param tokens: sequence of tokens to check
+        :return: the error ratio (lower is better)
+        """
+        err = 0
+        previous_type = self.vocab.token_type(tokens[0])
+        for token in tokens[1:]:
+            if self.vocab.token_type(token) not in self.tokens_types_graph[previous_type]:
+                err += 1
+            previous_type = self.vocab.token_type(token)
+        return err / len(tokens)
 
     @staticmethod
     def save_tokens(tokens, path: Union[str, Path, PurePath], programs: List[Tuple[int, bool]] = None):
