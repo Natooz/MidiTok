@@ -165,7 +165,7 @@ NOTES:
 
 ### Create your own
 
-You can easily create your own encoding strategy and benefit from the MidiTok framework. Just create a class inheriting from the [MIDITokenizer](miditok/midi_tokenizer_base.py) base class, and override the ```track_to_tokens```, ```tokens_to_track``` and ```_create_vocabulary``` methods with your tokenization strategy.
+You can easily create your own encoding strategy and benefit from the MidiTok framework. Just create a class inheriting from the [MIDITokenizer](miditok/midi_tokenizer_base.py) base class, and override the ```track_to_tokens```, ```tokens_to_track```,  ```_create_vocabulary``` and ```_create_token_types_graph``` methods with your tokenization strategy.
 
 We encourage you to read the docstring of the [Vocabulary class](miditok/vocabulary.py) to learn how to use it for your strategy.
 
@@ -203,7 +203,7 @@ We do not consider them additional tokens though as they are not used anywhere i
 | Program | ✅           | ✅             | ✅             | ✅        | ✅<sup>3</sup>| ✅<sup>3</sup>|
 
 <sup>1</sup> Should not be used with multiple tracks. Otherwise, at decoding, only the events of the first track will be considered.\
-<sup>2</sup> Only used in the input as additional information. At decoding no tempo tokens should be predicted, _i.e_ will be considered.\
+<sup>2</sup> Only used in the input as additional information. At decoding no tempo tokens should be predicted, i.e will be considered.\
 <sup>3</sup> Integrated by default.
 
 ## Limitations
@@ -214,7 +214,7 @@ Future updates will support other time signatures, and time signature changes fo
 
 ## Contributions
 
-Contributions are gratefully welcomed, feel free to send a PR if you want to add an encoding strategy or speed up the code. Just make sure to pass the [tests](tests/) accordingly to your changes.
+Contributions are gratefully welcomed, feel free to send a PR if you want to add an encoding strategy or speed up the code. Just make sure to pass the [tests](tests).
 
 ## Citations
 

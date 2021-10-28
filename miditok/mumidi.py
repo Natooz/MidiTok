@@ -165,7 +165,7 @@ class MuMIDIEncoding(MIDITokenizer):
                 if self.additional_tokens['Tempo']:
                     pos_token.append(self.vocab.event_to_token[f'Tempo_{current_tempo}'])
                 tokens.append(pos_token)
-            # Tracks (programs)
+            # Program (track)
             if note_event[0].desc != current_track:
                 current_track = note_event[0].desc
                 track_token = [self.vocab.event_to_token[f'Program_{current_track}'],
@@ -370,8 +370,8 @@ class MuMIDIEncoding(MIDITokenizer):
         dic['DrumPitch'] = ['DrumPitch', 'Program', 'Bar', 'Position']
 
         if self.additional_tokens['Chord']:
-            dic['Position'] += ['Chord']
-            dic['Chord'] = ['Program']
+            dic['Program'] += ['Chord']
+            dic['Chord'] = ['Pitch']
 
         return dic
 
@@ -396,7 +396,7 @@ class MuMIDIEncoding(MIDITokenizer):
 
         for token in tokens[1:]:
             bar_value = int(self.vocab.token_to_event[token[bar_idx]].split('_')[1])
-            pos_value = self.vocab.token_to_event[tokens[0][pos_idx]].split('_')[1]
+            pos_value = self.vocab.token_to_event[token[pos_idx]].split('_')[1]
             pos_value = int(pos_value) if pos_value != 'Ignore' else -1
             token_type, token_value = self.vocab.token_to_event[token[0]].split('_')
 

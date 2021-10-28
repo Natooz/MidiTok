@@ -62,20 +62,23 @@ class REMIEncoding(MIDITokenizer):
                     rest_beat, rest_pos = divmod(note.start-previous_tick, self.current_midi_metadata['time_division'])
                     rest_beat = min(rest_beat, max([r[0] for r in self.rests]))
                     rest_pos = round(rest_pos / ticks_per_sample)
+                    rest_tick = previous_tick  # untouched tick value to the order is not messed after sorting
 
                     if rest_beat > 0:
-                        events.append(Event(type_='Rest', time=previous_tick, value=f'{rest_beat}.0',
+                        events.append(Event(type_='Rest', time=rest_tick, value=f'{rest_beat}.0',
                                             desc=f'{rest_beat}.0'))
                         previous_tick += rest_beat * self.current_midi_metadata['time_division']
 
                     while rest_pos >= self.rests[0][1]:
                         rest_pos_temp = min([r[1] for r in self.rests], key=lambda x: abs(x - rest_pos))
-                        events.append(Event(type_='Rest', time=previous_tick, value=f'0.{rest_pos_temp}',
+                        events.append(Event(type_='Rest', time=rest_tick, value=f'0.{rest_pos_temp}',
                                             desc=f'0.{rest_pos_temp}'))
                         previous_tick += round(rest_pos_temp * ticks_per_sample)
                         rest_pos -= rest_pos_temp
 
-                    current_bar = previous_tick // ticks_per_bar  # updates current bar value
+                    current_bar_temp = previous_tick // ticks_per_bar
+                    if current_bar != current_bar_temp:  # if the rest crossed one or several new bars
+                        current_bar = current_bar_temp - 1  # -1 so that a bar event is created below
 
                 # Bar
                 nb_new_bars = note.start // ticks_per_bar - current_bar
@@ -150,7 +153,9 @@ class REMIEncoding(MIDITokenizer):
             elif event.type == 'Rest':
                 beat, pos = map(int, events[ei].value.split('.'))
                 current_tick += beat * time_division + pos * ticks_per_sample
-                current_bar = current_tick // ticks_per_bar
+                current_bar_temp = current_tick // ticks_per_bar
+                if current_bar_temp != current_bar:
+                    current_bar = current_bar_temp - 1
             elif event.type == 'Position':
                 current_tick = current_bar * ticks_per_bar + int(event.value) * ticks_per_sample
             elif event.type == 'Tempo':
@@ -236,7 +241,7 @@ class REMIEncoding(MIDITokenizer):
         except KeyError:
             pass
 
-        dic['Bar'] = ['Position']
+        dic['Bar'] = ['Position', 'Bar']
 
         dic['Position'] = ['Pitch']
         dic['Pitch'] = ['Velocity']
@@ -273,7 +278,7 @@ class REMIEncoding(MIDITokenizer):
         current_pos = -1
         current_pitches = []
 
-        for t, token in enumerate(tokens[1:]):  # todo remove enum
+        for token in tokens[1:]:
             token_type, token_value = self.vocab.token_to_event[token].split('_')
 
             # Good token type
@@ -288,7 +293,6 @@ class REMIEncoding(MIDITokenizer):
                         current_pitches.append(int(token_value))
                 elif token_type == 'Position':
                     if int(token_value) <= current_pos:
-                        toto = [self.vocab.token_to_event[to].split('_') for to in tokens[t-4:t+4]]
                         err += 1  # token position value <= to the current position
                     else:
                         current_pos = int(token_value)
