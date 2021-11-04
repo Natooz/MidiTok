@@ -565,7 +565,7 @@ def detect_chords(notes: List[Note], time_division: int, beat_res: int = 4, onse
         chord = onset_notes[np.where(onset_notes[:, 2] - onset_notes[0, 2] <= time_div_half)]
 
         # Creates the "chord map" and see if it has a "known" quality, append a chord event if it is valid
-        chord_map = (chord[:, 0] - chord[0, 0]).tolist()
+        chord_map = tuple(chord[:, 0] - chord[0, 0])
         if 3 <= len(chord_map) <= 5 and chord_map[-1] <= 24:  # max interval between the root and highest degree
             chord_quality = len(chord)
             for quality, known_chord in CHORD_MAPS.items():

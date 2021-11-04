@@ -107,7 +107,7 @@ NOTES:
 
 ### REMI
 
-Proposed in the [Pop Music Transformer](https://arxiv.org/abs/2002.00212), it is what we would call a "position-based" representation. The time is represented with "_Bar_" and "_Position_" tokens that indicate respectively when a new bar is beginning, and the current position within a bar.
+Proposed with the [Pop Music Transformer](https://arxiv.org/abs/2002.00212), it is a "position-based" representation. The time is represented with "_Bar_" and "_Position_" tokens that indicate respectively when a new bar is beginning, and the current position within a bar. A note is represented as a succession of a _Pitch_, _Velocity_ and _Duration_ tokens.
 
 NOTES:
 * In the original REMI paper, the tempo information are in fact the succession of two token types: a "_Token Class_" which indicate if the tempo is fast or slow, and a "_Token Value_" which represents its value with respect to the tempo class. In MidiTok we only encode one _Tempo_ token which encode its value, quantized in a number of bins set in parameters (as done for velocities).
