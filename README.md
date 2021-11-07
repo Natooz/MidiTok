@@ -26,7 +26,8 @@ nb_velocities = 32
 additional_tokens = {'Chord': True, 'Rest': True, 'Tempo': True,
                      'rest_range': (2, 8),  # (half, 8 beats)
                      'nb_tempos': 32,  # nb of tempo bins
-                     'tempo_range': (40, 250)}  # (min, max)
+                     'tempo_range': (40, 250),  # (min, max)
+                     'Program': False}
 
 # Creates the tokenizer and loads a MIDI
 tokenizer = REMIEncoding(pitch_range, beat_res, nb_velocities, additional_tokens)
