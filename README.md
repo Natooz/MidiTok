@@ -23,11 +23,10 @@ from miditoolkit import MidiFile
 pitch_range = range(21, 109)
 beat_res = {(0, 4): 8, (4, 12): 4}
 nb_velocities = 32
-additional_tokens = {'Chord': True, 'Rest': True, 'Tempo': True,
+additional_tokens = {'Chord': True, 'Rest': True, 'Tempo': True, 'Program': False,
                      'rest_range': (2, 8),  # (half, 8 beats)
                      'nb_tempos': 32,  # nb of tempo bins
-                     'tempo_range': (40, 250),  # (min, max)
-                     'Program': False}
+                     'tempo_range': (40, 250)}  # (min, max)
 
 # Creates the tokenizer and loads a MIDI
 tokenizer = REMIEncoding(pitch_range, beat_res, nb_velocities, additional_tokens)
@@ -209,7 +208,7 @@ We do not consider them additional tokens though as they are not used anywhere i
 
 ## Limitations
 
-For the concerned tokenization methods, MidiTok only consider a 4/4 time signature for now. This means that each bar is considered covering 4 beats, and each beat is the duration of a quarter note.
+For the tokenization methods using Bar tokens (REMI, Compound Word, Octuple and MuMIDI), **MidiTok only considers a 4/4 time signature** for now. This means that each bar is considered covering 4 beats, and each beat is the duration of a quarter note.
 
 Future updates will support other time signatures, and time signature changes for compatible tokenizations.
 
@@ -219,6 +218,17 @@ Contributions are gratefully welcomed, feel free to send a PR if you want to add
 
 ## Citations
 
+**This work:**
+```bibtex
+@inproceedings{miditok2021,
+    title={MidiTok: A Python package for MIDI file tokenization},
+    author={Nathan Fradet, Jean-Pierre Briot, Fabien Chhel, Amal El Fallah Seghrouchni, Nicolas Gutowski},
+    booktitle={Extended Abstracts for the Late-Breaking Demo Session of the 22nd International Society for Music Information Retrieval Conference},
+    year={2021}
+}
+```
+
+**Tokenizations:**
 ```bibtex
 @article{midilike2018,
     title={This time with feeling: Learning expressive musical performance},

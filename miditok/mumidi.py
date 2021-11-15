@@ -116,7 +116,7 @@ class MuMIDIEncoding(MIDITokenizer):
         for track in midi.instruments:
             note_tokens += self.track_to_tokens(track)
 
-        note_tokens.sort(key=lambda x: (x[0].time, x[0].desc, x[0].value))  # Sort by time then track then pitch
+        note_tokens.sort(key=lambda x: (x[0].time, x[0].desc))  # Sort by time then track
 
         ticks_per_sample = midi.ticks_per_beat / max(self.beat_res.values())
         ticks_per_bar = midi.ticks_per_beat * 4
