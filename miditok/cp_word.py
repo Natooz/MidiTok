@@ -62,8 +62,8 @@ class CPWordEncoding(MIDITokenizer):
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
         ticks_per_sample = self.current_midi_metadata['time_division'] / max(self.beat_res.values())
         ticks_per_bar = self.current_midi_metadata['time_division'] * 4
-        min_rest = self.current_midi_metadata['time_division'] * (
-                    self.rests[0][0] * self._first_beat_res + self.rests[0][1]) if self.additional_tokens['Rest'] else 0
+        min_rest = self.current_midi_metadata['time_division'] * self.rests[0][0] + ticks_per_sample * self.rests[0][1]\
+            if self.additional_tokens['Rest'] else 0
         tokens = []  # list of lists of tokens
 
         # Creates tokens
@@ -78,7 +78,8 @@ class CPWordEncoding(MIDITokenizer):
 
                 # (Rest)
                 if self.additional_tokens['Rest'] and note.start > previous_note_end and \
-                        note.start - previous_tick > min_rest:
+                        note.start - previous_note_end >= min_rest:
+                    previous_tick = previous_note_end
                     rest_beat, rest_pos = divmod(note.start - previous_tick,
                                                  self.current_midi_metadata['time_division'])
                     rest_beat = min(rest_beat, max([r[0] for r in self.rests]))
@@ -95,9 +96,11 @@ class CPWordEncoding(MIDITokenizer):
                         previous_tick += round(rest_pos_temp * ticks_per_sample)
                         rest_pos -= rest_pos_temp
 
+                    previous_tick += round(rest_pos * ticks_per_sample)  # remaining rest pos not represented
                     current_bar_temp = previous_tick // ticks_per_bar
                     if current_bar != current_bar_temp:  # if the rest crossed one or several new bars
-                        current_bar = current_bar_temp - 1  # -1 so that a bar event is created below
+                        current_bar = current_bar_temp
+                        tokens.append(self.create_cp_token(previous_tick, bar=True, desc='Bar'))
 
                 # (Tempo)
                 if self.additional_tokens['Tempo']:
@@ -234,9 +237,10 @@ class CPWordEncoding(MIDITokenizer):
         name = 'Drums' if program[1] else MIDI_INSTRUMENTS[program[0]]['name']
         instrument = Instrument(program[0], is_drum=program[1], name=name)
         tempo_changes = [TempoChange(TEMPO, -1)]  # mock the first tempo change to optimize below
+
         current_tick = 0
         current_bar = -1
-
+        previous_note_end = 0
         for compound_token in events:
             token_family = compound_token[0].value
             if token_family == 'Note':
@@ -244,6 +248,7 @@ class CPWordEncoding(MIDITokenizer):
                 vel = int(compound_token[3].value)
                 duration = self._token_duration_to_ticks(compound_token[4].value, time_division)
                 instrument.notes.append(Note(vel, pitch, current_tick, current_tick + duration))
+                previous_note_end = max(previous_note_end, current_tick + duration)
             elif token_family == 'Metric':
                 if compound_token[1].type == 'Bar':
                     current_bar += 1
@@ -255,10 +260,12 @@ class CPWordEncoding(MIDITokenizer):
                         if tempo != tempo_changes[-1].tempo:
                             tempo_changes.append(TempoChange(tempo, current_tick))
                 elif compound_token[self.rest_idx].value != 'Ignore':  # i.e. its a rest
+                    if current_tick < previous_note_end:  # if in case successive rest happen
+                        current_tick = previous_note_end
                     beat, pos = map(int, compound_token[self.rest_idx].value.split('.'))
                     current_tick += beat * time_division + pos * ticks_per_sample
                     current_bar_temp = current_tick // ticks_per_bar
-                    if current_bar_temp != current_bar:
+                    if current_bar_temp > current_bar + 1:
                         current_bar = current_bar_temp - 1
         if len(tempo_changes) > 1:
             del tempo_changes[0]
@@ -343,6 +350,7 @@ class CPWordEncoding(MIDITokenizer):
         if self.additional_tokens['Rest']:
             dic['Rest'] = ['Rest', 'Position', 'Bar']
             dic['Pitch'] += ['Rest']
+            dic['Bar'] += ['Rest']
 
         return dic
 

@@ -51,6 +51,8 @@ class MIDILikeEncoding(MIDITokenizer):
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
         ticks_per_sample = self.current_midi_metadata['time_division'] / max(self.beat_res.values())
+        min_rest = self.current_midi_metadata['time_division'] * self.rests[0][0] + ticks_per_sample * self.rests[0][1]\
+            if self.additional_tokens['Rest'] else 0
         events = []
 
         # Creates the Note On, Note Off and Velocity events
@@ -82,7 +84,7 @@ class MIDILikeEncoding(MIDITokenizer):
 
             time_shift = event.time - previous_tick
 
-            if self.additional_tokens['Rest'] and event.time > previous_note_end:
+            if self.additional_tokens['Rest'] and event.time > previous_note_end and time_shift >= min_rest:
                 rest_beat, rest_pos = divmod(time_shift, self.current_midi_metadata['time_division'])
                 rest_beat = min(rest_beat, max([r[0] for r in self.rests]))
                 rest_pos = round(rest_pos / ticks_per_sample)

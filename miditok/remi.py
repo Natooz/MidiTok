@@ -42,7 +42,7 @@ class REMIEncoding(MIDITokenizer):
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
         ticks_per_sample = self.current_midi_metadata['time_division'] / max(self.beat_res.values())
         ticks_per_bar = self.current_midi_metadata['time_division'] * 4
-        min_rest = self.current_midi_metadata['time_division']*(self.rests[0][0]*self._first_beat_res+self.rests[0][1])\
+        min_rest = self.current_midi_metadata['time_division'] * self.rests[0][0] + ticks_per_sample * self.rests[0][1]\
             if self.additional_tokens['Rest'] else 0
 
         events = []
@@ -58,7 +58,8 @@ class REMIEncoding(MIDITokenizer):
 
                 # (Rest)
                 if self.additional_tokens['Rest'] and note.start > previous_note_end and \
-                        note.start - previous_tick > min_rest:
+                        note.start - previous_note_end >= min_rest:
+                    previous_tick = previous_note_end
                     rest_beat, rest_pos = divmod(note.start-previous_tick, self.current_midi_metadata['time_division'])
                     rest_beat = min(rest_beat, max([r[0] for r in self.rests]))
                     rest_pos = round(rest_pos / ticks_per_sample)
@@ -76,9 +77,11 @@ class REMIEncoding(MIDITokenizer):
                         previous_tick += round(rest_pos_temp * ticks_per_sample)
                         rest_pos -= rest_pos_temp
 
+                    previous_tick += round(rest_pos * ticks_per_sample)  # remaining rest pos not represented
                     current_bar_temp = previous_tick // ticks_per_bar
                     if current_bar != current_bar_temp:  # if the rest crossed one or several new bars
-                        current_bar = current_bar_temp - 1  # -1 so that a bar event is created below
+                        current_bar = current_bar_temp
+                        events.append(Event(type_='Bar', time=previous_tick, value=None, desc=0))
 
                 # Bar
                 nb_new_bars = note.start // ticks_per_bar - current_bar
@@ -146,15 +149,18 @@ class REMIEncoding(MIDITokenizer):
 
         current_tick = 0
         current_bar = -1
+        previous_note_end = 0
         for ei, event in enumerate(events):
             if event.type == 'Bar':
                 current_bar += 1
                 current_tick = current_bar * ticks_per_bar
             elif event.type == 'Rest':
                 beat, pos = map(int, events[ei].value.split('.'))
+                if current_tick < previous_note_end:  # if in case successive rest happen
+                    current_tick = previous_note_end
                 current_tick += beat * time_division + pos * ticks_per_sample
                 current_bar_temp = current_tick // ticks_per_bar
-                if current_bar_temp != current_bar:
+                if current_bar_temp > current_bar + 1:
                     current_bar = current_bar_temp - 1
             elif event.type == 'Position':
                 current_tick = current_bar * ticks_per_bar + int(event.value) * ticks_per_sample
@@ -171,6 +177,7 @@ class REMIEncoding(MIDITokenizer):
                         vel = int(events[ei + 1].value)
                         duration = self._token_duration_to_ticks(events[ei + 2].value, time_division)
                         instrument.notes.append(Note(vel, pitch, current_tick, current_tick + duration))
+                        previous_note_end = max(previous_note_end, current_tick + duration)
                 except IndexError as _:  # A well constituted sequence should not raise an exception
                     pass  # However with generated sequences this can happen, or if the sequence isn't finished
 
@@ -260,6 +267,7 @@ class REMIEncoding(MIDITokenizer):
         if self.additional_tokens['Rest']:
             dic['Rest'] = ['Rest', 'Position', 'Bar']
             dic['Duration'] += ['Rest']
+            dic['Bar'] += ['Rest']
 
         return dic
 
