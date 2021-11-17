@@ -69,42 +69,50 @@ class MIDILikeEncoding(MIDITokenizer):
                 events.append(Event(type_='Tempo', time=tempo_change.time, value=tempo_change.tempo,
                                     desc=tempo_change.tempo))
 
-        # Sorts events in the good order
+        # Sorts events
         events.sort(key=lambda x: x.time)
 
         # Time Shift
         previous_tick = 0
         previous_note_end = track.notes[0].start + 1
         for e, event in enumerate(events.copy()):
-            if event.type == 'Note-On':
-                previous_note_end = max(previous_note_end, event.desc)
 
+            # No time shift
             if event.time == previous_tick:
+                if event.type == 'Note-On':
+                    previous_note_end = max(previous_note_end, event.desc)
                 continue
 
-            time_shift = event.time - previous_tick
-
-            if self.additional_tokens['Rest'] and event.time > previous_note_end and time_shift >= min_rest:
-                rest_beat, rest_pos = divmod(time_shift, self.current_midi_metadata['time_division'])
+            # (Rest)
+            elif event.type in ['Note-On', 'Tempo'] and self.additional_tokens['Rest'] \
+                    and event.time - previous_note_end >= min_rest:
+                rest_beat, rest_pos = divmod(event.time-previous_tick, self.current_midi_metadata['time_division'])
                 rest_beat = min(rest_beat, max([r[0] for r in self.rests]))
                 rest_pos = round(rest_pos / ticks_per_sample)
+                rest_tick = previous_tick  # untouched tick value to the order is not messed after sorting
+
                 if rest_beat > 0:
-                    events.append(Event(type_='Rest', time=previous_tick, value=f'{rest_beat}.0',
+                    events.append(Event(type_='Rest', time=rest_tick, value=f'{rest_beat}.0',
                                         desc=f'{rest_beat}.0'))
                     previous_tick += rest_beat * self.current_midi_metadata['time_division']
 
                 while rest_pos >= self.rests[0][1]:
                     rest_pos_temp = min([r[1] for r in self.rests], key=lambda x: abs(x - rest_pos))
-                    events.append(Event(type_='Rest', time=previous_tick, value=f'0.{rest_pos_temp}',
+                    events.append(Event(type_='Rest', time=rest_tick, value=f'0.{rest_pos_temp}',
                                         desc=f'0.{rest_pos_temp}'))
                     previous_tick += round(rest_pos_temp * ticks_per_sample)
                     rest_pos -= rest_pos_temp
 
+            # Time shift
             else:
+                time_shift = event.time - previous_tick
                 index = np.argmin(np.abs([ticks - time_shift for ticks in
                                           self.durations_ticks[self.current_midi_metadata['time_division']]]))
                 events.append(Event(type_='Time-Shift', time=previous_tick,
                                     value='.'.join(map(str, self.durations[index])), desc=f'{time_shift} ticks'))
+
+            if event.type == 'Note-On':
+                previous_note_end = max(previous_note_end, event.desc)
             previous_tick = event.time
 
         # Adds chord events if specified

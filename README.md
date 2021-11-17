@@ -218,7 +218,9 @@ Contributions are gratefully welcomed, feel free to send a PR if you want to add
 
 ## Citations
 
-**This work:**
+### MidiTok:
+
+[**Paper**](https://archives.ismir.net/ismir2021/latebreaking/000005.pdf) | [**Poster**](https://s3.eu-west-1.amazonaws.com/production-main-contentbucket52d4b12c-1x4mwd6yn8qjn/8672541d-e891-41ba-9444-26f31b038ee6.pdf)
 ```bibtex
 @inproceedings{miditok2021,
     title={MidiTok: A Python package for MIDI file tokenization},
@@ -228,7 +230,8 @@ Contributions are gratefully welcomed, feel free to send a PR if you want to add
 }
 ```
 
-**Tokenizations:**
+### Tokenizations:
+
 ```bibtex
 @article{midilike2018,
     title={This time with feeling: Learning expressive musical performance},
