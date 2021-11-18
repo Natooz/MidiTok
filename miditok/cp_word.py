@@ -350,7 +350,6 @@ class CPWordEncoding(MIDITokenizer):
         if self.additional_tokens['Rest']:
             dic['Rest'] = ['Rest', 'Position', 'Bar']
             dic['Pitch'] += ['Rest']
-            dic['Bar'] += ['Rest']
 
         return dic
 

@@ -267,7 +267,6 @@ class REMIEncoding(MIDITokenizer):
         if self.additional_tokens['Rest']:
             dic['Rest'] = ['Rest', 'Position', 'Bar']
             dic['Duration'] += ['Rest']
-            dic['Bar'] += ['Rest']
 
         return dic
 
