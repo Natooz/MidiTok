@@ -84,23 +84,18 @@ class CPWordEncoding(MIDITokenizer):
                                                  self.current_midi_metadata['time_division'])
                     rest_beat = min(rest_beat, max([r[0] for r in self.rests]))
                     rest_pos = round(rest_pos / ticks_per_sample)
-                    rest_tick = previous_tick
 
                     if rest_beat > 0:
-                        tokens.append(self.create_cp_token(rest_tick, rest=f'{rest_beat}.0', desc='Rest'))
+                        tokens.append(self.create_cp_token(previous_note_end, rest=f'{rest_beat}.0', desc='Rest'))
                         previous_tick += rest_beat * self.current_midi_metadata['time_division']
 
                     while rest_pos >= self.rests[0][1]:
                         rest_pos_temp = min([r[1] for r in self.rests], key=lambda x: abs(x - rest_pos))
-                        tokens.append(self.create_cp_token(rest_tick, rest=f'0.{rest_pos_temp}', desc='Rest'))
+                        tokens.append(self.create_cp_token(previous_note_end, rest=f'0.{rest_pos_temp}', desc='Rest'))
                         previous_tick += round(rest_pos_temp * ticks_per_sample)
                         rest_pos -= rest_pos_temp
 
-                    previous_tick += round(rest_pos * ticks_per_sample)  # remaining rest pos not represented
-                    current_bar_temp = previous_tick // ticks_per_bar
-                    if current_bar != current_bar_temp:  # if the rest crossed one or several new bars
-                        current_bar = current_bar_temp
-                        tokens.append(self.create_cp_token(previous_tick, bar=True, desc='Bar'))
+                    current_bar = previous_tick // ticks_per_bar
 
                 # (Tempo)
                 if self.additional_tokens['Tempo']:
@@ -264,9 +259,7 @@ class CPWordEncoding(MIDITokenizer):
                         current_tick = previous_note_end
                     beat, pos = map(int, compound_token[self.rest_idx].value.split('.'))
                     current_tick += beat * time_division + pos * ticks_per_sample
-                    current_bar_temp = current_tick // ticks_per_bar
-                    if current_bar_temp > current_bar + 1:
-                        current_bar = current_bar_temp - 1
+                    current_bar = current_tick // ticks_per_bar
         if len(tempo_changes) > 1:
             del tempo_changes[0]
         tempo_changes[0].time = 0
@@ -399,7 +392,7 @@ class CPWordEncoding(MIDITokenizer):
                     else:
                         current_pitches.append(int(token_value))
                 elif token_type == 'Position':
-                    if int(token_value) <= current_pos:
+                    if int(token_value) <= current_pos and previous_type != 'Rest':
                         err += 1  # token position value <= to the current position
                     else:
                         current_pos = int(token_value)

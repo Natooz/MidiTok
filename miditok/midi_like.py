@@ -103,6 +103,14 @@ class MIDILikeEncoding(MIDITokenizer):
                     previous_tick += round(rest_pos_temp * ticks_per_sample)
                     rest_pos -= rest_pos_temp
 
+                # Adds an additional time shift if needed
+                if rest_pos > 0:
+                    time_shift = round(rest_pos * ticks_per_sample)
+                    index = np.argmin(np.abs([ticks - time_shift for ticks in
+                                              self.durations_ticks[self.current_midi_metadata['time_division']]]))
+                    events.append(Event(type_='Time-Shift', time=previous_tick,
+                                        value='.'.join(map(str, self.durations[index])), desc=f'{time_shift} ticks'))
+
             # Time shift
             else:
                 time_shift = event.time - previous_tick
@@ -261,7 +269,7 @@ class MIDILikeEncoding(MIDITokenizer):
                 dic['Tempo'] += ['Chord']
 
         if self.additional_tokens['Rest']:
-            dic['Rest'] = ['Rest', 'Note-On']
+            dic['Rest'] = ['Rest', 'Note-On', 'Time-Shift']
             if self.additional_tokens['Chord']:
                 dic['Rest'] += ['Chord']
             dic['Note-Off'] += ['Rest']

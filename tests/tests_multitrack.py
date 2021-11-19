@@ -90,7 +90,7 @@ def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = '.
             errors = midis_equals(midi_to_compare, new_midi)
             if len(errors) > 0:
                 print(f'MIDI {i} - {file_path} failed to encode/decode with '
-                      f'{encoding[:-8]} ({sum(len(t) for t in errors)} errors)')
+                      f'{encoding[:-8]} ({sum(len(t[2]) for t in errors)} errors)')
                 # return False
 
             # Checks tempos
