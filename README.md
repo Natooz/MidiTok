@@ -13,7 +13,7 @@ MidiTok uses MIDIToolkit, which itself uses Mido to read and write MIDI files.
 
 ## Examples
 
-### Tokenize a MIDI
+### Tokenize a MIDI file
 
 ```python
 from miditok import REMIEncoding, get_midi_programs
@@ -304,3 +304,4 @@ Contributions are gratefully welcomed, feel free to send a PR if you want to add
 ## Acknowledgments
 
 We acknowledge [Aubay](https://www.aubay.com/index.php/language/en/home/?lang=en), the [LIP6](https://www.lip6.fr/?LANG=en), [LERIA](http://blog.univ-angers.fr/leria/n) and [ESEO](https://eseo.fr/en) for the financing and support of this project.
+Special thanks to all the contributors.
