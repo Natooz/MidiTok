@@ -143,7 +143,7 @@ class MIDITokenizer:
         """
         raise NotImplementedError
 
-    def _events_to_tokens(self, events: List[Event]) -> List[int]:
+    def events_to_tokens(self, events: List[Event]) -> List[int]:
         """ Converts a list of Event objects into a list of tokens
         You can override this method if necessary
 
@@ -152,7 +152,7 @@ class MIDITokenizer:
         """
         return [self.vocab.event_to_token[str(event)] for event in events]
 
-    def _tokens_to_events(self, tokens: List[int]) -> List[Event]:
+    def tokens_to_events(self, tokens: List[int]) -> List[Event]:
         """ Convert a sequence of tokens in their respective event objects
         You can override this method if necessary
 

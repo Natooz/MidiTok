@@ -95,7 +95,7 @@ class StructuredEncoding(MIDITokenizer):
 
         events.sort(key=lambda x: x.time)
 
-        return self._events_to_tokens(events)
+        return self.events_to_tokens(events)
 
     def tokens_to_track(self, tokens: List[int], time_division: Optional[int] = TIME_DIVISION,
                         program: Optional[Tuple[int, bool]] = (0, False)) -> Tuple[Instrument, List[TempoChange]]:
@@ -106,7 +106,7 @@ class StructuredEncoding(MIDITokenizer):
         :param program: the MIDI program of the produced track and if it drum, (default (0, False), piano)
         :return: the miditoolkit instrument object and a "Dummy" tempo change
         """
-        events = self._tokens_to_events(tokens)
+        events = self.tokens_to_events(tokens)
 
         name = 'Drums' if program[1] else MIDI_INSTRUMENTS[program[0]]['name']
         instrument = Instrument(program[0], is_drum=program[1], name=name)

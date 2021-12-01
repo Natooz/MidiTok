@@ -78,7 +78,7 @@ import torch
 remi_enc = REMIEncoding()  # uses defaults parameters in constants.py
 
 # The tokens, let's say produced by your Transformer, 4 tracks of 500 tokens
-tokens = torch.randint(low=0, high=len(remi_enc.event2token), size=(4, 500)).tolist()
+tokens = torch.randint(low=0, high=len(remi_enc.vocab), size=(4, 500)).tolist()
 
 # The instruments, here piano, violin, french horn and drums
 programs = [(0, False), (41, False), (61, False), (0, True)]
@@ -215,6 +215,13 @@ Future updates will support other time signatures, and time signature changes fo
 ## Contributions
 
 Contributions are gratefully welcomed, feel free to send a PR if you want to add an encoding strategy or speed up the code. Just make sure to pass the [tests](tests).
+
+## Todo
+
+* Time Signature
+* Allow switching between beat / second time unit
+* Control Change messages
+* Automatic data augmentation on the pitch
 
 ## Citations
 

@@ -144,14 +144,14 @@ class OctupleMonoEncoding(MIDITokenizer):
         """
         assert time_division % max(self.beat_res.values()) == 0, \
             f'Invalid time division, please give one divisible by {max(self.beat_res.values())}'
-        events = [self._tokens_to_events(time_step) for time_step in tokens]
+        events = [self.tokens_to_events(time_step) for time_step in tokens]
 
         ticks_per_sample = time_division // max(self.beat_res.values())
         name = 'Drums' if program[1] else MIDI_INSTRUMENTS[program[0]]['name']
         instrument = Instrument(program[0], is_drum=program[1], name=name)
 
         if self.additional_tokens['Tempo']:
-            tempo_changes = [TempoChange(int(self._tokens_to_events(tokens[0])[-1].value), 0)]
+            tempo_changes = [TempoChange(int(self.tokens_to_events(tokens[0])[-1].value), 0)]
         else:  # default
             tempo_changes = [TempoChange(TEMPO, 0)]
 

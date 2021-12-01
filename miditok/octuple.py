@@ -199,13 +199,13 @@ class OctupleEncoding(MIDITokenizer):
         midi = MidiFile(ticks_per_beat=time_division)
         ticks_per_sample = time_division // max(self.beat_res.values())
         if self.additional_tokens['Tempo']:
-            tempo_changes = [TempoChange(int(self._tokens_to_events(tokens[0])[-1].value), 0)]
+            tempo_changes = [TempoChange(int(self.tokens_to_events(tokens[0])[-1].value), 0)]
         else:  # default
             tempo_changes = [TempoChange(TEMPO, 0)]
 
         tracks = dict([(n, []) for n in range(-1, 128)])
         for time_step in tokens:
-            events = self._tokens_to_events(time_step)
+            events = self.tokens_to_events(time_step)
 
             # Note attributes
             pitch = int(events[0].value)
