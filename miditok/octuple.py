@@ -73,11 +73,9 @@ class OctupleEncoding(MIDITokenizer):
         :return: the token representation, i.e. tracks converted into sequences of tokens
         """
         # Check if the durations values have been calculated before for this time division
-        try:
-            _ = self.durations_ticks[midi.ticks_per_beat]
-        except KeyError:
-            self.durations_ticks[midi.ticks_per_beat] = [(beat * res + pos) * midi.ticks_per_beat // res
-                                                         for beat, pos, res in self.durations]
+        if midi.ticks_per_beat not in self.durations_ticks:
+            self.durations_ticks[midi.ticks_per_beat] = np.array([(beat * res + pos) * midi.ticks_per_beat // res
+                                                                  for beat, pos, res in self.durations])
 
         # Preprocess the MIDI file
         self.preprocess_midi(midi)
@@ -126,6 +124,7 @@ class OctupleEncoding(MIDITokenizer):
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
         ticks_per_sample = self.current_midi_metadata['time_division'] / max(self.beat_res.values())
         ticks_per_bar = self.current_midi_metadata['time_division'] * 4
+        dur_bins = self.durations_ticks[self.current_midi_metadata['time_division']]
 
         events = []
         current_tick = -1
@@ -143,8 +142,7 @@ class OctupleEncoding(MIDITokenizer):
 
             # Note attributes
             duration = note.end - note.start
-            dur_index = np.argmin(np.abs([ticks - duration for ticks in
-                                          self.durations_ticks[self.current_midi_metadata['time_division']]]))
+            dur_index = np.argmin(np.abs(dur_bins - duration))
             event = [Event(type_='Pitch', time=note.start, value=note.pitch,
                            desc=-1 if track.is_drum else track.program),
                      self.vocab.event_to_token[f'Velocity_{note.velocity}'],

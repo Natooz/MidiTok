@@ -79,12 +79,9 @@ class MuMIDIEncoding(MIDITokenizer):
         :return: the token representation, i.e. tracks converted into sequences of tokens
         """
         # Check if the durations values have been calculated before for this time division
-        try:
-            _ = self.durations_ticks[midi.ticks_per_beat]
-        except KeyError:
-            self.durations_ticks[midi.ticks_per_beat] = [(beat * res + pos) * midi.ticks_per_beat // res
-                                                         for beat, pos, res in self.durations]
-
+        if midi.ticks_per_beat not in self.durations_ticks:
+            self.durations_ticks[midi.ticks_per_beat] = np.array([(beat * res + pos) * midi.ticks_per_beat // res
+                                                                  for beat, pos, res in self.durations])
         # Preprocess the MIDI file
         t = 0
         while t < len(midi.instruments):
@@ -198,13 +195,13 @@ class MuMIDIEncoding(MIDITokenizer):
         """
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
+        dur_bins = self.durations_ticks[self.current_midi_metadata['time_division']]
 
         tokens = []
         for note in track.notes:
             # Note
             duration = note.end - note.start
-            dur_index = np.argmin(np.abs([ticks - duration for ticks in
-                                          self.durations_ticks[self.current_midi_metadata['time_division']]]))
+            dur_index = np.argmin(np.abs(dur_bins - duration))
             if not track.is_drum:
                 tokens.append([Event(type_='Pitch', time=note.start, value=note.pitch, desc=track.program),
                                self.vocab.event_to_token[f'Velocity_{note.velocity}'],

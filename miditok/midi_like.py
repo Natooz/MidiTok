@@ -51,6 +51,7 @@ class MIDILikeEncoding(MIDITokenizer):
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
         ticks_per_sample = self.current_midi_metadata['time_division'] / max(self.beat_res.values())
+        dur_bins = self.durations_ticks[self.current_midi_metadata['time_division']]
         min_rest = self.current_midi_metadata['time_division'] * self.rests[0][0] + ticks_per_sample * self.rests[0][1]\
             if self.additional_tokens['Rest'] else 0
         events = []
@@ -106,16 +107,14 @@ class MIDILikeEncoding(MIDITokenizer):
                 # Adds an additional time shift if needed
                 if rest_pos > 0:
                     time_shift = round(rest_pos * ticks_per_sample)
-                    index = np.argmin(np.abs([ticks - time_shift for ticks in
-                                              self.durations_ticks[self.current_midi_metadata['time_division']]]))
+                    index = np.argmin(np.abs(dur_bins - time_shift))
                     events.append(Event(type_='Time-Shift', time=previous_tick,
                                         value='.'.join(map(str, self.durations[index])), desc=f'{time_shift} ticks'))
 
             # Time shift
             else:
                 time_shift = event.time - previous_tick
-                index = np.argmin(np.abs([ticks - time_shift for ticks in
-                                          self.durations_ticks[self.current_midi_metadata['time_division']]]))
+                index = np.argmin(np.abs(dur_bins - time_shift))
                 events.append(Event(type_='Time-Shift', time=previous_tick,
                                     value='.'.join(map(str, self.durations[index])), desc=f'{time_shift} ticks'))
 

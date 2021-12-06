@@ -87,11 +87,9 @@ class MIDITokenizer:
         :return: the token representation, i.e. tracks converted into sequences of tokens
         """
         # Check if the durations values have been calculated before for this time division
-        try:
-            _ = self.durations_ticks[midi.ticks_per_beat]
-        except KeyError:
-            self.durations_ticks[midi.ticks_per_beat] = [(beat * res + pos) * midi.ticks_per_beat // res
-                                                         for beat, pos, res in self.durations]
+        if midi.ticks_per_beat not in self.durations_ticks:
+            self.durations_ticks[midi.ticks_per_beat] = np.array([(beat * res + pos) * midi.ticks_per_beat // res
+                                                                  for beat, pos, res in self.durations])
 
         # Preprocess the MIDI file
         self.preprocess_midi(midi)
