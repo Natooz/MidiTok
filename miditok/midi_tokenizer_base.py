@@ -46,8 +46,7 @@ class MIDITokenizer:
 
         # Init duration and velocity values
         self.durations = self.__create_durations_tuples()
-        self.velocities = list(np.linspace(0, 127, self.nb_velocities + 1, dtype=np.intc))
-        del self.velocities[0]  # removes velocity 0
+        self.velocities = np.linspace(0, 127, self.nb_velocities + 1, dtype=np.intc)[1:]  # remove velocity 0
         self._first_beat_res = list(beat_res.values())[0]
         for beat_range, res in beat_res.items():
             if 0 in beat_range:
@@ -232,7 +231,7 @@ class MIDITokenizer:
             if notes[i].start == notes[i].end:  # if this happens to often, consider using a higher beat resolution
                 notes[i].end += ticks_per_sample  # like 8 samples per beat or 24 samples per bar
 
-            notes[i].velocity = min(self.velocities, key=lambda x: abs(x - notes[i].velocity))
+            notes[i].velocity = self.velocities[np.argmin(np.abs(self.velocities - notes[i].velocity))]
             i += 1
 
     def quantize_tempos(self, tempos: List[TempoChange], time_division: int):
@@ -247,7 +246,7 @@ class MIDITokenizer:
         i = 0
         while i < len(tempos):
             # Quantize tempo value
-            tempos[i].tempo = min(self.tempos, key=lambda x: abs(x - tempos[i].tempo))
+            tempos[i].tempo = self.tempos[np.argmin(np.abs(self.tempos - tempos[i].tempo))]
             if tempos[i].tempo == prev_tempo:
                 del tempos[i]
                 continue
