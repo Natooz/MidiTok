@@ -59,7 +59,7 @@ class StructuredEncoding(MIDITokenizer):
                 time_shift = track.notes[0].start % self.current_midi_metadata['time_division']  # beat wise
             else:
                 time_shift = track.notes[0].start
-            index = np.argmin(np.abs([ticks - time_shift for ticks in dur_bins]))
+            index = np.argmin(np.abs(dur_bins - time_shift))
             events.append(Event(type_='Time-Shift', time=0, value='.'.join(map(str, self.durations[index])),
                                 desc=f'{time_shift} ticks'))
 
@@ -71,12 +71,12 @@ class StructuredEncoding(MIDITokenizer):
             events.append(Event(type_='Velocity', time=note.start, value=note.velocity, desc=f'{note.velocity}'))
             # Duration
             duration = note.end - note.start
-            index = np.argmin(np.abs([ticks - duration for ticks in dur_bins]))
+            index = np.argmin(np.abs(dur_bins - duration))
             events.append(Event(type_='Duration', time=note.start, value='.'.join(map(str, self.durations[index])),
                                 desc=f'{duration} ticks'))
             # Time-Shift
             time_shift = track.notes[n + 1].start - note.start
-            index = np.argmin(np.abs([ticks - time_shift for ticks in dur_bins]))
+            index = np.argmin(np.abs(dur_bins - time_shift))
             events.append(Event(type_='Time-Shift', time=note.start, desc=f'{time_shift} ticks',
                                 value='.'.join(map(str, self.durations[index])) if time_shift != 0 else '0.0.1'))
         # Adds the last note
@@ -89,7 +89,7 @@ class StructuredEncoding(MIDITokenizer):
             events.append(Event(type_='Velocity', time=track.notes[-1].start, value=track.notes[-1].velocity,
                                 desc=f'{track.notes[-1].velocity}'))
             duration = track.notes[-1].end - track.notes[-1].start
-            index = np.argmin(np.abs([ticks - duration for ticks in dur_bins]))
+            index = np.argmin(np.abs(dur_bins - duration))
             events.append(Event(type_='Duration', time=track.notes[-1].start,
                                 value='.'.join(map(str, self.durations[index])), desc=f'{duration} ticks'))
 

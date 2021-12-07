@@ -42,6 +42,7 @@ class REMIEncoding(MIDITokenizer):
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
         ticks_per_sample = self.current_midi_metadata['time_division'] / max(self.beat_res.values())
         ticks_per_bar = self.current_midi_metadata['time_division'] * 4
+        dur_bins = self.durations_ticks[self.current_midi_metadata['time_division']]
         min_rest = self.current_midi_metadata['time_division'] * self.rests[0][0] + ticks_per_sample * self.rests[0][1]\
             if self.additional_tokens['Rest'] else 0
 
@@ -108,8 +109,7 @@ class REMIEncoding(MIDITokenizer):
             events.append(Event(type_='Pitch', time=note.start, value=note.pitch, desc=note.pitch))
             events.append(Event(type_='Velocity', time=note.start, value=note.velocity, desc=f'{note.velocity}'))
             duration = note.end - note.start
-            index = np.argmin(np.abs([ticks - duration for ticks in
-                                      self.durations_ticks[self.current_midi_metadata['time_division']]]))
+            index = np.argmin(np.abs(dur_bins - duration))
             events.append(Event(type_='Duration', time=note.start, value='.'.join(map(str, self.durations[index])),
                                 desc=f'{duration} ticks'))
 

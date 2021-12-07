@@ -62,6 +62,7 @@ class CPWordEncoding(MIDITokenizer):
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
         ticks_per_sample = self.current_midi_metadata['time_division'] / max(self.beat_res.values())
         ticks_per_bar = self.current_midi_metadata['time_division'] * 4
+        dur_bins = self.durations_ticks[self.current_midi_metadata['time_division']]
         min_rest = self.current_midi_metadata['time_division'] * self.rests[0][0] + ticks_per_sample * self.rests[0][1]\
             if self.additional_tokens['Rest'] else 0
         tokens = []  # list of lists of tokens
@@ -125,8 +126,7 @@ class CPWordEncoding(MIDITokenizer):
 
             # Note
             duration = note.end - note.start
-            dur_index = np.argmin(np.abs([ticks - duration for ticks in
-                                          self.durations_ticks[self.current_midi_metadata['time_division']]]))
+            dur_index = np.argmin(np.abs(dur_bins - duration))
             dur_value = '.'.join(map(str, self.durations[dur_index]))
             tokens.append(self.create_cp_token(int(note.start), pitch=note.pitch, vel=note.velocity, dur=dur_value,
                                                desc=f'{duration} ticks'))

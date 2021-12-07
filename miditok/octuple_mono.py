@@ -76,6 +76,7 @@ class OctupleMonoEncoding(MIDITokenizer):
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
         ticks_per_sample = self.current_midi_metadata['time_division'] / max(self.beat_res.values())
         ticks_per_bar = self.current_midi_metadata['time_division'] * 4
+        dur_bins = self.durations_ticks[self.current_midi_metadata['time_division']]
 
         # Check bar embedding limit, update if needed
         nb_bars = ceil(max(note.end for note in track.notes) / (self.current_midi_metadata['time_division'] * 4))
@@ -99,8 +100,7 @@ class OctupleMonoEncoding(MIDITokenizer):
 
             # Note attributes
             duration = note.end - note.start
-            dur_index = np.argmin(np.abs([ticks - duration for ticks in
-                                          self.durations_ticks[self.current_midi_metadata['time_division']]]))
+            dur_index = np.argmin(np.abs(dur_bins - duration))
             token_ts = [self.vocab.event_to_token[f'Pitch_{note.pitch}'],
                         self.vocab.event_to_token[f'Velocity_{note.velocity}'],
                         self.vocab.event_to_token[f'Duration_{".".join(map(str, self.durations[dur_index]))}'],
