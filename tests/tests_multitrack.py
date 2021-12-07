@@ -15,10 +15,10 @@ NOTE: encoded tracks has to be compared with the quantized original track.
 
 """
 
-from sys import stdout
 from copy import deepcopy
 from pathlib import Path, PurePath
 from typing import Union
+import time
 
 import miditok
 from miditoolkit import MidiFile
@@ -46,15 +46,9 @@ def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = '.
     """
     encodings = ['REMIEncoding', 'CPWordEncoding', 'OctupleEncoding', 'OctupleMonoEncoding', 'MuMIDIEncoding']
     files = list(Path(data_path).glob('**/*.mid'))
+    t0 = time.time()
 
     for i, file_path in enumerate(files):
-        bar_len = 30
-        filled_len = int(round(bar_len * i / len(files)))
-        percents = round(100.0 * i / len(files), 2)
-        bar = '=' * filled_len + '-' * (bar_len - filled_len)
-        prog = f'\r{i} / {len(files)} [{bar}] {percents:.1f}% ...Converting MIDIs to tokens: {file_path}'
-        stdout.write(prog)
-        stdout.flush()
 
         # Reads the MIDI
         try:
@@ -63,6 +57,7 @@ def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = '.
             continue
         if midi.ticks_per_beat % max(BEAT_RES_TEST.values()) != 0:
             continue
+        t_midi = time.time()
 
         for encoding in encodings:
             tokenizer = getattr(miditok, encoding)(beat_res=BEAT_RES_TEST,
@@ -105,6 +100,15 @@ def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = '.
                 new_midi.dump(PurePath('tests', 'test_results', f'{file_path.stem}_{encoding[:-8]}')
                               .with_suffix('.mid'))
 
+        bar_len = 30
+        filled_len = int(round(bar_len * (i + 1) / len(files)))
+        percents = round(100.0 * (i + 1) / len(files), 2)
+        bar = '=' * filled_len + '-' * (bar_len - filled_len)
+        prog = f'{i + 1} / {len(files)} {time.time() - t_midi:.2f}sec [{bar}] ' \
+               f'{percents:.1f}% ...Converting MIDIs to tokens: {file_path}'
+        print(prog)
+
+    print(f'Took {time.time() - t0} seconds')
     return True
 
 

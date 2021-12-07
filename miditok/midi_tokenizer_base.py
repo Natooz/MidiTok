@@ -231,7 +231,7 @@ class MIDITokenizer:
             if notes[i].start == notes[i].end:  # if this happens to often, consider using a higher beat resolution
                 notes[i].end += ticks_per_sample  # like 8 samples per beat or 24 samples per bar
 
-            notes[i].velocity = self.velocities[np.argmin(np.abs(self.velocities - notes[i].velocity))]
+            notes[i].velocity = self.velocities[int(np.argmin(np.abs(self.velocities - notes[i].velocity)))]
             i += 1
 
     def quantize_tempos(self, tempos: List[TempoChange], time_division: int):
