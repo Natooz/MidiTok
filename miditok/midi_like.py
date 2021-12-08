@@ -13,18 +13,16 @@ from .constants import *
 
 
 class MIDILikeEncoding(MIDITokenizer):
-    """ Structured MIDI encoding method as using in the Piano Inpainting Application
-    https://arxiv.org/abs/2107.05944
-    The token types follows the specific pattern:
-    Pitch -> Velocity -> Duration -> Time shift -> back to Pitch ...
-    NOTE: this encoding uses only "Time Shifts" events to move in the time, and only
+    """ MIDI-Like encoding, used with Music Transformer or MT3
+    https://arxiv.org/abs/1808.03715
+    This strategy simply convert MIDI messages into distinct tokens.
+    The token types are then Note-On, Velocity, Note-Off and Time-Shift
+    (+ the additional token types of MidiTok if desired).
+    NOTE: as this encoding uses only "Time Shifts" events to move in the time, and only
     from one note to another. Hence it is suitable to encode continuous sequences of
     notes without long periods of silence. If your dataset contains music with long
     pauses, you might handle them with an appropriate "time shift" dictionary
     (which values are made from the beat_res dict) or with a different encoding.
-    NOTE: the original Structured MIDI Encoding doesn't use Chords tokens as its
-    purpose is to draw uniform token types transitions, you can still use them but
-    it will "break" this property
 
     :param pitch_range: range of used MIDI pitches
     :param beat_res: beat resolutions, with the form:
