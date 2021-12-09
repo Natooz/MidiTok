@@ -214,7 +214,7 @@ class MIDILikeEncoding(MIDITokenizer):
         vocab.add_event(f'Velocity_{i}' for i in self.velocities)
 
         # TIME SHIFTS
-        vocab.add_event(f'Time-Shift_{".".join(map(str, self.durations[i]))}' for i in range(len(self.durations)))
+        vocab.add_event(f'Time-Shift_{".".join(map(str, duration))}' for duration in self.durations)
 
         # CHORD
         if self.additional_tokens['Chord']:
@@ -273,7 +273,7 @@ class MIDILikeEncoding(MIDITokenizer):
 
         return dic
 
-    def token_types_errors(self, tokens: List[List[int]]) -> float:
+    def token_types_errors(self, tokens: List[int]) -> float:
         """ Checks if a sequence of tokens is constituted of good token types
         successions and returns the error ratio (lower is better).
         The Pitch and Position values are also analyzed:

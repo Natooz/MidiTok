@@ -154,7 +154,7 @@ class StructuredEncoding(MIDITokenizer):
 
         # TIME SHIFT (same as durations)
         vocab.add_event('Time-Shift_0.0.1')  # for a time shift of 0
-        vocab.add_event(f'Time-Shift_{".".join(map(str, self.durations[i]))}' for i in range(len(self.durations)))
+        vocab.add_event(f'Time-Shift_{".".join(map(str, duration))}' for duration in self.durations)
 
         # PROGRAM
         if self.additional_tokens['Program']:

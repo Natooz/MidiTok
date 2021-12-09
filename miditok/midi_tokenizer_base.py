@@ -223,10 +223,10 @@ class MIDITokenizer:
             if notes[i].pitch not in pitch_range:
                 del notes[i]
                 continue
-            start_rest = notes[i].start % ticks_per_sample
-            end_rest = notes[i].end % ticks_per_sample
-            notes[i].start += -start_rest if start_rest <= ticks_per_sample / 2 else ticks_per_sample - start_rest
-            notes[i].end += -end_rest if end_rest <= ticks_per_sample / 2 else ticks_per_sample - end_rest
+            start_offset = notes[i].start % ticks_per_sample
+            end_offset = notes[i].end % ticks_per_sample
+            notes[i].start += -start_offset if start_offset <= ticks_per_sample / 2 else ticks_per_sample - start_offset
+            notes[i].end += -end_offset if end_offset <= ticks_per_sample / 2 else ticks_per_sample - end_offset
 
             if notes[i].start == notes[i].end:  # if this happens to often, consider using a higher beat resolution
                 notes[i].end += ticks_per_sample  # like 8 samples per beat or 24 samples per bar
