@@ -174,23 +174,29 @@ class StructuredEncoding(MIDITokenizer):
 
         :return: the token types transitions dictionary
         """
-        return {'Pitch': ['Velocity'], 'Velocity': ['Duration'], 'Duration': ['Time-Shift'], 'Time-Shift': ['Pitch']}
+        dic = {'Pitch': ['Velocity'], 'Velocity': ['Duration'], 'Duration': ['Time-Shift'], 'Time-Shift': ['Pitch']}
+        self._add_pad_type_to_graph(dic)
+        return dic
 
-    def token_types_errors(self, tokens: List[int]) -> float:
+    def token_types_errors(self, tokens: List[int], consider_pad: bool = False) -> float:
         """ Checks if a sequence of tokens is constituted of good token types
         successions and returns the error ratio (lower is better).
         The Pitch values are also analyzed:
             - a pitch token should not be present if the same pitch is already played at the time
 
         :param tokens: sequence of tokens to check
+        :param consider_pad: if True will continue the error detection after the first PAD token (default: False)
         :return: the error ratio (lower is better)
         """
         err = 0
         previous_type = self.vocab.token_type(tokens[0])
         current_pitches = []
 
-        for token in tokens[1:]:
-            token_type, token_value = self.vocab.token_to_event[token].split('_')
+        def check(tok: int):
+            nonlocal err
+            nonlocal previous_type
+            nonlocal current_pitches
+            token_type, token_value = self.vocab.token_to_event[tok].split('_')
 
             # Good token type
             if token_type in self.tokens_types_graph[previous_type]:
@@ -205,6 +211,14 @@ class StructuredEncoding(MIDITokenizer):
             # Bad token type
             else:
                 err += 1
-
             previous_type = token_type
+
+        if consider_pad:
+            for token in tokens[1:]:
+                check(token)
+        else:
+            for token in tokens[1:]:
+                if previous_type == 'PAD':
+                    break
+                check(token)
         return err / len(tokens)

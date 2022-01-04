@@ -134,7 +134,7 @@ class Vocabulary:
     def __len__(self) -> int:
         return len(self._event_to_token)
 
-    def __iadd__(self, other: Union[Generator, str, Tuple[str, int]]):
+    def __iadd__(self, other: Union[Generator, Event, str, Tuple[Union[str, Event], int]]):
         self.add_event(*other if isinstance(other, tuple) else other)
         return self
 

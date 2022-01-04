@@ -370,9 +370,10 @@ class MuMIDIEncoding(MIDITokenizer):
             dic['Program'] += ['Chord']
             dic['Chord'] = ['Pitch']
 
+        self._add_pad_type_to_graph(dic)
         return dic
 
-    def token_types_errors(self, tokens: List[List[int]]) -> float:
+    def token_types_errors(self, tokens: List[List[int]], consider_pad: bool = False) -> float:
         """ Checks if a sequence of tokens is constituted of good token types
         successions and returns the error ratio (lower is better).
         The Pitch and Position values are also analyzed:
@@ -381,6 +382,7 @@ class MuMIDIEncoding(MIDITokenizer):
             - a pitch token should not be present if the same pitch is already played at the current position
 
         :param tokens: sequence of tokens to check
+        :param consider_pad: if True will continue the error detection after the first PAD token (default: False)
         :return: the error ratio (lower is better)
         """
         err = 0
@@ -393,6 +395,8 @@ class MuMIDIEncoding(MIDITokenizer):
         current_pos = int(current_pos) if current_pos != 'Ignore' else -1
 
         for token in tokens[1:]:
+            if not consider_pad and previous_type == 'PAD':
+                break
             bar_value = int(self.vocab.token_to_event[token[bar_idx]].split('_')[1])
             pos_value = self.vocab.token_to_event[token[pos_idx]].split('_')[1]
             pos_value = int(pos_value) if pos_value != 'Ignore' else -1

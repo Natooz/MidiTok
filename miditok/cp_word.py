@@ -344,9 +344,10 @@ class CPWordEncoding(MIDITokenizer):
             dic['Rest'] = ['Rest', 'Position', 'Bar']
             dic['Pitch'] += ['Rest']
 
+        self._add_pad_type_to_graph(dic)
         return dic
 
-    def token_types_errors(self, tokens: List[List[int]]) -> float:
+    def token_types_errors(self, tokens: List[List[int]], consider_pad: bool = False) -> float:
         """ Checks if a sequence of tokens is constituted of good token types
         successions and returns the error ratio (lower is better).
         The Pitch and Position values are also analyzed:
@@ -354,6 +355,7 @@ class CPWordEncoding(MIDITokenizer):
             - a pitch token should not be present if the same pitch is already played at the current position
 
         :param tokens: sequence of tokens to check
+        :param consider_pad: if True will continue the error detection after the first PAD token (default: False)
         :return: the error ratio (lower is better)
         """
         def cp_token_type(tok: List[int]) -> Tuple[str, str]:
@@ -370,6 +372,8 @@ class CPWordEncoding(MIDITokenizer):
                         if decoded_token[1] != 'Ignore':
                             return decoded_token
                 raise RuntimeError('No token type found, unknown error to fix')
+            elif family == 'None':
+                return 'PAD', 'None'
             else:  # Program
                 return self.vocab.token_to_event[tok[1]].split('_')
 
@@ -378,9 +382,12 @@ class CPWordEncoding(MIDITokenizer):
         current_pos = -1
         current_pitches = []
 
-        for token in tokens[1:]:
-            token_type, token_value = cp_token_type(token)
-
+        def check(tok: List[int]):
+            nonlocal err
+            nonlocal previous_type
+            nonlocal current_pos
+            nonlocal current_pitches
+            token_type, token_value = cp_token_type(tok)
             # Good token type
             if token_type in self.tokens_types_graph[previous_type]:
                 if token_type == 'Bar':  # reset
@@ -400,6 +407,14 @@ class CPWordEncoding(MIDITokenizer):
             # Bad token type
             else:
                 err += 1
-
             previous_type = token_type
+
+        if consider_pad:
+            for token in tokens[1:]:
+                check(token)
+        else:
+            for token in tokens[1:]:
+                if previous_type == 'PAD':
+                    break
+                check(token)
         return err / len(tokens)

@@ -304,6 +304,16 @@ class MIDITokenizer:
         See other classes (RemiEncoding, MIDILikeEncoding ...) for examples of how to implement it."""
         raise NotImplementedError
 
+    @staticmethod
+    def _add_pad_type_to_graph(dic):
+        """Adds the PAD token type to the token types graph.
+
+        :param dic: token types graph to add PAD type
+        """
+        for value in dic.values():
+            value.append('PAD')
+        dic['PAD'] = ['PAD']
+
     def __create_durations_tuples(self) -> List[Tuple]:
         """ Creates the possible durations in beat / position units, as tuple of the form:
         (beat, pos, res) where beat is the number of beats, pos the number of "samples"
@@ -410,21 +420,30 @@ class MIDITokenizer:
 
         self.save_params(out_dir)  # Saves the parameters with which the MIDIs are converted
 
-    def token_types_errors(self, tokens: List[int]) -> float:
+    def token_types_errors(self, tokens: List[int], consider_pad: bool = False) -> float:
         """ Checks if a sequence of tokens is constituted of good token types
         successions and returns the error ratio (lower is better).
         The implementation in MIDITokenizer class only checks the token types,
         in child class the methods also consider the position and pitch values.
 
         :param tokens: sequence of tokens to check
+        :param consider_pad: if True will continue the error detection after the first PAD token (default: False)
         :return: the error ratio (lower is better)
         """
         err = 0
         previous_type = self.vocab.token_type(tokens[0])
-        for token in tokens[1:]:
-            if self.vocab.token_type(token) not in self.tokens_types_graph[previous_type]:
-                err += 1
-            previous_type = self.vocab.token_type(token)
+        if consider_pad:
+            for token in tokens[1:]:
+                if self.vocab.token_type(token) not in self.tokens_types_graph[previous_type]:
+                    err += 1
+                previous_type = self.vocab.token_type(token)
+        else:
+            for token in tokens[1:]:
+                if previous_type == 'PAD':  # stop iteration at the first PAD token
+                    break
+                if self.vocab.token_type(token) not in self.tokens_types_graph[previous_type]:
+                    err += 1
+                previous_type = self.vocab.token_type(token)
         return err / len(tokens)
 
     @staticmethod
