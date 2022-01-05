@@ -12,7 +12,7 @@ from .midi_tokenizer_base import MIDITokenizer, Vocabulary, Event
 from .constants import *
 
 
-class StructuredEncoding(MIDITokenizer):
+class Structured(MIDITokenizer):
     """ Structured MIDI encoding method as using in the Piano Inpainting Application
     https://arxiv.org/abs/2107.05944
     The token types follows the specific pattern:

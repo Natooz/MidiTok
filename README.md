@@ -16,7 +16,7 @@ MidiTok uses MIDIToolkit, which itself uses Mido to read and write MIDI files.
 ### Tokenize a MIDI file
 
 ```python
-from miditok import REMIEncoding, get_midi_programs
+from miditok import REMI, get_midi_programs
 from miditoolkit import MidiFile
 
 # Our parameters
@@ -29,7 +29,7 @@ additional_tokens = {'Chord': True, 'Rest': True, 'Tempo': True, 'Program': Fals
                      'tempo_range': (40, 250)}  # (min, max)
 
 # Creates the tokenizer and loads a MIDI
-tokenizer = REMIEncoding(pitch_range, beat_res, nb_velocities, additional_tokens)
+tokenizer = REMI(pitch_range, beat_res, nb_velocities, additional_tokens)
 midi = MidiFile('path/to/your_midi.mid')
 
 # Converts MIDI to tokens, and back to a MIDI
@@ -49,11 +49,11 @@ converted_back_track, tempo_changes = tokenizer.tokens_to_track(piano_tokens, mi
 MidiTok will save your encoding parameters in a ```config.txt``` file to keep track of how they were converted.
 
 ```python
-from miditok import REMIEncoding
+from miditok import REMI
 from pathlib import Path
 
 # Creates the tokenizer and list the file paths
-tokenizer = REMIEncoding()  # uses defaults parameters
+tokenizer = REMI()  # uses defaults parameters
 paths = list(Path('path', 'to', 'dataset').glob('**/*.mid'))
 
 # A validation method to discard MIDIs we do not want
@@ -71,11 +71,11 @@ tokenizer.tokenize_midi_dataset(paths, 'path/to/save', midi_valid)
 ### Write a MIDI file from tokens
 
 ```python
-from miditok import REMIEncoding
+from miditok import REMI
 import torch
 
 # Creates the tokenizer and list the file paths
-remi_enc = REMIEncoding()  # uses defaults parameters in constants.py
+remi_enc = REMI()  # uses defaults parameters in constants.py
 
 # The tokens, let's say produced by your Transformer, 4 tracks of 500 tokens
 tokens = torch.randint(low=0, high=len(remi_enc.vocab), size=(4, 500)).tolist()

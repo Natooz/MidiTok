@@ -15,7 +15,7 @@ from .midi_tokenizer_base import MIDITokenizer, Vocabulary
 from .constants import *
 
 
-class OctupleMonoEncoding(MIDITokenizer):
+class OctupleMono(MIDITokenizer):
     """ Modified version of Octuple with no Program (Track) tokens
     To use mainly for tasks handling a single track.
 

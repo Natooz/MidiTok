@@ -20,7 +20,7 @@ from .constants import *
 DRUM_PITCH_RANGE = range(27, 88)
 
 
-class MuMIDIEncoding(MIDITokenizer):
+class MuMIDI(MIDITokenizer):
     """ MuMIDI encoding method, as introduced in PopMag
     https://arxiv.org/abs/2008.07703
 

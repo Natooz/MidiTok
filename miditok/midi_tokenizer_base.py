@@ -301,7 +301,7 @@ class MIDITokenizer:
 
     def _create_token_types_graph(self) -> Dict[str, List[str]]:
         """ Creates a dictionary for the directions of the token types of the encoding
-        See other classes (RemiEncoding, MIDILikeEncoding ...) for examples of how to implement it."""
+        See other classes (REMI, MIDILike ...) for examples of how to implement it."""
         raise NotImplementedError
 
     @staticmethod

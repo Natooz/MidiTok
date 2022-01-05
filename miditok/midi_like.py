@@ -12,7 +12,7 @@ from .midi_tokenizer_base import MIDITokenizer, Vocabulary, Event, detect_chords
 from .constants import *
 
 
-class MIDILikeEncoding(MIDITokenizer):
+class MIDILike(MIDITokenizer):
     """ MIDI-Like encoding, used with Music Transformer or MT3
     https://arxiv.org/abs/1808.03715
     This strategy simply convert MIDI messages into distinct tokens.

@@ -12,7 +12,7 @@ from .midi_tokenizer_base import MIDITokenizer, Vocabulary, Event, detect_chords
 from .constants import *
 
 
-class REMIEncoding(MIDITokenizer):
+class REMI(MIDITokenizer):
     """ MIDI encoding method, similar to the REMI introduced in the Pop Music Transformer paper
     https://arxiv.org/abs/2002.00212
 

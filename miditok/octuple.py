@@ -15,7 +15,7 @@ from .midi_tokenizer_base import MIDITokenizer, Vocabulary, Event
 from .constants import *
 
 
-class OctupleEncoding(MIDITokenizer):
+class Octuple(MIDITokenizer):
     """ Octuple encoding method, as introduced in MusicBERT
     https://arxiv.org/abs/2106.05630
 

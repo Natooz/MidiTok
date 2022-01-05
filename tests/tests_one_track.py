@@ -41,8 +41,8 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
     :param data_path: root path to the data to test
     :param saving_erroneous_midis: will save MIDIs converted back with errors, to be used to debug
     """
-    encodings = ['MIDILikeEncoding', 'StructuredEncoding', 'REMIEncoding', 'CPWordEncoding', 'OctupleEncoding',
-                 'OctupleMonoEncoding', 'MuMIDIEncoding']
+    encodings = ['MIDILike', 'Structured', 'REMI', 'CPWord', 'Octuple',
+                 'OctupleMono', 'MuMIDI']
     files = list(Path(data_path).glob('**/*.mid'))
     t0 = time.time()
 
@@ -56,9 +56,9 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
 
         for encoding in encodings:
             add_tokens = deepcopy(ADDITIONAL_TOKENS_TEST)
-            if encoding == 'MIDILikeEncoding':
+            if encoding == 'MIDILike':
                 add_tokens['rest_range'] = (add_tokens['rest_range'][0], max(t[1] for t in BEAT_RES_TEST))
-            if encoding == 'StructuredEncoding':
+            if encoding == 'Structured':
                 tokenizer = getattr(miditok, encoding)(beat_res=BEAT_RES_TEST)
             else:
                 tokenizer = getattr(miditok, encoding)(beat_res=BEAT_RES_TEST, additional_tokens=add_tokens)
@@ -67,17 +67,17 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
             tokens = tokenizer.midi_to_tokens(midi)
 
             # Checks types and values conformity following the rules
-            tokens_types = tokenizer.token_types_errors(tokens[0] if encoding not in ['OctupleEncoding',
-                                                                                      'MuMIDIEncoding'] else tokens)
+            tokens_types = tokenizer.token_types_errors(tokens[0] if encoding not in ['Octuple',
+                                                                                      'MuMIDI'] else tokens)
             if tokens_types != 0.:
                 print(f'Validation of tokens types / values successions failed with {encoding}: {tokens_types}')
 
             # Convert back tokens into a track object
             tempo_changes = None
-            if encoding == 'OctupleEncoding' or encoding == 'MuMIDIEncoding':
+            if encoding == 'Octuple' or encoding == 'MuMIDI':
                 new_midi = tokenizer.tokens_to_midi(tokens, time_division=midi.ticks_per_beat)
                 track = new_midi.instruments[0]
-                if encoding == 'OctupleEncoding':
+                if encoding == 'Octuple':
                     tempo_changes = new_midi.tempo_changes
             else:
                 track, tempo_changes = tokenizer.tokens_to_track(tokens[0], midi.ticks_per_beat)

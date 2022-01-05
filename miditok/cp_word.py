@@ -12,7 +12,7 @@ from .midi_tokenizer_base import MIDITokenizer, Vocabulary, Event, detect_chords
 from .constants import *
 
 
-class CPWordEncoding(MIDITokenizer):
+class CPWord(MIDITokenizer):
     """ MIDI encoding method, similar to Compound Word
     https://arxiv.org/abs/2101.02402
     Each compound token will be a list of the form:
