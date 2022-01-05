@@ -78,12 +78,10 @@ class MIDILike(MIDITokenizer):
 
             # No time shift
             if event.time == previous_tick:
-                if event.type == 'Note-On':
-                    previous_note_end = max(previous_note_end, event.desc)
-                continue
+                pass
 
             # (Rest)
-            elif event.type in ['Note-On', 'Tempo'] and self.additional_tokens['Rest'] \
+            elif self.additional_tokens['Rest'] and event.type in ['Note-On', 'Tempo'] \
                     and event.time - previous_note_end >= min_rest:
                 rest_beat, rest_pos = divmod(event.time-previous_tick, self.current_midi_metadata['time_division'])
                 rest_beat = min(rest_beat, max([r[0] for r in self.rests]))
@@ -143,7 +141,8 @@ class MIDILike(MIDITokenizer):
         ticks_per_sample = time_division // max(self.beat_res.values())
         events = self.tokens_to_events(tokens)
 
-        max_duration = (self.durations[-1][0] + self.durations[-1][1]) * time_division
+        max_duration = self.durations[-1][0] * time_division + self.durations[-1][1] * (time_division //
+                                                                                        self.durations[-1][2])
         name = 'Drums' if program[1] else MIDI_INSTRUMENTS[program[0]]['name']
         instrument = Instrument(program[0], is_drum=program[1], name=name)
         tempo_changes = [TempoChange(TEMPO, -1)]  # mock the first tempo change to optimize below

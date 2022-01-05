@@ -85,7 +85,7 @@ def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = '.
             errors = midis_equals(midi_to_compare, new_midi)
             if len(errors) > 0:
                 print(f'MIDI {i} - {file_path} failed to encode/decode with '
-                      f'{encoding[:-8]} ({sum(len(t[2]) for t in errors)} errors)')
+                      f'{encoding} ({sum(len(t[2]) for t in errors)} errors)')
                 # return False
 
             # Checks tempos
@@ -94,10 +94,10 @@ def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = '.
                 tempo_errors = tempo_changes_equals(midi_to_compare.tempo_changes, new_midi.tempo_changes)
                 if len(tempo_errors) > 0:
                     '''print(f'MIDI {i} - {file_path} failed to encode/decode TEMPO changes with '
-                          f'{encoding[:-8]} ({len(tempo_errors)} errors)')'''
+                          f'{encoding} ({len(tempo_errors)} errors)')'''
 
             if saving_erroneous_midis and (len(errors) > 0 or len(tempo_errors) > 0):
-                new_midi.dump(PurePath('tests', 'test_results', f'{file_path.stem}_{encoding[:-8]}')
+                new_midi.dump(PurePath('tests', 'test_results', f'{file_path.stem}_{encoding}')
                               .with_suffix('.mid'))
 
         bar_len = 30

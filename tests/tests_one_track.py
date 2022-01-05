@@ -88,12 +88,11 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
                 has_errors = True
                 if errors[0][0] != 'len':
                     for err, note, exp in errors:
-                        midi.markers.append(Marker(f'ERR {encoding[:-8]} with note {err} (pitch {note.pitch})',
+                        midi.markers.append(Marker(f'ERR {encoding} with note {err} (pitch {note.pitch})',
                                                    note.start))
-                print(f'MIDI {i} - {file_path} failed to encode/decode MIDI with '
-                      f'{encoding[:-8]} ({len(errors)} errors)')
+                print(f'MIDI {i} - {file_path} failed to encode/decode MIDI with {encoding} ({len(errors)} errors)')
                 # return False
-            track.name = f'encoded with {encoding[:-8]}'
+            track.name = f'encoded with {encoding}'
             tracks.append(track)
 
             # Checks tempos
@@ -102,7 +101,7 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
                 if len(tempo_errors) > 0:
                     has_errors = True
                     print(f'MIDI {i} - {file_path} failed to encode/decode TEMPO changes with '
-                          f'{encoding[:-8]} ({len(tempo_errors)} errors)')
+                          f'{encoding} ({len(tempo_errors)} errors)')
 
         bar_len = 30
         filled_len = int(round(bar_len * (i+1) / len(files)))

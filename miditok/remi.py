@@ -254,7 +254,7 @@ class REMI(MIDITokenizer):
             dic['Position'] += ['Chord']
 
         if self.additional_tokens['Tempo']:
-            dic['Tempo'] = ['Chord', 'Pitch']
+            dic['Tempo'] = ['Chord', 'Pitch'] if self.additional_tokens['Chord'] else ['Chord']
             dic['Position'] += ['Tempo']
 
         if self.additional_tokens['Rest']:
