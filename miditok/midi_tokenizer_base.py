@@ -55,8 +55,8 @@ class MIDITokenizer:
 
         # Tempos
         self.tempos = np.zeros(1)
-        if additional_tokens['Tempo']:
-            self.tempos = np.linspace(*additional_tokens['tempo_range'], additional_tokens['nb_tempos'],
+        if self.additional_tokens['Tempo']:
+            self.tempos = np.linspace(*self.additional_tokens['tempo_range'], self.additional_tokens['nb_tempos'],
                                       dtype=np.intc)
 
         # Rests
