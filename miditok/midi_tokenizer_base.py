@@ -264,10 +264,18 @@ class MIDITokenizer:
         :param time_sigs: time signature changes to quantize
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
         """
-        ticks_per_bar = time_division * time_sigs[0].numerator
+        ticks_per_bar = time_division * 4 * time_sigs[0].numerator // time_sigs[0].denominator
         current_bar = 0
         previous_tick = 0  # first time signature change is always at tick 0
-        for time_sig in time_sigs[1:]:
+        prev_time_sig = time_sigs[0]
+        i = 1
+        while i < len(time_sigs):
+            time_sig = time_sigs[i]
+
+            if (time_sig.numerator, time_sig.denominator) == (prev_time_sig.numerator, prev_time_sig.denominator):
+                del time_sigs[i]
+                continue
+
             # determine the current bar of time sig
             bar_offset, rest = divmod(time_sig.time - previous_tick, ticks_per_bar)
             if rest > 0:  # time sig doesn't happen on a new bar, we update it to the next bar
@@ -275,9 +283,11 @@ class MIDITokenizer:
                 time_sig.time = previous_tick + bar_offset * ticks_per_bar
 
             # Update values
-            ticks_per_bar = time_division * time_sig.numerator
+            ticks_per_bar = time_division * 4 * time_sig.numerator // time_sig.denominator
             current_bar += bar_offset
             previous_tick = time_sig.time
+            prev_time_sig = time_sig
+            i += 1
 
     def add_sos_eos_to_seq(self, seq: List[int]):
         """ Adds Start Of Sequence (SOS) and End Of Sequence EOS tokens to a sequence of tokens:
