@@ -23,7 +23,8 @@ import time
 import miditok
 from miditoolkit import MidiFile
 
-from tests_utils import midis_equals, tempo_changes_equals, reduce_note_durations, adapt_tempo_changes_times
+from tests_utils import midis_equals, tempo_changes_equals, reduce_note_durations, adapt_tempo_changes_times, \
+    time_signature_changes_equals
 
 # Special beat res for test, up to 16 beats so the duration and time-shift values are
 # long enough for MIDI-Like and Structured encodings, and with a single beat resolution
@@ -31,10 +32,12 @@ BEAT_RES_TEST = {(0, 16): 8}
 ADDITIONAL_TOKENS_TEST = {'Chord': True,
                           'Rest': True,
                           'Tempo': True,
+                          'TimeSignature': True,
                           'Program': False,
                           'rest_range': (4, 512),  # very high value to cover every possible rest in the test files
                           'nb_tempos': 32,
-                          'tempo_range': (40, 250)}
+                          'tempo_range': (40, 250),
+                          'time_signature_range': (16, 2)}
 
 
 def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './Maestro_MIDIs',
@@ -57,6 +60,7 @@ def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = '.
             continue
         if midi.ticks_per_beat % max(BEAT_RES_TEST.values()) != 0:
             continue
+        has_errors = False
         t_midi = time.time()
 
         for encoding in encodings:
@@ -84,19 +88,29 @@ def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = '.
             # Checks notes
             errors = midis_equals(midi_to_compare, new_midi)
             if len(errors) > 0:
+                has_errors = True
                 print(f'MIDI {i} - {file_path} failed to encode/decode with '
                       f'{encoding} ({sum(len(t[2]) for t in errors)} errors)')
                 # return False
 
             # Checks tempos
-            tempo_errors = []
             if tokenizer.additional_tokens['Tempo'] and encoding != 'MuMIDI':  # MuMIDI doesn't decode tempos
                 tempo_errors = tempo_changes_equals(midi_to_compare.tempo_changes, new_midi.tempo_changes)
                 if len(tempo_errors) > 0:
+                    has_errors = True
                     '''print(f'MIDI {i} - {file_path} failed to encode/decode TEMPO changes with '
                           f'{encoding} ({len(tempo_errors)} errors)')'''
 
-            if saving_erroneous_midis and (len(errors) > 0 or len(tempo_errors) > 0):
+            # Checks time signatures
+            if tokenizer.additional_tokens['TimeSignature'] and encoding == 'Octuple':
+                time_sig_errors = time_signature_changes_equals(midi_to_compare.time_signature_changes,
+                                                                new_midi.time_signature_changes)
+                if len(time_sig_errors) > 0:
+                    has_errors = True
+                    print(f'MIDI {i} - {file_path} failed to encode/decode TIME SIGNATURE changes with '
+                          f'{encoding} ({len(time_sig_errors)} errors)')
+
+            if saving_erroneous_midis and has_errors:
                 new_midi.dump(PurePath('tests', 'test_results', f'{file_path.stem}_{encoding}')
                               .with_suffix('.mid'))
 

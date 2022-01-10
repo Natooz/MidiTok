@@ -4,7 +4,7 @@
 
 from typing import Tuple, List, Union
 
-from miditoolkit import MidiFile, Instrument, Note, TempoChange
+from miditoolkit import MidiFile, Instrument, Note, TempoChange, TimeSignature
 
 
 def midis_equals(midi1: MidiFile, midi2: MidiFile) -> List[Tuple[int, str, List[Tuple[str, Union[Note, int], int]]]]:
@@ -40,13 +40,26 @@ def notes_equals(note1: Note, note2: Note) -> str:
 
 
 def tempo_changes_equals(tempo_changes1: List[TempoChange], tempo_changes2: List[TempoChange]) \
-        -> List[Tuple[str, float]]:
+        -> List[Tuple[str, TempoChange, float]]:
     errors = []
     for tempo_change1, tempo_change2 in zip(tempo_changes1, tempo_changes2):
         if tempo_change1.time != tempo_change2.time:
-            errors.append(('time', tempo_change2.time))
+            errors.append(('time', tempo_change1, tempo_change2.time))
         if tempo_change1.tempo != tempo_change2.tempo:
-            errors.append(('tempo', tempo_change2.time))
+            errors.append(('tempo', tempo_change1, tempo_change2.tempo))
+    return errors
+
+
+def time_signature_changes_equals(time_sig_changes1: List[TimeSignature], time_sig_changes2: List[TimeSignature]) \
+        -> List[Tuple[str, TimeSignature, float]]:
+    errors = []
+    for time_sig_change1, time_sig_change2 in zip(time_sig_changes1, time_sig_changes2):
+        if time_sig_change1.time != time_sig_change2.time:
+            errors.append(('time', time_sig_change1, time_sig_change2.time))
+        if time_sig_change1.numerator != time_sig_change2.numerator:
+            errors.append(('numerator', time_sig_change1, time_sig_change2.numerator))
+        if time_sig_change1.denominator != time_sig_change2.denominator:
+            errors.append(('denominator', time_sig_change1, time_sig_change2.denominator))
     return errors
 
 
