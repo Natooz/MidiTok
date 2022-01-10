@@ -257,6 +257,8 @@ class MuMIDI(MIDITokenizer):
                 current_bar += 1
                 current_tick = current_bar * time_division * 4
             elif events[0].type == 'Position':
+                if current_bar == -1:
+                    current_bar = 0  # as this Position token occurs before any Bar token
                 current_tick = current_bar * time_division * 4 + int(events[1].value) * ticks_per_sample
             elif events[0].type == 'Program':
                 current_track = events[0].value

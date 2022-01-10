@@ -249,6 +249,8 @@ class CPWord(MIDITokenizer):
                     current_bar += 1
                     current_tick = current_bar * ticks_per_bar
                 elif compound_token[1].value != 'Ignore':  # i.e. its a position
+                    if current_bar == -1:
+                        current_bar = 0  # as this Position token occurs before any Bar token
                     current_tick = current_bar * ticks_per_bar + int(compound_token[1].value) * ticks_per_sample
                     if self.additional_tokens['Tempo']:
                         tempo = int(compound_token[-1].value)

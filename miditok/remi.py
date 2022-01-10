@@ -156,6 +156,8 @@ class REMI(MIDITokenizer):
                 current_tick += beat * time_division + pos * ticks_per_sample
                 current_bar = current_tick // ticks_per_bar
             elif event.type == 'Position':
+                if current_bar == -1:
+                    current_bar = 0  # as this Position token occurs before any Bar token
                 current_tick = current_bar * ticks_per_bar + int(event.value) * ticks_per_sample
             elif event.type == 'Tempo':
                 # If your encoding include tempo tokens, each Position token should be followed by
