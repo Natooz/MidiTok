@@ -3,7 +3,7 @@ TODO Control change messages (sustain, modulation, pitch bend)
 TODO time signature changes tokens
 
 """
-
+import math
 from sys import stdout
 from pathlib import Path, PurePath
 import json
@@ -27,7 +27,7 @@ class MIDITokenizer:
             The keys of the dict are tuples indicating a range of beats, ex 0 to 3 for the first bar
             The values are the resolution, in samples per beat, of the given range, ex 8
     :param nb_velocities: number of velocity bins
-    :param additional_tokens: specifies additional tokens (chords, rests, tempo...)
+    :param additional_tokens: specifies additional tokens (chords, rests, tempo, time signature...)
     :param sos_eos_tokens: adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens to the vocabulary
     :param params: can be a path to the parameter (json encoded) file or a dictionary
     """
@@ -65,6 +65,11 @@ class MIDITokenizer:
             assert additional_tokens['rest_range'][0] // 4 <= self._first_beat_res, \
                 'The minimum rest value must be equal or superior to the initial beat resolution'
             self.rests = self.__create_rests()
+
+        # Time Signatures
+        self.time_signatures = []
+        if self.additional_tokens['TimeSignature']:
+            self.time_signatures = self.__create_time_signatures()
 
         # Vocabulary and token types graph
         self.vocab = self._create_vocabulary(sos_eos_tokens)
@@ -130,7 +135,9 @@ class MIDITokenizer:
 
         if self.additional_tokens['Tempo']:
             self.quantize_tempos(midi.tempo_changes, midi.ticks_per_beat)
-        # quantize_time_signatures(midi.time_signature_changes, midi.ticks_per_beat)
+
+        if self.additional_tokens['TimeSignature']:
+            self.quantize_time_signatures(midi.time_signature_changes, midi.ticks_per_beat)
 
     def track_to_tokens(self, track: Instrument) -> List[Union[int, List[int]]]:
         """ Converts a track (miditoolkit.Instrument object) into a sequence of tokens
@@ -380,6 +387,67 @@ class MIDITokenizer:
         rests += [(i, 0) for i in range(1, max_beat + 1)]
         return rests
 
+    def __create_time_signatures(self) -> List[Tuple]:
+        """ Creates the possible time signatures, as tuple of the form:
+        (nb_beats, beat_res) where nb_beats is the number of beats per bar.
+        Example: (3, 4) means one bar is 3 beat long and each beat is a quarter note.
+
+        :return: the time signatures
+        """
+        max_beat_res, nb_notes = self.additional_tokens.get('time_signature_range', (4, 1))
+        assert max_beat_res > 0 and math.log2(max_beat_res).is_integer(), \
+            f'The beat resolution in time signature must be a power of 2'
+
+        time_signatures = []
+        for i in range(0, int(math.log2(max_beat_res)) + 1):  # 1 ~ max_beat_res
+            for j in range(1, ((2 ** i) * nb_notes) + 1):
+                time_signatures.append((j, 2 ** i))
+        return time_signatures
+
+    def _reduce_time_signature(self, numerator: int, denominator: int) -> Tuple[int, int]:
+        """ Reduces and decomposes a time signature into one of the valid vocabulary time signatures.
+        If time signature's denominator (beat resolution) is larger than max_beat_res,
+        the denominator and numerator are reduced to max_beat_res if possible.
+        If time signature's numerator (bar length in beats) is larger than nb_notes * denominator,
+        the numerator is replaced with its GCD not larger than nb_notes * denominator.
+
+        Example: (10, 4), max_beat_res of 8, and nb_notes of 2 will convert the signature into (5, 4)
+
+        :param numerator: time signature's numerator (bar length in beats)
+        :param denominator: time signature's denominator (beat resolution)
+        :return: the numerator and denominator of a reduced and decomposed time signature
+        """
+        max_beat_res, nb_notes = self.additional_tokens['time_signature_range']
+
+        # reduction (when denominator exceed max_beat_res)
+        while denominator > max_beat_res and denominator % 2 == 0 and numerator % 2 == 0:
+            denominator //= 2
+            numerator //= 2
+
+        assert denominator <= max_beat_res, \
+            f'Unsupported time signature ({numerator}/{denominator}), ' \
+            f'beat resolution is irreducible to maximum beat resolution {max_beat_res}'
+
+        # decomposition (when length of a bar exceed max_nb_beats_per_bar)
+        while numerator > nb_notes * denominator:
+            for i in range(2, numerator + 1):
+                if numerator % i == 0:
+                    numerator //= i
+                    break
+
+        return numerator, denominator
+
+    @staticmethod
+    def _parse_token_time_signature(token_time_sig: str) -> Tuple[int, int]:
+        """ Converts a time signature token value of the form x/x into a tuple of integers,
+        time signature's numerator (bar length in beats) and denominator (beat resolution).
+
+        :param token_time_sig: TimeSig token value
+        :return: the numerator and denominator of a time signature
+        """
+        numerator, denominator = map(int, token_time_sig.split('/'))
+        return numerator, denominator
+
     def tokenize_midi_dataset(self, midi_paths: Union[List[str], List[Path], List[PurePath]],
                               out_dir: Union[str, Path, PurePath], validation_fn: Callable[[MidiFile], bool] = None,
                               logging: bool = True):
@@ -511,6 +579,8 @@ class MIDITokenizer:
         for key, value in params.items():
             if key == 'beat_res':
                 value = {tuple(map(int, beat_range.split('_'))): res for beat_range, res in value.items()}
+            elif key == 'additional_tokens':
+                value['TimeSignature'] = value.get('TimeSignature', False)
             setattr(self, key, value)
 
 
