@@ -10,16 +10,20 @@ NB_VELOCITIES = 32  # nb of velocity bins, velocities values from 0 to 127 will 
 ADDITIONAL_TOKENS = {'Chord': False,
                      'Rest': False,
                      'Tempo': False,
+                     'TimeSignature': False,
                      'Program': False,
                      # rest params
                      'rest_range': (2, 8),  # (/min_rest, max_rest_in_BEAT), first divides a whole note/rest
                      # tempo params
                      'nb_tempos': 32,  # nb of tempo bins for additional tempo tokens, quantized like velocities
-                     'tempo_range': (40, 250)}  # (min_tempo, max_tempo)
+                     'tempo_range': (40, 250),  # (min_tempo, max_tempo)
+                     # time signature params
+                     'time_signature_range': (8, 2)}  # (max_beat_res, max_bar_length_in_NOTE)
 
 # Defaults values when writing new MIDI files
 TIME_DIVISION = 384  # 384 and 480 are convenient as divisible by 4, 8, 12, 16, 24, 32
 TEMPO = 120
+TIME_SIGNATURE = (4, 4)
 
 CHORD_MAPS = {'min': (0, 3, 7),
               'maj': (0, 4, 7),

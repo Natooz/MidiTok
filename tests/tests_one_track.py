@@ -18,18 +18,20 @@ import time
 import miditok
 from miditoolkit import MidiFile, Marker
 
-from tests_utils import track_equals, tempo_changes_equals
+from tests_utils import track_equals, tempo_changes_equals, time_signature_changes_equals
 
 # Special beat res for test, up to 64 beats so the duration and time-shift values are
 # long enough for MIDI-Like and Structured encodings, and with a single beat resolution
 BEAT_RES_TEST = {(0, 64): 8}
-ADDITIONAL_TOKENS_TEST = {'Chord': True,  # set to false to speed up tests as it takes some time on maestro MIDIs
+ADDITIONAL_TOKENS_TEST = {'Chord': False,  # set to false to speed up tests as it takes some time on maestro MIDIs
                           'Rest': True,
                           'Tempo': True,
+                          'TimeSignature': True,
                           'Program': False,
                           'rest_range': (4, 16),
                           'nb_tempos': 32,
-                          'tempo_range': (40, 250)}
+                          'tempo_range': (40, 250),
+                          'time_signature_range': (16, 2)}
 
 
 def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './Maestro_MIDIs',
@@ -74,11 +76,13 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
 
             # Convert back tokens into a track object
             tempo_changes = None
+            time_sig_changes = None
             if encoding == 'Octuple' or encoding == 'MuMIDI':
                 new_midi = tokenizer.tokens_to_midi(tokens, time_division=midi.ticks_per_beat)
                 track = new_midi.instruments[0]
                 if encoding == 'Octuple':
                     tempo_changes = new_midi.tempo_changes
+                    time_sig_changes = new_midi.time_signature_changes
             else:
                 track, tempo_changes = tokenizer.tokens_to_track(tokens[0], midi.ticks_per_beat)
 
@@ -102,6 +106,14 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
                     has_errors = True
                     print(f'MIDI {i} - {file_path} failed to encode/decode TEMPO changes with '
                           f'{encoding} ({len(tempo_errors)} errors)')
+
+            # Checks time signatures
+            if time_sig_changes is not None and tokenizer.additional_tokens['TimeSignature']:
+                time_sig_errors = time_signature_changes_equals(midi.time_signature_changes, time_sig_changes)
+                if len(time_sig_errors) > 0:
+                    has_errors = True
+                    print(f'MIDI {i} - {file_path} failed to encode/decode TIME SIGNATURE changes with '
+                          f'{encoding} ({len(time_sig_errors)} errors)')
 
         bar_len = 30
         filled_len = int(round(bar_len * (i+1) / len(files)))
