@@ -279,7 +279,8 @@ class MIDITokenizer:
         while i < len(time_sigs):
             time_sig = time_sigs[i]
 
-            if (time_sig.numerator, time_sig.denominator) == (prev_time_sig.numerator, prev_time_sig.denominator):
+            if (time_sig.numerator, time_sig.denominator) == (prev_time_sig.numerator, prev_time_sig.denominator) or \
+                    time_sig.time == previous_tick:
                 del time_sigs[i]
                 continue
 

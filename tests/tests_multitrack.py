@@ -71,7 +71,7 @@ def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = '.
             new_midi = midi_to_tokens_to_midi(tokenizer, midi)
 
             # Process the MIDI
-            midi_to_compare = deepcopy(midi)  # midi notes / tempos quantized by the line above
+            midi_to_compare = deepcopy(midi)  # midi notes / tempos / time signature quantized with the line above
             for track in midi_to_compare.instruments:  # reduce the duration of notes to long
                 reduce_note_durations(track.notes, max(tu[1] for tu in BEAT_RES_TEST) * midi.ticks_per_beat)
                 if track.is_drum:
@@ -89,7 +89,12 @@ def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = '.
             errors = midis_equals(midi_to_compare, new_midi)
             if len(errors) > 0:
                 has_errors = True
-                print(f'MIDI {i} - {file_path} failed to encode/decode with '
+                '''for track_err in errors:
+                    if track_err[-1][0] != 'len':
+                        for err, note, exp in track_err[-1]:
+                            new_midi.markers.append(Marker(f'ERR {encoding} with note {err} (pitch {note.pitch})',
+                                                           note.start))'''
+                print(f'MIDI {i} - {file_path} failed to encode/decode NOTES with '
                       f'{encoding} ({sum(len(t[2]) for t in errors)} errors)')
                 # return False
 
@@ -98,8 +103,8 @@ def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = '.
                 tempo_errors = tempo_changes_equals(midi_to_compare.tempo_changes, new_midi.tempo_changes)
                 if len(tempo_errors) > 0:
                     has_errors = True
-                    '''print(f'MIDI {i} - {file_path} failed to encode/decode TEMPO changes with '
-                          f'{encoding} ({len(tempo_errors)} errors)')'''
+                    print(f'MIDI {i} - {file_path} failed to encode/decode TEMPO changes with '
+                          f'{encoding} ({len(tempo_errors)} errors)')
 
             # Checks time signatures
             if tokenizer.additional_tokens['TimeSignature'] and encoding == 'Octuple':
@@ -123,7 +128,6 @@ def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = '.
         print(prog)
 
     print(f'Took {time.time() - t0} seconds')
-    return True
 
 
 def midi_to_tokens_to_midi(tokenizer: miditok.MIDITokenizer, midi: MidiFile) -> MidiFile:

@@ -35,7 +35,7 @@ ADDITIONAL_TOKENS_TEST = {'Chord': False,  # set to false to speed up tests as i
 
 
 def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './Maestro_MIDIs',
-                                     saving_erroneous_midis: bool = True) -> bool:
+                                     saving_erroneous_midis: bool = True):
     """ Reads a few MIDI files, convert them into token sequences, convert them back to MIDI files.
     The converted back MIDI files should identical to original one, expect with note starting and ending
     times quantized, and maybe a some duplicated notes removed
@@ -94,7 +94,7 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
                     for err, note, exp in errors:
                         midi.markers.append(Marker(f'ERR {encoding} with note {err} (pitch {note.pitch})',
                                                    note.start))
-                print(f'MIDI {i} - {file_path} failed to encode/decode MIDI with {encoding} ({len(errors)} errors)')
+                print(f'MIDI {i} - {file_path} failed to encode/decode NOTES with {encoding} ({len(errors)} errors)')
                 # return False
             track.name = f'encoded with {encoding}'
             tracks.append(track)
@@ -132,7 +132,6 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
             midi.dump(PurePath('tests', 'test_results', file_path.name))
 
     print(f'Took {time.time() - t0} seconds')
-    return True
 
 
 if __name__ == "__main__":
