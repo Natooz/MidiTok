@@ -1,4 +1,4 @@
-""" Vocabulary class
+"""Vocabulary class
 
 """
 
@@ -6,7 +6,7 @@ from typing import List, Tuple, Dict, Union, Generator
 
 
 class Event:
-    """ Event class, representing a token and its characteristics
+    """Event class, representing a token and its characteristics
     The type corresponds to the token type (e.g. Pitch, Position ...);
     The value to its value.
     These two attributes are used to build its string representation (__str__),
@@ -27,7 +27,7 @@ class Event:
 
 
 class Vocabulary:
-    """ Vocabulary class.
+    """Vocabulary class.
     Get an element of the vocabulary from its index, such as:
         token = vocab['Pitch_80']  # gets the token of this event
         event = vocab[140]  # gets the event corresponding to token 140
@@ -62,7 +62,7 @@ class Vocabulary:
             self.add_sos_eos_to_vocab()
 
     def add_event(self, event: Union[Event, str, Generator], index: int = None):
-        """ Adds one or multiple entries to the vocabulary
+        """Adds one or multiple entries to the vocabulary
 
         :param event: event to add, either as an Event object or string of the form "Type_Value", e.g. Pitch_80
         :param index: (optional) index to set this event, if not given it will be set to last
@@ -78,7 +78,7 @@ class Vocabulary:
             self.__add_distinct_event(str(event), index)
 
     def __add_distinct_event(self, event: str, index: int = None):
-        """ Private: Adds an event to the vocabulary
+        """Private: Adds an event to the vocabulary
 
         :param event: event to add, as a formatted string of the form "Type_Value", e.g. Pitch_80
         :param index: (optional) index to set this event, if not given it will be set to last
@@ -100,7 +100,7 @@ class Vocabulary:
         self.count += 1
 
     def token_type(self, token: int) -> str:
-        """ Returns the type of a given token
+        """Returns the type of a given token
 
         :param token: token to get type from
         :return: the type of the token, as a string
@@ -108,7 +108,7 @@ class Vocabulary:
         return self._token_to_event[token].split('_')[0]
 
     def tokens_of_type(self, token_type: str) -> List[int]:
-        """ Returns the list of tokens of the given type
+        """Returns the list of tokens of the given type
 
         :param token_type: token type to get the associated tokens
         :return: list of tokens
@@ -116,12 +116,12 @@ class Vocabulary:
         return self._token_types_indexes[token_type]
 
     def add_sos_eos_to_vocab(self):
-        """ Adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens
-        to the vocabulary, to -1 and -2 respectively.
+        """Adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens
+        to the vocabulary.
         """
-        self.__add_distinct_event('SOS_None', -1)
-        self.__add_distinct_event('EOS_None', -2)
-        self.count -= 2
+        self.__add_distinct_event('SOS_None', self.count)
+        self.__add_distinct_event('EOS_None', self.count + 1)
+        self.count += 2
 
     def __getitem__(self, item: Union[int, str]) -> Union[str, int]:
         if isinstance(item, str):

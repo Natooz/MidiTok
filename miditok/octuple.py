@@ -132,7 +132,7 @@ class Octuple(MIDITokenizer):
         current_time_sig_bar = 0
         time_sig_change = self.current_midi_metadata['time_sig_changes'][current_time_sig_idx]
         current_time_sig = self._reduce_time_signature(time_sig_change.numerator, time_sig_change.denominator)
-        ticks_per_bar = time_division * 4 * current_time_sig[0] // current_time_sig[1]
+        ticks_per_bar = time_division * current_time_sig[0]
 
         for note in track.notes:
             # Positions and bars
@@ -185,7 +185,7 @@ class Octuple(MIDITokenizer):
                             current_time_sig_idx += 1  # update time signature value (might not change) and index
                             current_time_sig_bar += (time_sig_change.time - current_time_sig_tick) // ticks_per_bar
                             current_time_sig_tick = time_sig_change.time
-                            ticks_per_bar = time_division * 4 * current_time_sig[0] // current_time_sig[1]
+                            ticks_per_bar = time_division * current_time_sig[0]
                         elif time_sig_change.time > note.start:
                             break  # this time signature change is beyond the current time step, we break the loop
                 event.append(self.vocab.event_to_token[f'TimeSig_{current_time_sig[0]}/{current_time_sig[1]}'])
@@ -232,7 +232,7 @@ class Octuple(MIDITokenizer):
             time_sig = self._parse_token_time_signature(self.tokens_to_events(tokens[0])[-1].value)
         else:  # default
             time_sig = TIME_SIGNATURE
-        ticks_per_bar = time_division * 4 * time_sig[0] // time_sig[1]
+        ticks_per_bar = time_division * time_sig[0]
         time_sig_changes = [TimeSignature(*time_sig, 0)]
 
         current_time_sig_tick = 0
@@ -269,7 +269,7 @@ class Octuple(MIDITokenizer):
                 if time_sig != (time_sig_changes[-1].numerator, time_sig_changes[-1].denominator):
                     current_time_sig_tick += (current_bar - current_time_sig_bar) * ticks_per_bar
                     current_time_sig_bar = current_bar
-                    ticks_per_bar = time_division * 4 * time_sig[0] // time_sig[1]
+                    ticks_per_bar = time_division * time_sig[0]
                     time_sig_changes.append(TimeSignature(*time_sig, current_time_sig_tick))
 
         # Tempos

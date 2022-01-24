@@ -271,7 +271,7 @@ class MIDITokenizer:
         :param time_sigs: time signature changes to quantize
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
         """
-        ticks_per_bar = time_division * 4 * time_sigs[0].numerator // time_sigs[0].denominator
+        ticks_per_bar = time_division * time_sigs[0].numerator
         current_bar = 0
         previous_tick = 0  # first time signature change is always at tick 0
         prev_time_sig = time_sigs[0]
@@ -291,7 +291,7 @@ class MIDITokenizer:
                 time_sig.time = previous_tick + bar_offset * ticks_per_bar
 
             # Update values
-            ticks_per_bar = time_division * 4 * time_sig.numerator // time_sig.denominator
+            ticks_per_bar = time_division * time_sig.numerator
             current_bar += bar_offset
             previous_tick = time_sig.time
             prev_time_sig = time_sig
