@@ -144,7 +144,7 @@ The Bar and Position embeddings can act as a positional encoding, but the author
 NOTES:
 * In MidiTok, the tokens are first sorted by time, then track, then pitch values.
 * This implementation uses _Program_ tokens to distinguish tracks, on their MIDI program. Hence, two tracks with the same program will be treated as being the same.
-* Time signature tokens are not implemented in MidiTok.
+* Time signature and Tempo tokens are optional in MidiTok, you can chose to use them or not with the ```additional_tokens``` parameter.
 * [Octuple Mono](miditok/octuple_mono.py) is a modified version with no program embedding at each time step.
 
 ![Octuple figure](https://github.com/Natooz/MidiTok/blob/assets/assets/octuple.png?raw=true "Octuple sequence, with a bar and position embeddings")
