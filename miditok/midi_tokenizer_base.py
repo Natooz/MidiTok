@@ -480,6 +480,8 @@ class MIDITokenizer:
             # Some MIDIs can contains errors that are raised by Mido, if so the loop continues
             try:
                 midi = MidiFile(PurePath(midi_path))
+            except FileNotFoundError:
+                print(f'File not found: {midi_path}')
             except Exception as _:  # ValueError, OSError, FileNotFoundError, IOError, EOFError, mido.KeySignatureError
                 continue
 
