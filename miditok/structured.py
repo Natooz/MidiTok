@@ -193,9 +193,7 @@ class Structured(MIDITokenizer):
         current_pitches = []
 
         def check(tok: int):
-            nonlocal err
-            nonlocal previous_type
-            nonlocal current_pitches
+            nonlocal err, previous_type, current_pitches
             token_type, token_value = self.vocab.token_to_event[tok].split('_')
 
             # Good token type

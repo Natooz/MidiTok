@@ -385,10 +385,7 @@ class CPWord(MIDITokenizer):
         current_pitches = []
 
         def check(tok: List[int]):
-            nonlocal err
-            nonlocal previous_type
-            nonlocal current_pos
-            nonlocal current_pitches
+            nonlocal err, previous_type, current_pos, current_pitches
             token_type, token_value = cp_token_type(tok)
             # Good token type
             if token_type in self.tokens_types_graph[previous_type]:

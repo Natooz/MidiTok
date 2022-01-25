@@ -289,8 +289,7 @@ class MIDILike(MIDITokenizer):
         current_pitches = []
 
         def check(tok: int):
-            nonlocal err
-            nonlocal previous_type
+            nonlocal err, previous_type
             token_type, token_value = self.vocab.token_to_event[tok].split('_')
 
             # Good token type
