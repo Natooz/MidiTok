@@ -1,8 +1,15 @@
 # MidiTok
 
-MidiTok is a package for MIDI encoding / tokenization for deep neural networks. It "tokenize" MIDI files as for text in the NLP field, to use them with Transformers or RNNs.
+Python package to tokenize MIDI music files.
 
-MidiTok features most known MIDI encoding strategies, and is built around the idea that they all share common parameters and methods.
+[![PyPI version fury.io](https://badge.fury.io/py/miditok.svg)](https://pypi.python.org/pypi/miditok/)
+[![GitHub license](https://img.shields.io/github/license/Natooz/MidiTok.svg)](https://github.com/Natooz/MidiTok/blob/main/LICENSE)
+
+![MidiTok Logo](https://github.com/Natooz/MidiTok/blob/assets/assets/logo.png?raw=true "")
+
+
+MidiTok converts MIDI music files into sequences of tokens, i.e. integers, ready to be fed to sequential neural networks like Transformers or RNNs.
+MidiTok features most known MIDI tokenization strategies, and is built around the idea that they all share common parameters and methods.
 
 ## Install
 
