@@ -46,7 +46,7 @@ class Vocabulary:
         if event_to_token is None:
             event_to_token = {}
         self._event_to_token = event_to_token
-        self.count = len(event_to_token)
+        self.custom_indexes = False  # will be set True if custom indexes have been used
 
         self._token_to_event = {}
         self._token_types_indexes = {}
@@ -59,7 +59,7 @@ class Vocabulary:
                 self._token_types_indexes[token_type] = [token]
 
         if sos_eos:
-            self.add_sos_eos_to_vocab()
+            self.add_sos_eos()
 
     def add_event(self, event: Union[Event, str, Generator], index: int = None):
         """Adds one or multiple entries to the vocabulary
@@ -84,10 +84,14 @@ class Vocabulary:
         :param index: (optional) index to set this event, if not given it will be set to last
         """
         if index is not None:
+            self.custom_indexes = True
             if index in self._token_to_event:
                 raise ValueError(f'Index {index} already used by {self._token_to_event[index]} event')
         else:
-            index = self.count
+            index = len(self._token_to_event)
+            if self.custom_indexes:  # no need to check if no custom index have been used
+                while index in self._token_to_event.keys():  # assert the index isn't already used
+                    index += 1
 
         self._event_to_token[event] = index
         self._token_to_event[index] = event
@@ -97,10 +101,9 @@ class Vocabulary:
             self._token_types_indexes[event_type].append(index)
         else:
             self._token_types_indexes[event_type] = [index]
-        self.count += 1
 
     def token_type(self, token: int) -> str:
-        """Returns the type of a given token
+        """Returns the type of the given token
 
         :param token: token to get type from
         :return: the type of the token, as a string
@@ -115,13 +118,18 @@ class Vocabulary:
         """
         return self._token_types_indexes[token_type]
 
-    def add_sos_eos_to_vocab(self):
+    def add_mask(self):
+        """Adds a MASK token to the vocabulary. This may be used to
+        pre-train a model, such as for BERT, before finetuning it.
+        """
+        self.__add_distinct_event('MASK_None')
+
+    def add_sos_eos(self):
         """Adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens
         to the vocabulary.
         """
-        self.__add_distinct_event('SOS_None', self.count)
-        self.__add_distinct_event('EOS_None', self.count + 1)
-        self.count += 2
+        self.__add_distinct_event('SOS_None')
+        self.__add_distinct_event('EOS_None')
 
     def __getitem__(self, item: Union[int, str]) -> Union[str, int]:
         if isinstance(item, str):
