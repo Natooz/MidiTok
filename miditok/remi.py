@@ -223,7 +223,7 @@ class REMI(MIDITokenizer):
 
         # SOS & EOS
         if sos_eos_tokens:
-            vocab.add_sos_eos_to_vocab()
+            vocab.add_sos_eos()
 
         return vocab
 
@@ -256,7 +256,7 @@ class REMI(MIDITokenizer):
             dic['Position'] += ['Chord']
 
         if self.additional_tokens['Tempo']:
-            dic['Tempo'] = ['Chord', 'Pitch'] if self.additional_tokens['Chord'] else ['Chord']
+            dic['Tempo'] = ['Chord', 'Pitch'] if self.additional_tokens['Chord'] else ['Pitch']
             dic['Position'] += ['Tempo']
 
         if self.additional_tokens['Rest']:

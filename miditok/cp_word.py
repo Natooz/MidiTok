@@ -318,7 +318,7 @@ class CPWord(MIDITokenizer):
 
         # SOS & EOS
         if sos_eos_tokens:
-            vocab.add_sos_eos_to_vocab()
+            vocab.add_sos_eos()
 
         return vocab
 

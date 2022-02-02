@@ -34,6 +34,7 @@ class MIDILike(MIDITokenizer):
     :param sos_eos_tokens: adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens to the vocabulary
     :param params: can be a path to the parameter (json encoded) file or a dictionary
     """
+
     def __init__(self, pitch_range: range = PITCH_RANGE, beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
                  nb_velocities: int = NB_VELOCITIES, additional_tokens: Dict[str, bool] = ADDITIONAL_TOKENS,
                  sos_eos_tokens: bool = False, params=None):
@@ -83,7 +84,7 @@ class MIDILike(MIDITokenizer):
             # (Rest)
             elif self.additional_tokens['Rest'] and event.type in ['Note-On', 'Tempo'] \
                     and event.time - previous_note_end >= min_rest:
-                rest_beat, rest_pos = divmod(event.time-previous_tick, self.current_midi_metadata['time_division'])
+                rest_beat, rest_pos = divmod(event.time - previous_tick, self.current_midi_metadata['time_division'])
                 rest_beat = min(rest_beat, max([r[0] for r in self.rests]))
                 rest_pos = round(rest_pos / ticks_per_sample)
                 rest_tick = previous_tick  # untouched tick value to the order is not messed after sorting
@@ -159,7 +160,7 @@ class MIDILike(MIDITokenizer):
                         # look for an associated note off event to get duration
                         offset_tick = 0
                         duration = 0
-                        for i in range(ei+1, len(events)):
+                        for i in range(ei + 1, len(events)):
                             if events[i].type == 'Note-Off' and int(events[i].value) == pitch:
                                 duration = offset_tick
                                 break
@@ -234,7 +235,7 @@ class MIDILike(MIDITokenizer):
 
         # SOS & EOS
         if sos_eos_tokens:
-            vocab.add_sos_eos_to_vocab()
+            vocab.add_sos_eos()
 
         return vocab
 
@@ -285,38 +286,43 @@ class MIDILike(MIDITokenizer):
         :return: the error ratio (lower is better)
         """
         err = 0
-        previous_type = self.vocab.token_type(tokens[0])
         current_pitches = []
+        max_duration = self.durations[-1][0] * max(self.beat_res.values())
+        max_duration += self.durations[-1][1] * (max(self.beat_res.values()) // self.durations[-1][2])
 
-        def check(tok: int):
-            nonlocal err, previous_type
-            token_type, token_value = self.vocab.token_to_event[tok].split('_')
+        events = self.tokens_to_events(tokens)
 
+        for i in range(1, len(events)):
             # Good token type
-            if token_type in self.tokens_types_graph[previous_type]:
-                if token_type == 'Note-On':
-                    if int(token_value) in current_pitches:
+            if events[i].type in self.tokens_types_graph[events[i - 1].type]:
+                if events[i].type == 'Note-On':
+                    if int(events[i].value) in current_pitches:
                         err += 1  # pitch already being played
-                    else:
-                        current_pitches.append(int(token_value))
-                elif token_type == 'Note-Off':
-                    if int(token_value) not in current_pitches:
+                        continue
+
+                    current_pitches.append(int(events[i].value))
+                    # look for an associated note off event to get duration
+                    offset_sample = 0
+                    for j in range(i + 1, len(events)):
+                        if events[j].type == 'Note-Off' and int(events[j].value) == int(events[i].value):
+                            break  # all good
+                        elif events[j].type == 'Time-Shift':
+                            offset_sample += self._token_duration_to_ticks(events[j].value, max(self.beat_res.values()))
+
+                        if offset_sample > max_duration:  # will not look for Note Off beyond
+                            err += 1
+                elif events[i].type == 'Note-Off':
+                    if int(events[i].value) not in current_pitches:
                         err += 1  # this pitch wasn't being played
                     else:
-                        current_pitches.remove(int(token_value))
+                        current_pitches.remove(int(events[i].value))
+                elif not consider_pad and events[i].type == 'PAD':
+                    break
+
             # Bad token type
             else:
                 err += 1
-            previous_type = token_type
 
-        if consider_pad:
-            for token in tokens[1:]:
-                check(token)
-        else:
-            for token in tokens[1:]:
-                if previous_type == 'PAD':
-                    break
-                check(token)
         return err / len(tokens)
 
     @staticmethod

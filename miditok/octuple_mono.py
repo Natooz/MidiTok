@@ -206,7 +206,7 @@ class OctupleMono(MIDITokenizer):
 
         # SOS & EOS
         if sos_eos_tokens:
-            vocab.add_sos_eos_to_vocab()
+            vocab.add_sos_eos()
 
         # BAR --- MUST BE LAST IN DIC AS THIS MIGHT BE INCREASED
         vocab.add_event('Bar_None')  # new bar token

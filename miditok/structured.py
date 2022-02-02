@@ -38,7 +38,8 @@ class Structured(MIDITokenizer):
                  nb_velocities: int = NB_VELOCITIES, program_tokens: bool = ADDITIONAL_TOKENS['Program'],
                  sos_eos_tokens: bool = False, params=None):
         # No additional tokens
-        additional_tokens = {'Chord': False, 'Rest': False, 'Tempo': False, 'Program': program_tokens}
+        additional_tokens = {'Chord': False, 'Rest': False, 'Tempo': False, 'TimeSignature': False,
+                             'Program': program_tokens}
         super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, sos_eos_tokens, params)
 
     def track_to_tokens(self, track: Instrument) -> List[int]:
@@ -162,7 +163,7 @@ class Structured(MIDITokenizer):
 
         # SOS & EOS
         if sos_eos_tokens:
-            vocab.add_sos_eos_to_vocab()
+            vocab.add_sos_eos()
 
         return vocab
 
