@@ -311,6 +311,7 @@ class MIDILike(MIDITokenizer):
 
                         if offset_sample > max_duration:  # will not look for Note Off beyond
                             err += 1
+                            break
                 elif events[i].type == 'Note-Off':
                     if int(events[i].value) not in current_pitches:
                         err += 1  # this pitch wasn't being played
