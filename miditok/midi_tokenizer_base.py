@@ -685,20 +685,46 @@ def detect_chords(notes: List[Note], time_division: int, beat_res: int = 4, onse
     return events
 
 
-def merge_tracks(tracks: List[Instrument]) -> Instrument:
-    """ Merge several miditoolkit Instrument objects
+def merge_tracks(tracks: Union[List[Instrument], MidiFile], effects: bool = False) -> Instrument:
+    """ Merge several miditoolkit Instrument objects, from a list of Instruments or a MidiFile object.
     All the tracks will be merged into the first Instrument object (notes concatenated and sorted),
-    beware of giving tracks with the same program (no assessment is performed)
+    beware of giving tracks with the same program (no assessment is performed).
     The other tracks will be deleted.
 
-    :param tracks: list of tracks to merge
+    :param tracks: list of tracks to merge, or MidiFile object
+    :param effects: will also merge effects, i.e. control changes, sustain pedals and pitch bends
     :return: the merged track
     """
-    tracks[0].name += ''.join([' / ' + t.name for t in tracks[1:]])
-    tracks[0].notes = sum((t.notes for t in tracks), [])
-    tracks[0].notes.sort(key=lambda note: note.start)
-    tracks = [tracks[0]]
-    return tracks[0]
+    if isinstance(tracks, MidiFile):
+        tracks_ = tracks.instruments
+    else:
+        tracks_ = tracks
+
+    # Change name
+    tracks_[0].name += ''.join([' / ' + t.name for t in tracks_[1:]])
+
+    # Gather and sort notes
+    tracks_[0].notes = sum((t.notes for t in tracks_), [])
+    tracks_[0].notes.sort(key=lambda note: note.start)
+    if effects:
+        # Pedals
+        tracks_[0].pedals = sum((t.pedals for t in tracks_), [])
+        tracks_[0].pedals.sort(key=lambda pedal: pedal.start)
+        # Control changes
+        tracks_[0].control_changes = sum((t.control_changes for t in tracks_), [])
+        tracks_[0].control_changes.sort(key=lambda control_change: control_change.time)
+        # Pitch bends
+        tracks_[0].pitch_bends = sum((t.pitch_bends for t in tracks_), [])
+        tracks_[0].pitch_bends.sort(key=lambda pitch_bend: pitch_bend.start)
+
+    # Keeps only one track
+    if isinstance(tracks, MidiFile):
+        tracks.instruments = [tracks_[0]]
+    else:
+        for _ in range(1, len(tracks)):
+            del tracks[1]
+        tracks[0] = tracks_[0]
+    return tracks_[0]
 
 
 def merge_same_program_tracks(tracks: List[Instrument]):
