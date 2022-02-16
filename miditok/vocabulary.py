@@ -84,9 +84,10 @@ class Vocabulary:
         :param index: (optional) index to set this event, if not given it will be set to last
         """
         if index is not None:
-            self.custom_indexes = True
-            if index in self._token_to_event:
+            if index in self._token_to_event:  # first checks if index is already used
                 raise ValueError(f'Index {index} already used by {self._token_to_event[index]} event')
+            if index != len(self._event_to_token):  # index == len(self._event_to_token) <=> index == None, as below
+                self.custom_indexes = True
         else:
             index = len(self._token_to_event)
             if self.custom_indexes:  # no need to check if no custom index have been used

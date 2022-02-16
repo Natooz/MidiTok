@@ -481,7 +481,8 @@ class MIDITokenizer:
             try:
                 midi = MidiFile(PurePath(midi_path))
             except FileNotFoundError:
-                print(f'File not found: {midi_path}')
+                if logging:
+                    print(f'File not found: {midi_path}')
                 continue
             except Exception as _:  # ValueError, OSError, FileNotFoundError, IOError, EOFError, mido.KeySignatureError
                 continue
