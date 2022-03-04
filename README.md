@@ -231,6 +231,7 @@ Contributions are gratefully welcomed, feel free to send a PR if you want to add
 * Allow switching between beat / second time unit
 * Control Change messages
 * Automatic data augmentation on pitch
+* Documentation website
 
 ## Citations
 
@@ -312,5 +313,5 @@ Contributions are gratefully welcomed, feel free to send a PR if you want to add
 
 ## Acknowledgments
 
-We acknowledge [Aubay](https://www.aubay.com/index.php/language/en/home/?lang=en), the [LIP6](https://www.lip6.fr/?LANG=en), [LERIA](http://blog.univ-angers.fr/leria/n) and [ESEO](https://eseo.fr/en) for the financing and support of this project.
+We acknowledge [Aubay](https://blog.aubay.com/index.php/language/en/home/?lang=en), the [LIP6](https://www.lip6.fr/?LANG=en), [LERIA](http://blog.univ-angers.fr/leria/n) and [ESEO](https://eseo.fr/en) for the financing and support of this project.
 Special thanks to all the contributors.
