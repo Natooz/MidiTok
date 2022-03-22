@@ -142,7 +142,7 @@ class Structured(MIDITokenizer):
         :param sos_eos_tokens: will include Start Of Sequence (SOS) and End Of Sequence (tokens)
         :return: the vocabulary object
         """
-        vocab = Vocabulary({'PAD_None': 0, 'Bar_None': 1})
+        vocab = Vocabulary({'PAD_None': 0})
 
         # PITCH
         vocab.add_event(f'Pitch_{i}' for i in self.pitch_range)
