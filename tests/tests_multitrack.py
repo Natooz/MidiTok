@@ -33,7 +33,7 @@ ADDITIONAL_TOKENS_TEST = {'Chord': True,
                           'Rest': True,
                           'Tempo': True,
                           'TimeSignature': True,
-                          'Program': False,
+                          'Program': True,
                           'rest_range': (4, 512),  # very high value to cover every possible rest in the test files
                           'nb_tempos': 32,
                           'tempo_range': (40, 250),
