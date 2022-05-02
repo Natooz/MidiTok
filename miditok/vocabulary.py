@@ -38,10 +38,11 @@ class Vocabulary:
     Read add_event docstring for how to give arguments.
 
     :param event_to_token: a dictionary mapping events to tokens to initialize the vocabulary
-    :param sos_eos: will include Start Of Sequence (SOS) and End Of Sequence (tokens) (default None)
+    :param sos_eos: will include Start Of Sequence (SOS) and End Of Sequence (tokens) (default False)
+    :param mask: will add a MASK token to the vocabulary (default: False)
     """
 
-    def __init__(self, event_to_token: Dict[str, int] = None, sos_eos: bool = False):
+    def __init__(self, event_to_token: Dict[str, int] = None, sos_eos: bool = False, mask: bool = False):
 
         if event_to_token is None:
             event_to_token = {}
@@ -58,8 +59,10 @@ class Vocabulary:
             else:
                 self._token_types_indexes[token_type] = [token]
 
+        if mask:
+            self.__add_mask()
         if sos_eos:
-            self.add_sos_eos()
+            self.__add_sos_eos()
 
     def add_event(self, event: Union[Event, str, Generator], index: int = None):
         """Adds one or multiple entries to the vocabulary
@@ -119,13 +122,13 @@ class Vocabulary:
         """
         return self._token_types_indexes[token_type]
 
-    def add_mask(self):
+    def __add_mask(self):
         """Adds a MASK token to the vocabulary. This may be used to
         pre-train a model, such as for BERT, before finetuning it.
         """
         self.__add_distinct_event('MASK_None')
 
-    def add_sos_eos(self):
+    def __add_sos_eos(self):
         """Adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens
         to the vocabulary.
         """

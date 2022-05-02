@@ -36,7 +36,7 @@ additional_tokens = {'Chord': True, 'Rest': True, 'Tempo': True, 'Program': Fals
                      'tempo_range': (40, 250)}  # (min, max)
 
 # Creates the tokenizer and loads a MIDI
-tokenizer = REMI(pitch_range, beat_res, nb_velocities, additional_tokens)
+tokenizer = REMI(pitch_range, beat_res, nb_velocities, additional_tokens, mask=True)
 midi = MidiFile('path/to/your_midi.mid')
 
 # Converts MIDI to tokens, and back to a MIDI
@@ -60,13 +60,15 @@ from miditok import REMI
 from pathlib import Path
 
 # Creates the tokenizer and list the file paths
-tokenizer = REMI()  # uses defaults parameters
+tokenizer = REMI(mask=True)  # using defaults parameters (constants.py), with MASK tokens for pre-training
 paths = list(Path('path', 'to', 'dataset').glob('**/*.mid'))
 
 # A validation method to discard MIDIs we do not want
+# It can also be used for custom pre-processing, for instance if you want to merge
+# some tracks before tokenizing a MIDI file
 def midi_valid(midi) -> bool:
-    if any(ts.numerator != 4 or ts.denominator != 4 for ts in midi.time_signature_changes):
-        return False  # time signature different from 4/4
+    if any(ts.numerator != 4 for ts in midi.time_signature_changes):
+        return False  # time signature different from 4/*, 4 beats per bar
     if midi.max_tick < 10 * midi.ticks_per_beat:
         return False  # this MIDI is too short
     return True
@@ -82,16 +84,16 @@ from miditok import REMI
 import torch
 
 # Creates the tokenizer and list the file paths
-remi_enc = REMI()  # uses defaults parameters in constants.py
+tokenizer = REMI(mask=True)  # using defaults parameters (constants.py), with MASK tokens for pre-training
 
 # The tokens, let's say produced by your Transformer, 4 tracks of 500 tokens
-tokens = torch.randint(low=0, high=len(remi_enc.vocab), size=(4, 500)).tolist()
+tokens = torch.randint(low=0, high=len(tokenizer.vocab), size=(4, 500)).tolist()
 
 # The instruments, here piano, violin, french horn and drums
 programs = [(0, False), (41, False), (61, False), (0, True)]
 
 # Convert to MIDI and save it
-generated_midi = remi_enc.tokens_to_midi(tokens, programs)
+generated_midi = tokenizer.tokens_to_midi(tokens, programs)
 generated_midi.dump('path/to/save/file.mid')  # could have been done above by giving the path argument
 ```
 

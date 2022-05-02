@@ -32,13 +32,14 @@ class MIDILike(MIDITokenizer):
     :param nb_velocities: number of velocity bins
     :param additional_tokens: specifies additional tokens (chords, time signature, rests, tempo...)
     :param sos_eos_tokens: adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens to the vocabulary
+    :param mask: will add a MASK token to the vocabulary (default: False)
     :param params: can be a path to the parameter (json encoded) file or a dictionary
     """
 
     def __init__(self, pitch_range: range = PITCH_RANGE, beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
                  nb_velocities: int = NB_VELOCITIES, additional_tokens: Dict[str, bool] = ADDITIONAL_TOKENS,
-                 sos_eos_tokens: bool = False, params=None):
-        super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, sos_eos_tokens, params)
+                 sos_eos_tokens: bool = False, mask: bool = False, params=None):
+        super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, sos_eos_tokens, mask, params)
 
     def track_to_tokens(self, track: Instrument) -> List[int]:
         """ Converts a track (miditoolkit.Instrument object) into a sequence of tokens
@@ -194,15 +195,18 @@ class MIDILike(MIDITokenizer):
         tempo_changes[0].time = 0
         return instrument, tempo_changes
 
-    def _create_vocabulary(self, sos_eos_tokens: bool = False) -> Vocabulary:
+    def _create_vocabulary(self, sos_eos_tokens: bool = None) -> Vocabulary:
         """ Creates the Vocabulary object of the tokenizer.
         See the docstring of the Vocabulary class for more details about how to use it.
         NOTE: token index 0 is often used as a padding index during training
 
-        :param sos_eos_tokens: will include Start Of Sequence (SOS) and End Of Sequence (tokens)
+        :param sos_eos_tokens: DEPRECIATED, will include Start Of Sequence (SOS) and End Of Sequence (tokens)
         :return: the vocabulary object
         """
-        vocab = Vocabulary({'PAD_None': 0})
+        if sos_eos_tokens is not None:
+            print(f'\033[93msos_eos_tokens argument is depreciated and will be removed in a future update, '
+                  f'_create_vocabulary now uses self._sos_eos attribute set a class init \033[0m')
+        vocab = Vocabulary({'PAD_None': 0}, sos_eos=self._sos_eos, mask=self._mask)
 
         # NOTE ON
         vocab.add_event(f'Note-On_{i}' for i in self.pitch_range)
@@ -232,10 +236,6 @@ class MIDILike(MIDITokenizer):
         # PROGRAM
         if self.additional_tokens['Program']:
             vocab.add_event(f'Program_{program}' for program in range(-1, 128))
-
-        # SOS & EOS
-        if sos_eos_tokens:
-            vocab.add_sos_eos()
 
         return vocab
 

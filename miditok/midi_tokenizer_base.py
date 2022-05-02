@@ -29,18 +29,21 @@ class MIDITokenizer:
     :param nb_velocities: number of velocity bins
     :param additional_tokens: specifies additional tokens (chords, rests, tempo, time signature...)
     :param sos_eos_tokens: adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens to the vocabulary
+    :param mask: will add a MASK token to the vocabulary (default: False)
     :param params: can be a path to the parameter (json encoded) file or a dictionary
     """
 
     def __init__(self, pitch_range: range, beat_res: Dict[Tuple[int, int], int], nb_velocities: int,
                  additional_tokens: Dict[str, Union[bool, int, Tuple[int, int]]], sos_eos_tokens: bool = False,
-                 params: Union[str, Path, PurePath, Dict[str, Any]] = None):
+                 mask: bool = False, params: Union[str, Path, PurePath, Dict[str, Any]] = None):
         # Initialize params
         if params is None:
             self.pitch_range = pitch_range
             self.beat_res = beat_res
             self.additional_tokens = additional_tokens
             self.nb_velocities = nb_velocities
+            self._sos_eos = sos_eos_tokens
+            self._mask = mask
         else:
             self.load_params(params)
 
@@ -72,7 +75,7 @@ class MIDITokenizer:
             self.time_signatures = self.__create_time_signatures()
 
         # Vocabulary and token types graph
-        self.vocab = self._create_vocabulary(sos_eos_tokens)
+        self.vocab = self._create_vocabulary()
         self.tokens_types_graph = self._create_token_types_graph()
 
         # Keep in memory durations in ticks for seen time divisions so these values
@@ -451,21 +454,21 @@ class MIDITokenizer:
 
     def tokenize_midi_dataset(self, midi_paths: Union[List[str], List[Path], List[PurePath]],
                               out_dir: Union[str, Path, PurePath], validation_fn: Callable[[MidiFile], bool] = None,
-                              logging: bool = True):
+                              save_programs: bool = True, logging: bool = True):
         """ Converts a dataset / list of MIDI files, into their token version and save them as json files
-        NOTE: MIDIs with a time division lower than 4 times the beat resolution will be discarded.
+        The resulting Json files will have the shape (T, *), first dimension is tracks, second tokens.
+        If save_programs is True, the shape will be [(T, *), (T, 2)], first dim is tokens and programs instead,
+        for programs the first value is the program, second a bool indicating if the track is drums.
 
         :param midi_paths: paths of the MIDI files
         :param out_dir: output directory to save the converted files
         :param validation_fn: a function checking if the MIDI is valid on your requirements
                             (e.g. time signature, minimum/maximum length, instruments ...)
-        :param logging: logs a progress bar
+        :param save_programs: will also save the programs of the tracks of the MIDI(default: True)
+        :param logging: logs progress bar
         """
         Path(out_dir).mkdir(parents=True, exist_ok=True)
-
-        # Making a directory of the parent folders for the JSON file
-        # parent_dir = PurePath(midi_paths[0]).parent[0]
-        # PurePath(out_dir, parent_dir).mkdir(parents=True, exist_ok=True)
+        self.save_params(out_dir)  # Saves the parameters with which the MIDIs are converted
 
         for m, midi_path in enumerate(midi_paths):
             if logging:
@@ -497,11 +500,9 @@ class MIDITokenizer:
 
             # Converting the MIDI to tokens and saving them as json
             tokens = self.midi_to_tokens(midi)
-            midi_programs = get_midi_programs(midi)
             midi_name = PurePath(midi_path).stem
-            self.save_tokens(tokens, PurePath(out_dir, midi_name).with_suffix(".json"), midi_programs)
-
-        self.save_params(out_dir)  # Saves the parameters with which the MIDIs are converted
+            self.save_tokens(tokens, PurePath(out_dir, midi_name).with_suffix(".json"),
+                             get_midi_programs(midi) if save_programs else None)
 
     def token_types_errors(self, tokens: List[int], consider_pad: bool = False) -> float:
         """ Checks if a sequence of tokens is constituted of good token types
@@ -567,6 +568,8 @@ class MIDITokenizer:
                        'beat_res': {f'{k1}_{k2}': v for (k1, k2), v in self.beat_res.items()},
                        'nb_velocities': len(self.velocities),
                        'additional_tokens': self.additional_tokens,
+                       '_sos_eos': self._sos_eos,
+                       '_mask': self._mask,
                        'encoding': self.__class__.__name__}, outfile, indent=4)
 
     def load_params(self, params: Union[str, Path, PurePath, Dict[str, Any]]):
@@ -587,6 +590,12 @@ class MIDITokenizer:
             elif key == 'additional_tokens':
                 value['TimeSignature'] = value.get('TimeSignature', False)
             setattr(self, key, value)
+
+        # when loading from params of miditok < v1.2.0
+        if '_sos_eos' not in params:
+            self._sos_eos = False
+        if '_mask' not in params:
+            self._mask = False
 
 
 def get_midi_programs(midi: MidiFile) -> List[Tuple[int, bool]]:
