@@ -210,7 +210,6 @@ class Octuple(MIDITokenizer):
             5: Bar
             (6: Tempo)
             (7: TimeSignature)
-
         :param tokens: list of lists of tokens to convert, each list inside the
                        first list corresponds to a track
         :param _: unused, to match parent method signature
@@ -225,12 +224,20 @@ class Octuple(MIDITokenizer):
         ticks_per_sample = time_division // max(self.beat_res.values())
 
         if self.additional_tokens['Tempo']:
-            tempo_changes = [TempoChange(int(self.tokens_to_events(tokens[0])[6].value), 0)]
+            event = self.tokens_to_events(tokens[0])[6]
+            if event.type == 'Tempo':
+                tempo_changes = [TempoChange(int(event.value), 0)]
+            else:
+                tempo_changes = [TempoChange(TEMPO, 0)]
         else:  # default
             tempo_changes = [TempoChange(TEMPO, 0)]
 
         if self.additional_tokens['TimeSignature']:
-            time_sig = self._parse_token_time_signature(self.tokens_to_events(tokens[0])[-1].value)
+            event = self.tokens_to_events(tokens[0])[-1]
+            if event.type == 'TimeSig':
+                time_sig = self._parse_token_time_signature(event.value)
+            else:
+                time_sig = TIME_SIGNATURE  # default TS if the first token got an erroneous value
         else:  # default
             time_sig = TIME_SIGNATURE
         ticks_per_bar = time_division * time_sig[0]
@@ -259,13 +266,13 @@ class Octuple(MIDITokenizer):
             tracks[program].append(Note(vel, pitch, current_tick, current_tick + duration))
 
             # Tempo, adds a TempoChange if necessary
-            if self.additional_tokens['Tempo']:
+            if self.additional_tokens['Tempo'] and events[6].type == 'Tempo':
                 tempo = int(events[6].value)
                 if tempo != tempo_changes[-1].tempo:
                     tempo_changes.append(TempoChange(tempo, current_tick))
 
             # Time Signature, adds a TimeSignatureChange if necessary
-            if self.additional_tokens['TimeSignature']:
+            if self.additional_tokens['TimeSignature'] and events[-1].type == 'TimeSig':
                 time_sig = self._parse_token_time_signature(events[-1].value)
                 if time_sig != (time_sig_changes[-1].numerator, time_sig_changes[-1].denominator):
                     current_time_sig_tick += (current_bar - current_time_sig_bar) * ticks_per_bar
