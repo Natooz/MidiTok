@@ -159,17 +159,28 @@ class MIDITokenizer:
         """
         return [self.vocab.event_to_token[str(event)] for event in events]
 
-    def tokens_to_events(self, tokens: List[int]) -> List[Event]:
+    def tokens_to_events(self, tokens: List[Union[int, List[int]]], multi_voc: bool = False) \
+            -> List[Union[Event, List[Event]]]:
         """ Convert a sequence of tokens in their respective event objects
         You can override this method if necessary
 
         :param tokens: sequence of tokens to convert
+        :param multi_voc: set True if the tokenizer has several vocabularies, e.g. CP Word or Octuple
+                            (default: False)
         :return: the sequence of corresponding events
         """
         events = []
-        for token in tokens:
-            name, val = self.vocab.token_to_event[token].split('_')
-            events.append(Event(name, None, val, None))
+        if multi_voc:
+            for multi_token in tokens:
+                multi_event = []
+                for i, token in enumerate(multi_token):
+                    name, val = self.vocab[i].token_to_event[token].split('_')
+                    multi_event.append(Event(name, None, val, None))
+                events.append(multi_event)
+        else:
+            for token in tokens:
+                name, val = self.vocab.token_to_event[token].split('_')
+                events.append(Event(name, None, val, None))
         return events
 
     def tokens_to_midi(self, tokens: List[List[Union[int, List[int]]]],
@@ -309,7 +320,7 @@ class MIDITokenizer:
         seq.insert(0, self.vocab['SOS_None'])
         seq.append(self.vocab['EOS_None'])
 
-    def _create_vocabulary(self, *args, **kwargs) -> Vocabulary:
+    def _create_vocabulary(self, *args, **kwargs) -> Union[Vocabulary, List[Vocabulary]]:
         """ Creates the Vocabulary object of the tokenizer.
         See the docstring of the Vocabulary class for more details about how to use it.
         NOTE: token index 0 is often used as a padding index during training
