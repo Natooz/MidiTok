@@ -272,7 +272,7 @@ class Octuple(MIDITokenizer):
                     tempo_changes.append(TempoChange(tempo, current_tick))
 
             # Time Signature, adds a TimeSignatureChange if necessary
-            if self.additional_tokens['TimeSignature'] and time_step[-1].value == 'None':
+            if self.additional_tokens['TimeSignature'] and time_step[-1].value != 'None':
                 time_sig = self._parse_token_time_signature(time_step[-1].value)
                 if time_sig != (time_sig_changes[-1].numerator, time_sig_changes[-1].denominator):
                     current_time_sig_tick += (current_bar - current_time_sig_bar) * ticks_per_bar
