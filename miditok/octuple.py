@@ -96,7 +96,7 @@ class Octuple(MIDITokenizer):
 
         # Convert pitch events into tokens
         for time_step in tokens:
-            time_step[0] = self.vocab.event_to_token[f'{time_step[0].type}_{time_step[0].value}']
+            time_step[0] = self.vocab[0].event_to_token[f'{time_step[0].type}_{time_step[0].value}']
 
         return tokens
 
@@ -145,7 +145,7 @@ class Octuple(MIDITokenizer):
 
                 # Check bar embedding limit, update if needed
                 if self.max_bar_embedding <= current_bar:
-                    self.vocab.add_event(f'Bar_{i}' for i in range(self.max_bar_embedding, current_bar + 1))
+                    self.vocab[5].add_event(f'Bar_{i}' for i in range(self.max_bar_embedding, current_bar + 1))
                     self.max_bar_embedding = current_bar + 1
 
             # Note attributes
@@ -153,11 +153,11 @@ class Octuple(MIDITokenizer):
             dur_index = np.argmin(np.abs(dur_bins - duration))
             event = [Event(type_='Pitch', time=note.start, value=note.pitch,
                            desc=-1 if track.is_drum else track.program),
-                     self.vocab.event_to_token[f'Velocity_{note.velocity}'],
-                     self.vocab.event_to_token[f'Duration_{".".join(map(str, self.durations[dur_index]))}'],
-                     self.vocab.event_to_token[f'Program_{-1 if track.is_drum else track.program}'],
-                     self.vocab.event_to_token[f'Position_{current_pos}'],
-                     self.vocab.event_to_token[f'Bar_{current_bar}']]
+                     self.vocab[1].event_to_token[f'Velocity_{note.velocity}'],
+                     self.vocab[2].event_to_token[f'Duration_{".".join(map(str, self.durations[dur_index]))}'],
+                     self.vocab[3].event_to_token[f'Program_{-1 if track.is_drum else track.program}'],
+                     self.vocab[4].event_to_token[f'Position_{current_pos}'],
+                     self.vocab[5].event_to_token[f'Bar_{current_bar}']]
 
             # (Tempo)
             if self.additional_tokens['Tempo']:
@@ -171,7 +171,7 @@ class Octuple(MIDITokenizer):
                             current_tempo_idx += 1  # update tempo value (might not change) and index
                         elif tempo_change.time > note.start:
                             break  # this tempo change is beyond the current time step, we break the loop
-                event.append(self.vocab.event_to_token[f'Tempo_{current_tempo}'])
+                event.append(self.vocab[6].event_to_token[f'Tempo_{current_tempo}'])
 
             # (TimeSignature)
             if self.additional_tokens['TimeSignature']:
@@ -189,7 +189,7 @@ class Octuple(MIDITokenizer):
                             ticks_per_bar = time_division * current_time_sig[0]
                         elif time_sig_change.time > note.start:
                             break  # this time signature change is beyond the current time step, we break the loop
-                event.append(self.vocab.event_to_token[f'TimeSig_{current_time_sig[0]}/{current_time_sig[1]}'])
+                event.append(self.vocab[-1].event_to_token[f'TimeSig_{current_time_sig[0]}/{current_time_sig[1]}'])
 
             events.append(event)
 
@@ -222,24 +222,22 @@ class Octuple(MIDITokenizer):
             f'Invalid time division, please give one divisible by {max(self.beat_res.values())}'
         midi = MidiFile(ticks_per_beat=time_division)
         ticks_per_sample = time_division // max(self.beat_res.values())
+        events = self.tokens_to_events(tokens, multi_voc=True)
 
+        tempo_changes = [TempoChange(TEMPO, 0)]
         if self.additional_tokens['Tempo']:
-            event = self.tokens_to_events(tokens[0])[6]
-            if event.type == 'Tempo':
-                tempo_changes = [TempoChange(int(event.value), 0)]
-            else:
-                tempo_changes = [TempoChange(TEMPO, 0)]
-        else:  # default
-            tempo_changes = [TempoChange(TEMPO, 0)]
+            for i in range(len(events)):
+                if events[i][6].value != 'None':
+                    tempo_changes = [TempoChange(int(events[i][6].value), 0)]
+                    break
 
+        time_sig = TIME_SIGNATURE
         if self.additional_tokens['TimeSignature']:
-            event = self.tokens_to_events(tokens[0])[-1]
-            if event.type == 'TimeSig':
-                time_sig = self._parse_token_time_signature(event.value)
-            else:
-                time_sig = TIME_SIGNATURE  # default TS if the first token got an erroneous value
-        else:  # default
-            time_sig = TIME_SIGNATURE
+            for i in range(len(events)):
+                if events[i][-1].value != 'None':
+                    time_sig = self._parse_token_time_signature(events[i][-1].value)
+                    break
+
         ticks_per_bar = time_division * time_sig[0]
         time_sig_changes = [TimeSignature(*time_sig, 0)]
 
@@ -247,18 +245,19 @@ class Octuple(MIDITokenizer):
         current_time_sig_bar = 0
 
         tracks = dict([(n, []) for n in range(-1, 128)])
-        for time_step in tokens:
-            events = self.tokens_to_events(time_step)
+        for time_step in events:
+            if any(tok.value == 'None' for tok in time_step[:6]):
+                continue  # Either padding, mask: error of prediction or end of sequence anyway
 
             # Note attributes
-            pitch = int(events[0].value)
-            vel = int(events[1].value)
-            duration = self._token_duration_to_ticks(events[2].value, time_division)
+            pitch = int(time_step[0].value)
+            vel = int(time_step[1].value)
+            duration = self._token_duration_to_ticks(time_step[2].value, time_division)
 
             # Time and track values
-            program = int(events[3].value)
-            current_pos = int(events[4].value)
-            current_bar = int(events[5].value)
+            program = int(time_step[3].value)
+            current_pos = int(time_step[4].value)
+            current_bar = int(time_step[5].value)
             current_tick = current_time_sig_tick + (current_bar - current_time_sig_bar) * ticks_per_bar \
                            + current_pos * ticks_per_sample
 
@@ -266,14 +265,14 @@ class Octuple(MIDITokenizer):
             tracks[program].append(Note(vel, pitch, current_tick, current_tick + duration))
 
             # Tempo, adds a TempoChange if necessary
-            if self.additional_tokens['Tempo'] and events[6].type == 'Tempo':
-                tempo = int(events[6].value)
+            if self.additional_tokens['Tempo'] and time_step[6].value != 'None':
+                tempo = int(time_step[6].value)
                 if tempo != tempo_changes[-1].tempo:
                     tempo_changes.append(TempoChange(tempo, current_tick))
 
             # Time Signature, adds a TimeSignatureChange if necessary
-            if self.additional_tokens['TimeSignature'] and events[-1].type == 'TimeSig':
-                time_sig = self._parse_token_time_signature(events[-1].value)
+            if self.additional_tokens['TimeSignature'] and time_step[-1].value != 'None':
+                time_sig = self._parse_token_time_signature(time_step[-1].value)
                 if time_sig != (time_sig_changes[-1].numerator, time_sig_changes[-1].denominator):
                     current_time_sig_tick += (current_bar - current_time_sig_bar) * ticks_per_bar
                     current_time_sig_bar = current_bar
@@ -314,10 +313,10 @@ class Octuple(MIDITokenizer):
         """
         raise NotImplementedError('tokens_to_track not implemented for Octuple, use tokens_to_midi instead')
 
-    def _create_vocabulary(self, sos_eos_tokens: bool = None) -> Vocabulary:
+    def _create_vocabulary(self, sos_eos_tokens: bool = None) -> List[Vocabulary]:
         """ Creates the Vocabulary object of the tokenizer.
         See the docstring of the Vocabulary class for more details about how to use it.
-        NOTE: token index 0 is often used as a padding index during training TODO several vocabs
+        NOTE: token index 0 is often used as a padding index during training
 
         :param sos_eos_tokens: DEPRECIATED, will include Start Of Sequence (SOS) and End Of Sequence (tokens)
         :return: the vocabulary object
@@ -325,36 +324,36 @@ class Octuple(MIDITokenizer):
         if sos_eos_tokens is not None:
             print(f'\033[93msos_eos_tokens argument is depreciated and will be removed in a future update, '
                   f'_create_vocabulary now uses self._sos_eos attribute set a class init \033[0m')
-        vocab = Vocabulary({'PAD_None': 0}, sos_eos=self._sos_eos, mask=self._mask)
+        vocab = [Vocabulary({'PAD_None': 0}, sos_eos=self._sos_eos, mask=self._mask) for _ in range(6)]
 
         # PITCH
-        vocab.add_event(f'Pitch_{i}' for i in self.pitch_range)
+        vocab[0].add_event(f'Pitch_{i}' for i in self.pitch_range)
 
         # VELOCITY
-        vocab.add_event(f'Velocity_{i}' for i in self.velocities)
+        vocab[1].add_event(f'Velocity_{i}' for i in self.velocities)
 
         # DURATION
-        vocab.add_event(f'Duration_{".".join(map(str, duration))}' for duration in self.durations)
+        vocab[2].add_event(f'Duration_{".".join(map(str, duration))}' for duration in self.durations)
+
+        # PROGRAM
+        vocab[3].add_event(f'Program_{i}' for i in range(-1, 128))
 
         # POSITION
-        _, nb_notes = self.additional_tokens.get('time_signature_range', (4, 1))
-        nb_positions = max(self.beat_res.values()) * 4 * nb_notes
-        vocab.add_event(f'Position_{i}' for i in range(nb_positions))
+        nb_positions = max(self.beat_res.values()) * 4  # 4/4 time signature
+        vocab[4].add_event(f'Position_{i}' for i in range(nb_positions))
+
+        # BAR
+        vocab[5].add_event(f'Bar_{i}' for i in range(self.max_bar_embedding))  # bar embeddings (positional encoding)
 
         # TEMPO
         if self.additional_tokens['Tempo']:
-            vocab.add_event(f'Tempo_{i}' for i in self.tempos)
+            vocab.append(Vocabulary({'PAD_None': 0}, sos_eos=self._sos_eos, mask=self._mask))
+            vocab[-1].add_event(f'Tempo_{i}' for i in self.tempos)
 
         # TIME_SIGNATURE
         if self.additional_tokens['TimeSignature']:
-            vocab.add_event(f'TimeSig_{i[0]}/{i[1]}' for i in self.time_signatures)
-
-        # PROGRAM
-        vocab.add_event(f'Program_{program}' for program in range(-1, 128))
-
-        # BAR --- MUST BE LAST IN DIC AS THIS MIGHT BE INCREASED
-        vocab.add_event('Bar_None')  # new bar token
-        vocab.add_event(f'Bar_{i}' for i in range(self.max_bar_embedding))  # bar embeddings (positional encoding)
+            vocab.append(Vocabulary({'PAD_None': 0}, sos_eos=self._sos_eos, mask=self._mask))
+            vocab[-1].add_event(f'TimeSig_{i[0]}/{i[1]}' for i in self.time_signatures)
 
         return vocab
 
@@ -385,9 +384,9 @@ class Octuple(MIDITokenizer):
 
         for token in tokens:
             has_error = False
-            bar_value = int(self.vocab.token_to_event[token[5]].split('_')[1])
-            pos_value = int(self.vocab.token_to_event[token[4]].split('_')[1])
-            pitch_value = int(self.vocab.token_to_event[token[0]].split('_')[1])
+            bar_value = int(self.vocab[5].token_to_event[token[5]].split('_')[1])
+            pos_value = int(self.vocab[4].token_to_event[token[4]].split('_')[1])
+            pitch_value = int(self.vocab[0].token_to_event[token[0]].split('_')[1])
 
             # Bar
             if bar_value < current_bar:
