@@ -10,7 +10,8 @@ from typing import List, Tuple, Dict, Optional, Union
 import numpy as np
 from miditoolkit import MidiFile, Instrument, Note, TempoChange, TimeSignature
 
-from .midi_tokenizer_base import MIDITokenizer, Vocabulary, Event
+from .midi_tokenizer_base import MIDITokenizer
+from .vocabulary import Vocabulary, Event
 from .constants import *
 
 

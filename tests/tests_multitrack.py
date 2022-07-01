@@ -79,7 +79,7 @@ def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = '.
             # Sort and merge tracks if needed
             # MIDI produced with Octuple contains tracks ordered by program
             if encoding == 'Octuple' or encoding == 'MuMIDI':
-                miditok.merge_same_program_tracks(midi_to_compare.instruments)  # merge tracks
+                miditok.utils.merge_same_program_tracks(midi_to_compare.instruments)  # merge tracks
                 midi_to_compare.instruments.sort(key=lambda x: (x.program, x.is_drum))  # sort tracks
                 new_midi.instruments.sort(key=lambda x: (x.program, x.is_drum))
             if encoding == 'Octuple':  # needed

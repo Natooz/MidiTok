@@ -11,7 +11,9 @@ from typing import List, Tuple, Dict, Optional, Union
 import numpy as np
 from miditoolkit import MidiFile, Instrument, Note, TempoChange
 
-from .midi_tokenizer_base import MIDITokenizer, Vocabulary, Event, detect_chords, remove_duplicated_notes
+from .midi_tokenizer_base import MIDITokenizer
+from .vocabulary import Vocabulary, Event
+from .utils import detect_chords, remove_duplicated_notes
 from .constants import *
 
 

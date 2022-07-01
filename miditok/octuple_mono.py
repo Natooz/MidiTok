@@ -11,7 +11,8 @@ from typing import List, Tuple, Dict, Optional, Union
 import numpy as np
 from miditoolkit import Instrument, Note, TempoChange
 
-from .midi_tokenizer_base import MIDITokenizer, Vocabulary
+from .midi_tokenizer_base import MIDITokenizer
+from .vocabulary import Vocabulary
 from .constants import *
 
 

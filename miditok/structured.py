@@ -8,7 +8,8 @@ from typing import List, Tuple, Dict, Optional
 import numpy as np
 from miditoolkit import Instrument, Note, TempoChange
 
-from .midi_tokenizer_base import MIDITokenizer, Vocabulary, Event
+from .midi_tokenizer_base import MIDITokenizer
+from .vocabulary import Vocabulary, Event
 from .constants import *
 
 
