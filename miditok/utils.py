@@ -114,17 +114,23 @@ def merge_tracks_per_class(midi: MidiFile,
                            new_program_per_class: Dict[int, int] = None,
                            max_nb_of_tracks_per_inst_class: Dict[int, int] = None,
                            valid_programs: List[int] = None):
-    """Multitrack version of is_midi_valid.
-    NOTE: programs of drum tracks will be set to -1
+    """Merges per instrument class the tracks which are in the class in classes_to_merge.
+    Example, a list of tracks / programs [0, 3, 8, 10, 11, 24, 25, 44, 47] will become [0, 8, 24, 25, 40] if
+    classes_to_merge is [0, 1, 5].
+    See miditok.constants.INSTRUMENT_CLASSES
+    NOTE: programs of drum tracks will be set to -1.
 
-    :param midi: MIDI object to valid
-    :param classes_to_merge: instrument categories to merge, to give as list of indexes
-            (see miditok.constants.INSTRUMENT_CLASSES), default is None for no merging
+    :param midi: MIDI object to merge tracks
+    :param classes_to_merge: instrument classes to merge, to give as list of indexes
+            (see miditok.constants.INSTRUMENT_CLASSES). Give None to merge nothing,
+             the function will still remove non-valid programs / tracks if given (default: None)
     :param new_program_per_class: new program of the final merged tracks, to be given per
-            instrument category as a dict {cat_id: program}
-    :param max_nb_of_tracks_per_inst_class: max number of tracks per instrument category,
-            if the limit is exceeded for one category only the tracks with the maximum notes will be kept
-    :param valid_programs: valid program numbers to keep, others will be deleted (default all)
+            instrument class as a dict {class_id: program}
+    :param max_nb_of_tracks_per_inst_class: max number of tracks per instrument class,
+            if the limit is exceeded for one class only the tracks with the maximum notes
+            will be kept, give None for no limit (default: None)
+    :param valid_programs: valid program ids to keep, others will be deleted, give None
+            for keep all programs (default None)
     :return: True if the MIDI is valid, else False
     """
     # remove non-valid tracks (instruments)
@@ -140,19 +146,19 @@ def merge_tracks_per_class(midi: MidiFile,
             else:
                 i += 1
 
-    # merge tracks of the same instrument categories
+    # merge tracks of the same instrument classes
     if classes_to_merge is not None:
         midi.instruments.sort(key=lambda track: track.program)
         if max_nb_of_tracks_per_inst_class is None:
-            max_nb_of_tracks_per_inst_class = {cat: len(midi.instruments) for cat in classes_to_merge}  # no limit
+            max_nb_of_tracks_per_inst_class = {cla: len(midi.instruments) for cla in classes_to_merge}  # no limit
         if new_program_per_class is None:
-            new_program_per_class = {cat: INSTRUMENT_CLASSES[cat]['program_range'].start for cat in classes_to_merge}
+            new_program_per_class = {cla: INSTRUMENT_CLASSES[cla]['program_range'].start for cla in classes_to_merge}
         else:
-            for cat, program in new_program_per_class.items():
-                if program not in INSTRUMENT_CLASSES[cat]['program_range']:
-                    raise ValueError(f'Error in program value, got {program} for instrument category {cat} '
-                                     f'({INSTRUMENT_CLASSES[cat]["name"]}), required value in '
-                                     f'{INSTRUMENT_CLASSES[cat]["program_range"]}')
+            for cla, program in new_program_per_class.items():
+                if program not in INSTRUMENT_CLASSES[cla]['program_range']:
+                    raise ValueError(f'Error in program value, got {program} for instrument class {cla} '
+                                     f'({INSTRUMENT_CLASSES[cla]["name"]}), required value in '
+                                     f'{INSTRUMENT_CLASSES[cla]["program_range"]}')
 
         for ci in classes_to_merge:
             idx_to_merge = [ti for ti in range(len(midi.instruments))
