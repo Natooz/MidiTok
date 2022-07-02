@@ -9,7 +9,7 @@ from miditoolkit import MidiFile, Note, Instrument
 import numpy as np
 
 from .vocabulary import Event
-from .constants import CHORD_MAPS, INSTRUMENT_CLASSES
+from .constants import CHORD_MAPS, INSTRUMENT_CLASSES, MIDI_INSTRUMENTS
 
 
 def get_midi_programs(midi: MidiFile) -> List[Tuple[int, bool]]:
@@ -113,7 +113,8 @@ def merge_tracks_per_class(midi: MidiFile,
                            classes_to_merge: List[int] = None,
                            new_program_per_class: Dict[int, int] = None,
                            max_nb_of_tracks_per_inst_class: Dict[int, int] = None,
-                           valid_programs: List[int] = None):
+                           valid_programs: List[int] = None,
+                           filter_pitches: bool = True):
     """Merges per instrument class the tracks which are in the class in classes_to_merge.
     Example, a list of tracks / programs [0, 3, 8, 10, 11, 24, 25, 44, 47] will become [0, 8, 24, 25, 40] if
     classes_to_merge is [0, 1, 5].
@@ -131,6 +132,8 @@ def merge_tracks_per_class(midi: MidiFile,
             will be kept, give None for no limit (default: None)
     :param valid_programs: valid program ids to keep, others will be deleted, give None
             for keep all programs (default None)
+    :param filter_pitches: after merging, will remove notes whose pitches are out the recommended
+            range defined by the GM2 specs (default: True)
     :return: True if the MIDI is valid, else False
     """
     # remove non-valid tracks (instruments)
@@ -170,9 +173,18 @@ def merge_tracks_per_class(midi: MidiFile,
                     idx_to_merge = np.argsort(lengths)
                     # could also be randomly picked
 
-                tracks_to_merge = [midi.instruments[i] for i in idx_to_merge]
-                midi.instruments[idx_to_merge[0]] = merge_tracks(tracks_to_merge)
+                # Merges tracks to merge
+                midi.instruments[idx_to_merge[0]] = merge_tracks([midi.instruments[i] for i in idx_to_merge])
+                if filter_pitches:  # filters notes with pitches out of tessitura / recommended pitch range
+                    ni = 0
+                    while ni < len(midi.instruments[idx_to_merge[0]].notes):
+                        if midi.instruments[idx_to_merge[0]].notes[ni].pitch not in \
+                                MIDI_INSTRUMENTS[midi.instruments[idx_to_merge[0]].program]['pitch_range']:
+                            del midi.instruments[idx_to_merge[0]].notes[ni]
+                        else:
+                            ni += 1
 
+                # Removes tracks merged to index idx_to_merge[0]
                 new_len = len(midi.instruments) - len(idx_to_merge) + 1
                 while len(midi.instruments) > new_len:
                     del midi.instruments[idx_to_merge[0] + 1]
