@@ -3,6 +3,7 @@ https://arxiv.org/abs/2106.05630
 
 """
 
+from math import ceil
 import json
 from pathlib import Path, PurePath
 from typing import List, Tuple, Dict, Optional, Union
@@ -32,10 +33,11 @@ class Octuple(MIDITokenizer):
     """
     def __init__(self, pitch_range: range = PITCH_RANGE, beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
                  nb_velocities: int = NB_VELOCITIES, additional_tokens: Dict[str, bool] = ADDITIONAL_TOKENS,
-                 sos_eos_tokens: bool = False, mask: bool = False, params=None):
+                 programs: List[int] = None, sos_eos_tokens: bool = False, mask: bool = False, params=None):
         additional_tokens['Chord'] = False  # Incompatible additional token
         additional_tokens['Rest'] = False
         # used in place of positional encoding
+        self.programs = list(range(-1, 128)) if programs is None else programs
         self.max_bar_embedding = 60  # this attribute might increase during encoding
         super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, sos_eos_tokens, mask, params)
 
@@ -54,6 +56,7 @@ class Octuple(MIDITokenizer):
                        'nb_velocities': len(self.velocities),
                        'additional_tokens': self.additional_tokens,
                        'encoding': self.__class__.__name__,
+                       'programs': self.programs,
                        'max_bar_embedding': self.max_bar_embedding},
                       outfile)
 
@@ -88,10 +91,19 @@ class Octuple(MIDITokenizer):
                                       'time_sig_changes': midi.time_signature_changes,
                                       'key_sig_changes': midi.key_signature_changes}
 
+        # **************** OVERRIDE FROM HERE, KEEP THE LINES ABOVE IN YOUR METHOD ****************
+
+        # Check bar embedding limit, update if needed
+        nb_bars = ceil(midi.max_tick / (midi.ticks_per_beat * 4))
+        if self.max_bar_embedding < nb_bars:
+            self.vocab[5].add_event(f'Bar_{i}' for i in range(self.max_bar_embedding, nb_bars))
+            self.max_bar_embedding = nb_bars
+
         # Convert each track to tokens
         tokens = []
         for track in midi.instruments:
-            tokens += self.track_to_tokens(track)
+            if track.program in self.programs:
+                tokens += self.track_to_tokens(track)
 
         tokens.sort(key=lambda x: (x[0].time, x[0].desc, x[0].value))  # Sort by time then track then pitch
 
@@ -143,11 +155,6 @@ class Octuple(MIDITokenizer):
                 current_tick = note.start
                 current_bar = current_time_sig_bar + (current_tick - current_time_sig_tick) // ticks_per_bar
                 current_pos = pos_index
-
-                # Check bar embedding limit, update if needed
-                if self.max_bar_embedding <= current_bar:
-                    self.vocab[5].add_event(f'Bar_{i}' for i in range(self.max_bar_embedding, current_bar + 1))
-                    self.max_bar_embedding = current_bar + 1
 
             # Note attributes
             duration = note.end - note.start

@@ -40,10 +40,11 @@ class MuMIDI(MIDITokenizer):
     """
     def __init__(self, pitch_range: range = PITCH_RANGE, beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
                  nb_velocities: int = NB_VELOCITIES, additional_tokens: Dict[str, bool] = ADDITIONAL_TOKENS,
-                 sos_eos_tokens: bool = False, mask: bool = False, params=None,
+                 programs: List[int] = None, sos_eos_tokens: bool = False, mask: bool = False, params=None,
                  drum_pitch_range: range = DRUM_PITCH_RANGE):
         additional_tokens['Rest'] = False
         self.drum_pitch_range = drum_pitch_range
+        self.programs = list(range(-1, 128)) if programs is None else programs
         # used in place of positional encoding
         self.max_bar_embedding = 60  # this attribute might increase during encoding
         super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, sos_eos_tokens, mask, params)
@@ -87,24 +88,15 @@ class MuMIDI(MIDITokenizer):
             self.durations_ticks[midi.ticks_per_beat] = np.array([(beat * res + pos) * midi.ticks_per_beat // res
                                                                   for beat, pos, res in self.durations])
         # Preprocess the MIDI file
-        t = 0
-        while t < len(midi.instruments):
-            self.quantize_notes(midi.instruments[t].notes, midi.ticks_per_beat,
-                                self.pitch_range if not midi.instruments[t].is_drum else self.drum_pitch_range)
-            midi.instruments[t].notes.sort(key=lambda x: (x.start, x.pitch, x.end))  # sort notes
-            remove_duplicated_notes(midi.instruments[t].notes)  # remove possible duplicated notes
-            if len(midi.instruments[t].notes) == 0:
-                del midi.instruments[t]
-                continue
-            t += 1
-        if self.additional_tokens['Tempo']:
-            self.quantize_tempos(midi.tempo_changes, midi.ticks_per_beat)
+        self.preprocess_midi(midi)
 
         # Register MIDI metadata
         self.current_midi_metadata = {'time_division': midi.ticks_per_beat,
                                       'tempo_changes': midi.tempo_changes,
                                       'time_sig_changes': midi.time_signature_changes,
                                       'key_sig_changes': midi.key_signature_changes}
+
+        # **************** OVERRIDE FROM HERE, KEEP THE LINES ABOVE IN YOUR METHOD ****************
 
         # Check bar embedding limit, update if needed
         nb_bars = ceil(midi.max_tick / (midi.ticks_per_beat * 4))
@@ -115,7 +107,8 @@ class MuMIDI(MIDITokenizer):
         # Convert each track to tokens
         note_tokens = []
         for track in midi.instruments:
-            note_tokens += self.track_to_tokens(track)
+            if track.program in self.programs:
+                note_tokens += self.track_to_tokens(track)
 
         note_tokens.sort(key=lambda x: (x[0].time, x[0].desc))  # Sort by time then track
 
@@ -358,7 +351,7 @@ class MuMIDI(MIDITokenizer):
             vocab[-1].add_event(f'Tempo_{i}' for i in self.tempos)
 
         # PROGRAM
-        vocab[0].add_event(f'Program_{program}' for program in range(-1, 128))
+        vocab[0].add_event(f'Program_{program}' for program in self.programs)
 
         # BAR POS ENC
         vocab[0].add_event('Bar_None')  # new bar token
