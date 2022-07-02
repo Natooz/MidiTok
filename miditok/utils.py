@@ -151,7 +151,7 @@ def merge_tracks_per_class(midi: MidiFile,
 
     # merge tracks of the same instrument classes
     if classes_to_merge is not None:
-        midi.instruments.sort(key=lambda track: track.program)
+        midi.instruments.sort(key=lambda trac: trac.program)
         if max_nb_of_tracks_per_inst_class is None:
             max_nb_of_tracks_per_inst_class = {cla: len(midi.instruments) for cla in classes_to_merge}  # no limit
         if new_program_per_class is None:
@@ -175,19 +175,21 @@ def merge_tracks_per_class(midi: MidiFile,
 
                 # Merges tracks to merge
                 midi.instruments[idx_to_merge[0]] = merge_tracks([midi.instruments[i] for i in idx_to_merge])
-                if filter_pitches:  # filters notes with pitches out of tessitura / recommended pitch range
-                    ni = 0
-                    while ni < len(midi.instruments[idx_to_merge[0]].notes):
-                        if midi.instruments[idx_to_merge[0]].notes[ni].pitch not in \
-                                MIDI_INSTRUMENTS[midi.instruments[idx_to_merge[0]].program]['pitch_range']:
-                            del midi.instruments[idx_to_merge[0]].notes[ni]
-                        else:
-                            ni += 1
 
                 # Removes tracks merged to index idx_to_merge[0]
                 new_len = len(midi.instruments) - len(idx_to_merge) + 1
                 while len(midi.instruments) > new_len:
                     del midi.instruments[idx_to_merge[0] + 1]
+
+    # filters notes with pitches out of tessitura / recommended pitch range
+    if filter_pitches:
+        for track in midi.instruments:
+            ni = 0
+            while ni < len(track.notes):
+                if track.notes[ni].pitch not in MIDI_INSTRUMENTS[track.program]['pitch_range']:
+                    del track.notes[ni]
+                else:
+                    ni += 1
 
 
 def merge_tracks(tracks: Union[List[Instrument], MidiFile], effects: bool = False) -> Instrument:
