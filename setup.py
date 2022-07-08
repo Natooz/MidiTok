@@ -24,7 +24,8 @@ setup(
     ],
     install_requires=[
         'numpy>=1.21',
-        'miditoolkit>=0.1.14'
+        'miditoolkit>=0.1.14',
+        'tqdm'
     ],
     classifiers=[
         'Intended Audience :: Developers',

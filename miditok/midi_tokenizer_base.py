@@ -4,12 +4,12 @@ TODO time signature changes tokens
 
 """
 import math
-from sys import stdout
 from pathlib import Path, PurePath
 import json
 from typing import List, Tuple, Dict, Union, Callable, Optional, Any
 
 import numpy as np
+from tqdm import tqdm
 from miditoolkit import MidiFile, Instrument, Note, TempoChange, TimeSignature
 
 from .vocabulary import Vocabulary, Event
@@ -481,16 +481,7 @@ class MIDITokenizer:
         Path(out_dir).mkdir(parents=True, exist_ok=True)
         self.save_params(out_dir)  # Saves the parameters with which the MIDIs are converted
 
-        for m, midi_path in enumerate(midi_paths):
-            if logging:
-                bar_len = 30
-                filled_len = int(round(bar_len * m / len(midi_paths)))
-                percents = round(100.0 * m / len(midi_paths), 2)
-                bar = '=' * filled_len + '-' * (bar_len - filled_len)
-                prog = f'\r{m} / {len(midi_paths)} [{bar}] {percents:.1f}% ...Converting MIDIs to tokens: {midi_path}'
-                stdout.write(prog)
-                stdout.flush()
-
+        for midi_path in tqdm(midi_paths, desc='Converting MIDIs to tokens') if logging else enumerate(midi_paths):
             # Some MIDIs can contains errors that are raised by Mido, if so the loop continues
             try:
                 midi = MidiFile(PurePath(midi_path))

@@ -43,31 +43,30 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
     :param data_path: root path to the data to test
     :param saving_erroneous_midis: will save MIDIs converted back with errors, to be used to debug
     """
-    encodings = ['MIDILike', 'Structured', 'REMI', 'CPWord', 'Octuple',
-                 'OctupleMono', 'MuMIDI']
-    files = list(Path(data_path).glob('**/*.mid'))
+    encodings = ['Structured', 'Octuple']
+    tokenizers = []
+    data_path = Path(data_path)
+    files = list(data_path.glob('**/*.mid'))
+    for encoding in encodings:
+        add_tokens = deepcopy(ADDITIONAL_TOKENS_TEST)
+        tokenizers.append(miditok.bpe(getattr(miditok, encoding), beat_res=BEAT_RES_TEST, additional_tokens=add_tokens))
+        tokenizers[-1].tokenize_midi_dataset(files, data_path / encoding)
+        tokenizers[-1].bpe(data_path / encoding, data_path / f'{encoding}_bpe')
+
     t0 = time.time()
-
     for i, file_path in enumerate(files):
-
         # Reads the midi
         midi = MidiFile(file_path)
         tracks = [deepcopy(midi.instruments[0])]
         has_errors = False
         t_midi = time.time()
 
-        for encoding in encodings:
-            add_tokens = deepcopy(ADDITIONAL_TOKENS_TEST)
-            if encoding == 'MIDILike':
-                add_tokens['rest_range'] = (add_tokens['rest_range'][0], max(t[1] for t in BEAT_RES_TEST))
-            tokenizer = getattr(miditok, encoding)(beat_res=BEAT_RES_TEST, additional_tokens=add_tokens)
-
+        for encoding, tokenizer in zip(encodings, tokenizers):
             # Convert the track in tokens
             tokens = tokenizer.midi_to_tokens(midi)
 
             # Checks types and values conformity following the rules
-            tokens_types = tokenizer.token_types_errors(tokens[0] if encoding not in ['Octuple',
-                                                                                      'MuMIDI'] else tokens)
+            tokens_types = tokenizer.token_types_errors(tokens[0] if encoding not in ['Octuple', 'MuMIDI'] else tokens)
             if tokens_types != 0.:
                 print(f'Validation of tokens types / values successions failed with {encoding}: {tokens_types}')
 
