@@ -51,8 +51,8 @@ class MIDITokenizer:
         # Init duration and velocity values
         self.durations = self.__create_durations_tuples()
         self.velocities = np.linspace(0, 127, self.nb_velocities + 1, dtype=np.intc)[1:]  # remove velocity 0
-        self._first_beat_res = list(beat_res.values())[0]
-        for beat_range, res in beat_res.items():
+        self._first_beat_res = list(self.beat_res.values())[0]
+        for beat_range, res in self.beat_res.items():
             if 0 in beat_range:
                 self._first_beat_res = res
                 break
@@ -65,8 +65,8 @@ class MIDITokenizer:
 
         # Rests
         self.rests = []
-        if additional_tokens['Rest']:
-            assert additional_tokens['rest_range'][0] // 4 <= self._first_beat_res, \
+        if self.additional_tokens['Rest']:
+            assert self.additional_tokens['rest_range'][0] // 4 <= self._first_beat_res, \
                 'The minimum rest value must be equal or superior to the initial beat resolution'
             self.rests = self.__create_rests()
 

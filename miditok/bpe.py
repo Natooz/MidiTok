@@ -19,8 +19,8 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
         r"""A wrapper for any tokenizer object, which allows to use Byte Pair Encoding (BPE).
         """
         def __init__(self):
-            super().__init__(*args, **kwargs)
             self.has_bpe = False
+            super().__init__(*args, **kwargs)
 
         def bpe(self, tokens_path: Union[Path, PurePath, str], vocab_size: int, out_dir: Union[Path, PurePath, str],
                 files_lim: int = None, save_converted_samples: bool = False):
@@ -67,14 +67,15 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
                         except KeyError:
                             occurrences[tuple(sample[i: i + 2])] = 1
 
-                to_replace = max(occurrences, key=occurrences.get)
+                to_replace = max(occurrences, key=occurrences.get)  # most recurrent succession of two tokens
                 to_replace_bis = []  # store non-BPE tokens to be registered in vocab
                 for token in to_replace:
                     if self.vocab.token_to_event[token].split('_')[0] == 'BPE':
-                        to_replace_bis += map(int, self.vocab.token_to_event[token].split('_')[1].split('-'))
+                        to_replace_bis += map(int,
+                                              self.vocab.token_to_event[token].split('_')[1].split('.')[1].split('-'))
                     else:
                         to_replace_bis.append(token)
-                to_replace_str = '-'.join(map(str, to_replace_bis))
+                to_replace_str = '-'.join(map(str, to_replace)) + '.' + '-'.join(map(str, to_replace_bis))
                 self.vocab.add_event(Event(type_='BPE', time=0, value=to_replace_str, desc=''))
                 for sample in samples:  # replace in existing samples
                     i = 0
@@ -95,23 +96,42 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
             original_mean = sum(original_lengths) / len(original_lengths) if len(original_lengths) > 0. else 0.
             new_mean = sum(new_lengths) / len(new_lengths) if len(new_lengths) > 0. else 0.
             print(f'Mean of original lengths: {original_mean}\nMean length after BPE: {new_mean}')
-            print(f'Variation from original: {(new_mean - original_mean) / original_mean * 100}')
+            print(f'Variation from original: {(new_mean - original_mean) / original_mean * 100:.2f} %')
             self.save_params(out_dir)  # Saves the parameters with which the MIDIs are converted
 
-        def convert_tokens_to_bpe(self, tokens: List[int]) -> List[int]:
+        def apply_bpe(self, tokens: List[int]) -> List[int]:
+            r"""Converts a sequence of tokens into tokens with BPE.
+
+            :param tokens: tokens to convert.
+            :return:
+            """
             if not self.has_bpe:
                 return tokens
-            # while one bpe replacement in new seq
-            # for bpe token in vocab, if succession of tok in seq --> replace
-            while True:
+
+            previous_len = len(tokens) + 1  # + 1 to fool when entering the loop
+            while previous_len != len(tokens):
+                previous_len = len(tokens)
+                # loop over BPE tokens from the vocabulary
                 for tok in self.vocab.tokens_of_type('BPE'):
-                    token_succession = 0
-                    toto = 1
+                    token_succession = list(map(int,
+                                                self.vocab.token_to_event[tok].split('_')[1].split('.')[0].split('-')))
+                    i = 0  # will check if any token succession from the input token sequence matches the BPE
+                    while i <= len(tokens) - len(token_succession):
+                        if tokens[i:i+len(token_succession)] == token_succession:
+                            tokens[i] = tok  # if so, will replace the current token and remove the next ones to replace
+                            for _ in range(len(token_succession) - 1):
+                                del tokens[i + 1]
+                        i += 1
             return tokens
 
         def midi_to_tokens(self, midi: MidiFile, *args_, **kwargs_) -> List[List[int]]:
+            r"""First convert the MIDI into "regular" tokens, then apply BPE.
+
+            :param midi: MIDI object to convert.
+            :return: the token representation, i.e. tracks converted into sequences of tokens
+            """
             tokens = super().midi_to_tokens(midi, *args_, **kwargs_)
-            return [self.convert_tokens_to_bpe(track) for track in tokens] if self.has_bpe else tokens
+            return [self.apply_bpe(track) for track in tokens] if self.has_bpe else tokens
 
         def tokens_to_events(self, tokens: List[int], **kwargss) -> List[Event]:
             r"""First decomposes BPE tokens, then converts them in their respective event objects.
@@ -134,7 +154,7 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
                 token_type, token_val = self.vocab[tokens[i]].split('_')
                 if token_type == 'BPE':
                     del tokens[i]
-                    for j, to_insert in enumerate(map(int, token_val.split('-'))):
+                    for j, to_insert in enumerate(map(int, token_val.split('.')[1].split('-'))):
                         tokens.insert(i + j, to_insert)
                 i += 1
             return tokens
