@@ -37,6 +37,7 @@ class MIDITokenizer:
                  additional_tokens: Dict[str, Union[bool, int, Tuple[int, int]]], sos_eos_tokens: bool = False,
                  mask: bool = False, params: Union[str, Path, PurePath, Dict[str, Any]] = None):
         # Initialize params
+        self.vocab = None
         if params is None:
             self.pitch_range = pitch_range
             self.beat_res = beat_res
@@ -75,7 +76,8 @@ class MIDITokenizer:
             self.time_signatures = self.__create_time_signatures()
 
         # Vocabulary and token types graph
-        self.vocab = self._create_vocabulary()
+        if self.vocab is None:  # in case it was already loaded by an overriding load_params method, such as with BPE
+            self.vocab = self._create_vocabulary()
         self.tokens_types_graph = self._create_token_types_graph()
 
         # Keep in memory durations in ticks for seen time divisions so these values

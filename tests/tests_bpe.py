@@ -22,7 +22,7 @@ from tests_utils import track_equals, tempo_changes_equals, time_signature_chang
 
 # Special beat res for test, up to 64 beats so the duration and time-shift values are
 # long enough for MIDI-Like and Structured encodings, and with a single beat resolution
-BEAT_RES_TEST = {(0, 64): 8}
+BEAT_RES_TEST = {(0, 4): 8, (4, 12): 4}
 ADDITIONAL_TOKENS_TEST = {'Chord': False,  # set to false to speed up tests as it takes some time on maestro MIDIs
                           'Rest': True,
                           'Tempo': True,
@@ -43,7 +43,7 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
     :param data_path: root path to the data to test
     :param saving_erroneous_midis: will save MIDIs converted back with errors, to be used to debug
     """
-    encodings = ['Structured', 'Octuple']
+    encodings = ['Structured', 'REMI']
     tokenizers = []
     data_path = Path(data_path)
     files = list(data_path.glob('**/*.mid'))
@@ -51,7 +51,12 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
         add_tokens = deepcopy(ADDITIONAL_TOKENS_TEST)
         tokenizers.append(miditok.bpe(getattr(miditok, encoding), beat_res=BEAT_RES_TEST, additional_tokens=add_tokens))
         tokenizers[-1].tokenize_midi_dataset(files, data_path / encoding)
-        tokenizers[-1].bpe(data_path / encoding, data_path / f'{encoding}_bpe')
+        tokenizers[-1].bpe(data_path / encoding, len(tokenizers[-1].vocab) + 10, out_dir=data_path / f'{encoding}_bpe',
+                           files_lim=None, save_converted_samples=True)
+
+    # Reload (test) tokenizer from the saved config file
+    for i, encoding in enumerate(encodings):
+        tokenizers[i] = miditok.bpe(getattr(miditok, encoding), params=data_path / f'{encoding}_bpe' / 'config.txt')
 
     t0 = time.time()
     for i, file_path in enumerate(files):
@@ -131,9 +136,4 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
 
 
 if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser(description='MIDI Encoding test')
-    parser.add_argument('--data', type=str, default='tests/Maestro_MIDIs',
-                        help='directory of MIDI files to use for test')
-    args = parser.parse_args()
-    one_track_midi_to_tokens_to_midi(args.data)
+    one_track_midi_to_tokens_to_midi('tests/Maestro_MIDIs')

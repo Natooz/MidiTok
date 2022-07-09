@@ -6,7 +6,7 @@ from typing import List, Tuple, Dict, Union, Generator
 
 
 class Event:
-    """Event class, representing a token and its characteristics
+    r"""Event class, representing a token and its characteristics
     The type corresponds to the token type (e.g. Pitch, Position ...);
     The value to its value.
     These two attributes are used to build its string representation (__str__),
@@ -27,7 +27,7 @@ class Event:
 
 
 class Vocabulary:
-    """Vocabulary class.
+    r"""Vocabulary class.
     Get an element of the vocabulary from its index, such as:
         token = vocab['Pitch_80']  # gets the token of this event
         event = vocab[140]  # gets the event corresponding to token 140
@@ -51,13 +51,7 @@ class Vocabulary:
 
         self._token_to_event = {}
         self._token_types_indexes = {}
-        for event, token in event_to_token.items():
-            self._token_to_event[token] = event  # inversion
-            token_type = event.split('_')[0]
-            if token_type in self._token_types_indexes:
-                self._token_types_indexes[token_type].append(token)
-            else:
-                self._token_types_indexes[token_type] = [token]
+        self.update_token_types_indexes()
 
         if mask:
             self.__add_mask()
@@ -65,7 +59,7 @@ class Vocabulary:
             self.__add_sos_eos()
 
     def add_event(self, event: Union[Event, str, Generator], index: int = None):
-        """Adds one or multiple entries to the vocabulary
+        r"""Adds one or multiple entries to the vocabulary.
 
         :param event: event to add, either as an Event object or string of the form "Type_Value", e.g. Pitch_80
         :param index: (optional) index to set this event, if not given it will be set to last
@@ -81,7 +75,7 @@ class Vocabulary:
             self.__add_distinct_event(str(event), index)
 
     def __add_distinct_event(self, event: str, index: int = None):
-        """Private: Adds an event to the vocabulary
+        r"""Private: Adds an event to the vocabulary.
 
         :param event: event to add, as a formatted string of the form "Type_Value", e.g. Pitch_80
         :param index: (optional) index to set this event, if not given it will be set to last
@@ -107,15 +101,26 @@ class Vocabulary:
             self._token_types_indexes[event_type] = [index]
 
     def token_type(self, token: int) -> str:
-        """Returns the type of the given token
+        r"""Returns the type of the given token.
 
         :param token: token to get type from
         :return: the type of the token, as a string
         """
         return self._token_to_event[token].split('_')[0]
 
+    def update_token_types_indexes(self):
+        r"""Updates the _token_types_indexes attribute according to _event_to_token.
+        """
+        for event, token in self._event_to_token.items():
+            self._token_to_event[token] = event  # inversion
+            token_type = event.split('_')[0]
+            if token_type in self._token_types_indexes:
+                self._token_types_indexes[token_type].append(token)
+            else:
+                self._token_types_indexes[token_type] = [token]
+
     def tokens_of_type(self, token_type: str) -> List[int]:
-        """Returns the list of tokens of the given type
+        r"""Returns the list of tokens of the given type.
 
         :param token_type: token type to get the associated tokens
         :return: list of tokens
@@ -123,13 +128,13 @@ class Vocabulary:
         return self._token_types_indexes[token_type]
 
     def __add_mask(self):
-        """Adds a MASK token to the vocabulary. This may be used to
+        r"""Adds a MASK token to the vocabulary. This may be used to
         pre-train a model, such as for BERT, before finetuning it.
         """
         self.__add_distinct_event('MASK_None')
 
     def __add_sos_eos(self):
-        """Adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens
+        r"""Adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens
         to the vocabulary.
         """
         self.__add_distinct_event('SOS_None')

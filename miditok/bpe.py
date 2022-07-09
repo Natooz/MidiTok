@@ -20,10 +20,10 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
         """
         def __init__(self):
             super().__init__(*args, **kwargs)
-            self.max_vocab_size = len(self.vocab)
+            self.has_bpe = False
 
         def bpe(self, tokens_path: Union[Path, PurePath, str], vocab_size: int, out_dir: Union[Path, PurePath, str],
-                files_lim: int = None):
+                files_lim: int = None, save_converted_samples: bool = False):
             r"""Byte Pair Encoding (BPE) method.
             This method will build (modify) the vocabulary by analyzing a tokenized dataset to find
             the most recurrent token successions.
@@ -32,8 +32,10 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
 
             :param tokens_path: path to token files to load
             :param vocab_size: the new vocabulary size
-            :param out_dir:
-            :param files_lim: limit of token files to use
+            :param out_dir: directory to save the tokenizer's parameters and vocabulary
+            :param files_lim: limit of token files to use (default: None)
+            :param save_converted_samples: will save in out_dir the samples that have been used
+                    to create the BPE vocab. Files will keep the same name and relative path (default: True)
             """
             assert vocab_size > len(self.vocab), f'vocab_size ({vocab_size}) need to be higher than the size' \
                                                  f'of the current vocabulary ({len(self.vocab)})'
@@ -43,19 +45,19 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
             files_paths = list(Path(tokens_path).glob('**/*.json'))
             files_paths_bpe = choices(files_paths, k=files_lim) if files_lim is not None else files_paths
             samples = []
-            samples_stems = []
+            samples_paths = []
             original_lengths = []
 
             # Loads tokens / samples to analyze
             for file_path in tqdm(files_paths_bpe, desc='Loading token files'):
                 with open(file_path) as json_file:
                     samples.append(json.load(json_file)[0][0])  # first [0] for tracks, second [0] for the first track
-                    samples_stems.append(file_path.stem)
+                    samples_paths.append(file_path.relative_to(tokens_path))
                 original_lengths.append(len(samples[-1]))
 
             # Byte Pair Encoding
-            pbar = tqdm(total=self.max_vocab_size, desc='Running byte pair encoding')
-            while len(self.vocab) < self.max_vocab_size:
+            pbar = tqdm(total=vocab_size - len(self.vocab), desc='Running byte pair encoding')
+            while len(self.vocab) < vocab_size:
                 pbar.update(1)
                 occurrences = {}  # count occurrences of successive tokens
                 for sample in samples:
@@ -83,9 +85,12 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
                         i += 1
 
             # Saves dictionary and prints the difference in sequence length
+            pbar.close()
+            self.has_bpe = True
             new_lengths = []
             for i, sample in enumerate(samples):
-                # self.save_tokens([sample], PurePath(out_dir, samples_stems[i]).with_suffix(".json"), [(0, False)])
+                if save_converted_samples:
+                    self.save_tokens([sample], PurePath(out_dir, samples_paths[i]).with_suffix(".json"), [(0, False)])
                 new_lengths.append(len(sample))
             original_mean = sum(original_lengths) / len(original_lengths) if len(original_lengths) > 0. else 0.
             new_mean = sum(new_lengths) / len(new_lengths) if len(new_lengths) > 0. else 0.
@@ -94,12 +99,19 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
             self.save_params(out_dir)  # Saves the parameters with which the MIDIs are converted
 
         def convert_tokens_to_bpe(self, tokens: List[int]) -> List[int]:
-            #
-            return  # TODO
+            if not self.has_bpe:
+                return tokens
+            # while one bpe replacement in new seq
+            # for bpe token in vocab, if succession of tok in seq --> replace
+            while True:
+                for tok in self.vocab.tokens_of_type('BPE'):
+                    token_succession = 0
+                    toto = 1
+            return tokens
 
         def midi_to_tokens(self, midi: MidiFile, *args_, **kwargs_) -> List[List[int]]:
             tokens = super().midi_to_tokens(midi, *args_, **kwargs_)
-            return [self.convert_tokens_to_bpe(track) for track in tokens]
+            return [self.convert_tokens_to_bpe(track) for track in tokens] if self.has_bpe else tokens
 
         def tokens_to_events(self, tokens: List[int], **kwargss) -> List[Event]:
             r"""First decomposes BPE tokens, then converts them in their respective event objects.
@@ -182,6 +194,8 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
                     self.vocab = Vocabulary()
                     self.vocab._token_to_event = {int(token): event for token, event in value.items()}
                     self.vocab._event_to_token = {event: int(token) for token, event in value.items()}
+                    self.vocab.update_token_types_indexes()
+                    self.has_bpe = len(self.vocab.tokens_of_type('BPE')) > 0
                     continue
                 setattr(self, key, value)
 
