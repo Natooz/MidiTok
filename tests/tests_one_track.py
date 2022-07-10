@@ -60,10 +60,7 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
             add_tokens = deepcopy(ADDITIONAL_TOKENS_TEST)
             if encoding == 'MIDILike':
                 add_tokens['rest_range'] = (add_tokens['rest_range'][0], max(t[1] for t in BEAT_RES_TEST))
-            if encoding == 'Structured':
-                tokenizer = getattr(miditok, encoding)(beat_res=BEAT_RES_TEST)
-            else:
-                tokenizer = getattr(miditok, encoding)(beat_res=BEAT_RES_TEST, additional_tokens=add_tokens)
+            tokenizer = getattr(miditok, encoding)(beat_res=BEAT_RES_TEST, additional_tokens=add_tokens)
 
             # Convert the track in tokens
             tokens = tokenizer.midi_to_tokens(midi)

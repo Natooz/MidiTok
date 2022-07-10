@@ -3,7 +3,7 @@ https://arxiv.org/abs/2107.05944
 
 """
 
-from typing import List, Tuple, Dict, Optional
+from typing import List, Tuple, Dict, Optional, Union
 
 import numpy as np
 from miditoolkit import Instrument, Note, TempoChange
@@ -30,18 +30,20 @@ class Structured(MIDITokenizer):
             The keys of the dict are tuples indicating a range of beats, ex 0 to 3 for the first bar
             The values are the resolution, in samples per beat, of the given range, ex 8
     :param nb_velocities: number of velocity bins
-    :param program_tokens: will add entries for MIDI programs in the dictionary, to use
-            in the case of multitrack generation for instance
+    :param additional_tokens: specifies additional tokens (chords, time signature, rests, tempo...), only programs
+            are considered here.
     :param sos_eos_tokens: Adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens to the vocabulary
     :param mask: will add a MASK token to the vocabulary (default: False)
     :param params: can be a path to the parameter (json encoded) file or a dictionary
     """
     def __init__(self, pitch_range: range = PITCH_RANGE, beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
-                 nb_velocities: int = NB_VELOCITIES, program_tokens: bool = ADDITIONAL_TOKENS['Program'],
+                 nb_velocities: int = NB_VELOCITIES, additional_tokens: Dict[str, Union[bool, int]] = ADDITIONAL_TOKENS,
                  sos_eos_tokens: bool = False, mask: bool = False, params=None):
         # No additional tokens
-        additional_tokens = {'Chord': False, 'Rest': False, 'Tempo': False, 'TimeSignature': False,
-                             'Program': program_tokens}
+        additional_tokens['Chord'] = False  # Incompatible additional token
+        additional_tokens['Rest'] = False
+        additional_tokens['Tempo'] = False
+        additional_tokens['TimeSignature'] = False
         super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, sos_eos_tokens, mask, params)
 
     def track_to_tokens(self, track: Instrument) -> List[int]:

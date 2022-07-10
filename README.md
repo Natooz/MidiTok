@@ -9,7 +9,7 @@ Python package to tokenize MIDI music files.
 
 
 MidiTok converts MIDI music files into sequences of tokens, i.e. integers, ready to be fed to sequential neural networks like Transformers or RNNs.
-MidiTok features most known MIDI tokenization strategies, and is built around the idea that they all share common parameters and methods.
+MidiTok features most known MIDI tokenization strategies, and is built around the idea that they all share common parameters and methods. It also handled Byte Pair Encoding (BPE).
 
 ## Install
 
@@ -83,7 +83,7 @@ tokenizer.tokenize_midi_dataset(paths, 'path/to/save', midi_valid)
 from miditok import REMI
 import torch
 
-# Creates the tokenizer and list the file paths
+# Creates the tokenizer
 tokenizer = REMI(mask=True)  # using defaults parameters (constants.py), with MASK tokens for pre-training
 
 # The tokens, let's say produced by your Transformer, 4 tracks of 500 tokens
@@ -96,6 +96,27 @@ programs = [(0, False), (41, False), (61, False), (0, True)]
 generated_midi = tokenizer.tokens_to_midi(tokens, programs)
 generated_midi.dump('path/to/save/file.mid')  # could have been done above by giving the path argument
 ```
+
+### Apply Byte Pair Encoding
+
+```python
+from miditok import REMI, bpe
+from pathlib import Path
+
+# Creates the tokenizer, bpe method takes a class and its constructor arguments as arguments
+tokenizer = bpe(REMI, mask=True)  # as is, its exactly like a standard REMI tokenizer
+midi_paths = list(Path('path', 'to', 'dataset').glob('**/*.mid'))
+tokenizer.tokenize_midi_dataset(midi_paths, Path('path', 'to', 'dataset_tokenized'))
+
+# Constructs the vocabulary with BPE
+tokenizer.bpe(tokens_path=Path('path', 'to', 'dataset_tokenized'), vocab_size=500,
+              out_dir=Path('path', 'to', 'dataset_tokenized_bpe'), files_lim=300)
+
+# Converts the tokenized musics into tokens with BPE
+tokenizer.apply_bpe_to_dataset(Path('path', 'to', 'dataset_tokenized'), Path('path', 'to', 'dataset_tokenized_bpe'))
+```
+
+Read the [docstring](miditok/bpe.py) for the details.
 
 ## Encodings
 

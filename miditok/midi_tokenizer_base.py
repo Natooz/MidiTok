@@ -4,12 +4,12 @@ TODO time signature changes tokens
 
 """
 import math
-from sys import stdout
 from pathlib import Path, PurePath
 import json
 from typing import List, Tuple, Dict, Union, Callable, Optional, Any
 
 import numpy as np
+from tqdm import tqdm
 from miditoolkit import MidiFile, Instrument, Note, TempoChange, TimeSignature
 
 from .vocabulary import Vocabulary, Event
@@ -37,6 +37,7 @@ class MIDITokenizer:
                  additional_tokens: Dict[str, Union[bool, int, Tuple[int, int]]], sos_eos_tokens: bool = False,
                  mask: bool = False, params: Union[str, Path, PurePath, Dict[str, Any]] = None):
         # Initialize params
+        self.vocab = None
         if params is None:
             self.pitch_range = pitch_range
             self.beat_res = beat_res
@@ -50,8 +51,8 @@ class MIDITokenizer:
         # Init duration and velocity values
         self.durations = self.__create_durations_tuples()
         self.velocities = np.linspace(0, 127, self.nb_velocities + 1, dtype=np.intc)[1:]  # remove velocity 0
-        self._first_beat_res = list(beat_res.values())[0]
-        for beat_range, res in beat_res.items():
+        self._first_beat_res = list(self.beat_res.values())[0]
+        for beat_range, res in self.beat_res.items():
             if 0 in beat_range:
                 self._first_beat_res = res
                 break
@@ -64,8 +65,8 @@ class MIDITokenizer:
 
         # Rests
         self.rests = []
-        if additional_tokens['Rest']:
-            assert additional_tokens['rest_range'][0] // 4 <= self._first_beat_res, \
+        if self.additional_tokens['Rest']:
+            assert self.additional_tokens['rest_range'][0] // 4 <= self._first_beat_res, \
                 'The minimum rest value must be equal or superior to the initial beat resolution'
             self.rests = self.__create_rests()
 
@@ -75,7 +76,8 @@ class MIDITokenizer:
             self.time_signatures = self.__create_time_signatures()
 
         # Vocabulary and token types graph
-        self.vocab = self._create_vocabulary()
+        if self.vocab is None:  # in case it was already loaded by an overriding load_params method, such as with BPE
+            self.vocab = self._create_vocabulary()
         self.tokens_types_graph = self._create_token_types_graph()
 
         # Keep in memory durations in ticks for seen time divisions so these values
@@ -481,16 +483,7 @@ class MIDITokenizer:
         Path(out_dir).mkdir(parents=True, exist_ok=True)
         self.save_params(out_dir)  # Saves the parameters with which the MIDIs are converted
 
-        for m, midi_path in enumerate(midi_paths):
-            if logging:
-                bar_len = 30
-                filled_len = int(round(bar_len * m / len(midi_paths)))
-                percents = round(100.0 * m / len(midi_paths), 2)
-                bar = '=' * filled_len + '-' * (bar_len - filled_len)
-                prog = f'\r{m} / {len(midi_paths)} [{bar}] {percents:.1f}% ...Converting MIDIs to tokens: {midi_path}'
-                stdout.write(prog)
-                stdout.flush()
-
+        for midi_path in tqdm(midi_paths, desc='Converting MIDIs to tokens') if logging else enumerate(midi_paths):
             # Some MIDIs can contains errors that are raised by Mido, if so the loop continues
             try:
                 midi = MidiFile(PurePath(midi_path))
@@ -543,7 +536,7 @@ class MIDITokenizer:
 
     @staticmethod
     def save_tokens(tokens, path: Union[str, Path, PurePath], programs: List[Tuple[int, bool]] = None):
-        """ Saves tokens as a JSON file.
+        r"""Saves tokens as a JSON file.
 
         :param tokens: tokens, as any format
         :param path: path of the file to save
@@ -551,21 +544,20 @@ class MIDITokenizer:
                         given as a tuples (int, bool) for (program, is_drum)
         """
         with open(path, 'w') as outfile:
-            json.dump([tokens, programs] if programs is not None else [tokens], outfile)
+            json.dump({'tokens': tokens, 'programs': programs if programs is not None else []}, outfile)
 
     @staticmethod
-    def load_tokens(path: Union[str, Path, PurePath]) -> Tuple[Any, Any]:
-        """ Loads tokens saved as JSON files.
+    def load_tokens(path: Union[str, Path, PurePath]) -> Union[List[Any], Dict]:
+        r"""Loads tokens saved as JSON files.
 
         :param path: path of the file to load
         :return: the tokens, with the associated programs if saved with
         """
         with open(path) as file:
-            data = json.load(file)
-            return data[0], data[1] if len(data) > 1 else None
+            return json.load(file)
 
     def save_params(self, out_dir: Union[str, Path, PurePath]):
-        """ Saves the base parameters of this encoding in a txt file
+        r"""Saves the base parameters of this encoding in a txt file
         Useful to keep track of how a dataset has been tokenized / encoded
         It will also save the name of the class used, i.e. the encoding strategy
         NOTE: as json cant save tuples as keys, the beat ranges are saved as strings
@@ -584,7 +576,7 @@ class MIDITokenizer:
                        'encoding': self.__class__.__name__}, outfile, indent=4)
 
     def load_params(self, params: Union[str, Path, PurePath, Dict[str, Any]]):
-        """ Load parameters and set the encoder attributes
+        r"""Load parameters and set the encoder attributes
 
         :param params: can be a path to the parameter (json encoded) file or a dictionary
         """
