@@ -9,7 +9,7 @@ Python package to tokenize MIDI music files.
 
 
 MidiTok converts MIDI music files into sequences of tokens, i.e. integers, ready to be fed to sequential neural networks like Transformers or RNNs.
-MidiTok features most known MIDI tokenization strategies, and is built around the idea that they all share common parameters and methods. It also handled Byte Pair Encoding (BPE).
+MidiTok features most known MIDI tokenization strategies, and is built around the idea that they all share common parameters and methods. It also handles Byte Pair Encoding (BPE).
 
 ## Install
 
