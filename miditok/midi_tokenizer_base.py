@@ -536,7 +536,7 @@ class MIDITokenizer:
 
     @staticmethod
     def save_tokens(tokens, path: Union[str, Path, PurePath], programs: List[Tuple[int, bool]] = None):
-        """ Saves tokens as a JSON file.
+        r"""Saves tokens as a JSON file.
 
         :param tokens: tokens, as any format
         :param path: path of the file to save
@@ -544,21 +544,20 @@ class MIDITokenizer:
                         given as a tuples (int, bool) for (program, is_drum)
         """
         with open(path, 'w') as outfile:
-            json.dump([tokens, programs] if programs is not None else [tokens], outfile)
+            json.dump({'tokens': tokens, 'programs': programs if programs is not None else []}, outfile)
 
     @staticmethod
-    def load_tokens(path: Union[str, Path, PurePath]) -> Tuple[Any, Any]:
-        """ Loads tokens saved as JSON files.
+    def load_tokens(path: Union[str, Path, PurePath]) -> Union[List[Any], Dict]:
+        r"""Loads tokens saved as JSON files.
 
         :param path: path of the file to load
         :return: the tokens, with the associated programs if saved with
         """
         with open(path) as file:
-            data = json.load(file)
-            return data[0], data[1] if len(data) > 1 else None
+            return json.load(file)
 
     def save_params(self, out_dir: Union[str, Path, PurePath]):
-        """ Saves the base parameters of this encoding in a txt file
+        r"""Saves the base parameters of this encoding in a txt file
         Useful to keep track of how a dataset has been tokenized / encoded
         It will also save the name of the class used, i.e. the encoding strategy
         NOTE: as json cant save tuples as keys, the beat ranges are saved as strings
@@ -577,7 +576,7 @@ class MIDITokenizer:
                        'encoding': self.__class__.__name__}, outfile, indent=4)
 
     def load_params(self, params: Union[str, Path, PurePath, Dict[str, Any]]):
-        """ Load parameters and set the encoder attributes
+        r"""Load parameters and set the encoder attributes
 
         :param params: can be a path to the parameter (json encoded) file or a dictionary
         """

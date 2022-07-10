@@ -66,18 +66,14 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath]):
             # Convert the track in tokens
             tokens = tokenizer.midi_to_tokens(deepcopy(midi))[0]  # with BPE
             with open(data_path / f'{encoding}' / f'{file_path.stem}.json') as json_file:
-                tokens_no_bpe = json.load(json_file)[0][0]  # no BPE
+                tokens_no_bpe = json.load(json_file)['tokens'][0]  # no BPE
             tokens_no_bpe2 = tokenizer.decompose_bpe(deepcopy(tokens))  # BPE decomposed
             with open(data_path / f'{encoding}_bpe' / f'{file_path.stem}.json') as json_file:
-                saved_tokens = json.load(json_file)[0][0]  # with BPE, saved after creating vocab
+                saved_tokens = json.load(json_file)['tokens'][0]  # with BPE, saved after creating vocab
             saved_tokens_decomposed = tokenizer.decompose_bpe(deepcopy(saved_tokens))
             no_error_bpe = tokens == saved_tokens
             no_error = tokens_no_bpe == tokens_no_bpe2 == saved_tokens_decomposed
             if not no_error or not no_error_bpe:
-                '''toto = [tokenizer[tok] for tok in tokens[-7:]]
-                toto2 = tokens[-7:]
-                totos = [tokenizer[tok] for tok in saved_tokens[-7:]]
-                toto2s = saved_tokens[-7:]'''
                 print(f'error for {encoding} and {file_path.name}')
 
     print(f'Took {time.time() - t0} seconds')
