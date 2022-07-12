@@ -1,4 +1,4 @@
-""" Structured MIDI encoding method as using in the Piano Inpainting Application
+"""Structured MIDI encoding method as using in the Piano Inpainting Application
 https://arxiv.org/abs/2107.05944
 
 """
@@ -14,7 +14,7 @@ from .constants import *
 
 
 class Structured(MIDITokenizer):
-    """ Structured MIDI encoding method as using in the Piano Inpainting Application
+    r"""Structured MIDI encoding method as using in the Piano Inpainting Application
     https://arxiv.org/abs/2107.05944
     The token types follows the specific pattern:
     Pitch -> Velocity -> Duration -> Time Shift -> back to Pitch ...
@@ -47,7 +47,7 @@ class Structured(MIDITokenizer):
         super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, sos_eos_tokens, mask, params)
 
     def track_to_tokens(self, track: Instrument) -> List[int]:
-        """ Converts a track (miditoolkit.Instrument object) into a sequence of tokens
+        r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
 
         :param track: MIDI track to convert
         :return: sequence of corresponding tokens
@@ -104,7 +104,7 @@ class Structured(MIDITokenizer):
 
     def tokens_to_track(self, tokens: List[int], time_division: Optional[int] = TIME_DIVISION,
                         program: Optional[Tuple[int, bool]] = (0, False)) -> Tuple[Instrument, List[TempoChange]]:
-        """ Converts a sequence of tokens into a track object
+        r"""Converts a sequence of tokens into a track object
 
         :param tokens: sequence of tokens to convert
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create)
@@ -139,7 +139,7 @@ class Structured(MIDITokenizer):
         return instrument, [TempoChange(TEMPO, 0)]
 
     def _create_vocabulary(self, sos_eos_tokens: bool = None) -> Vocabulary:
-        """ Creates the Vocabulary object of the tokenizer.
+        r"""Creates the Vocabulary object of the tokenizer.
         See the docstring of the Vocabulary class for more details about how to use it.
         NOTE: token index 0 is often used as a padding index during training
 
@@ -171,7 +171,7 @@ class Structured(MIDITokenizer):
         return vocab
 
     def _create_token_types_graph(self) -> Dict[str, List[str]]:
-        """ Returns a graph (as a dictionary) of the possible token
+        r"""Returns a graph (as a dictionary) of the possible token
         types successions.
         NOTE: Program type is not referenced here, you can add it manually by
         modifying the tokens_types_graph class attribute following your strategy.
@@ -183,7 +183,7 @@ class Structured(MIDITokenizer):
         return dic
 
     def token_types_errors(self, tokens: List[int], consider_pad: bool = False) -> float:
-        """ Checks if a sequence of tokens is constituted of good token types
+        r"""Checks if a sequence of tokens is constituted of good token types
         successions and returns the error ratio (lower is better).
         The Pitch values are also analyzed:
             - a pitch token should not be present if the same pitch is already played at the time

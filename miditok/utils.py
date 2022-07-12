@@ -13,7 +13,7 @@ from .constants import CHORD_MAPS, INSTRUMENT_CLASSES, MIDI_INSTRUMENTS
 
 
 def get_midi_programs(midi: MidiFile) -> List[Tuple[int, bool]]:
-    """ Returns the list of programs of the tracks of a MIDI, deeping the
+    r"""Returns the list of programs of the tracks of a MIDI, deeping the
     same order. It returns it as a list of tuples (program, is_drum).
 
     :param midi: the MIDI object to extract tracks programs
@@ -23,7 +23,7 @@ def get_midi_programs(midi: MidiFile) -> List[Tuple[int, bool]]:
 
 
 def remove_duplicated_notes(notes: List[Note]):
-    """ Remove possible duplicated notes, i.e. with the same pitch, starting and ending times.
+    r"""Remove possible duplicated notes, i.e. with the same pitch, starting and ending times.
     Before running this function make sure the notes has been sorted by start then pitch then end values:
     notes.sort(key=lambda x: (x.start, x.pitch, x.end))
 
@@ -37,7 +37,7 @@ def remove_duplicated_notes(notes: List[Note]):
 
 def detect_chords(notes: List[Note], time_division: int, beat_res: int = 4, onset_offset: int = 1,
                   only_known_chord: bool = False, simul_notes_limit: int = 20) -> List[Event]:
-    """ Chord detection method.
+    r"""Chord detection method.
     NOTE: make sure to sort notes by start time then pitch before: notes.sort(key=lambda x: (x.start, x.pitch))
     NOTE2: on very large tracks with high note density this method can be very slow !
     If you plan to use it with the Maestro or GiantMIDI datasets, it can take up to
@@ -115,7 +115,7 @@ def merge_tracks_per_class(midi: MidiFile,
                            max_nb_of_tracks_per_inst_class: Dict[int, int] = None,
                            valid_programs: List[int] = None,
                            filter_pitches: bool = True):
-    """Merges per instrument class the tracks which are in the class in classes_to_merge.
+    r"""Merges per instrument class the tracks which are in the class in classes_to_merge.
     Example, a list of tracks / programs [0, 3, 8, 10, 11, 24, 25, 44, 47] will become [0, 8, 24, 25, 40] if
     classes_to_merge is [0, 1, 5].
     See miditok.constants.INSTRUMENT_CLASSES
@@ -193,7 +193,7 @@ def merge_tracks_per_class(midi: MidiFile,
 
 
 def merge_tracks(tracks: Union[List[Instrument], MidiFile], effects: bool = False) -> Instrument:
-    """ Merge several miditoolkit Instrument objects, from a list of Instruments or a MidiFile object.
+    r"""Merge several miditoolkit Instrument objects, from a list of Instruments or a MidiFile object.
     All the tracks will be merged into the first Instrument object (notes concatenated and sorted),
     beware of giving tracks with the same program (no assessment is performed).
     The other tracks will be deleted.
@@ -235,7 +235,7 @@ def merge_tracks(tracks: Union[List[Instrument], MidiFile], effects: bool = Fals
 
 
 def merge_same_program_tracks(tracks: List[Instrument]):
-    """ Takes a list of tracks and merge the ones with the same programs.
+    r"""Takes a list of tracks and merge the ones with the same programs.
     NOTE: Control change messages are not considered
 
     :param tracks: list of tracks
@@ -259,7 +259,7 @@ def merge_same_program_tracks(tracks: List[Instrument]):
 
 def current_bar_pos(seq: List[int], bar_token: int, position_tokens: List[int], pitch_tokens: List[int],
                     chord_tokens: List[int] = None) -> Tuple[int, int, List[int], bool]:
-    """ Detects the current state of a sequence of tokens
+    r"""Detects the current state of a sequence of tokens
 
     :param seq: sequence of tokens
     :param bar_token: the bar token value

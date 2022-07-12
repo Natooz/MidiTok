@@ -15,7 +15,7 @@ from .constants import *
 
 
 class CPWord(MIDITokenizer):
-    """ MIDI encoding method, similar to Compound Word
+    r"""MIDI encoding method, similar to Compound Word
     https://arxiv.org/abs/2101.02402
     Each compound token will be a list of the form:
         (index. Token type)
@@ -66,7 +66,7 @@ class CPWord(MIDITokenizer):
         super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, sos_eos_tokens, mask, params)
 
     def track_to_tokens(self, track: Instrument) -> List[List[int]]:
-        """ Converts a track (miditoolkit.Instrument object) into a sequence of tokens
+        r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
 
         :param track: MIDI track to convert
         :return: sequence of corresponding tokens
@@ -168,7 +168,7 @@ class CPWord(MIDITokenizer):
     def create_cp_token(self, time: int, bar: bool = False, pos: int = None, pitch: int = None, vel: int = None,
                         dur: str = None, chord: str = None, rest: str = None, tempo: int = None, program: int = None,
                         desc: str = '') -> List[Union[Event, int]]:
-        """ Create a CP Word token, with the following structure:
+        r"""Create a CP Word token, with the following structure:
             (index. Token type)
             0. Family
             1. Bar/Position
@@ -232,7 +232,7 @@ class CPWord(MIDITokenizer):
 
     def tokens_to_track(self, tokens: List[List[int]], time_division: Optional[int] = TIME_DIVISION,
                         program: Optional[Tuple[int, bool]] = (0, False)) -> Tuple[Instrument, List[TempoChange]]:
-        """ Converts a sequence of tokens into a track object
+        r"""Converts a sequence of tokens into a track object
 
         :param tokens: sequence of tokens to convert
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create)
@@ -286,8 +286,9 @@ class CPWord(MIDITokenizer):
         return instrument, tempo_changes
 
     def _create_vocabulary(self, sos_eos_tokens: bool = None) -> List[Vocabulary]:
-        """ Creates the Vocabulary object of the tokenizer.
+        r"""Creates the Vocabulary object of the tokenizer.
         See the docstring of the Vocabulary class for more details about how to use it.
+        NOTE: token index 0 is used as a padding index for training.
 
         :param sos_eos_tokens: DEPRECIATED, will include Start Of Sequence (SOS) and End Of Sequence (tokens)
         :return: the vocabulary object
@@ -347,7 +348,7 @@ class CPWord(MIDITokenizer):
         return vocab
 
     def _create_token_types_graph(self) -> Dict[str, List[str]]:
-        """ Returns a graph (as a dictionary) of the possible token
+        r"""Returns a graph (as a dictionary) of the possible token
         types successions.
         As with CP the tokens types are "merged", each state here corresponds to
         a "compound" token, which is characterized by the token types Program, Bar,
@@ -375,7 +376,7 @@ class CPWord(MIDITokenizer):
         return dic
 
     def token_types_errors(self, tokens: List[List[int]], consider_pad: bool = False) -> float:
-        """ Checks if a sequence of tokens is constituted of good token types
+        r"""Checks if a sequence of tokens is constituted of good token types
         successions and returns the error ratio (lower is better).
         The Pitch and Position values are also analyzed:
             - a position token cannot have a value <= to the current position (it would go back in time)

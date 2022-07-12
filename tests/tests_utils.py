@@ -64,7 +64,7 @@ def time_signature_changes_equals(time_sig_changes1: List[TimeSignature], time_s
 
 
 def reduce_note_durations(notes: List[Note], max_note_duration: int):
-    """ Reduce the durations of too long notes.
+    r"""Reduce the durations of too long notes.
     Each tokenization can only represent a limited duration value.
     This method ensure the notes durations do not exceed the maximum value.
 
@@ -77,7 +77,7 @@ def reduce_note_durations(notes: List[Note], max_note_duration: int):
 
 
 def adapt_tempo_changes_times(tracks: List[Instrument], tempo_changes: List[TempoChange]):
-    """ Will adapt the times of tempo changes depending on the
+    r"""Will adapt the times of tempo changes depending on the
     onset times of the notes of the MIDI.
     This is needed to pass the tempo tests for Octuple as the tempos
     will be decoded only from the notes.

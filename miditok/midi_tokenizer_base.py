@@ -1,4 +1,4 @@
-""" MIDI encoding base class and methods
+"""MIDI encoding base class and methods
 TODO Control change messages (sustain, modulation, pitch bend)
 TODO time signature changes tokens
 
@@ -18,7 +18,7 @@ from .constants import TIME_DIVISION
 
 
 class MIDITokenizer:
-    """ MIDI encoding base class, containing common parameters to all encodings
+    r"""MIDI encoding base class, containing common parameters to all encodings
     and common methods.
 
     :param pitch_range: range of used MIDI pitches
@@ -89,7 +89,7 @@ class MIDITokenizer:
         self.current_midi_metadata = {}  # needs to be updated each time a MIDI is read
 
     def midi_to_tokens(self, midi: MidiFile, *args, **kwargs) -> List[List[Union[int, List[int]]]]:
-        """ Converts a MIDI file in a tokens representation.
+        r"""Converts a MIDI file in a tokens representation.
         NOTE: if you override this method, be sure to keep the first lines in your method
 
         :param midi: the MIDI objet to convert
@@ -117,7 +117,7 @@ class MIDITokenizer:
         return tokens
 
     def preprocess_midi(self, midi: MidiFile):
-        """ Will process a MIDI file so it can be used to train a model.
+        r"""Will process a MIDI file so it can be used to train a model.
         Its notes attributes (times, pitches, velocities) will be quantized and sorted, duplicated
         notes removed, as well as tempos.
         NOTE: empty tracks (with no note) will be removed from the MIDI object
@@ -145,7 +145,7 @@ class MIDITokenizer:
             self.quantize_time_signatures(midi.time_signature_changes, midi.ticks_per_beat)
 
     def track_to_tokens(self, track: Instrument) -> List[Union[int, List[int]]]:
-        """ Converts a track (miditoolkit.Instrument object) into a sequence of tokens
+        r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
 
         :param track: MIDI track to convert
         :return: sequence of corresponding tokens
@@ -153,7 +153,7 @@ class MIDITokenizer:
         raise NotImplementedError
 
     def events_to_tokens(self, events: List[Event]) -> List[int]:
-        """ Converts a list of Event objects into a list of tokens
+        r"""Converts a list of Event objects into a list of tokens
         You can override this method if necessary
 
         :param events: list of Events objects to convert
@@ -163,7 +163,7 @@ class MIDITokenizer:
 
     def tokens_to_events(self, tokens: List[Union[int, List[int]]], multi_voc: bool = False) \
             -> List[Union[Event, List[Event]]]:
-        """ Convert a sequence of tokens in their respective event objects
+        r"""Convert a sequence of tokens in their respective event objects
         You can override this method if necessary
 
         :param tokens: sequence of tokens to convert
@@ -188,7 +188,7 @@ class MIDITokenizer:
     def tokens_to_midi(self, tokens: List[List[Union[int, List[int]]]],
                        programs: Optional[List[Tuple[int, bool]]] = None, output_path: Optional[str] = None,
                        time_division: Optional[int] = TIME_DIVISION) -> MidiFile:
-        """ Convert multiple sequences of tokens into a multitrack MIDI and save it.
+        r"""Convert multiple sequences of tokens into a multitrack MIDI and save it.
         The tokens will be converted to event objects and then to a miditoolkit.MidiFile object.
         NOTE: With Remi, MIDI-Like, CP Word or other encoding methods that process tracks
         independently, only the tempo changes of the first track in tokens will be used
@@ -220,7 +220,7 @@ class MIDITokenizer:
 
     def tokens_to_track(self, tokens: List[Union[int, List[int]]], time_division: Optional[int] = TIME_DIVISION,
                         program: Optional[Tuple[int, bool]] = (0, False)) -> Tuple[Instrument, List[TempoChange]]:
-        """ Converts a sequence of tokens into a track object
+        r"""Converts a sequence of tokens into a track object
 
         :param tokens: sequence of tokens to convert
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create)
@@ -230,7 +230,7 @@ class MIDITokenizer:
         raise NotImplementedError
 
     def quantize_notes(self, notes: List[Note], time_division: int, pitch_range: range = None):
-        """ Quantize the notes items, i.e. their pitch, velocity, start and end values.
+        r"""Quantize the notes items, i.e. their pitch, velocity, start and end values.
         It shifts the notes so they start at times that match the quantization (e.g. 16 samples per bar)
         Notes with pitches outside of self.pitch_range will simply be deleted.
 
@@ -258,7 +258,7 @@ class MIDITokenizer:
             i += 1
 
     def quantize_tempos(self, tempos: List[TempoChange], time_division: int):
-        """ Quantize the times and tempo values of tempo change events.
+        r"""Quantize the times and tempo values of tempo change events.
         Consecutive identical tempo changes will be removed.
 
         :param tempos: tempo changes to quantize
@@ -280,7 +280,7 @@ class MIDITokenizer:
 
     @staticmethod
     def quantize_time_signatures(time_sigs: List[TimeSignature], time_division: int):
-        """ Quantize the time signature changes, delayed to the next bar.
+        r"""Quantize the time signature changes, delayed to the next bar.
         See MIDI 1.0 Detailed specifications, pages 54 - 56, for more information on
         delayed time signature messages.
 
@@ -314,7 +314,7 @@ class MIDITokenizer:
             i += 1
 
     def add_sos_eos_to_seq(self, seq: List[int]):
-        """ Adds Start Of Sequence (SOS) and End Of Sequence EOS tokens to a sequence of tokens:
+        r"""Adds Start Of Sequence (SOS) and End Of Sequence EOS tokens to a sequence of tokens:
         SOS at the beginning, EOS at the end.
 
         :param seq: sequence of tokens
@@ -323,7 +323,7 @@ class MIDITokenizer:
         seq.append(self.vocab['EOS_None'])
 
     def _create_vocabulary(self, *args, **kwargs) -> Union[Vocabulary, List[Vocabulary]]:
-        """ Creates the Vocabulary object of the tokenizer.
+        r"""Creates the Vocabulary object of the tokenizer.
         See the docstring of the Vocabulary class for more details about how to use it.
         NOTE: token index 0 is often used as a padding index during training
         NOTE 2: SOS and EOS tokens should be set to -1 and -2 respectively.
@@ -334,13 +334,13 @@ class MIDITokenizer:
         raise NotImplementedError
 
     def _create_token_types_graph(self) -> Dict[str, List[str]]:
-        """ Creates a dictionary for the directions of the token types of the encoding
+        r"""Creates a dictionary for the directions of the token types of the encoding
         See other classes (REMI, MIDILike ...) for examples of how to implement it."""
         raise NotImplementedError
 
     @staticmethod
     def _add_pad_type_to_graph(dic):
-        """Adds the PAD token type to the token types graph.
+        r"""Adds the PAD token type to the token types graph.
 
         :param dic: token types graph to add PAD type
         """
@@ -349,7 +349,7 @@ class MIDITokenizer:
         dic['PAD'] = ['PAD']
 
     def __create_durations_tuples(self) -> List[Tuple]:
-        """ Creates the possible durations in beat / position units, as tuple of the form:
+        r"""Creates the possible durations in beat / position units, as tuple of the form:
         (beat, pos, res) where beat is the number of beats, pos the number of "samples"
         ans res the beat resolution considered (samples per beat)
         Example: (2, 5, 8) means the duration is 2 beat long + position 5 / 8 of the ongoing beat
@@ -368,7 +368,7 @@ class MIDITokenizer:
 
     @staticmethod
     def _token_duration_to_ticks(token_duration: str, time_division: int) -> int:
-        """ Converts a duration token value of the form x.x.x, for beat.position.resolution,
+        r"""Converts a duration token value of the form x.x.x, for beat.position.resolution,
         in ticks.
         Is also used for Time-Shifts.
 
@@ -380,7 +380,7 @@ class MIDITokenizer:
         return (beat * res + pos) * time_division // res
 
     def __create_rests(self) -> List[Tuple]:
-        """ Creates the possible rests in beat / position units, as tuple of the form:
+        r"""Creates the possible rests in beat / position units, as tuple of the form:
         (beat, pos) where beat is the number of beats, pos the number of "samples"
         The rests are calculated from the value of self.additional_tokens[rest_range],
         which first value divide a beat to determine the minimum rest represented,
@@ -405,7 +405,7 @@ class MIDITokenizer:
         return rests
 
     def __create_time_signatures(self) -> List[Tuple]:
-        """ Creates the possible time signatures, as tuple of the form:
+        r"""Creates the possible time signatures, as tuple of the form:
         (nb_beats, beat_res) where nb_beats is the number of beats per bar.
         Example: (3, 4) means one bar is 3 beat long and each beat is a quarter note.
 
@@ -422,7 +422,7 @@ class MIDITokenizer:
         return time_signatures
 
     def _reduce_time_signature(self, numerator: int, denominator: int) -> Tuple[int, int]:
-        """ Reduces and decomposes a time signature into one of the valid vocabulary time signatures.
+        r"""Reduces and decomposes a time signature into one of the valid vocabulary time signatures.
         If time signature's denominator (beat resolution) is larger than max_beat_res,
         the denominator and numerator are reduced to max_beat_res if possible.
         If time signature's numerator (bar length in beats) is larger than nb_notes * denominator,
@@ -456,7 +456,7 @@ class MIDITokenizer:
 
     @staticmethod
     def _parse_token_time_signature(token_time_sig: str) -> Tuple[int, int]:
-        """ Converts a time signature token value of the form x/x into a tuple of integers,
+        r"""Converts a time signature token value of the form x/x into a tuple of integers,
         time signature's numerator (bar length in beats) and denominator (beat resolution).
 
         :param token_time_sig: TimeSig token value
@@ -468,7 +468,7 @@ class MIDITokenizer:
     def tokenize_midi_dataset(self, midi_paths: Union[List[str], List[Path], List[PurePath]],
                               out_dir: Union[str, Path, PurePath], validation_fn: Callable[[MidiFile], bool] = None,
                               save_programs: bool = True, logging: bool = True):
-        """ Converts a dataset / list of MIDI files, into their token version and save them as json files
+        r"""Converts a dataset / list of MIDI files, into their token version and save them as json files
         The resulting Json files will have the shape (T, *), first dimension is tracks, second tokens.
         If save_programs is True, the shape will be [(T, *), (T, 2)], first dim is tokens and programs instead,
         for programs the first value is the program, second a bool indicating if the track is drums.
@@ -509,7 +509,7 @@ class MIDITokenizer:
                              get_midi_programs(midi) if save_programs else None)
 
     def token_types_errors(self, tokens: List[int], consider_pad: bool = False) -> float:
-        """ Checks if a sequence of tokens is constituted of good token types
+        r"""Checks if a sequence of tokens is constituted of good token types
         successions and returns the error ratio (lower is better).
         The implementation in MIDITokenizer class only checks the token types,
         in child class the methods also consider the position and pitch values.

@@ -1,4 +1,4 @@
-""" Constants for data encoding
+"""Constants for data encoding
 
 """
 

@@ -1,4 +1,4 @@
-""" MIDI encoding method, similar to the REMI introduced in the Pop Music Transformer paper
+"""MIDI encoding method, similar to the REMI introduced in the Pop Music Transformer paper
 https://arxiv.org/abs/2002.00212
 
 """
@@ -15,7 +15,7 @@ from .constants import *
 
 
 class REMI(MIDITokenizer):
-    """ MIDI encoding method, similar to the REMI introduced in the Pop Music Transformer paper
+    r"""MIDI encoding method, similar to the REMI introduced in the Pop Music Transformer paper
     https://arxiv.org/abs/2002.00212
 
     :param pitch_range: range of used MIDI pitches
@@ -36,7 +36,7 @@ class REMI(MIDITokenizer):
         super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, sos_eos_tokens, mask, params)
 
     def track_to_tokens(self, track: Instrument) -> List[int]:
-        """ Converts a track (miditoolkit.Instrument object) into a sequence of tokens
+        r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
 
         :param track: MIDI track to convert
         :return: sequence of corresponding tokens
@@ -128,7 +128,7 @@ class REMI(MIDITokenizer):
 
     def tokens_to_track(self, tokens: List[int], time_division: Optional[int] = TIME_DIVISION,
                         program: Optional[Tuple[int, bool]] = (0, False)) -> Tuple[Instrument, List[TempoChange]]:
-        """ Converts a sequence of tokens into a track object
+        r"""Converts a sequence of tokens into a track object
 
         :param tokens: sequence of tokens to convert
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create)
@@ -185,7 +185,7 @@ class REMI(MIDITokenizer):
         return instrument, tempo_changes
 
     def _create_vocabulary(self, sos_eos_tokens: bool = None) -> Vocabulary:
-        """ Creates the Vocabulary object of the tokenizer.
+        r"""Creates the Vocabulary object of the tokenizer.
         See the docstring of the Vocabulary class for more details about how to use it.
         NOTE: token index 0 is often used as a padding index during training
 
@@ -230,7 +230,7 @@ class REMI(MIDITokenizer):
         return vocab
 
     def _create_token_types_graph(self) -> Dict[str, List[str]]:
-        """ Returns a graph (as a dictionary) of the possible token
+        r"""Returns a graph (as a dictionary) of the possible token
         types successions.
         NOTE: Program type is not referenced here, you can add it manually by
         modifying the tokens_types_graph class attribute following your strategy.
@@ -269,7 +269,7 @@ class REMI(MIDITokenizer):
         return dic
 
     def token_types_errors(self, tokens: List[int], consider_pad: bool = False) -> float:
-        """ Checks if a sequence of tokens is constituted of good token types
+        r"""Checks if a sequence of tokens is constituted of good token types
         successions and returns the error ratio (lower is better).
         The Pitch and Position values are also analyzed:
             - a position token cannot have a value <= to the current position (it would go back in time)
@@ -321,7 +321,7 @@ class REMI(MIDITokenizer):
 
     @staticmethod
     def _order(x: Event) -> int:
-        """ Helper function to sort events in the right order
+        r"""Helper function to sort events in the right order
 
         :param x: event to get order index
         :return: an order int

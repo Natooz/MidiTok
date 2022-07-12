@@ -1,4 +1,4 @@
-""" Octuple encoding method, as introduced in MusicBERT
+"""Octuple encoding method, as introduced in MusicBERT
 https://arxiv.org/abs/2106.05630
 
 """
@@ -17,7 +17,7 @@ from .constants import *
 
 
 class Octuple(MIDITokenizer):
-    """ Octuple encoding method, as introduced in MusicBERT
+    r"""Octuple encoding method, as introduced in MusicBERT
     https://arxiv.org/abs/2106.05630
 
     :param pitch_range: range of used MIDI pitches
@@ -42,7 +42,7 @@ class Octuple(MIDITokenizer):
         super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, sos_eos_tokens, mask, params)
 
     def save_params(self, out_dir: Union[str, Path, PurePath]):
-        """ Override the parent class method to include additional parameter drum pitch range
+        r"""Override the parent class method to include additional parameter drum pitch range
         Saves the base parameters of this encoding in a txt file
         Useful to keep track of how a dataset has been tokenized / encoded
         It will also save the name of the class used, i.e. the encoding strategy
@@ -61,7 +61,7 @@ class Octuple(MIDITokenizer):
                       outfile)
 
     def midi_to_tokens(self, midi: MidiFile) -> List[List[int]]:
-        """ Override the parent class method
+        r"""Override the parent class method
         Converts a MIDI file in a tokens representation, a sequence of "time steps".
         A time step is a list of tokens where:
             (list index: token type)
@@ -114,7 +114,7 @@ class Octuple(MIDITokenizer):
         return tokens
 
     def track_to_tokens(self, track: Instrument) -> List[List[Union[Event, int]]]:
-        """ Converts a track (miditoolkit.Instrument object) into a sequence of tokens
+        r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
         A time step is a list of tokens where:
             (list index: token type)
             0: Pitch (as an Event object for sorting purpose afterwards)
@@ -205,7 +205,7 @@ class Octuple(MIDITokenizer):
 
     def tokens_to_midi(self, tokens: List[List[int]], _=None, output_path: Optional[str] = None,
                        time_division: Optional[int] = TIME_DIVISION) -> MidiFile:
-        """ Override the parent class method
+        r"""Override the parent class method
         Convert multiple sequences of tokens into a multitrack MIDI and save it.
         The tokens will be converted to event objects and then to a miditoolkit.MidiFile object.
         A time step is a list of tokens where:
@@ -311,7 +311,7 @@ class Octuple(MIDITokenizer):
 
     def tokens_to_track(self, tokens: List[List[int]], time_division: Optional[int] = TIME_DIVISION,
                         program: Optional[Tuple[int, bool]] = (0, False)) -> Tuple[Instrument, List[TempoChange]]:
-        """ NOT RELEVANT / IMPLEMENTED IN OCTUPLE
+        r"""NOT RELEVANT / IMPLEMENTED IN OCTUPLE
         Use tokens_to_midi instead
 
         :param tokens: sequence of tokens to convert
@@ -322,9 +322,9 @@ class Octuple(MIDITokenizer):
         raise NotImplementedError('tokens_to_track not implemented for Octuple, use tokens_to_midi instead')
 
     def _create_vocabulary(self, sos_eos_tokens: bool = None) -> List[Vocabulary]:
-        """ Creates the Vocabulary object of the tokenizer.
+        r"""Creates the Vocabulary object of the tokenizer.
         See the docstring of the Vocabulary class for more details about how to use it.
-        NOTE: token index 0 is often used as a padding index during training
+        NOTE: token index 0 is used as a padding index for training.
 
         :param sos_eos_tokens: DEPRECIATED, will include Start Of Sequence (SOS) and End Of Sequence (tokens)
         :return: the vocabulary object
@@ -366,7 +366,7 @@ class Octuple(MIDITokenizer):
         return vocab
 
     def _create_token_types_graph(self) -> Dict[str, List[str]]:
-        """ Returns a graph (as a dictionary) of the possible token
+        r"""Returns a graph (as a dictionary) of the possible token
         types successions.
         Not relevant for Octuple.
 
@@ -375,7 +375,7 @@ class Octuple(MIDITokenizer):
         return {}  # not relevant for this encoding
 
     def token_types_errors(self, tokens: List[List[int]]) -> float:
-        """ Checks if a sequence of tokens is constituted of good token values and
+        r"""Checks if a sequence of tokens is constituted of good token values and
         returns the error ratio (lower is better).
         The token types are always the same in Octuple so this methods only checks
         if their values are correct:

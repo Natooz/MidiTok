@@ -23,7 +23,7 @@ DRUM_PITCH_RANGE = range(27, 88)
 
 
 class MuMIDI(MIDITokenizer):
-    """ MuMIDI encoding method, as introduced in PopMag
+    r"""MuMIDI encoding method, as introduced in PopMag
     https://arxiv.org/abs/2008.07703
 
     :param pitch_range: range of used MIDI pitches
@@ -50,7 +50,7 @@ class MuMIDI(MIDITokenizer):
         super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, sos_eos_tokens, mask, params)
 
     def save_params(self, out_dir: Union[str, Path, PurePath]):
-        """ Override the parent class method to include additional parameter drum pitch range
+        r"""Override the parent class method to include additional parameter drum pitch range
         Saves the base parameters of this encoding in a txt file
         Useful to keep track of how a dataset has been tokenized / encoded
         It will also save the name of the class used, i.e. the encoding strategy
@@ -69,7 +69,7 @@ class MuMIDI(MIDITokenizer):
                       outfile)
 
     def midi_to_tokens(self, midi: MidiFile) -> List[List[int]]:
-        """ Override the parent class method
+        r"""Override the parent class method
         Converts a MIDI file in a tokens representation, a sequence of "time steps".
         A time step is a list of tokens where:
             (list index: token type)
@@ -180,7 +180,7 @@ class MuMIDI(MIDITokenizer):
         return tokens
 
     def track_to_tokens(self, track: Instrument) -> List[List[Union[Event, int]]]:
-        """ Converts a track (miditoolkit.Instrument object) into a sequence of tokens
+        r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
         For each note, it create a time step as a list of tokens where:
             (list index: token type)
             0: Pitch (as an Event object for sorting purpose afterwards)
@@ -221,7 +221,7 @@ class MuMIDI(MIDITokenizer):
 
     def tokens_to_midi(self, tokens: List[List[int]], _=None, output_path: Optional[str] = None,
                        time_division: Optional[int] = TIME_DIVISION) -> MidiFile:
-        """ Override the parent class method
+        r"""Override the parent class method
         Convert multiple sequences of tokens into a multitrack MIDI and save it.
         The tokens will be converted to event objects and then to a miditoolkit.MidiFile object.
         A time step is a list of tokens where:
@@ -289,7 +289,7 @@ class MuMIDI(MIDITokenizer):
 
     def tokens_to_track(self, tokens: List[List[int]], time_division: Optional[int] = TIME_DIVISION,
                         program: Optional[Tuple[int, bool]] = (0, False)):
-        """ NOT RELEVANT / IMPLEMENTED IN MUMIDI
+        r"""NOT RELEVANT / IMPLEMENTED IN MUMIDI
         Use tokens_to_midi instead
 
         :param tokens: sequence of tokens to convert
@@ -300,9 +300,9 @@ class MuMIDI(MIDITokenizer):
         raise NotImplementedError('tokens_to_track not implemented for Octuple, use tokens_to_midi instead')
 
     def _create_vocabulary(self, sos_eos_tokens: bool = None) -> List[Vocabulary]:
-        """ Creates the Vocabulary object of the tokenizer.
+        r"""Creates the Vocabulary object of the tokenizer.
         See the docstring of the Vocabulary class for more details about how to use it.
-        NOTE: token index 0 is often used as a padding index during training TODO note in readme
+        NOTE: token index 0 is used as a padding index for training.
         0: Pitch / Position / Bar / Program / (Chord)
         (1: Velocity)
         (2: Duration)
@@ -360,7 +360,7 @@ class MuMIDI(MIDITokenizer):
         return vocab
 
     def _create_token_types_graph(self) -> Dict[str, List[str]]:
-        """ Returns a graph (as a dictionary) of the possible token
+        r"""Returns a graph (as a dictionary) of the possible token
         types successions.
         Here the combination of Pitch, Velocity and Duration tokens is represented by
         "Pitch" in the graph.
@@ -383,7 +383,7 @@ class MuMIDI(MIDITokenizer):
         return dic
 
     def token_types_errors(self, tokens: List[List[int]], consider_pad: bool = False) -> float:
-        """ Checks if a sequence of tokens is constituted of good token types
+        r"""Checks if a sequence of tokens is constituted of good token types
         successions and returns the error ratio (lower is better).
         The Pitch and Position values are also analyzed:
             - a bar token value cannot be < to the current bar (it would go back in time)

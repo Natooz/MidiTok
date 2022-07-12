@@ -1,6 +1,6 @@
 #!/usr/bin/python3 python
 
-""" One track test file
+"""One track test file
 This test method is to be used with MIDI files of one track (like the maestro dataset).
 It is mostly useful to measure the performance of encodings where time is based on
 time shifts tokens, as these files usually don't contain tracks with very long pauses,
@@ -36,14 +36,14 @@ ADDITIONAL_TOKENS_TEST = {'Chord': False,  # set to false to speed up tests as i
 
 def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './Maestro_MIDIs',
                                      saving_erroneous_midis: bool = True):
-    """ Reads a few MIDI files, convert them into token sequences, convert them back to MIDI files.
+    r"""Reads a few MIDI files, convert them into token sequences, convert them back to MIDI files.
     The converted back MIDI files should identical to original one, expect with note starting and ending
     times quantized, and maybe a some duplicated notes removed
 
     :param data_path: root path to the data to test
     :param saving_erroneous_midis: will save MIDIs converted back with errors, to be used to debug
     """
-    encodings = ['MIDILike', 'Structured', 'REMI', 'CPWord', 'Octuple',
+    encodings = ['MIDILike', 'TSD', 'Structured', 'REMI', 'CPWord', 'Octuple',
                  'OctupleMono', 'MuMIDI']
     files = list(Path(data_path).glob('**/*.mid'))
     t0 = time.time()
@@ -58,7 +58,7 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
 
         for encoding in encodings:
             add_tokens = deepcopy(ADDITIONAL_TOKENS_TEST)
-            if encoding == 'MIDILike':
+            if encoding in ['MIDILike', 'TSD']:
                 add_tokens['rest_range'] = (add_tokens['rest_range'][0], max(t[1] for t in BEAT_RES_TEST))
             tokenizer = getattr(miditok, encoding)(beat_res=BEAT_RES_TEST, additional_tokens=add_tokens)
 

@@ -178,7 +178,7 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
             return tokens
 
         def token_types_errors(self, tokens: List[int], consider_pad: bool = False) -> float:
-            """ Checks if a sequence of tokens is constituted of good token types
+            r"""Checks if a sequence of tokens is constituted of good token types
             successions and returns the error ratio (lower is better).
             The Pitch and Position values are also analyzed:
                 - a position token cannot have a value <= to the current position (it would go back in time)

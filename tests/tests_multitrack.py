@@ -42,7 +42,7 @@ ADDITIONAL_TOKENS_TEST = {'Chord': True,
 
 def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './Maestro_MIDIs',
                                       saving_erroneous_midis: bool = True):
-    """ Reads a few MIDI files, convert them into token sequences, convert them back to MIDI files.
+    r"""Reads a few MIDI files, convert them into token sequences, convert them back to MIDI files.
     The converted back MIDI files should identical to original one, expect with note starting and ending
     times quantized, and maybe a some duplicated notes removed
 
@@ -131,7 +131,7 @@ def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = '.
 
 
 def midi_to_tokens_to_midi(tokenizer: miditok.MIDITokenizer, midi: MidiFile) -> MidiFile:
-    """ Converts a MIDI into tokens, and convert them back to MIDI
+    r"""Converts a MIDI into tokens, and convert them back to MIDI
     Useful to see if the conversion works well in both ways
 
     :param tokenizer: the tokenizer

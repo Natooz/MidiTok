@@ -246,12 +246,11 @@ Future updates will support other time signatures, and time signature changes fo
 
 ## Contributions
 
-Contributions are gratefully welcomed, feel free to send a PR if you want to add an encoding strategy or speed up the code. Just make sure to pass the [tests](tests).
+Contributions are gratefully welcomed, feel free to open an issue or send a PR if you want to add an encoding strategy or speed up the code. Just make sure to pass the [tests](tests).
 
 ## Todo
 
 * Time Signature
-* Allow switching between beat / second time unit
 * Control Change messages
 * Automatic data augmentation on pitch
 * Documentation website
