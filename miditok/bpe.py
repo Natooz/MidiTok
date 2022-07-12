@@ -90,6 +90,7 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
             # Saves dictionary and prints the difference in sequence length
             pbar.close()
             self.has_bpe = True
+            self.add_bpe_to_tokens_type_graph()
             new_lengths = []
             for sample, path in zip(samples, samples_paths):
                 if save_converted_samples:
@@ -189,6 +190,15 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
             # Decompose BPE tokens first
             tokens = self.decompose_bpe(tokens)
             return super().token_types_errors(tokens, consider_pad)
+
+        def add_bpe_to_tokens_type_graph(self):
+            r"""Adds BPE to the tokens_types_graph.
+            You must manually call this method after loading a BPE tokenizer from params (config file) if
+            you intend to use tokens_types_graph.
+            """
+            for val in self.tokens_types_graph.values():
+                val.append('BPE')
+            self.tokens_types_graph['BPE'] = list(self.tokens_types_graph.keys())
 
         def save_params(self, out_dir: Union[str, Path, PurePath]):
             r"""Saves the base parameters of this encoding in a txt file.
