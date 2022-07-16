@@ -603,7 +603,9 @@ class MIDITokenizer:
             params['pitch_range'] = range(*params['pitch_range'])
 
         for key, value in params.items():
-            if key == 'beat_res':
+            if key == 'encoding':
+                continue
+            elif key == 'beat_res':
                 value = {tuple(map(int, beat_range.split('_'))): res for beat_range, res in value.items()}
             elif key == 'additional_tokens':
                 value['TimeSignature'] = value.get('TimeSignature', False)

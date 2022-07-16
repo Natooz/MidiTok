@@ -21,6 +21,8 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
         def __init__(self):
             self.has_bpe = False
             super().__init__(*args, **kwargs)
+            if self.has_bpe:  # loaded from config file
+                self.add_bpe_to_tokens_type_graph()
 
         def bpe(self, tokens_path: Union[Path, PurePath, str], vocab_size: int, out_dir: Union[Path, PurePath, str],
                 files_lim: int = None, save_converted_samples: bool = False):
@@ -209,6 +211,7 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
 
             :param out_dir: output directory to save the file
             """
+            from inspect import getmro
             Path(out_dir).mkdir(parents=True, exist_ok=True)
             with open(PurePath(out_dir, 'config').with_suffix(".txt"), 'w') as outfile:
                 json.dump({'pitch_range': (self.pitch_range.start, self.pitch_range.stop),
@@ -217,7 +220,7 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
                            'additional_tokens': self.additional_tokens,
                            '_sos_eos': self._sos_eos,
                            '_mask': self._mask,
-                           'encoding': f'{self.__class__.__name__}_bpe',
+                           'encoding': f'{getmro(self.__class__)[1].__name__}_bpe',
                            'token_to_event': self.vocab.token_to_event}, outfile, indent=4)
 
         def load_params(self, params: Union[str, Path, PurePath, Dict[str, Any]]):
@@ -233,7 +236,9 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
                 params['pitch_range'] = range(*params['pitch_range'])
 
             for key, value in params.items():
-                if key == 'beat_res':
+                if key == 'encoding':
+                    continue
+                elif key == 'beat_res':
                     value = {tuple(map(int, beat_range.split('_'))): res for beat_range, res in value.items()}
                 elif key == 'additional_tokens':
                     value['TimeSignature'] = value.get('TimeSignature', False)
