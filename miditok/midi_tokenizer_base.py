@@ -338,15 +338,30 @@ class MIDITokenizer:
         See other classes (REMI, MIDILike ...) for examples of how to implement it."""
         raise NotImplementedError
 
-    @staticmethod
-    def _add_pad_type_to_graph(dic):
-        r"""Adds the PAD token type to the token types graph.
+    def _add_pad_type_to_graph(self, dic: Dict[str, List[str]]):
+        r"""DEPRECIATED: has been replaced by _add_special_tokens_to_types_graph.
+        This method will call _add_special_tokens_to_types_graph, see below.
+
+        :param dic: token types graph to add PAD type
+        """
+        self._add_special_tokens_to_types_graph(dic)
+
+    def _add_special_tokens_to_types_graph(self, dic: Dict[str, List[str]]):
+        r"""Inplace adds special tokens (PAD, EOS, SOS, MASK) types to the token types graph dictionary.
 
         :param dic: token types graph to add PAD type
         """
         for value in dic.values():
             value.append('PAD')
         dic['PAD'] = ['PAD']
+        if self._sos_eos:
+            dic['SOS'] = list(dic.keys())
+            for value in dic.values():
+                value.append('EOS')
+        if self._mask:
+            dic['MASK'] = list(dic.keys())
+            for value in dic.values():
+                value.append('MASK')
 
     def __create_durations_tuples(self) -> List[Tuple]:
         r"""Creates the possible durations in beat / position units, as tuple of the form:

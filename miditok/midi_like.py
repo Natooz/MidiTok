@@ -273,7 +273,7 @@ class MIDILike(MIDITokenizer):
                 dic['Rest'] += ['Chord']
             dic['Note-Off'] += ['Rest']
 
-        self._add_pad_type_to_graph(dic)
+        self._add_special_tokens_to_types_graph(dic)
         return dic
 
     def token_types_errors(self, tokens: List[int], consider_pad: bool = False) -> float:
