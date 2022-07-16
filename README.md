@@ -9,7 +9,7 @@ Python package to tokenize MIDI music files.
 
 
 MidiTok converts MIDI music files into sequences of tokens, i.e. integers, ready to be fed to sequential neural networks like Transformers or RNNs.
-MidiTok features most known MIDI tokenization strategies, and is built around the idea that they all share common parameters and methods. It also handles Byte Pair Encoding (BPE).
+MidiTok features most known MIDI tokenization strategies, and is built around the idea that they all share common parameters and methods. It contains method that allows to properly pre-process any MIDI file, and also supports Byte Pair Encoding (BPE).
 
 ## Install
 
@@ -134,6 +134,12 @@ NOTES:
 * Rests act exactly like Time-shifts. It is then recommended choosing a minimum rest range of the same first beat resolution so the time is shifted with the same accuracy. For instance if your first beat resolution is ```(0, 4): 8```, you should choose a minimum rest of ```8```.
 
 ![MIDI-Like figure](https://github.com/Natooz/MidiTok/blob/assets/assets/midi_like.png?raw=true "MIDI-Like token sequence, with Time-Shifts and Note-Off tokens")
+
+### TimeShift Duration (TSD)
+
+A strategy similar to MIDI-Like, but uses explicit `Duration` tokens to represent note durations.
+
+![MIDI-Like figure](https://github.com/Natooz/MidiTok/blob/assets/assets/tsd.png?raw=true "MIDI-Like token sequence, with Time-Shifts and Note-Off tokens")
 
 ### REMI
 
