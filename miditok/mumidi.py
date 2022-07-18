@@ -406,6 +406,9 @@ class MuMIDI(MIDITokenizer):
         for token in tokens[1:]:
             if not consider_pad and previous_type == 'PAD':
                 break
+            if any(self.vocab[i][token].split('_')[0] in ['PAD', 'MASK'] for i, token in enumerate(token)):
+                err += 1
+                continue
             bar_value = int(self.vocab[4].token_to_event[token[bar_idx]].split('_')[1])
             pos_value = self.vocab[3].token_to_event[token[pos_idx]].split('_')[1]
             pos_value = int(pos_value) if pos_value != 'Ignore' else -1

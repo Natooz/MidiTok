@@ -374,7 +374,7 @@ class Octuple(MIDITokenizer):
         """
         return {}  # not relevant for this encoding
 
-    def token_types_errors(self, tokens: List[List[int]]) -> float:
+    def token_types_errors(self, tokens: List[List[int]], consider_pad: bool = False) -> float:
         r"""Checks if a sequence of tokens is constituted of good token values and
         returns the error ratio (lower is better).
         The token types are always the same in Octuple so this methods only checks
@@ -384,17 +384,24 @@ class Octuple(MIDITokenizer):
             - a pitch token should not be present if the same pitch is already played at the current position
 
         :param tokens: sequence of tokens to check
+        :param consider_pad: if True will continue the error detection after the first PAD token (default: False)
         :return: the error ratio (lower is better)
         """
         err = 0
         current_bar = current_pos = -1
-        current_pitches = []
+        current_pitches = {p: [] for p in self.programs}
 
         for token in tokens:
+            if consider_pad and all(token[i] == self.vocab[i]['PAD_None'] for i in range(len(token))):
+                break
+            if any(self.vocab[i][token].split('_')[0] in ['PAD', 'MASK'] for i, token in enumerate(token)):
+                err += 1
+                continue
             has_error = False
             bar_value = int(self.vocab[5].token_to_event[token[5]].split('_')[1])
             pos_value = int(self.vocab[4].token_to_event[token[4]].split('_')[1])
             pitch_value = int(self.vocab[0].token_to_event[token[0]].split('_')[1])
+            program_value = int(self.vocab[0].token_to_event[token[0]].split('_')[1])
 
             # Bar
             if bar_value < current_bar:
@@ -402,20 +409,20 @@ class Octuple(MIDITokenizer):
             elif bar_value > current_bar:
                 current_bar = bar_value
                 current_pos = -1
-                current_pitches = []
+                current_pitches = {p: [] for p in self.programs}
 
             # Position
             if pos_value < current_pos:
                 has_error = True
             elif pos_value > current_pos:
                 current_pos = pos_value
-                current_pitches = []
+                current_pitches = {p: [] for p in self.programs}
 
             # Pitch
             if pitch_value in current_pitches:
                 has_error = True
             else:
-                current_pitches.append(pitch_value)
+                current_pitches[program_value].append(pitch_value)
 
             if has_error:
                 err += 1
