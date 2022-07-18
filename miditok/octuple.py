@@ -344,7 +344,7 @@ class Octuple(MIDITokenizer):
         vocab[2].add_event(f'Duration_{".".join(map(str, duration))}' for duration in self.durations)
 
         # PROGRAM
-        vocab[3].add_event(f'Program_{i}' for i in range(-1, 128))
+        vocab[3].add_event(f'Program_{i}' for i in self.programs)
 
         # POSITION
         nb_positions = max(self.beat_res.values()) * 4  # 4/4 time signature
