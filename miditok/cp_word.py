@@ -255,7 +255,7 @@ class CPWord(MIDITokenizer):
         for compound_token in events:
             token_family = compound_token[0].value
             if token_family == 'Note':
-                if any(tok.value == 'None' for tok in compound_token[1:5]):
+                if any(tok.value in ['None', 'Ignore'] for tok in compound_token[2:5]):
                     continue
                 pitch = int(compound_token[2].value)
                 vel = int(compound_token[3].value)
@@ -274,7 +274,7 @@ class CPWord(MIDITokenizer):
                         tempo = int(compound_token[-1].value)
                         if tempo != tempo_changes[-1].tempo:
                             tempo_changes.append(TempoChange(tempo, current_tick))
-                elif compound_token[self.rest_idx].value != 'Ignore':  # i.e. its a rest
+                elif self.additional_tokens['Rest'] and compound_token[self.rest_idx].value != 'Ignore':
                     if current_tick < previous_note_end:  # if in case successive rest happen
                         current_tick = previous_note_end
                     beat, pos = map(int, compound_token[self.rest_idx].value.split('.'))

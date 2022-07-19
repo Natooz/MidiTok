@@ -55,6 +55,8 @@ class Octuple(MIDITokenizer):
                        'beat_res': {f'{k1}_{k2}': v for (k1, k2), v in self.beat_res.items()},
                        'nb_velocities': len(self.velocities),
                        'additional_tokens': self.additional_tokens,
+                       '_sos_eos': self._sos_eos,
+                       '_mask': self._mask,
                        'encoding': self.__class__.__name__,
                        'programs': self.programs,
                        'max_bar_embedding': self.max_bar_embedding},
