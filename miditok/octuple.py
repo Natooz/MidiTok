@@ -396,7 +396,7 @@ class Octuple(MIDITokenizer):
         for token in tokens:
             if consider_pad and all(token[i] == self.vocab[i]['PAD_None'] for i in range(len(token))):
                 break
-            if any(self.vocab[i][token].split('_')[0] in ['PAD', 'MASK'] for i, token in enumerate(token)):
+            if any(self.vocab[i][token].split('_')[1] == 'None' for i, token in enumerate(token)):
                 err += 1
                 continue
             has_error = False
