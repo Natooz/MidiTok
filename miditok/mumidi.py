@@ -43,6 +43,7 @@ class MuMIDI(MIDITokenizer):
                  programs: List[int] = None, sos_eos_tokens: bool = False, mask: bool = False, params=None,
                  drum_pitch_range: range = DRUM_PITCH_RANGE):
         additional_tokens['Rest'] = False
+        additional_tokens['TimeSignature'] = False  # not compatible
         self.drum_pitch_range = drum_pitch_range
         self.programs = list(range(-1, 128)) if programs is None else programs
         # used in place of positional encoding

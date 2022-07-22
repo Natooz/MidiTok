@@ -50,6 +50,7 @@ class CPWord(MIDITokenizer):
                  sos_eos_tokens: bool = False, mask: bool = False, params=None):
         # Indexes of additional token types within a compound token
         add_idx = 5
+        additional_tokens['TimeSignature'] = False  # not compatible
         self.program_ixd = self.chord_idx = self.rest_idx = self.tempo_idx = None
         if additional_tokens['Program']:
             self.program_ixd = add_idx
