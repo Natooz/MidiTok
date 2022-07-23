@@ -118,7 +118,7 @@ class MIDITokenizer:
 
     def preprocess_midi(self, midi: MidiFile):
         r"""Will process a MIDI file so it can be used to train a model.
-        Its notes attributes (times, pitches, velocities) will be quantized and sorted, duplicated
+        Its notes attribute (times, pitches, velocities) will be quantized and sorted, duplicated
         notes removed, as well as tempos.
         NOTE: empty tracks (with no note) will be removed from the MIDI object
 
@@ -141,6 +141,8 @@ class MIDITokenizer:
         if self.additional_tokens['Tempo']:
             self.quantize_tempos(midi.tempo_changes, midi.ticks_per_beat)
 
+        if len(midi.time_signature_changes) == 0:  # can sometimes happen
+            midi.time_signature_changes.append(TimeSignature(4, 4, 0))  # 4/4 by default in this case
         if self.additional_tokens['TimeSignature']:
             self.quantize_time_signatures(midi.time_signature_changes, midi.ticks_per_beat)
 
