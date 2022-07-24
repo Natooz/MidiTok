@@ -13,7 +13,7 @@ from miditoolkit import MidiFile, Instrument, Note, TempoChange
 
 from .midi_tokenizer_base import MIDITokenizer
 from .vocabulary import Vocabulary, Event
-from .utils import detect_chords, remove_duplicated_notes
+from .utils import detect_chords
 from .constants import *
 
 
@@ -199,15 +199,15 @@ class MuMIDI(MIDITokenizer):
         for note in track.notes:
             # Note
             duration = note.end - note.start
-            dur_index = np.argmin(np.abs(dur_bins - duration))
+            dur_idx = np.argmin(np.abs(dur_bins - duration))
             if not track.is_drum:
                 tokens.append([Event(type_='Pitch', time=note.start, value=note.pitch, desc=track.program),
                                self.vocab[1].event_to_token[f'Velocity_{note.velocity}'],
-                               self.vocab[2].event_to_token[f'Duration_{".".join(map(str, self.durations[dur_index]))}']])
+                               self.vocab[2].event_to_token[f'Duration_{".".join(map(str, self.durations[dur_idx]))}']])
             else:
                 tokens.append([Event(type_='DrumPitch', time=note.start, value=note.pitch, desc=-1),
                                self.vocab[1].event_to_token[f'Velocity_{note.velocity}'],
-                               self.vocab[2].event_to_token[f'Duration_{".".join(map(str, self.durations[dur_index]))}']])
+                               self.vocab[2].event_to_token[f'Duration_{".".join(map(str, self.durations[dur_idx]))}']])
 
         # Adds chord tokens if specified
         if self.additional_tokens['Chord'] and not track.is_drum:
