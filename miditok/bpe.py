@@ -23,6 +23,8 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
             super().__init__(*args, **kwargs)
             if self.has_bpe:  # loaded from config file
                 self.add_bpe_to_tokens_type_graph()
+            self.bpe_successions = []
+            self.set_bpe_tokens_successions()
 
         def bpe(self, tokens_path: Union[Path, PurePath, str], vocab_size: int, out_dir: Union[Path, PurePath, str],
                 files_lim: int = None, save_converted_samples: bool = False):
@@ -92,6 +94,7 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
             # Saves dictionary and prints the difference in sequence length
             pbar.close()
             self.has_bpe = True
+            self.set_bpe_tokens_successions()
             self.add_bpe_to_tokens_type_graph()
             new_lengths = []
             for sample, path in zip(samples, samples_paths):
@@ -103,6 +106,10 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
             print(f'Mean of original lengths: {original_mean}\nMean length after BPE: {new_mean}')
             print(f'Variation from original: {(new_mean - original_mean) / original_mean * 100:.2f} %')
             self.save_params(out_dir)  # Saves the parameters with which the MIDIs are converted
+
+        def set_bpe_tokens_successions(self):
+            self.bpe_successions = [(list(map(int, self.vocab.token_to_event[tok].split('_')[1].split('.')[0].
+                                              split('-'))), tok) for tok in self.vocab.tokens_of_type('BPE')]
 
         def apply_bpe(self, tokens: List[int]) -> List[int]:
             r"""Converts a sequence of tokens into tokens with BPE.
@@ -117,9 +124,7 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
             while previous_len != len(tokens):
                 previous_len = len(tokens)
                 # loop over BPE tokens from the vocabulary
-                for tok in self.vocab.tokens_of_type('BPE'):
-                    token_succession = list(map(int,
-                                                self.vocab.token_to_event[tok].split('_')[1].split('.')[0].split('-')))
+                for token_succession, tok in self.bpe_successions:
                     i = 0  # will check if any token succession from the input token sequence matches the BPE
                     while i <= len(tokens) - len(token_succession):
                         if tokens[i:i + len(token_succession)] == token_succession:
