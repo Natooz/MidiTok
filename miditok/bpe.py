@@ -23,7 +23,7 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
             super().__init__(*args, **kwargs)
             if self.has_bpe:  # loaded from config file
                 self.add_bpe_to_tokens_type_graph()
-            self.bpe_successions = []
+            self.bpe_successions = {}
             self.set_bpe_tokens_successions()
 
         def bpe(self, tokens_path: Union[Path, PurePath, str], vocab_size: int, out_dir: Union[Path, PurePath, str],
@@ -108,8 +108,10 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
             self.save_params(out_dir)  # Saves the parameters with which the MIDIs are converted
 
         def set_bpe_tokens_successions(self):
-            self.bpe_successions = [(list(map(int, self.vocab.token_to_event[tok].split('_')[1].split('.')[0].
-                                              split('-'))), tok) for tok in self.vocab.tokens_of_type('BPE')]
+            """Creates the bpe_successions attributes, as a dictionary of the form bpe_token: (tok1, tok2, tok3...)
+            """
+            self.bpe_successions = {tok: list(map(int, self.vocab.token_to_event[tok].split('_')[1].split('.')[0].
+                                                  split('-')))for tok in self.vocab.tokens_of_type('BPE')}
 
         def apply_bpe(self, tokens: List[int]) -> List[int]:
             r"""Converts a sequence of tokens into tokens with BPE.
@@ -124,7 +126,7 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
             while previous_len != len(tokens):
                 previous_len = len(tokens)
                 # loop over BPE tokens from the vocabulary
-                for token_succession, tok in self.bpe_successions:
+                for tok, token_succession in self.bpe_successions.items():
                     i = 0  # will check if any token succession from the input token sequence matches the BPE
                     while i <= len(tokens) - len(token_succession):
                         if tokens[i:i + len(token_succession)] == token_succession:
