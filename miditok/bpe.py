@@ -21,14 +21,14 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
         def __init__(self):
             self.has_bpe = False
             super().__init__(*args, **kwargs)
+            self.bpe_successions = {}
             if self.has_bpe:  # loaded from config file
                 self.add_bpe_to_tokens_type_graph()
-            self.bpe_successions = {}
-            self.set_bpe_tokens_successions()
+                self.set_bpe_tokens_successions()
 
         def bpe(self, tokens_path: Union[Path, PurePath, str], vocab_size: int, out_dir: Union[Path, PurePath, str],
                 files_lim: int = None, save_converted_samples: bool = False):
-            r"""Byte Pair Encoding (BPE) method.
+            r"""Byte Pair Encoding (BPE) method to build the vocabulary.
             This method will build (modify) the vocabulary by analyzing a tokenized dataset to find
             the most recurrent token successions.
             Note that this implementation is in pure Python and will be slow if you use a large amount of
@@ -111,7 +111,7 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
             """Creates the bpe_successions attributes, as a dictionary of the form bpe_token: (tok1, tok2, tok3...)
             """
             self.bpe_successions = {tok: list(map(int, self.vocab.token_to_event[tok].split('_')[1].split('.')[0].
-                                                  split('-')))for tok in self.vocab.tokens_of_type('BPE')}
+                                                  split('-'))) for tok in self.vocab.tokens_of_type('BPE')}
 
         def apply_bpe(self, tokens: List[int]) -> List[int]:
             r"""Converts a sequence of tokens into tokens with BPE.
