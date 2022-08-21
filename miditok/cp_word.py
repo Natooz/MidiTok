@@ -65,7 +65,6 @@ class CPWord(MIDITokenizer):
             self.tempo_idx = add_idx
 
         super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, sos_eos_tokens, mask, params)
-        self.multi_voc = True
 
     def track_to_tokens(self, track: Instrument) -> List[List[int]]:
         r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens

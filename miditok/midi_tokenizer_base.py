@@ -39,7 +39,6 @@ class MIDITokenizer(ABC):
                  mask: bool = False, params: Union[str, Path, PurePath, Dict[str, Any]] = None):
         # Initialize params
         self.vocab = None
-        self.multi_voc = False  # overrided in constructors of concerned tokenizations, eg CP Word
         if params is None:
             self.pitch_range = pitch_range
             self.beat_res = beat_res
@@ -81,6 +80,7 @@ class MIDITokenizer(ABC):
         if self.vocab is None:  # in case it was already loaded by an overriding load_params method, such as with BPE
             self.vocab = self._create_vocabulary()
         self.tokens_types_graph = self._create_token_types_graph()
+        self.multi_voc = isinstance(self.vocab, list)
 
         # Keep in memory durations in ticks for seen time divisions so these values
         # are not calculated each time a MIDI is processed

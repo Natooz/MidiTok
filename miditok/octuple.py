@@ -40,7 +40,6 @@ class Octuple(MIDITokenizer):
         self.programs = list(range(-1, 128)) if programs is None else programs
         self.max_bar_embedding = 60  # this attribute might increase during encoding
         super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, sos_eos_tokens, mask, params)
-        self.multi_voc = True
 
     def save_params(self, out_dir: Union[str, Path, PurePath]):
         r"""Override the parent class method to include additional parameter drum pitch range
