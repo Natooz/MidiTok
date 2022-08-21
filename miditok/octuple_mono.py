@@ -41,6 +41,7 @@ class OctupleMono(MIDITokenizer):
         # used in place of positional encoding
         self.max_bar_embedding = 60  # this attribute might increase during encoding
         super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, sos_eos_tokens, mask, params)
+        self.multi_voc = True
 
     def save_params(self, out_dir: Union[str, Path, PurePath]):
         r"""Override the parent class method to include additional parameter drum pitch range
@@ -148,7 +149,7 @@ class OctupleMono(MIDITokenizer):
         """
         assert time_division % max(self.beat_res.values()) == 0, \
             f'Invalid time division, please give one divisible by {max(self.beat_res.values())}'
-        events = self.tokens_to_events(tokens, multi_voc=True)
+        events = self.tokens_to_events(tokens)
 
         ticks_per_sample = time_division // max(self.beat_res.values())
         name = 'Drums' if program[1] else MIDI_INSTRUMENTS[program[0]]['name']

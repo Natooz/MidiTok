@@ -12,9 +12,9 @@ from .vocabulary import Vocabulary, Event
 
 
 def _changed_class_warning(class_obj):
-    print(f'\033[93mmiditok: {class_obj.__class__.__name__} class has been renamed '
+    print(f'\033[93mmiditok warning: {class_obj.__class__.__name__} class has been renamed '
           f'{class_obj.__class__.__bases__[0].__name__} and will be removed in future updates, '
-          f'please consider changing it in your code\033[0m')
+          f'please consider changing it in your code.\033[0m')
 
 
 class REMIEncoding(REMI):

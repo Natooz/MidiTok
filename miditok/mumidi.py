@@ -49,6 +49,7 @@ class MuMIDI(MIDITokenizer):
         # used in place of positional encoding
         self.max_bar_embedding = 60  # this attribute might increase during encoding
         super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, sos_eos_tokens, mask, params)
+        self.multi_voc = True
 
     def save_params(self, out_dir: Union[str, Path, PurePath]):
         r"""Override the parent class method to include additional parameter drum pitch range
@@ -407,7 +408,7 @@ class MuMIDI(MIDITokenizer):
         for token in tokens[1:]:
             if not consider_pad and previous_type == 'PAD':
                 break
-            if any(self.vocab[i][token].split('_')[0] in ['PAD', 'MASK'] for i, token in enumerate(token)):
+            if any(self.vocab[i][tok].split('_')[0] in ['PAD', 'MASK'] for i, tok in enumerate(token)):
                 err += 1
                 continue
             bar_value = int(self.vocab[4].token_to_event[token[bar_idx]].split('_')[1])

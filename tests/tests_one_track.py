@@ -43,8 +43,7 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
     :param data_path: root path to the data to test
     :param saving_erroneous_midis: will save MIDIs converted back with errors, to be used to debug
     """
-    encodings = ['MIDILike', 'TSD', 'Structured', 'REMI', 'CPWord', 'Octuple',
-                 'OctupleMono', 'MuMIDI']
+    encodings = ['MIDILike', 'TSD', 'Structured', 'REMI', 'CPWord', 'Octuple', 'OctupleMono', 'MuMIDI']
     files = list(Path(data_path).glob('**/*.mid'))
     t0 = time.time()
 

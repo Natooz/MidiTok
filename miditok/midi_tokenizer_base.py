@@ -3,6 +3,7 @@ TODO Control change messages (sustain, modulation, pitch bend)
 TODO time signature changes tokens
 
 """
+from abc import ABC, abstractmethod
 import math
 from pathlib import Path, PurePath
 import json
@@ -17,7 +18,7 @@ from .utils import remove_duplicated_notes, get_midi_programs
 from .constants import TIME_DIVISION
 
 
-class MIDITokenizer:
+class MIDITokenizer(ABC):
     r"""MIDI encoding base class, containing common parameters to all encodings
     and common methods.
 
@@ -38,6 +39,7 @@ class MIDITokenizer:
                  mask: bool = False, params: Union[str, Path, PurePath, Dict[str, Any]] = None):
         # Initialize params
         self.vocab = None
+        self.multi_voc = False  # overrided in constructors of concerned tokenizations, eg CP Word
         if params is None:
             self.pitch_range = pitch_range
             self.beat_res = beat_res
@@ -146,6 +148,7 @@ class MIDITokenizer:
         if self.additional_tokens['TimeSignature']:
             self.quantize_time_signatures(midi.time_signature_changes, midi.ticks_per_beat)
 
+    @abstractmethod
     def track_to_tokens(self, track: Instrument) -> List[Union[int, List[int]]]:
         r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
 
@@ -163,18 +166,20 @@ class MIDITokenizer:
         """
         return [self.vocab.event_to_token[str(event)] for event in events]
 
-    def tokens_to_events(self, tokens: List[Union[int, List[int]]], multi_voc: bool = False) \
+    def tokens_to_events(self, tokens: List[Union[int, List[int]]], multi_voc: bool = None) \
             -> List[Union[Event, List[Event]]]:
         r"""Convert a sequence of tokens in their respective event objects
         You can override this method if necessary
 
         :param tokens: sequence of tokens to convert
-        :param multi_voc: set True if the tokenizer has several vocabularies, e.g. CP Word or Octuple
-                            (default: False)
+        :param multi_voc: DEPRECIATED, no longer needed nor used (default: None)
         :return: the sequence of corresponding events
         """
+        if multi_voc is not None:
+            print(f'\033[93mmiditok warning: tokens_to_events method no longer need multi_voc argument as '
+                  f'it is now a class attribute, it will be removed in future updates.\033[0m')
         events = []
-        if multi_voc:
+        if self.multi_voc:
             for multi_token in tokens:
                 multi_event = []
                 for i, token in enumerate(multi_token):
@@ -220,6 +225,7 @@ class MIDITokenizer:
             midi.dump(output_path)
         return midi
 
+    @abstractmethod
     def tokens_to_track(self, tokens: List[Union[int, List[int]]], time_division: Optional[int] = TIME_DIVISION,
                         program: Optional[Tuple[int, bool]] = (0, False)) -> Tuple[Instrument, List[TempoChange]]:
         r"""Converts a sequence of tokens into a track object
@@ -324,6 +330,7 @@ class MIDITokenizer:
         seq.insert(0, self.vocab['SOS_None'])
         seq.append(self.vocab['EOS_None'])
 
+    @abstractmethod
     def _create_vocabulary(self, *args, **kwargs) -> Union[Vocabulary, List[Vocabulary]]:
         r"""Creates the Vocabulary object of the tokenizer.
         See the docstring of the Vocabulary class for more details about how to use it.
@@ -335,6 +342,7 @@ class MIDITokenizer:
         """
         raise NotImplementedError
 
+    @abstractmethod
     def _create_token_types_graph(self) -> Dict[str, List[str]]:
         r"""Creates a dictionary for the directions of the token types of the encoding
         See other classes (REMI, MIDILike ...) for examples of how to implement it."""
