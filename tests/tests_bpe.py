@@ -45,6 +45,8 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath]):
     tokenizers = []
     data_path = Path(data_path)
     files = list(data_path.glob('**/*.mid'))
+
+    # Creates tokenizers and computes BPE (build voc)
     for encoding in encodings:
         add_tokens = deepcopy(ADDITIONAL_TOKENS_TEST)
         tokenizers.append(miditok.bpe(getattr(miditok, encoding), beat_res=BEAT_RES_TEST, additional_tokens=add_tokens))
@@ -58,7 +60,7 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath]):
         tokenizers.append(miditok.bpe(getattr(miditok, encoding), params=data_path / f'{encoding}_bpe' / 'config.txt'))
 
     t0 = time.time()
-    for i, file_path in enumerate(tqdm(files, desc='Testing')):
+    for i, file_path in enumerate(tqdm(files, desc='Testing BPE')):
         # Reads the midi
         midi = MidiFile(file_path)
 

@@ -18,10 +18,10 @@ NOTE: encoded tracks has to be compared with the quantized original track.
 from copy import deepcopy
 from pathlib import Path, PurePath
 from typing import Union
-import time
 
 import miditok
 from miditoolkit import MidiFile
+from tqdm import tqdm
 
 from tests_utils import midis_equals, tempo_changes_equals, reduce_note_durations, adapt_tempo_changes_times, \
     time_signature_changes_equals
@@ -34,7 +34,7 @@ ADDITIONAL_TOKENS_TEST = {'Chord': True,
                           'Tempo': True,
                           'TimeSignature': True,
                           'Program': True,
-                          'rest_range': (4, 512),  # very high value to cover every possible rest in the test files
+                          'rest_range': (4, 1024),  # very high value to cover every possible rest in the test files
                           'nb_tempos': 32,
                           'tempo_range': (40, 250),
                           'time_signature_range': (16, 2)}
@@ -49,41 +49,41 @@ def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = '.
     """
     encodings = ['REMI', 'CPWord', 'Octuple', 'OctupleMono', 'MuMIDI']
     files = list(Path(data_path).glob('**/*.mid'))
-    t0 = time.time()
 
-    for i, file_path in enumerate(files):
+    for i, file_path in enumerate(tqdm(files, desc='Testing BPE')):
 
         # Reads the MIDI
         try:
             midi = MidiFile(PurePath(file_path))
-        except Exception as _:  # ValueError, OSError, FileNotFoundError, IOError, EOFError, mido.KeySignatureError
+        except Exception:  # ValueError, OSError, FileNotFoundError, IOError, EOFError, mido.KeySignatureError
             continue
         if midi.ticks_per_beat % max(BEAT_RES_TEST.values()) != 0:
             continue
         has_errors = False
-        t_midi = time.time()
 
         for encoding in encodings:
             tokenizer = getattr(miditok, encoding)(beat_res=BEAT_RES_TEST,
                                                    additional_tokens=deepcopy(ADDITIONAL_TOKENS_TEST))
 
-            # MIDI -> Tokens -> MIDI
-            new_midi = midi_to_tokens_to_midi(tokenizer, midi)
-
             # Process the MIDI
             midi_to_compare = deepcopy(midi)  # midi notes / tempos / time signature quantized with the line above
-            for track in midi_to_compare.instruments:  # reduce the duration of notes to long
-                reduce_note_durations(track.notes, max(tu[1] for tu in BEAT_RES_TEST) * midi.ticks_per_beat)
+            for track in midi_to_compare.instruments:
                 if track.is_drum:
-                    track.program = 0
+                    track.program = 0  # need to be done before sorting tracks per program
             # Sort and merge tracks if needed
             # MIDI produced with Octuple contains tracks ordered by program
             if encoding == 'Octuple' or encoding == 'MuMIDI':
                 miditok.utils.merge_same_program_tracks(midi_to_compare.instruments)  # merge tracks
-                midi_to_compare.instruments.sort(key=lambda x: (x.program, x.is_drum))  # sort tracks
-                new_midi.instruments.sort(key=lambda x: (x.program, x.is_drum))
+            for track in midi_to_compare.instruments:  # reduce the duration of notes to long
+                reduce_note_durations(track.notes, max(tu[1] for tu in BEAT_RES_TEST) * midi.ticks_per_beat)
+                miditok.utils.remove_duplicated_notes(track.notes)
             if encoding == 'Octuple':  # needed
                 adapt_tempo_changes_times(midi_to_compare.instruments, midi_to_compare.tempo_changes)
+
+            # MIDI -> Tokens -> MIDI
+            midi_to_compare.instruments.sort(key=lambda x: (x.program, x.is_drum))  # sort tracks
+            new_midi = midi_to_tokens_to_midi(tokenizer, midi_to_compare)
+            new_midi.instruments.sort(key=lambda x: (x.program, x.is_drum))
 
             # Checks notes
             errors = midis_equals(midi_to_compare, new_midi)
@@ -118,16 +118,6 @@ def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = '.
             if saving_erroneous_midis and has_errors:
                 new_midi.dump(PurePath('tests', 'test_results', f'{file_path.stem}_{encoding}')
                               .with_suffix('.mid'))
-
-        bar_len = 30
-        filled_len = int(round(bar_len * (i + 1) / len(files)))
-        percents = round(100.0 * (i + 1) / len(files), 2)
-        bar = '=' * filled_len + '-' * (bar_len - filled_len)
-        prog = f'{i + 1} / {len(files)} {time.time() - t_midi:.2f}sec [{bar}] ' \
-               f'{percents:.1f}% ...Converting MIDIs to tokens: {file_path}'
-        print(prog)
-
-    print(f'Took {time.time() - t0} seconds')
 
 
 def midi_to_tokens_to_midi(tokenizer: miditok.MIDITokenizer, midi: MidiFile) -> MidiFile:

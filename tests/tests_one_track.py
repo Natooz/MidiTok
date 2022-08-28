@@ -13,10 +13,10 @@ NOTE: encoded tracks has to be compared with the quantized original track.
 from copy import deepcopy
 from pathlib import Path, PurePath
 from typing import Union
-import time
 
 import miditok
 from miditoolkit import MidiFile, Marker
+from tqdm import tqdm
 
 from tests_utils import track_equals, tempo_changes_equals, time_signature_changes_equals
 
@@ -45,15 +45,13 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
     """
     encodings = ['MIDILike', 'TSD', 'Structured', 'REMI', 'CPWord', 'Octuple', 'OctupleMono', 'MuMIDI']
     files = list(Path(data_path).glob('**/*.mid'))
-    t0 = time.time()
 
-    for i, file_path in enumerate(files):
+    for i, file_path in enumerate(tqdm(files, desc='Testing BPE')):
 
         # Reads the midi
         midi = MidiFile(file_path)
         tracks = [deepcopy(midi.instruments[0])]
         has_errors = False
-        t_midi = time.time()
 
         for encoding in encodings:
             add_tokens = deepcopy(ADDITIONAL_TOKENS_TEST)
@@ -111,14 +109,6 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
                     print(f'MIDI {i} - {file_path} failed to encode/decode TIME SIGNATURE changes with '
                           f'{encoding} ({len(time_sig_errors)} errors)')
 
-        bar_len = 30
-        filled_len = int(round(bar_len * (i+1) / len(files)))
-        percents = round(100.0 * (i+1) / len(files), 2)
-        bar = '=' * filled_len + '-' * (bar_len - filled_len)
-        prog = f'{i+1} / {len(files)} {time.time() - t_midi:.2f}sec [{bar}] ' \
-               f'{percents:.1f}% ...Converting MIDIs to tokens: {file_path}'
-        print(prog)
-
         if saving_erroneous_midis and has_errors:
             midi.instruments[0].name = 'original quantized'
             tracks[0].name = 'original not quantized'
@@ -126,8 +116,6 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
             # Updates the MIDI and save it
             midi.instruments += tracks
             midi.dump(PurePath('tests', 'test_results', file_path.name))
-
-    print(f'Took {time.time() - t0} seconds')
 
 
 if __name__ == "__main__":
