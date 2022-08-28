@@ -1,4 +1,4 @@
 miditoolkit>=0.1.16
 tqdm~=4.64.0
-numpy>=1.23
+numpy>=1.19
 setuptools>=60.2
