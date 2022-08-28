@@ -13,7 +13,6 @@ NOTE: encoded tracks has to be compared with the quantized original track.
 from copy import deepcopy
 from pathlib import Path, PurePath
 from typing import Union
-import time
 import json
 
 import miditok
@@ -34,7 +33,7 @@ ADDITIONAL_TOKENS_TEST = {'Chord': False,  # set to false to speed up tests as i
                           'time_signature_range': (16, 2)}
 
 
-def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath]):
+def test_bpe_conversion(data_path: Union[str, Path, PurePath] = './tests/Maestro_MIDIs'):
     r"""Reads a few MIDI files, convert them into token sequences, convert them back to MIDI files.
     The converted back MIDI files should identical to original one, expect with note starting and ending
     times quantized, and maybe a some duplicated notes removed
@@ -59,7 +58,8 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath]):
     for i, encoding in enumerate(encodings):
         tokenizers.append(miditok.bpe(getattr(miditok, encoding), params=data_path / f'{encoding}_bpe' / 'config.txt'))
 
-    t0 = time.time()
+    at_least_one_error = False
+
     for i, file_path in enumerate(tqdm(files, desc='Testing BPE')):
         # Reads the midi
         midi = MidiFile(file_path)
@@ -76,10 +76,10 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath]):
             no_error_bpe = tokens == saved_tokens
             no_error = tokens_no_bpe == tokens_no_bpe2 == saved_tokens_decomposed
             if not no_error or not no_error_bpe:
+                at_least_one_error = True
                 print(f'error for {encoding} and {file_path.name}')
-
-    print(f'Took {time.time() - t0} seconds')
+    assert not at_least_one_error
 
 
 if __name__ == "__main__":
-    one_track_midi_to_tokens_to_midi('tests/Maestro_MIDIs')
+    test_bpe_conversion()

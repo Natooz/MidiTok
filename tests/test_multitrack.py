@@ -23,7 +23,7 @@ import miditok
 from miditoolkit import MidiFile
 from tqdm import tqdm
 
-from tests_utils import midis_equals, tempo_changes_equals, reduce_note_durations, adapt_tempo_changes_times, \
+from .tests_utils import midis_equals, tempo_changes_equals, reduce_note_durations, adapt_tempo_changes_times, \
     time_signature_changes_equals
 
 # Special beat res for test, up to 16 beats so the duration and time-shift values are
@@ -40,8 +40,8 @@ ADDITIONAL_TOKENS_TEST = {'Chord': True,
                           'time_signature_range': (16, 2)}
 
 
-def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './Maestro_MIDIs',
-                                      saving_erroneous_midis: bool = True):
+def test_multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './tests/Maestro_MIDIs',
+                                           saving_erroneous_midis: bool = True):
     r"""Reads a few MIDI files, convert them into token sequences, convert them back to MIDI files.
     The converted back MIDI files should identical to original one, expect with note starting and ending
     times quantized, and maybe a some duplicated notes removed
@@ -49,6 +49,7 @@ def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = '.
     """
     encodings = ['REMI', 'CPWord', 'Octuple', 'OctupleMono', 'MuMIDI']
     files = list(Path(data_path).glob('**/*.mid'))
+    at_least_one_error = False
 
     for i, file_path in enumerate(tqdm(files, desc='Testing BPE')):
 
@@ -115,9 +116,12 @@ def multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = '.
                     print(f'MIDI {i} - {file_path} failed to encode/decode TIME SIGNATURE changes with '
                           f'{encoding} ({len(time_sig_errors)} errors)')
 
-            if saving_erroneous_midis and has_errors:
-                new_midi.dump(PurePath('tests', 'test_results', f'{file_path.stem}_{encoding}')
-                              .with_suffix('.mid'))
+            if has_errors:
+                at_least_one_error = True
+                if saving_erroneous_midis:
+                    new_midi.dump(PurePath('tests', 'test_results', f'{file_path.stem}_{encoding}')
+                                  .with_suffix('.mid'))
+    assert not at_least_one_error
 
 
 def midi_to_tokens_to_midi(tokenizer: miditok.MIDITokenizer, midi: MidiFile) -> MidiFile:
@@ -140,8 +144,8 @@ def midi_to_tokens_to_midi(tokenizer: miditok.MIDITokenizer, midi: MidiFile) -> 
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description='MIDI Encoding test')
-    parser.add_argument('--data', type=str, default='tests/Multitrack_MIDIs',
+    parser.add_argument('--data', type=str, default='Multitrack_MIDIs',
                         help='directory of MIDI files to use for test')
     args = parser.parse_args()
 
-    multitrack_midi_to_tokens_to_midi(args.data)
+    test_multitrack_midi_to_tokens_to_midi(args.data)

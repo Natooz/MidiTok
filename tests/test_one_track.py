@@ -18,7 +18,7 @@ import miditok
 from miditoolkit import MidiFile, Marker
 from tqdm import tqdm
 
-from tests_utils import track_equals, tempo_changes_equals, time_signature_changes_equals
+from .tests_utils import track_equals, tempo_changes_equals, time_signature_changes_equals
 
 # Special beat res for test, up to 64 beats so the duration and time-shift values are
 # long enough for MIDI-Like and Structured encodings, and with a single beat resolution
@@ -34,8 +34,8 @@ ADDITIONAL_TOKENS_TEST = {'Chord': False,  # set to false to speed up tests as i
                           'time_signature_range': (16, 2)}
 
 
-def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './Maestro_MIDIs',
-                                     saving_erroneous_midis: bool = True):
+def test_one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './tests/Maestro_MIDIs',
+                                          saving_erroneous_midis: bool = True):
     r"""Reads a few MIDI files, convert them into token sequences, convert them back to MIDI files.
     The converted back MIDI files should identical to original one, expect with note starting and ending
     times quantized, and maybe a some duplicated notes removed
@@ -45,6 +45,7 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
     """
     encodings = ['MIDILike', 'TSD', 'Structured', 'REMI', 'CPWord', 'Octuple', 'OctupleMono', 'MuMIDI']
     files = list(Path(data_path).glob('**/*.mid'))
+    at_least_one_error = False
 
     for i, file_path in enumerate(tqdm(files, desc='Testing BPE')):
 
@@ -109,13 +110,17 @@ def one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './
                     print(f'MIDI {i} - {file_path} failed to encode/decode TIME SIGNATURE changes with '
                           f'{encoding} ({len(time_sig_errors)} errors)')
 
-        if saving_erroneous_midis and has_errors:
-            midi.instruments[0].name = 'original quantized'
-            tracks[0].name = 'original not quantized'
+        if has_errors:
+            at_least_one_error = True
+            if saving_erroneous_midis:
+                midi.instruments[0].name = 'original quantized'
+                tracks[0].name = 'original not quantized'
 
-            # Updates the MIDI and save it
-            midi.instruments += tracks
-            midi.dump(PurePath('tests', 'test_results', file_path.name))
+                # Updates the MIDI and save it
+                midi.instruments += tracks
+                midi.dump(PurePath('tests', 'test_results', file_path.name))
+
+    assert not at_least_one_error
 
 
 if __name__ == "__main__":
@@ -124,4 +129,4 @@ if __name__ == "__main__":
     parser.add_argument('--data', type=str, default='tests/Maestro_MIDIs',
                         help='directory of MIDI files to use for test')
     args = parser.parse_args()
-    one_track_midi_to_tokens_to_midi(args.data)
+    test_one_track_midi_to_tokens_to_midi(args.data)
