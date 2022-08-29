@@ -366,6 +366,7 @@ class MIDITokenizer(ABC):
         dic['PAD'] = ['PAD']
         if self._sos_eos:
             dic['SOS'] = list(dic.keys())
+            dic['EOS'] = []
             for value in dic.values():
                 value.append('EOS')
         if self._mask:
