@@ -1,6 +1,6 @@
 # MidiTok
 
-Python package to tokenize MIDI music files.
+Python package to tokenize MIDI music files, presented at the ISMIR 2021 LBD.
 
 [![PyPI version fury.io](https://badge.fury.io/py/miditok.svg)](https://pypi.python.org/pypi/miditok/)
 [![GitHub license](https://img.shields.io/github/license/Natooz/MidiTok.svg)](https://github.com/Natooz/MidiTok/blob/main/LICENSE)
