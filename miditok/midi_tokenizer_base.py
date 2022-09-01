@@ -80,7 +80,6 @@ class MIDITokenizer(ABC):
         if self.vocab is None:  # in case it was already loaded by an overriding load_params method, such as with BPE
             self.vocab = self._create_vocabulary()
         self.tokens_types_graph = self._create_token_types_graph()
-        self.multi_voc = isinstance(self.vocab, list)
 
         # Keep in memory durations in ticks for seen time divisions so these values
         # are not calculated each time a MIDI is processed
@@ -179,7 +178,7 @@ class MIDITokenizer(ABC):
             print(f'\033[93mmiditok warning: tokens_to_events method no longer need multi_voc argument as '
                   f'it is now a class attribute, it will be removed in future updates.\033[0m')
         events = []
-        if self.multi_voc:
+        if isinstance(self.vocab, list):  # multiple vocabularies
             for multi_token in tokens:
                 multi_event = []
                 for i, token in enumerate(multi_token):
