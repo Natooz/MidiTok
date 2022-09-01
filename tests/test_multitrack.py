@@ -51,7 +51,7 @@ def test_multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath]
     files = list(Path(data_path).glob('**/*.mid'))
     at_least_one_error = False
 
-    for i, file_path in enumerate(tqdm(files, desc='Testing BPE')):
+    for i, file_path in enumerate(tqdm(files, desc='Testing multitrack')):
 
         # Reads the MIDI
         try:

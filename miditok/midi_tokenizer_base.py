@@ -217,6 +217,7 @@ class MIDITokenizer(ABC):
             if i == 0:  # only keep tempo changes of the first track
                 midi.tempo_changes = tempo_changes
                 midi.tempo_changes[0].time = 0
+        midi.max_tick = max([max([note.end for note in track.notes]) for track in midi.instruments])
 
         # Write MIDI file
         if output_path:
