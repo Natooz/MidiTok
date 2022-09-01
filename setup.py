@@ -8,7 +8,7 @@ setup(
     author='Nathan Fradet',
     url='https://github.com/Natooz/MidiTok',
     packages=find_packages(exclude=("tests",)),
-    version='1.2.7',
+    version='1.2.8',
     license='MIT',
     description='A convenient MIDI tokenizer for Deep Learning networks, with multiple encoding strategies',
     long_description=long_description,
@@ -23,7 +23,7 @@ setup(
         'mir'
     ],
     install_requires=[
-        'numpy>=1.21',
+        'numpy>=1.19',
         'miditoolkit>=0.1.16',
         'tqdm'
     ],
