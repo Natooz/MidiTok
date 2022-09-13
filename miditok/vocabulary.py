@@ -125,10 +125,7 @@ class Vocabulary:
         :param token_type: token type to get the associated tokens
         :return: list of tokens
         """
-        try:
-            return self._token_types_indexes[token_type]
-        except KeyError:
-            return []
+        return self._token_types_indexes[token_type]
 
     def __add_mask(self):
         r"""Adds a MASK token to the vocabulary. This may be used to

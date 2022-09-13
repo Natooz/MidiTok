@@ -35,9 +35,9 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
             Note that this implementation is in pure Python and will be slow if you use a large amount of
             tokens files. You might use the files_lim argument.
 
-            :param tokens_path: path to token files to load
+            :param tokens_path: path to token files to learn the BPE combinations from
             :param vocab_size: the new vocabulary size
-            :param out_dir: directory to save the tokenizer's parameters and vocabulary
+            :param out_dir: directory to save the tokenizer's parameters and vocabulary after BPE learning is finished
             :param files_lim: limit of token files to use (default: None)
             :param save_converted_samples: will save in out_dir the samples that have been used
                     to create the BPE vocab. Files will keep the same name and relative path (default: True)
@@ -139,7 +139,7 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
             return tokens
 
         def apply_bpe_to_dataset(self, dataset_path: Union[Path, PurePath, str], out_path: Union[Path, PurePath, str]):
-            r"""Converts a sequence of tokens into tokens with BPE.
+            r"""Apply BPE to an already tokenized dataset (with no BPE).
 
             :param dataset_path: path to token files to load
             :param out_path: output directory to save
