@@ -58,6 +58,7 @@ class Octuple(MIDITokenizer):
                        '_sos_eos': self._sos_eos,
                        '_mask': self._mask,
                        'encoding': self.__class__.__name__,
+                       'miditok_version': CURRENT_PACKAGE_VERSION,
                        'programs': self.programs,
                        'max_bar_embedding': self.max_bar_embedding},
                       outfile)

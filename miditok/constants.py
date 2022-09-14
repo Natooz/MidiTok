@@ -2,6 +2,8 @@
 
 """
 
+CURRENT_PACKAGE_VERSION = '1.2.8'  # used un setup and when saving the config of a tokenizer
+
 # MIDI encodings default parameters, used when tokenizing a dataset and using tokens
 # These are the parameters from which a MIDI file will be tokenized
 PITCH_RANGE = range(21, 109)  # the recommended pitches for piano in the GM2 specs are from 21 to 108

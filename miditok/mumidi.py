@@ -66,6 +66,7 @@ class MuMIDI(MIDITokenizer):
                        'nb_velocities': len(self.velocities),
                        'additional_tokens': self.additional_tokens,
                        'encoding': self.__class__.__name__,
+                       'miditok_version': CURRENT_PACKAGE_VERSION,
                        'max_bar_embedding': self.max_bar_embedding},
                       outfile)
 

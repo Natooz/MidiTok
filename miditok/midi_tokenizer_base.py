@@ -15,7 +15,7 @@ from miditoolkit import MidiFile, Instrument, Note, TempoChange, TimeSignature
 
 from .vocabulary import Vocabulary, Event
 from .utils import remove_duplicated_notes, get_midi_programs
-from .constants import TIME_DIVISION
+from .constants import TIME_DIVISION, CURRENT_PACKAGE_VERSION
 
 
 class MIDITokenizer(ABC):
@@ -599,7 +599,8 @@ class MIDITokenizer(ABC):
                        'additional_tokens': self.additional_tokens,
                        '_sos_eos': self._sos_eos,
                        '_mask': self._mask,
-                       'encoding': self.__class__.__name__}, outfile, indent=4)
+                       'encoding': self.__class__.__name__,
+                       'miditok_version': CURRENT_PACKAGE_VERSION}, outfile, indent=4)
 
     def load_params(self, params: Union[str, Path, PurePath, Dict[str, Any]]):
         r"""Load parameters and set the encoder attributes
@@ -614,7 +615,7 @@ class MIDITokenizer(ABC):
             params['pitch_range'] = range(*params['pitch_range'])
 
         for key, value in params.items():
-            if key == 'encoding':
+            if key in ['encoding', 'miditok_version']:
                 continue
             elif key == 'beat_res':
                 value = {tuple(map(int, beat_range.split('_'))): res for beat_range, res in value.items()}
