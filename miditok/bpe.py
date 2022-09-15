@@ -61,7 +61,7 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
                 original_lengths += [len(track) for track in file['tokens']]
 
             # Byte Pair Encoding
-            pbar = tqdm(total=vocab_size - len(self.vocab), desc='Running byte pair encoding')
+            pbar = tqdm(total=vocab_size - len(self.vocab), desc='Learning byte pair encoding')
             while len(self.vocab) < vocab_size:
                 pbar.update(1)
                 occurrences = {}  # count occurrences of successive tokens
