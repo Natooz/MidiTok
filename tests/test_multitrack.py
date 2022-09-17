@@ -40,7 +40,7 @@ ADDITIONAL_TOKENS_TEST = {'Chord': True,
                           'time_signature_range': (16, 2)}
 
 
-def test_multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './tests/Maestro_MIDIs',
+def test_multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './tests/Multitrack_MIDIs',
                                            saving_erroneous_midis: bool = True):
     r"""Reads a few MIDI files, convert them into token sequences, convert them back to MIDI files.
     The converted back MIDI files should identical to original one, expect with note starting and ending
