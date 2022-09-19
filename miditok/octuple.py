@@ -269,8 +269,8 @@ class Octuple(MIDITokenizer):
             program = int(time_step[3].value)
             current_pos = int(time_step[4].value)
             current_bar = int(time_step[5].value)
-            current_tick = current_time_sig_tick + (current_bar - current_time_sig_bar) * ticks_per_bar \
-                           + current_pos * ticks_per_sample
+            current_tick = (current_time_sig_tick + (current_bar - current_time_sig_bar) * ticks_per_bar +
+                            current_pos * ticks_per_sample)
 
             # Append the created note
             tracks[program].append(Note(vel, pitch, current_tick, current_tick + duration))
@@ -333,8 +333,8 @@ class Octuple(MIDITokenizer):
         :return: the vocabulary object
         """
         if sos_eos_tokens is not None:
-            print(f'\033[93msos_eos_tokens argument is depreciated and will be removed in a future update, '
-                  f'_create_vocabulary now uses self._sos_eos attribute set a class init \033[0m')
+            print('\033[93msos_eos_tokens argument is depreciated and will be removed in a future update, '
+                  '_create_vocabulary now uses self._sos_eos attribute set a class init \033[0m')
         vocab = [Vocabulary({'PAD_None': 0}, sos_eos=self._sos_eos, mask=self._mask) for _ in range(6)]
 
         # PITCH

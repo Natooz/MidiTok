@@ -147,7 +147,7 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
             if not self.has_bpe:
                 return
 
-            files_paths = list(Path(dataset_path).glob(f'**/*.json'))
+            files_paths = list(Path(dataset_path).glob('**/*.json'))
             for path in tqdm(files_paths, desc='Applying BPE to dataset'):
                 sample = self.load_tokens(path)
                 sample_bpe = [self.apply_bpe(track) for track in sample['tokens']]

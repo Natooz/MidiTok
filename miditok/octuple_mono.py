@@ -196,8 +196,8 @@ class OctupleMono(MIDITokenizer):
         :return: the vocabulary object
         """
         if sos_eos_tokens is not None:
-            print(f'\033[93msos_eos_tokens argument is depreciated and will be removed in a future update, '
-                  f'_create_vocabulary now uses self._sos_eos attribute set a class init \033[0m')
+            print('\033[93msos_eos_tokens argument is depreciated and will be removed in a future update, '
+                  '_create_vocabulary now uses self._sos_eos attribute set a class init \033[0m')
         vocab = [Vocabulary({'PAD_None': 0}, sos_eos=self._sos_eos, mask=self._mask) for _ in range(5)]
 
         # PITCH

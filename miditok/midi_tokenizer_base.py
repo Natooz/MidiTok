@@ -175,8 +175,8 @@ class MIDITokenizer(ABC):
         :return: the sequence of corresponding events
         """
         if multi_voc is not None:
-            print(f'\033[93mmiditok warning: tokens_to_events method no longer need multi_voc argument as '
-                  f'it is now a class attribute, it will be removed in future updates.\033[0m')
+            print('\033[93mmiditok warning: tokens_to_events method no longer need multi_voc argument as '
+                  'it is now a class attribute, it will be removed in future updates.\033[0m')
         events = []
         if isinstance(self.vocab, list):  # multiple vocabularies
             for multi_token in tokens:
@@ -439,7 +439,7 @@ class MIDITokenizer(ABC):
         """
         max_beat_res, nb_notes = self.additional_tokens.get('time_signature_range', (4, 1))
         assert max_beat_res > 0 and math.log2(max_beat_res).is_integer(), \
-            f'The beat resolution in time signature must be a power of 2'
+            'The beat resolution in time signature must be a power of 2'
 
         time_signatures = []
         for i in range(0, int(math.log2(max_beat_res)) + 1):  # 1 ~ max_beat_res
