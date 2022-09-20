@@ -1,0 +1,18 @@
+# Codecov params
+
+coverage:
+  status:
+    project:
+      default: false  # disable the default status that measures entire project
+      tests:
+        paths:
+          - "tests/"
+        target: 70%
+      source:
+        paths:
+          - "miditok/"
+        target: 75%
+        threshold: 0.5%
+    patch:
+      default:
+        target: 75%  # new contributions should have a coverage at least equal to target
