@@ -15,4 +15,4 @@ coverage:
         threshold: 0.5%
     patch:
       default:
-        target: 75%  # new contributions should have a coverage at least equal to target
+        enabled: no # target: 75%  # new contributions should have a coverage at least equal to target
