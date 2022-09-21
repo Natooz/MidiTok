@@ -11,7 +11,8 @@ from miditoolkit import Instrument, Note, TempoChange
 from .midi_tokenizer_base import MIDITokenizer
 from .vocabulary import Vocabulary, Event
 from .utils import detect_chords
-from .constants import *
+from .constants import PITCH_RANGE, NB_VELOCITIES, BEAT_RES, ADDITIONAL_TOKENS, TIME_DIVISION, TEMPO,\
+    MIDI_INSTRUMENTS, CHORD_MAPS
 
 
 class CPWord(MIDITokenizer):

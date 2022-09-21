@@ -10,8 +10,8 @@ from miditoolkit import Instrument, Note, TempoChange
 from .midi_tokenizer_base import MIDITokenizer
 from .vocabulary import Vocabulary, Event
 from .utils import detect_chords
-from .constants import PITCH_RANGE, NB_VELOCITIES, ADDITIONAL_TOKENS, BEAT_RES, TEMPO, TIME_DIVISION, MIDI_INSTRUMENTS,\
-    CHORD_MAPS
+from .constants import PITCH_RANGE, NB_VELOCITIES, BEAT_RES, ADDITIONAL_TOKENS, TIME_DIVISION, TEMPO, \
+    MIDI_INSTRUMENTS, CHORD_MAPS
 
 
 class TSD(MIDITokenizer):
@@ -150,7 +150,7 @@ class TSD(MIDITokenizer):
                         duration = self._token_duration_to_ticks(events[ei + 2].value, time_division)
                         instrument.notes.append(Note(vel, pitch, current_tick, current_tick + duration))
                         ei += 1
-                except IndexError as _:
+                except IndexError:
                     pass
             elif events[ei].type == 'Time-Shift':
                 current_tick += self._token_duration_to_ticks(events[ei].value, time_division)

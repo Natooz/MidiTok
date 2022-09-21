@@ -10,7 +10,7 @@ from miditoolkit import Instrument, Note, TempoChange
 
 from .midi_tokenizer_base import MIDITokenizer
 from .vocabulary import Vocabulary, Event
-from .constants import *
+from .constants import PITCH_RANGE, NB_VELOCITIES, BEAT_RES, ADDITIONAL_TOKENS, TIME_DIVISION, TEMPO, MIDI_INSTRUMENTS
 
 
 class Structured(MIDITokenizer):
@@ -127,7 +127,7 @@ class Structured(MIDITokenizer):
                         duration = self._token_duration_to_ticks(events[count + 2].value, time_division)
                         instrument.notes.append(Note(vel, pitch, current_tick, current_tick + duration))
                         count += 3
-                except IndexError as _:
+                except IndexError:
                     count += 1
             elif events[count].type == 'Time-Shift':
                 beat, pos, res = map(int, events[count].value.split('.'))

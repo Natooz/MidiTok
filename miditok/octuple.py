@@ -13,7 +13,8 @@ from miditoolkit import MidiFile, Instrument, Note, TempoChange, TimeSignature
 
 from .midi_tokenizer_base import MIDITokenizer
 from .vocabulary import Vocabulary, Event
-from .constants import *
+from .constants import PITCH_RANGE, NB_VELOCITIES, BEAT_RES, ADDITIONAL_TOKENS, TIME_DIVISION, TIME_SIGNATURE, TEMPO, \
+    MIDI_INSTRUMENTS, CURRENT_PACKAGE_VERSION
 
 
 class Octuple(MIDITokenizer):
@@ -63,7 +64,7 @@ class Octuple(MIDITokenizer):
                        'max_bar_embedding': self.max_bar_embedding},
                       outfile)
 
-    def midi_to_tokens(self, midi: MidiFile) -> List[List[int]]:
+    def midi_to_tokens(self, midi: MidiFile, *args, **kwargs) -> List[List[int]]:
         r"""Override the parent class method
         Converts a MIDI file in a tokens representation, a sequence of "time steps".
         A time step is a list of tokens where:

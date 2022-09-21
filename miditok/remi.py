@@ -11,7 +11,8 @@ from miditoolkit import Instrument, Note, TempoChange
 from .midi_tokenizer_base import MIDITokenizer
 from .vocabulary import Vocabulary, Event
 from .utils import detect_chords
-from .constants import *
+from .constants import PITCH_RANGE, NB_VELOCITIES, BEAT_RES, ADDITIONAL_TOKENS, TIME_DIVISION, TEMPO, \
+    MIDI_INSTRUMENTS, CHORD_MAPS
 
 
 class REMI(MIDITokenizer):
@@ -177,7 +178,7 @@ class REMI(MIDITokenizer):
                         duration = self._token_duration_to_ticks(events[ei + 2].value, time_division)
                         instrument.notes.append(Note(vel, pitch, current_tick, current_tick + duration))
                         previous_note_end = max(previous_note_end, current_tick + duration)
-                except IndexError as _:  # A well constituted sequence should not raise an exception
+                except IndexError:  # A well constituted sequence should not raise an exception
                     pass  # However with generated sequences this can happen, or if the sequence isn't finished
 
         if len(tempo_changes) > 1:

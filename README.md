@@ -3,6 +3,7 @@
 Python package to tokenize MIDI music files, presented at the ISMIR 2021 LBD.
 
 [![PyPI version fury.io](https://badge.fury.io/py/miditok.svg)](https://pypi.python.org/pypi/miditok/)
+[![GitHub workflow](https://img.shields.io/github/workflow/status/Natooz/MidiTok/Testing)](https://github.com/Natooz/MidiTok/actions)
 [![Codecov](https://img.shields.io/codecov/c/github/Natooz/MidiTok)](https://codecov.io/gh/Natooz/MidiTok)
 [![GitHub license](https://img.shields.io/github/license/Natooz/MidiTok.svg)](https://github.com/Natooz/MidiTok/blob/main/LICENSE)
 
@@ -266,7 +267,7 @@ Contributions are gratefully welcomed, feel free to open an issue or send a PR i
 
 ### MidiTok:
 
-[**Paper**](https://archives.ismir.net/ismir2021/latebreaking/000005.pdf) | [**Poster**](https://s3.eu-west-1.amazonaws.com/production-main-contentbucket52d4b12c-1x4mwd6yn8qjn/8672541d-e891-41ba-9444-26f31b038ee6.pdf)
+[**Paper**](https://archives.ismir.net/ismir2021/latebreaking/000005.pdf)
 ```bibtex
 @inproceedings{miditok2021,
     title={MidiTok: A Python package for MIDI file tokenization},

@@ -1,6 +1,6 @@
 # PyTest workflow
 
-name: Python package
+name: Testing
 
 on:
   push:

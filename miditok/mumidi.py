@@ -14,7 +14,8 @@ from miditoolkit import MidiFile, Instrument, Note, TempoChange
 from .midi_tokenizer_base import MIDITokenizer
 from .vocabulary import Vocabulary, Event
 from .utils import detect_chords
-from .constants import *
+from .constants import PITCH_RANGE, NB_VELOCITIES, BEAT_RES, ADDITIONAL_TOKENS, TIME_DIVISION, TEMPO, \
+    MIDI_INSTRUMENTS, CHORD_MAPS, CURRENT_PACKAGE_VERSION
 
 
 # recommended range from the GM2 specs
@@ -70,7 +71,7 @@ class MuMIDI(MIDITokenizer):
                        'max_bar_embedding': self.max_bar_embedding},
                       outfile)
 
-    def midi_to_tokens(self, midi: MidiFile) -> List[List[int]]:
+    def midi_to_tokens(self, midi: MidiFile, *args, **kwargs) -> List[List[int]]:
         r"""Override the parent class method
         Converts a MIDI file in a tokens representation, a sequence of "time steps".
         A time step is a list of tokens where:

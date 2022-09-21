@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "Fradet"
+  given-names: "Nathan"
+  orcid: "https://orcid.org/0000-0003-4729-570X"
+- family-names: "Briot"
+  given-names: "Jean-Pierre"
+  orcid: "https://orcid.org/0000-0003-1621-6335"
+- family-names: "Chhel"
+  given-names: "Fabien"
+  orcid: "https://orcid.org/0000-0003-2224-8296"
+- family-names: "El Fallah Seghrouchni"
+  given-names: "Amal"
+  orcid: "https://orcid.org/0000-0002-8390-8780"
+- family-names: "Gutowski"
+  given-names: "Nicolas"
+  orcid: "https://orcid.org/0000-0002-5765-9901"
+title: "MidiTok: A Python package for MIDI file tokenization"
+license: MIT
+date-released: 2021-11-07
+url: "https://github.com/Natooz/MidiTok"
+repository-code: "https://github.com/Natooz/MidiTok"
