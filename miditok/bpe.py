@@ -2,10 +2,11 @@
 This does not work with "multi-embedding" representations like CP Word or Octuple.
 """
 
-from typing import List, Dict, Union, Any, Type
+from typing import List, Dict, Union, Any, Type, Tuple
 from pathlib import Path, PurePath
 import json
 from random import choices
+from copy import deepcopy
 
 from miditoolkit import MidiFile
 from tqdm import tqdm
@@ -124,15 +125,14 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
             if not self.has_bpe:
                 return tokens
 
-            previous_len = len(tokens) + 1  # + 1 to fool when entering the loop
-            while previous_len != len(tokens):
-                previous_len = len(tokens)
-                # loop over BPE tokens from the vocabulary
-                for tok, token_succession in self.bpe_successions.items():
-                    i = 0  # will check if any token succession from the input token sequence matches the BPE
-                    while i <= len(tokens) - len(token_succession):
-                        if tokens[i:i + len(token_succession)] == token_succession:
-                            tokens[i] = tok  # if so, will replace the current token and remove the next ones to replace
+            previous_len = len(tokens) + 1  # + 1 to fool when entering the loop the first time
+            while previous_len != len(tokens):  # if this is True, it means no more BPE combinations is possible
+                previous_len = len(tokens)  # length of the token sequence before applying BPE
+                for tok, token_succession in self.bpe_successions.items():  # loops over BPE tokens from the vocabulary
+                    i = 0
+                    while i <= len(tokens) - len(token_succession):  # loops over each token of the input sequence
+                        if tokens[i:i + len(token_succession)] == token_succession:  # same token succession found
+                            tokens[i] = tok  # replaces the current token and removes the next ones (replaced by BPE)
                             for _ in range(len(token_succession) - 1):
                                 del tokens[i + 1]
                         i += 1
@@ -162,18 +162,22 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
             tokens = super().midi_to_tokens(midi, *args_, **kwargs_)
             return [self.apply_bpe(track) for track in tokens] if self.has_bpe else tokens
 
-        def tokens_to_events(self, tokens: List[int], **kwargss) -> List[Event]:
+        def tokens_to_events(self, tokens: List[int], return_decomposed_tokens: bool = False, **kwargss) \
+                -> Union[List[Event], Tuple[List[Event], List[int]]]:
             r"""First decomposes BPE tokens, then converts them in their respective event objects.
 
             :param tokens: sequence of tokens to convert
+            :param return_decomposed_tokens: set True if you want the decomposed tokens to be returned (default: False)
             :return: the sequence of corresponding events
             """
             # Decompose BPE tokens first
-            tokens = self.decompose_bpe(tokens)
-            return super().tokens_to_events(tokens, **kwargss)
+            decomposed_tokens = self.decompose_bpe(deepcopy(tokens))
+            events = super().tokens_to_events(decomposed_tokens, **kwargss)
+            return (events, decomposed_tokens) if return_decomposed_tokens else events
 
         def decompose_bpe(self, tokens: List[int]) -> List[int]:
             r"""Decomposes a sequence of tokens containing BP encoded tokens into "prime" tokens.
+            It is an inplace operation.
 
             :param tokens: token sequence to decompose
             :return: decomposed token sequence
