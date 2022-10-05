@@ -562,16 +562,18 @@ class MIDITokenizer(ABC):
         return err / len(tokens)
 
     @staticmethod
-    def save_tokens(tokens, path: Union[str, Path, PurePath], programs: List[Tuple[int, bool]] = None):
+    def save_tokens(tokens, path: Union[str, Path, PurePath], programs: List[Tuple[int, bool]] = None, **kwargs):
         r"""Saves tokens as a JSON file.
+        Use kwargs to save any additional information within the JSON file.
 
         :param tokens: tokens, as any format
         :param path: path of the file to save
         :param programs: (optional), programs of the associated tokens, should be
                         given as a tuples (int, bool) for (program, is_drum)
+        :param kwargs: any additional information to save within the JSON file.
         """
         with open(path, 'w') as outfile:
-            json.dump({'tokens': tokens, 'programs': programs if programs is not None else []}, outfile)
+            json.dump({'tokens': tokens, 'programs': programs if programs is not None else [], **kwargs}, outfile)
 
     @staticmethod
     def load_tokens(path: Union[str, Path, PurePath]) -> Union[List[Any], Dict]:
