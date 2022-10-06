@@ -129,14 +129,30 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
             while previous_len != len(tokens):  # if this is True, it means no more BPE combinations is possible
                 previous_len = len(tokens)  # length of the token sequence before applying BPE
                 for tok, token_succession in self.bpe_successions.items():  # loops over BPE tokens from the vocabulary
-                    i = 0
-                    while i <= len(tokens) - len(token_succession):  # loops over each token of the input sequence
-                        if tokens[i:i + len(token_succession)] == token_succession:  # same token succession found
-                            tokens[i] = tok  # replaces the current token and removes the next ones (replaced by BPE)
-                            for _ in range(len(token_succession) - 1):
-                                del tokens[i + 1]
-                        i += 1
+                    occurrences = self.__subfind(tokens, token_succession)
+                    for idx in reversed(occurrences):
+                        tokens[idx] = tok
+                        for _ in range(len(token_succession) - 1):
+                            del tokens[idx + 1]
             return tokens
+
+        @staticmethod
+        def __subfind(in_list: List[int], pattern: List[int]) -> List[int]:
+            """Finds the locations of a pattern within a list.
+            Adapted from: https://stackoverflow.com/questions/10106901/elegant-find-sub-list-in-list
+            Related: https://www.reddit.com/r/learnpython/comments/2xqlwj/using_npwhere_to_find_subarrays/
+            After testing, the numba jit version does not seem to be much faster.
+            The conversion of python lists to numba.typed.List() seems to also take time.
+
+            :param in_list: input list to analyze
+            :param pattern: pattern to detect
+            :return: indices of in_list where the pattern has been found
+            """
+            matches = []
+            for i in range(len(in_list)):
+                if in_list[i] == pattern[0] and in_list[i:i + len(pattern)] == pattern:
+                    matches.append(i)
+            return matches
 
         def apply_bpe_to_dataset(self, dataset_path: Union[Path, PurePath, str], out_path: Union[Path, PurePath, str]):
             r"""Apply BPE to an already tokenized dataset (with no BPE).
