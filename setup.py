@@ -1,5 +1,4 @@
 from setuptools import setup, find_packages
-from miditok.constants import CURRENT_PACKAGE_VERSION
 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
@@ -9,7 +8,7 @@ setup(
     author='Nathan Fradet',
     url='https://github.com/Natooz/MidiTok',
     packages=find_packages(exclude=("tests",)),
-    version=CURRENT_PACKAGE_VERSION,
+    version='1.2.9',
     license='MIT',
     description='A convenient MIDI tokenizer for Deep Learning networks, with multiple encoding strategies',
     long_description=long_description,
