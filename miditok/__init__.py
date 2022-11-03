@@ -23,12 +23,6 @@ class REMIEncoding(REMI):
         _changed_class_warning(self)
 
 
-class StructuredEndcoding(Structured):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        _changed_class_warning(self)
-
-
 class MIDILikeEncoding(MIDILike):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -36,24 +30,6 @@ class MIDILikeEncoding(MIDILike):
 
 
 class CPWordEncoding(CPWord):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        _changed_class_warning(self)
-
-
-class MuMIDIEncoding(MuMIDI):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        _changed_class_warning(self)
-
-
-class OctupleEncoding(Octuple):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        _changed_class_warning(self)
-
-
-class OctupleMonoEncoding(OctupleMono):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         _changed_class_warning(self)
