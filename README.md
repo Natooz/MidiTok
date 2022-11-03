@@ -220,6 +220,14 @@ Every encoding strategy share some common parameters around which the tokenizers
 
 Check [constants.py](miditok/constants.py) to see how these parameters are constructed.
 
+### Special tokens
+
+When creating a tokenizer, you can specify to include some special tokens in its vocabulary, by giving the arguments:
+
+* `pad` (default `True`) --> `PAD_None`: a padding token to use when training a model with batches of sequences of unequal lengths. The padding token will be at index 0 of the vocabulary.
+* `sos_eos` (default `False`) --> `SOS_None` and `EOS_None`: "Start Of Sequence" and "End Of Sequence" tokens, designed to be placed respectively at the beginning and end of a token sequence during training. At inference, the EOS token tells when to end the generation.
+* `mask` (default `False`) --> `MASK_None`: a masking token, to use when pre-training a (bidirectional) model with a self-supervised objective like [BERT](https://arxiv.org/abs/1810.04805).
+
 ### Additional tokens
 
 MidiTok offers the possibility to insert additional tokens in the encodings.
