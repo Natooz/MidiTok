@@ -2,7 +2,7 @@
 
 """
 
-from typing import List, Tuple, Dict, Union, Generator
+from typing import List, Tuple, Union, Generator
 
 
 class Event:
@@ -13,17 +13,17 @@ class Event:
     used in the Vocabulary class to map an event to its corresponding token.
     """
 
-    def __init__(self, type_, time, value, desc):
+    def __init__(self, type_: str, value: Union[str, int], time: Union[int, float] = 0, desc: str = None):
         self.type = type_
-        self.time = time
         self.value = value
+        self.time = time
         self.desc = desc
 
     def __str__(self):
         return f'{self.type}_{self.value}'
 
     def __repr__(self):
-        return f'Event(type={self.type}, time={self.time}, value={self.value}, desc={self.desc})'
+        return f'Event(type={self.type}, value={self.value}, time={self.time}, desc={self.desc})'
 
 
 class Vocabulary:
@@ -37,33 +37,37 @@ class Vocabulary:
     Use add_event or the += operator to add an event to the vocab.
     Read add_event docstring for how to give arguments.
 
-    :param event_to_token: a dictionary mapping events to tokens to initialize the vocabulary
-    :param sos_eos: will include Start Of Sequence (SOS) and End Of Sequence (tokens) (default False)
-    :param mask: will add a MASK token to the vocabulary (default: False)
+    :param pad: will include a PAD token, used when training a model with batch of sequences of
+                unequal lengths, and usually at index 0 of the vocabulary.
+                If this argument is set to True, the PAD token will be at index 0. (default: True)
+    :param mask: will add a MASK token to the vocabulary. (default: False)
+    :param sos_eos: will include Start Of Sequence (SOS) and End Of Sequence (tokens) (default: False)
+    :param events: a list of events to add to the vocabulary when creating it. (default: None)
     """
 
-    def __init__(self, event_to_token: Dict[str, int] = None, sos_eos: bool = False, mask: bool = False):
-
-        if event_to_token is None:
-            event_to_token = {}
-        self._event_to_token = event_to_token
-        self.custom_indexes = False  # will be set True if custom indexes have been used
-
+    def __init__(self, pad: bool = True, mask: bool = False, sos_eos: bool = False,
+                 events: List[Union[str, Event]] = None):
+        self._event_to_token = {}
         self._token_to_event = {}
         self._token_types_indexes = {}
-        self.update_token_types_indexes()
 
+        # Adds (if specified) special tokens first
+        if pad:
+            self.__add_pad()
         if mask:
             self.__add_mask()
         if sos_eos:
             self.__add_sos_eos()
 
-    def add_event(self, event: Union[Event, str, Generator], index: int = None):
+        # Add custom events and updates _token_types_indexes
+        if events is not None:
+            self.add_event(event for event in events)
+        self.update_token_types_indexes()
+
+    def add_event(self, event: Union[Event, str, Generator]):
         r"""Adds one or multiple entries to the vocabulary.
 
         :param event: event to add, either as an Event object or string of the form "Type_Value", e.g. Pitch_80
-        :param index: (optional) index to set this event, if not given it will be set to last
-                        Will be ignored if you give a generator as first arg
         """
         if isinstance(event, Generator):
             while True:
@@ -72,29 +76,24 @@ class Vocabulary:
                 except StopIteration:
                     return
         else:
-            self.__add_distinct_event(str(event), index)
+            self.__add_distinct_event(str(event))
 
-    def __add_distinct_event(self, event: str, index: int = None):
-        r"""Private: Adds an event to the vocabulary.
+    def __add_distinct_event(self, event: Union[str, Event]):
+        r"""Private: Adds an event to the vocabulary. Its index (int) will be the length of the vocab.
 
         :param event: event to add, as a formatted string of the form "Type_Value", e.g. Pitch_80
-        :param index: (optional) index to set this event, if not given it will be set to last
         """
-        if index is not None:
-            if index in self._token_to_event:  # first checks if index is already used
-                raise ValueError(f'Index {index} already used by {self._token_to_event[index]} event')
-            if index != len(self._event_to_token):  # index == len(self._event_to_token) <=> index == None, as below
-                self.custom_indexes = True
+        if isinstance(event, str):
+            event_str = event
+            event_type = event.split('_')[0]
         else:
-            index = len(self._token_to_event)
-            if self.custom_indexes:  # no need to check if no custom index have been used
-                while index in self._token_to_event.keys():  # assert the index isn't already used
-                    index += 1
+            event_str = str(event)
+            event_type = event.type
 
-        self._event_to_token[event] = index
-        self._token_to_event[index] = event
+        index = len(self._token_to_event)
+        self._event_to_token[event_str] = index
+        self._token_to_event[index] = event_str
 
-        event_type = event.split('_')[0]
         if event_type in self._token_types_indexes:
             self._token_types_indexes[event_type].append(index)
         else:
@@ -112,7 +111,6 @@ class Vocabulary:
         r"""Updates the _token_types_indexes attribute according to _event_to_token.
         """
         for event, token in self._event_to_token.items():
-            self._token_to_event[token] = event  # inversion
             token_type = event.split('_')[0]
             if token_type in self._token_types_indexes:
                 self._token_types_indexes[token_type].append(token)
@@ -125,7 +123,15 @@ class Vocabulary:
         :param token_type: token type to get the associated tokens
         :return: list of tokens
         """
-        return self._token_types_indexes[token_type]
+        try:
+            return self._token_types_indexes[token_type]
+        except KeyError:  # no tokens of this type, returns an empty list
+            return []
+
+    def __add_pad(self):
+        r"""Adds a PAD token to the vocabulary. It is usually at index 0.
+        """
+        self.__add_distinct_event('PAD_None')
 
     def __add_mask(self):
         r"""Adds a MASK token to the vocabulary. This may be used to

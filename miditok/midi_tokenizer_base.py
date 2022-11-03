@@ -183,12 +183,12 @@ class MIDITokenizer(ABC):
                 multi_event = []
                 for i, token in enumerate(multi_token):
                     name, val = self.vocab[i].token_to_event[token].split('_')
-                    multi_event.append(Event(name, None, val, None))
+                    multi_event.append(Event(name, val))
                 events.append(multi_event)
         else:
             for token in tokens:
                 name, val = self.vocab.token_to_event[token].split('_')
-                events.append(Event(name, None, val, None))
+                events.append(Event(name, val))
         return events
 
     def tokens_to_midi(self, tokens: List[List[Union[int, List[int]]]],
