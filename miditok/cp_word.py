@@ -41,14 +41,17 @@ class CPWord(MIDITokenizer):
             The values are the resolution, in samples per beat, of the given range, ex 8
     :param nb_velocities: number of velocity bins
     :param additional_tokens: specifies additional tokens (chords, time signature, rests, tempo...)
-    :param sos_eos_tokens: adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens to the vocabulary
+    :param pad: will include a PAD token, used when training a model with batch of sequences of
+            unequal lengths, and usually at index 0 of the vocabulary. (default: True)
+    :param sos_eos: adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens to the vocabulary.
+            (default: False)
     :param mask: will add a MASK token to the vocabulary (default: False)
-    :param params: can be a path to the parameter (json encoded) file or a dictionary
+    :param params: can be a path to the parameter (json encoded) file or a dictionary. (default: None)
     """
 
     def __init__(self, pitch_range: range = PITCH_RANGE, beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
                  nb_velocities: int = NB_VELOCITIES, additional_tokens: Dict[str, bool] = ADDITIONAL_TOKENS,
-                 sos_eos_tokens: bool = False, mask: bool = False, params=None):
+                 pad: bool = True, sos_eos: bool = False, mask: bool = False, params=None):
         # Indexes of additional token types within a compound token
         add_idx = 5
         additional_tokens['TimeSignature'] = False  # not compatible
@@ -65,7 +68,7 @@ class CPWord(MIDITokenizer):
         if additional_tokens['Tempo']:
             self.tempo_idx = add_idx
 
-        super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, sos_eos_tokens, mask, params)
+        super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, pad, sos_eos, mask, params)
 
     def track_to_tokens(self, track: Instrument) -> List[List[int]]:
         r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
@@ -197,7 +200,7 @@ class CPWord(MIDITokenizer):
         :param desc: an optional argument for debug and used to spot position tokens in track_to_tokens
         :return: The compound token as a list of integers
         """
-        cp_token_template = [Event(type_='Family', time=time, value='Metric', desc=desc),
+        cp_token_template = [Event(type_='Family', value='Metric', time=time, desc=desc),
                              self.vocab[1].event_to_token['Position_Ignore'],
                              self.vocab[2].event_to_token['Pitch_Ignore'],
                              self.vocab[3].event_to_token['Velocity_Ignore'],
@@ -299,7 +302,7 @@ class CPWord(MIDITokenizer):
             print('\033[93msos_eos_tokens argument is depreciated and will be removed in a future update, '
                   '_create_vocabulary now uses self._sos_eos attribute set a class init \033[0m')
 
-        vocab = [Vocabulary({'PAD_None': 0}, sos_eos=self._sos_eos, mask=self._mask) for _ in range(5)]
+        vocab = [Vocabulary(pad=self._pad, sos_eos=self._sos_eos, mask=self._mask) for _ in range(5)]
 
         vocab[0].add_event('Family_Metric')
         vocab[0].add_event('Family_Note')
@@ -324,26 +327,26 @@ class CPWord(MIDITokenizer):
 
         # PROGRAM
         if self.additional_tokens['Program']:
-            vocab.append(Vocabulary({'PAD_None': 0}, sos_eos=self._sos_eos, mask=self._mask))
+            vocab.append(Vocabulary(pad=self._pad, sos_eos=self._sos_eos, mask=self._mask))
             vocab[-1].add_event('Program_Ignore')
             vocab[-1].add_event(f'Program_{program}' for program in range(-1, 128))
 
         # CHORD
         if self.additional_tokens['Chord']:
-            vocab.append(Vocabulary({'PAD_None': 0}, sos_eos=self._sos_eos, mask=self._mask))
+            vocab.append(Vocabulary(pad=self._pad, sos_eos=self._sos_eos, mask=self._mask))
             vocab[-1].add_event('Chord_Ignore')
             vocab[-1].add_event(f'Chord_{i}' for i in range(3, 6))  # non recognized chords (between 3 and 5 notes)
             vocab[-1].add_event(f'Chord_{chord_quality}' for chord_quality in CHORD_MAPS)
 
         # REST
         if self.additional_tokens['Rest']:
-            vocab.append(Vocabulary({'PAD_None': 0}, sos_eos=self._sos_eos, mask=self._mask))
+            vocab.append(Vocabulary(pad=self._pad, sos_eos=self._sos_eos, mask=self._mask))
             vocab[-1].add_event('Rest_Ignore')
             vocab[-1].add_event(f'Rest_{".".join(map(str, rest))}' for rest in self.rests)
 
         # TEMPO
         if self.additional_tokens['Tempo']:
-            vocab.append(Vocabulary({'PAD_None': 0}, sos_eos=self._sos_eos, mask=self._mask))
+            vocab.append(Vocabulary(pad=self._pad, sos_eos=self._sos_eos, mask=self._mask))
             vocab[-1].add_event('Tempo_Ignore')
             vocab[-1].add_event(f'Tempo_{i}' for i in self.tempos)
 

@@ -26,16 +26,19 @@ class REMI(MIDITokenizer):
             The values are the resolution, in samples per beat, of the given range, ex 8
     :param nb_velocities: number of velocity bins
     :param additional_tokens: specifies additional tokens (chords, time signature, rests, tempo...)
-    :param sos_eos_tokens: adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens to the vocabulary
+    :param pad: will include a PAD token, used when training a model with batch of sequences of
+            unequal lengths, and usually at index 0 of the vocabulary. (default: True)
+    :param sos_eos: adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens to the vocabulary.
+            (default: False)
     :param mask: will add a MASK token to the vocabulary (default: False)
     :param params: can be a path to the parameter (json encoded) file or a dictionary
     """
 
     def __init__(self, pitch_range: range = PITCH_RANGE, beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
                  nb_velocities: int = NB_VELOCITIES, additional_tokens: Dict[str, Union[bool, int]] = ADDITIONAL_TOKENS,
-                 sos_eos_tokens: bool = False, mask: bool = False, params=None):
+                 pad: bool = True, sos_eos: bool = False, mask: bool = False, params=None):
         additional_tokens['TimeSignature'] = False  # not compatible
-        super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, sos_eos_tokens, mask, params)
+        super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, pad, sos_eos, mask, params)
 
     def track_to_tokens(self, track: Instrument) -> List[int]:
         r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
@@ -71,13 +74,13 @@ class REMI(MIDITokenizer):
                     rest_pos = round(rest_pos / ticks_per_sample)
 
                     if rest_beat > 0:
-                        events.append(Event(type_='Rest', time=previous_note_end, value=f'{rest_beat}.0',
+                        events.append(Event(type_='Rest', value=f'{rest_beat}.0', time=previous_note_end,
                                             desc=f'{rest_beat}.0'))
                         previous_tick += rest_beat * self.current_midi_metadata['time_division']
 
                     while rest_pos >= self.rests[0][1]:
                         rest_pos_temp = min([r[1] for r in self.rests], key=lambda x: abs(x - rest_pos))
-                        events.append(Event(type_='Rest', time=previous_note_end, value=f'0.{rest_pos_temp}',
+                        events.append(Event(type_='Rest', value=f'0.{rest_pos_temp}', time=previous_note_end,
                                             desc=f'0.{rest_pos_temp}'))
                         previous_tick += round(rest_pos_temp * ticks_per_sample)
                         rest_pos -= rest_pos_temp
@@ -87,12 +90,12 @@ class REMI(MIDITokenizer):
                 # Bar
                 nb_new_bars = note.start // ticks_per_bar - current_bar
                 for i in range(nb_new_bars):
-                    events.append(Event(type_='Bar', time=(current_bar + i + 1) * ticks_per_bar, value=None, desc=0))
+                    events.append(Event(type_='Bar', value='None', time=(current_bar + i + 1) * ticks_per_bar, desc=0))
                 current_bar += nb_new_bars
 
                 # Position
                 pos_index = int((note.start % ticks_per_bar) / ticks_per_sample)
-                events.append(Event(type_='Position', time=note.start, value=pos_index, desc=note.start))
+                events.append(Event(type_='Position', value=pos_index, time=note.start, desc=note.start))
 
                 # (Tempo)
                 if self.additional_tokens['Tempo']:
@@ -106,16 +109,16 @@ class REMI(MIDITokenizer):
                                 current_tempo_idx += 1  # update tempo value (might not change) and index
                             else:  # <==> elif tempo_change.time > previous_tick:
                                 break  # this tempo change is beyond the current time step, we break the loop
-                    events.append(Event(type_='Tempo', time=note.start, value=current_tempo, desc=note.start))
+                    events.append(Event(type_='Tempo', value=current_tempo, time=note.start, desc=note.start))
 
                 previous_tick = note.start
 
             # Pitch / Velocity / Duration
-            events.append(Event(type_='Pitch', time=note.start, value=note.pitch, desc=note.pitch))
-            events.append(Event(type_='Velocity', time=note.start, value=note.velocity, desc=f'{note.velocity}'))
+            events.append(Event(type_='Pitch', value=note.pitch, time=note.start, desc=note.pitch))
+            events.append(Event(type_='Velocity', value=note.velocity, time=note.start, desc=f'{note.velocity}'))
             duration = note.end - note.start
             index = np.argmin(np.abs(dur_bins - duration))
-            events.append(Event(type_='Duration', time=note.start, value='.'.join(map(str, self.durations[index])),
+            events.append(Event(type_='Duration', value='.'.join(map(str, self.durations[index])), time=note.start,
                                 desc=f'{duration} ticks'))
 
             previous_note_end = max(previous_note_end, note.end)
@@ -197,7 +200,10 @@ class REMI(MIDITokenizer):
         if sos_eos_tokens is not None:
             print('\033[93msos_eos_tokens argument is depreciated and will be removed in a future update, '
                   '_create_vocabulary now uses self._sos_eos attribute set a class init \033[0m')
-        vocab = Vocabulary({'PAD_None': 0, 'Bar_None': 1}, sos_eos=self._sos_eos, mask=self._mask)
+        vocab = Vocabulary(pad=self._pad, sos_eos=self._sos_eos, mask=self._mask)
+
+        # BAR
+        vocab.add_event('Bar_None')
 
         # PITCH
         vocab.add_event(f'Pitch_{i}' for i in self.pitch_range)

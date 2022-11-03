@@ -28,20 +28,23 @@ class OctupleMono(MIDITokenizer):
             The values are the resolution, in samples per beat, of the given range, ex 8
     :param nb_velocities: number of velocity bins
     :param additional_tokens: specifies additional tokens (time signature, tempo)
-    :param sos_eos_tokens: adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens to the vocabulary
+    :param pad: will include a PAD token, used when training a model with batch of sequences of
+            unequal lengths, and usually at index 0 of the vocabulary. (default: True)
+    :param sos_eos: adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens to the vocabulary.
+            (default: False)
     :param mask: will add a MASK token to the vocabulary (default: False)
     :param params: can be a path to the parameter (json encoded) file or a dictionary
     """
 
     def __init__(self, pitch_range: range = PITCH_RANGE, beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
                  nb_velocities: int = NB_VELOCITIES, additional_tokens: Dict[str, bool] = ADDITIONAL_TOKENS,
-                 sos_eos_tokens: bool = False, mask: bool = False, params=None):
+                 pad: bool = True, sos_eos: bool = False, mask: bool = False, params=None):
         additional_tokens['Chord'] = False  # Incompatible additional token
         additional_tokens['Rest'] = False
         additional_tokens['Program'] = False
         # used in place of positional encoding
         self.max_bar_embedding = 60  # this attribute might increase during encoding
-        super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, sos_eos_tokens, mask, params)
+        super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, pad, sos_eos, mask, params)
 
     def save_params(self, out_dir: Union[str, Path, PurePath]):
         r"""Override the parent class method to include additional parameter drum pitch range
@@ -199,7 +202,7 @@ class OctupleMono(MIDITokenizer):
         if sos_eos_tokens is not None:
             print('\033[93msos_eos_tokens argument is depreciated and will be removed in a future update, '
                   '_create_vocabulary now uses self._sos_eos attribute set a class init \033[0m')
-        vocab = [Vocabulary({'PAD_None': 0}, sos_eos=self._sos_eos, mask=self._mask) for _ in range(5)]
+        vocab = [Vocabulary(pad=self._pad, sos_eos=self._sos_eos, mask=self._mask) for _ in range(5)]
 
         # PITCH
         vocab[0].add_event(f'Pitch_{i}' for i in self.pitch_range)
@@ -219,7 +222,7 @@ class OctupleMono(MIDITokenizer):
 
         # TEMPO
         if self.additional_tokens['Tempo']:
-            vocab.append(Vocabulary({'PAD_None': 0}, sos_eos=self._sos_eos, mask=self._mask))
+            vocab.append(Vocabulary(pad=self._pad, sos_eos=self._sos_eos, mask=self._mask))
             vocab[-1].add_event(f'Tempo_{i}' for i in self.tempos)
 
         return vocab

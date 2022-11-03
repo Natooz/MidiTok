@@ -21,7 +21,6 @@ ADDITIONAL_TOKENS = {'Chord': False,
                      'tempo_range': (40, 250),  # (min_tempo, max_tempo)
                      # time signature params
                      'time_signature_range': (8, 2)}  # (max_beat_res, max_bar_length_in_NOTE)
-SPECIAL_TOKENS = {'pad': True, 'mask': False, 'sos_eos': False}
 
 # Defaults values when writing new MIDI files
 TIME_DIVISION = 384  # 384 and 480 are convenient as divisible by 4, 8, 12, 16, 24, 32

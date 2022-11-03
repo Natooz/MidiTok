@@ -25,15 +25,18 @@ class TSD(MIDITokenizer):
             The values are the resolution, in samples per beat, of the given range, ex 8
     :param nb_velocities: number of velocity bins
     :param additional_tokens: specifies additional tokens (chords, time signature, rests, tempo...)
-    :param sos_eos_tokens: adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens to the vocabulary
+    :param pad: will include a PAD token, used when training a model with batch of sequences of
+            unequal lengths, and usually at index 0 of the vocabulary. (default: True)
+    :param sos_eos: adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens to the vocabulary.
+            (default: False)
     :param mask: will add a MASK token to the vocabulary (default: False)
     :param params: can be a path to the parameter (json encoded) file or a dictionary
     """
     def __init__(self, pitch_range: range = PITCH_RANGE, beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
                  nb_velocities: int = NB_VELOCITIES, additional_tokens: Dict[str, bool] = ADDITIONAL_TOKENS,
-                 sos_eos_tokens: bool = False, mask: bool = False, params=None):
+                 pad: bool = True, sos_eos: bool = False, mask: bool = False, params=None):
         additional_tokens['TimeSignature'] = False  # not compatible
-        super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, sos_eos_tokens, mask, params)
+        super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, pad, sos_eos, mask, params)
 
     def track_to_tokens(self, track: Instrument) -> List[int]:
         r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
@@ -53,16 +56,16 @@ class TSD(MIDITokenizer):
         # Creates the Note On, Note Off and Velocity events
         for n, note in enumerate(track.notes):
             # Note On / Velocity / Duration
-            events.append(Event(type_='Pitch', time=note.start, value=note.pitch, desc=note.end))
-            events.append(Event(type_='Velocity', time=note.start, value=note.velocity, desc=f'{note.velocity}'))
+            events.append(Event(type_='Pitch', value=note.pitch, time=note.start, desc=note.end))
+            events.append(Event(type_='Velocity', value=note.velocity, time=note.start, desc=f'{note.velocity}'))
             duration = note.end - note.start
             index = np.argmin(np.abs(dur_bins - duration))
-            events.append(Event(type_='Duration', time=note.start, value='.'.join(map(str, self.durations[index])),
+            events.append(Event(type_='Duration', value='.'.join(map(str, self.durations[index])), time=note.start,
                                 desc=f'{duration} ticks'))
         # Adds tempo events if specified
         if self.additional_tokens['Tempo']:
             for tempo_change in self.current_midi_metadata['tempo_changes']:
-                events.append(Event(type_='Tempo', time=tempo_change.time, value=tempo_change.tempo,
+                events.append(Event(type_='Tempo', value=tempo_change.tempo, time=tempo_change.time,
                                     desc=tempo_change.tempo))
 
         # Sorts events
@@ -86,13 +89,13 @@ class TSD(MIDITokenizer):
                 rest_tick = previous_tick  # untouched tick value to the order is not messed after sorting
 
                 if rest_beat > 0:
-                    events.append(Event(type_='Rest', time=rest_tick, value=f'{rest_beat}.0',
+                    events.append(Event(type_='Rest', value=f'{rest_beat}.0', time=rest_tick,
                                         desc=f'{rest_beat}.0'))
                     previous_tick += rest_beat * self.current_midi_metadata['time_division']
 
                 while rest_pos >= self.rests[0][1]:
                     rest_pos_temp = min([r[1] for r in self.rests], key=lambda x: abs(x - rest_pos))
-                    events.append(Event(type_='Rest', time=rest_tick, value=f'0.{rest_pos_temp}',
+                    events.append(Event(type_='Rest', value=f'0.{rest_pos_temp}', time=rest_tick,
                                         desc=f'0.{rest_pos_temp}'))
                     previous_tick += round(rest_pos_temp * ticks_per_sample)
                     rest_pos -= rest_pos_temp
@@ -101,15 +104,15 @@ class TSD(MIDITokenizer):
                 if rest_pos > 0:
                     time_shift = round(rest_pos * ticks_per_sample)
                     index = np.argmin(np.abs(dur_bins - time_shift))
-                    events.append(Event(type_='Time-Shift', time=previous_tick,
-                                        value='.'.join(map(str, self.durations[index])), desc=f'{time_shift} ticks'))
+                    events.append(Event(type_='Time-Shift', value='.'.join(map(str, self.durations[index])),
+                                        time=previous_tick, desc=f'{time_shift} ticks'))
 
             # Time shift
             else:
                 time_shift = event.time - previous_tick
                 index = np.argmin(np.abs(dur_bins - time_shift))
-                events.append(Event(type_='Time-Shift', time=previous_tick,
-                                    value='.'.join(map(str, self.durations[index])), desc=f'{time_shift} ticks'))
+                events.append(Event(type_='Time-Shift', value='.'.join(map(str, self.durations[index])),
+                                    time=previous_tick, desc=f'{time_shift} ticks'))
 
             if event.type == 'Pitch':
                 previous_note_end = max(previous_note_end, event.desc)
@@ -175,7 +178,7 @@ class TSD(MIDITokenizer):
         :param sos_eos_tokens: will include Start Of Sequence (SOS) and End Of Sequence (tokens)
         :return: the vocabulary object
         """
-        vocab = Vocabulary({'PAD_None': 0}, mask=True, sos_eos=self._sos_eos)
+        vocab = Vocabulary(pad=self._pad, sos_eos=self._sos_eos, mask=self._mask)
 
         # NOTE ON
         vocab.add_event(f'Pitch_{i}' for i in self.pitch_range)

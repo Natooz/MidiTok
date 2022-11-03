@@ -13,7 +13,7 @@ class Event:
     used in the Vocabulary class to map an event to its corresponding token.
     """
 
-    def __init__(self, type_: str, value: Union[str, int], time: Union[int, float] = 0, desc: str = None):
+    def __init__(self, type_: str, value: Union[str, int], time: Union[int, float] = 0, desc=None):
         self.type = type_
         self.value = value
         self.time = time
@@ -40,8 +40,8 @@ class Vocabulary:
     :param pad: will include a PAD token, used when training a model with batch of sequences of
                 unequal lengths, and usually at index 0 of the vocabulary.
                 If this argument is set to True, the PAD token will be at index 0. (default: True)
-    :param mask: will add a MASK token to the vocabulary. (default: False)
     :param sos_eos: will include Start Of Sequence (SOS) and End Of Sequence (tokens) (default: False)
+    :param mask: will add a MASK token to the vocabulary. (default: False)
     :param events: a list of events to add to the vocabulary when creating it. (default: None)
     """
 
@@ -54,10 +54,10 @@ class Vocabulary:
         # Adds (if specified) special tokens first
         if pad:
             self.__add_pad()
-        if mask:
-            self.__add_mask()
         if sos_eos:
             self.__add_sos_eos()
+        if mask:
+            self.__add_mask()
 
         # Add custom events and updates _token_types_indexes
         if events is not None:
@@ -133,18 +133,18 @@ class Vocabulary:
         """
         self.__add_distinct_event('PAD_None')
 
-    def __add_mask(self):
-        r"""Adds a MASK token to the vocabulary. This may be used to
-        pre-train a model, such as for BERT, before finetuning it.
-        """
-        self.__add_distinct_event('MASK_None')
-
     def __add_sos_eos(self):
         r"""Adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens
         to the vocabulary.
         """
         self.__add_distinct_event('SOS_None')
         self.__add_distinct_event('EOS_None')
+
+    def __add_mask(self):
+        r"""Adds a MASK token to the vocabulary. This may be used to
+        pre-train a model, such as for BERT, before finetuning it.
+        """
+        self.__add_distinct_event('MASK_None')
 
     def __getitem__(self, item: Union[int, str]) -> Union[str, int]:
         if isinstance(item, str):

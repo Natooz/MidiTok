@@ -29,14 +29,17 @@ class MIDITokenizer(ABC):
             The values are the resolution, in samples per beat, of the given range, ex 8
     :param nb_velocities: number of velocity bins
     :param additional_tokens: specifies additional tokens (chords, rests, tempo, time signature...)
-    :param sos_eos_tokens: adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens to the vocabulary
+    :param pad: will include a PAD token, used when training a model with batch of sequences of
+            unequal lengths, and usually at index 0 of the vocabulary. (default: True)
+    :param sos_eos: adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens to the vocabulary.
+            (default: False)
     :param mask: will add a MASK token to the vocabulary (default: False)
     :param params: can be a path to the parameter (json encoded) file or a dictionary
     """
 
     def __init__(self, pitch_range: range, beat_res: Dict[Tuple[int, int], int], nb_velocities: int,
-                 additional_tokens: Dict[str, Union[bool, int, Tuple[int, int]]], sos_eos_tokens: bool = False,
-                 mask: bool = False, params: Union[str, Path, PurePath, Dict[str, Any]] = None):
+                 additional_tokens: Dict[str, Union[bool, int, Tuple[int, int]]], pad: bool = True,
+                 sos_eos: bool = False, mask: bool = False, params: Union[str, Path, PurePath, Dict[str, Any]] = None):
         # Initialize params
         self.vocab = None
         if params is None:
@@ -44,7 +47,8 @@ class MIDITokenizer(ABC):
             self.beat_res = beat_res
             self.additional_tokens = additional_tokens
             self.nb_velocities = nb_velocities
-            self._sos_eos = sos_eos_tokens
+            self._pad = pad
+            self._sos_eos = sos_eos
             self._mask = mask
         else:
             self.load_params(params)
@@ -77,7 +81,7 @@ class MIDITokenizer(ABC):
             self.time_signatures = self.__create_time_signatures()
 
         # Vocabulary and token types graph
-        if self.vocab is None:  # in case it was already loaded by an overriding load_params method, such as with BPE
+        if self.vocab is None:  # in case it was already loaded by an overridden load_params method, such as with BPE
             self.vocab = self._create_vocabulary()
         self.tokens_types_graph = self._create_token_types_graph()
 
@@ -349,22 +353,15 @@ class MIDITokenizer(ABC):
         See other classes (REMI, MIDILike ...) for examples of how to implement it."""
         raise NotImplementedError
 
-    def _add_pad_type_to_graph(self, dic: Dict[str, List[str]]):
-        r"""DEPRECIATED: has been replaced by _add_special_tokens_to_types_graph.
-        This method will call _add_special_tokens_to_types_graph, see below.
-
-        :param dic: token types graph to add PAD type
-        """
-        self._add_special_tokens_to_types_graph(dic)
-
     def _add_special_tokens_to_types_graph(self, dic: Dict[str, List[str]]):
         r"""Inplace adds special tokens (PAD, EOS, SOS, MASK) types to the token types graph dictionary.
 
         :param dic: token types graph to add PAD type
         """
-        for value in dic.values():
-            value.append('PAD')
-        dic['PAD'] = ['PAD']
+        if self._pad:
+            for value in dic.values():
+                value.append('PAD')
+            dic['PAD'] = ['PAD']
         if self._sos_eos:
             dic['SOS'] = list(dic.keys())
             dic['EOS'] = []
@@ -600,19 +597,19 @@ class MIDITokenizer(ABC):
                        'beat_res': {f'{k1}_{k2}': v for (k1, k2), v in self.beat_res.items()},
                        'nb_velocities': len(self.velocities),
                        'additional_tokens': self.additional_tokens,
+                       '_pad': self._pad,
                        '_sos_eos': self._sos_eos,
                        '_mask': self._mask,
                        'encoding': self.__class__.__name__,
                        'miditok_version': CURRENT_PACKAGE_VERSION}, outfile, indent=4)
 
-    def load_params(self, params: Union[str, Path, PurePath, Dict[str, Any]]):
+    def load_params(self, params: Union[str, Path, PurePath]):
         r"""Load parameters and set the encoder attributes
 
-        :param params: can be a path to the parameter (json encoded) file or a dictionary
+        :param params: can be a path to the parameter (json encoded) file
         """
-        if isinstance(params, (str, Path, PurePath)):
-            with open(params) as param_file:
-                params = json.load(param_file)
+        with open(params) as param_file:
+            params = json.load(param_file)
 
         if not isinstance(params['pitch_range'], range):
             params['pitch_range'] = range(*params['pitch_range'])
@@ -626,10 +623,12 @@ class MIDITokenizer(ABC):
                 value['TimeSignature'] = value.get('TimeSignature', False)
             setattr(self, key, value)
 
-        # when loading from params of miditok < v1.2.0
-        if '_sos_eos' not in params:
+        # when loading from params of miditok of previous versions
+        if '_pad' not in params:  # miditok < v1.3.0
+            self._pad = False
+        if '_sos_eos' not in params:  # miditok < v1.2.0
             self._sos_eos = False
-        if '_mask' not in params:
+        if '_mask' not in params:  # miditok < v1.2.0
             self._mask = False
 
     def __call__(self, midi: MidiFile, *args, **kwargs):

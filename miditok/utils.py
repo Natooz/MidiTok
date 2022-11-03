@@ -105,7 +105,7 @@ def detect_chords(notes: List[Note], time_division: int, beat_res: int = 4, onse
 
     events = []
     for chord in chords:
-        events.append(Event('Chord', chord[1], chord[0], chord[2]))
+        events.append(Event(type_='Chord', value=chord[0], time=chord[1], desc=chord[2]))
     return events
 
 

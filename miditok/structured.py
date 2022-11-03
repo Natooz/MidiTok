@@ -32,19 +32,22 @@ class Structured(MIDITokenizer):
     :param nb_velocities: number of velocity bins
     :param additional_tokens: specifies additional tokens (chords, time signature, rests, tempo...), only programs
             are considered here.
-    :param sos_eos_tokens: Adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens to the vocabulary
+    :param pad: will include a PAD token, used when training a model with batch of sequences of
+            unequal lengths, and usually at index 0 of the vocabulary. (default: True)
+    :param sos_eos: adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens to the vocabulary.
+            (default: False)
     :param mask: will add a MASK token to the vocabulary (default: False)
     :param params: can be a path to the parameter (json encoded) file or a dictionary
     """
     def __init__(self, pitch_range: range = PITCH_RANGE, beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
                  nb_velocities: int = NB_VELOCITIES, additional_tokens: Dict[str, Union[bool, int]] = ADDITIONAL_TOKENS,
-                 sos_eos_tokens: bool = False, mask: bool = False, params=None):
+                 pad: bool = True, sos_eos: bool = False, mask: bool = False, params=None):
         # No additional tokens
         additional_tokens['Chord'] = False  # Incompatible additional token
         additional_tokens['Rest'] = False
         additional_tokens['Tempo'] = False
         additional_tokens['TimeSignature'] = False
-        super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, sos_eos_tokens, mask, params)
+        super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, pad, sos_eos, mask, params)
 
     def track_to_tokens(self, track: Instrument) -> List[int]:
         r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
@@ -65,19 +68,19 @@ class Structured(MIDITokenizer):
             else:
                 time_shift = track.notes[0].start
             index = np.argmin(np.abs(dur_bins - time_shift))
-            events.append(Event(type_='Time-Shift', time=0, value='.'.join(map(str, self.durations[index])),
+            events.append(Event(type_='Time-Shift', value='.'.join(map(str, self.durations[index])), time=0,
                                 desc=f'{time_shift} ticks'))
 
         # Creates the Pitch, Velocity, Duration and Time Shift events
         for n, note in enumerate(track.notes[:-1]):
             # Pitch
-            events.append(Event(type_='Pitch', time=note.start, value=note.pitch, desc=note.pitch))
+            events.append(Event(type_='Pitch', value=note.pitch, time=note.start, desc=note.pitch))
             # Velocity
-            events.append(Event(type_='Velocity', time=note.start, value=note.velocity, desc=f'{note.velocity}'))
+            events.append(Event(type_='Velocity', value=note.velocity, time=note.start, desc=f'{note.velocity}'))
             # Duration
             duration = note.end - note.start
             index = np.argmin(np.abs(dur_bins - duration))
-            events.append(Event(type_='Duration', time=note.start, value='.'.join(map(str, self.durations[index])),
+            events.append(Event(type_='Duration', value='.'.join(map(str, self.durations[index])), time=note.start,
                                 desc=f'{duration} ticks'))
             # Time-Shift
             time_shift = track.notes[n + 1].start - note.start
@@ -89,14 +92,14 @@ class Structured(MIDITokenizer):
             if len(events) > 0:
                 del events[-1]
         else:
-            events.append(Event(type_='Pitch', time=track.notes[-1].start, value=track.notes[-1].pitch,
+            events.append(Event(type_='Pitch', value=track.notes[-1].pitch, time=track.notes[-1].start,
                                 desc=track.notes[-1].pitch))
-            events.append(Event(type_='Velocity', time=track.notes[-1].start, value=track.notes[-1].velocity,
+            events.append(Event(type_='Velocity', value=track.notes[-1].velocity, time=track.notes[-1].start,
                                 desc=f'{track.notes[-1].velocity}'))
             duration = track.notes[-1].end - track.notes[-1].start
             index = np.argmin(np.abs(dur_bins - duration))
-            events.append(Event(type_='Duration', time=track.notes[-1].start,
-                                value='.'.join(map(str, self.durations[index])), desc=f'{duration} ticks'))
+            events.append(Event(type_='Duration', value='.'.join(map(str, self.durations[index])),
+                                time=track.notes[-1].start, desc=f'{duration} ticks'))
 
         events.sort(key=lambda x: x.time)
 
@@ -149,7 +152,7 @@ class Structured(MIDITokenizer):
         if sos_eos_tokens is not None:
             print('\033[93msos_eos_tokens argument is depreciated and will be removed in a future update, '
                   '_create_vocabulary now uses self._sos_eos attribute set a class init \033[0m')
-        vocab = Vocabulary({'PAD_None': 0}, sos_eos=self._sos_eos, mask=self._mask)
+        vocab = Vocabulary(pad=self._pad, sos_eos=self._sos_eos, mask=self._mask)
 
         # PITCH
         vocab.add_event(f'Pitch_{i}' for i in self.pitch_range)

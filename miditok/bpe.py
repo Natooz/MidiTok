@@ -248,6 +248,7 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
                            'beat_res': {f'{k1}_{k2}': v for (k1, k2), v in self.beat_res.items()},
                            'nb_velocities': len(self.velocities),
                            'additional_tokens': self.additional_tokens,
+                           '_pad': self._pad,
                            '_sos_eos': self._sos_eos,
                            '_mask': self._mask,
                            'encoding': f'{getmro(self.__class__)[1].__name__}_bpe',
