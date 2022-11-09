@@ -611,7 +611,8 @@ class MIDITokenizer(ABC):
                   'miditok_version': CURRENT_PACKAGE_VERSION,
                   **additional_attributes}
 
-        (out_path := Path(out_path)).parent.mkdir(parents=True, exist_ok=True)
+        out_path = Path(out_path)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
         with open(out_path, 'w') as outfile:
             json.dump(params, outfile, indent=4)
 
