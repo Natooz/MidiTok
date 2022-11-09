@@ -590,10 +590,12 @@ class MIDITokenizer(ABC):
             return json.load(file)
 
     def save_params(self, out_path: Union[str, Path, PurePath], additional_attributes: Dict = None):
-        r"""Saves the base parameters of this encoding in a txt file
+        r"""Saves the config / base parameters of the tokenizer in a file.
         Useful to keep track of how a dataset has been tokenized / encoded
-        It will also save the name of the class used, i.e. the encoding strategy
-        NOTE: as json cant save tuples as keys, the beat ranges are saved as strings
+        It will also save the name of the class used, i.e. the encoding strategy.
+        NOTE: if you override this method, you should probably call it (super()) at the end
+            and use the additional_attributes argument.
+        NOTE 2: as json cant save tuples as keys, the beat ranges are saved as strings
         with the form startingBeat_endingBeat (underscore separating these two values)
 
         :param out_path: output path to save the file

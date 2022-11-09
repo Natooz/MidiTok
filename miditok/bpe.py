@@ -2,9 +2,8 @@
 This does not work with "multi-embedding" representations like CP Word or Octuple.
 """
 
-from typing import List, Dict, Union, Any, Type, Tuple
+from typing import List, Dict, Union, Type, Tuple
 from pathlib import Path, PurePath
-import json
 from random import choices
 from copy import deepcopy
 
@@ -29,7 +28,7 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
                 self.vocab.update_token_types_indexes()
 
         def bpe(self, tokens_path: Union[Path, PurePath, str], vocab_size: int, out_dir: Union[Path, PurePath, str],
-                files_lim: int = None, save_converted_samples: bool = False):
+                files_lim: int = None, save_converted_samples: bool = False, print_seq_len_variation: bool = True):
             r"""Byte Pair Encoding (BPE) method to build the vocabulary.
             This method will build (modify) the vocabulary by analyzing a tokenized dataset to find
             the most recurrent token successions.
@@ -42,6 +41,8 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
             :param files_lim: limit of token files to use (default: None)
             :param save_converted_samples: will save in out_path the samples that have been used
                     to create the BPE vocab. Files will keep the same name and relative path (default: True)
+            :param print_seq_len_variation: prints the mean sequence length before and after BPE,
+                    and the variation in %. (default: True)
             """
             assert vocab_size > len(self.vocab), f'vocab_size ({vocab_size}) need to be higher than the size' \
                                                  f'of the current vocabulary ({len(self.vocab)})'
@@ -105,10 +106,11 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
                 if save_converted_samples:
                     self.save_tokens(sample['tokens'], PurePath(out_dir, path).with_suffix(".json"), sample['programs'])
                 new_lengths += [len(track) for track in sample['tokens']]
-            original_mean = sum(original_lengths) / len(original_lengths) if len(original_lengths) > 0. else 0.
-            new_mean = sum(new_lengths) / len(new_lengths) if len(new_lengths) > 0. else 0.
-            print(f'Mean of original lengths: {original_mean}\nMean length after BPE: {new_mean}')
-            print(f'Variation from original: {(new_mean - original_mean) / original_mean * 100:.2f} %')
+            if print_seq_len_variation:
+                original_mean = sum(original_lengths) / len(original_lengths) if len(original_lengths) > 0. else 0.
+                new_mean = sum(new_lengths) / len(new_lengths) if len(new_lengths) > 0. else 0.
+                print(f'Mean of original lengths: {original_mean}\nMean length after BPE: {new_mean}')
+                print(f'Variation from original: {(new_mean - original_mean) / original_mean * 100:.2f} %')
             self.save_params(out_dir / 'config.txt')  # Saves the parameters with which the MIDIs are converted
 
         def set_bpe_tokens_successions(self):
@@ -244,36 +246,21 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
             """
             if additional_attributes is None:
                 additional_attributes = {}
-            additional_attributes['token_to_event'] = self.vocab.token_to_event
+            additional_attributes['vocab'] = self.vocab.token_to_event
             super().save_params(out_dir, additional_attributes)
 
-        def load_params(self, params: Union[str, Path, PurePath, Dict[str, Any]]):
-            r"""Loads parameters and set the encoder attributes.
+        def load_params(self, params: Union[str, Path, PurePath]):
+            r"""Load parameters and set the encoder attributes
 
-            :param params: can be a path to the parameter (json encoded) file or a dictionary
+            :param params: can be a path to the parameter (json encoded) file
             """
-            if isinstance(params, (str, Path, PurePath)):
-                with open(params) as param_file:
-                    params = json.load(param_file)
-
-            if not isinstance(params['pitch_range'], range):
-                params['pitch_range'] = range(*params['pitch_range'])
-
-            for key, value in params.items():
-                if key == 'encoding':
-                    continue
-                elif key == 'beat_res':
-                    value = {tuple(map(int, beat_range.split('_'))): res for beat_range, res in value.items()}
-                elif key == 'additional_tokens':
-                    value['TimeSignature'] = value.get('TimeSignature', False)
-                elif key == 'token_to_event':
-                    self.vocab = Vocabulary()
-                    self.vocab._token_to_event = {int(token): event for token, event in value.items()}
-                    self.vocab._event_to_token = {event: int(token) for token, event in value.items()}
-                    self.vocab.update_token_types_indexes()
-                    self.has_bpe = len(self.vocab.tokens_of_type('BPE')) > 0
-                    continue
-                setattr(self, key, value)
+            super().load_params(params)
+            token_to_event = deepcopy(self.vocab)  # from the saved config file
+            self.vocab = Vocabulary()
+            self.vocab._token_to_event = {int(token): event for token, event in token_to_event.items()}
+            self.vocab._event_to_token = {event: int(token) for token, event in token_to_event.items()}
+            self.vocab.update_token_types_indexes()
+            self.has_bpe = len(self.vocab.tokens_of_type('BPE')) > 0
 
     # tokenizer.__class__.__bases__ += (BPE,)
     return BPE()

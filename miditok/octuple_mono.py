@@ -46,10 +46,14 @@ class OctupleMono(MIDITokenizer):
         super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, pad, sos_eos, mask, params=params)
 
     def save_params(self, out_path: Union[str, Path, PurePath], additional_attributes: Dict = None):
-        r"""Override the parent class method to include additional parameter drum pitch range
-        Saves the base parameters of this encoding in a txt file
+        r"""Overrides the parent class method to include max_bar_embedding.
+        Saves the config / base parameters of the tokenizer in a file.
         Useful to keep track of how a dataset has been tokenized / encoded
-        It will also save the name of the class used, i.e. the encoding strategy
+        It will also save the name of the class used, i.e. the encoding strategy.
+        NOTE: if you override this method, you should probably call it (super()) at the end
+            and use the additional_attributes argument.
+        NOTE 2: as json cant save tuples as keys, the beat ranges are saved as strings
+        with the form startingBeat_endingBeat (underscore separating these two values)
 
         :param out_path: output path to save the file
         :param additional_attributes: any additional information to store in the config file.

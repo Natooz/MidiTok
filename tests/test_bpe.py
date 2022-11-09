@@ -40,7 +40,7 @@ def test_bpe_conversion(data_path: Union[str, Path, PurePath] = './tests/Maestro
 
     :param data_path: root path to the data to test
     """
-    encodings = ['Structured', 'REMI', 'MIDILike']
+    encodings = ['Structured', 'REMI', 'MIDILike', 'TSD']
     tokenizers = []
     data_path = Path(data_path)
     files = list(data_path.glob('**/*.mid'))
@@ -50,7 +50,7 @@ def test_bpe_conversion(data_path: Union[str, Path, PurePath] = './tests/Maestro
         add_tokens = deepcopy(ADDITIONAL_TOKENS_TEST)
         tokenizers.append(miditok.bpe(getattr(miditok, encoding), beat_res=BEAT_RES_TEST, additional_tokens=add_tokens))
         tokenizers[-1].tokenize_midi_dataset(files, data_path / encoding)
-        tokenizers[-1].bpe(data_path / encoding, len(tokenizers[-1].vocab) + 120, out_dir=data_path / f'{encoding}_bpe',
+        tokenizers[-1].bpe(data_path / encoding, len(tokenizers[-1].vocab) + 60, out_dir=data_path / f'{encoding}_bpe',
                            files_lim=None, save_converted_samples=True)
 
     # Reload (test) tokenizer from the saved config file

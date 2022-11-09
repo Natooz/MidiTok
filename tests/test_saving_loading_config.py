@@ -10,7 +10,7 @@ from copy import deepcopy
 import miditok
 
 
-ADDITIONAL_TOKENS_TEST = {'Chord': False,  # set to false to speed up tests as it takes some time on maestro MIDIs
+ADDITIONAL_TOKENS_TEST = {'Chord': False,  # set False to speed up tests as it takes some time on maestro MIDIs
                           'Rest': True,
                           'Tempo': True,
                           'TimeSignature': True,
