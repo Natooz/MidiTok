@@ -235,11 +235,13 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
             self.tokens_types_graph['BPE'] = list(self.tokens_types_graph.keys())
 
         def save_params(self, out_dir: Union[str, Path, PurePath], additional_attributes: Dict = None):
-            r"""Saves the base parameters of this encoding in a txt file.
-            Useful to keep track of how a dataset has been tokenized / encoded.
+            r"""Saves the config / base parameters of the tokenizer in a file.
+            Useful to keep track of how a dataset has been tokenized / encoded
             It will also save the name of the class used, i.e. the encoding strategy.
-            NOTE: as json can't save tuples as keys, the beat ranges are saved as strings
-            with the form startingBeat_endingBeat (underscore separating these two values).
+            NOTE: the vocabulary (token_to_event) will be saved with the 'vocab' key, that will be decoded
+                back by the load_params method.
+            NOTE 2: as json cant save tuples as keys, the beat ranges are saved as strings
+                with the form startingBeat_endingBeat (underscore separating these two values)
 
             :param out_dir: output directory to save the file
             :param additional_attributes: any additional information to store in the config file. (default: None)
