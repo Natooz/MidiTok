@@ -502,6 +502,7 @@ class MIDITokenizer(ABC):
         The resulting Json files will have the shape (T, *), first dimension is tracks, second tokens.
         If save_programs is True, the shape will be [(T, *), (T, 2)], first dim is tokens and programs instead,
         for programs the first value is the program, second a bool indicating if the track is drums.
+        The config of the tokenizer will be saved as a "config.txt" file by default.
 
         :param midi_paths: paths of the MIDI files
         :param out_dir: output directory to save the converted files
@@ -511,7 +512,7 @@ class MIDITokenizer(ABC):
         :param logging: logs progress bar
         """
         Path(out_dir).mkdir(parents=True, exist_ok=True)
-        self.save_params(out_dir)  # Saves the parameters with which the MIDIs are converted
+        self.save_params(out_dir / 'config.txt')  # Saves the parameters with which the MIDIs are converted
 
         for midi_path in tqdm(midi_paths, desc='Converting MIDIs to tokens') if logging else enumerate(midi_paths):
             # Some MIDIs can contains errors that are raised by Mido, if so the loop continues

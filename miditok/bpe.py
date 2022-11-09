@@ -109,7 +109,7 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
             new_mean = sum(new_lengths) / len(new_lengths) if len(new_lengths) > 0. else 0.
             print(f'Mean of original lengths: {original_mean}\nMean length after BPE: {new_mean}')
             print(f'Variation from original: {(new_mean - original_mean) / original_mean * 100:.2f} %')
-            self.save_params(out_dir)  # Saves the parameters with which the MIDIs are converted
+            self.save_params(out_dir / 'config.txt')  # Saves the parameters with which the MIDIs are converted
 
         def set_bpe_tokens_successions(self):
             """Creates the bpe_successions attributes, as a dictionary of the form bpe_token: (tok1, tok2, tok3...)
