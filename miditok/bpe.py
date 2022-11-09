@@ -40,7 +40,7 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
             :param vocab_size: the new vocabulary size
             :param out_dir: directory to save the tokenizer's parameters and vocabulary after BPE learning is finished
             :param files_lim: limit of token files to use (default: None)
-            :param save_converted_samples: will save in out_dir the samples that have been used
+            :param save_converted_samples: will save in out_path the samples that have been used
                     to create the BPE vocab. Files will keep the same name and relative path (default: True)
             """
             assert vocab_size > len(self.vocab), f'vocab_size ({vocab_size}) need to be higher than the size' \
@@ -232,7 +232,7 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
                 val.append('BPE')
             self.tokens_types_graph['BPE'] = list(self.tokens_types_graph.keys())
 
-        def save_params(self, out_dir: Union[str, Path, PurePath]):
+        def save_params(self, out_dir: Union[str, Path, PurePath], additional_attributes: Dict = None):
             r"""Saves the base parameters of this encoding in a txt file.
             Useful to keep track of how a dataset has been tokenized / encoded.
             It will also save the name of the class used, i.e. the encoding strategy.
@@ -240,19 +240,12 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
             with the form startingBeat_endingBeat (underscore separating these two values).
 
             :param out_dir: output directory to save the file
+            :param additional_attributes: any additional information to store in the config file. (default: None)
             """
-            from inspect import getmro
-            Path(out_dir).mkdir(parents=True, exist_ok=True)
-            with open(PurePath(out_dir, 'config').with_suffix(".txt"), 'w') as outfile:
-                json.dump({'pitch_range': (self.pitch_range.start, self.pitch_range.stop),
-                           'beat_res': {f'{k1}_{k2}': v for (k1, k2), v in self.beat_res.items()},
-                           'nb_velocities': len(self.velocities),
-                           'additional_tokens': self.additional_tokens,
-                           '_pad': self._pad,
-                           '_sos_eos': self._sos_eos,
-                           '_mask': self._mask,
-                           'encoding': f'{getmro(self.__class__)[1].__name__}_bpe',
-                           'token_to_event': self.vocab.token_to_event}, outfile, indent=4)
+            if additional_attributes is None:
+                additional_attributes = {}
+            additional_attributes['token_to_event'] = self.vocab.token_to_event
+            super().save_params(out_dir, additional_attributes)
 
         def load_params(self, params: Union[str, Path, PurePath, Dict[str, Any]]):
             r"""Loads parameters and set the encoder attributes.

@@ -34,12 +34,17 @@ class MIDITokenizer(ABC):
     :param sos_eos: adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens to the vocabulary.
             (default: False)
     :param mask: will add a MASK token to the vocabulary (default: False)
+    :param unique_track: set to True if the tokenizer works only with a unique track.
+            Tokens will be saved as a single track. This applies to representations that natively handle
+            multiple tracks such as Octuple, resulting in a single "stream" of tokens for all tracks.
+            This attribute will be saved in config files of the tokenizer. (default: False)
     :param params: can be a path to the parameter (json encoded) file or a dictionary
     """
 
     def __init__(self, pitch_range: range, beat_res: Dict[Tuple[int, int], int], nb_velocities: int,
                  additional_tokens: Dict[str, Union[bool, int, Tuple[int, int]]], pad: bool = True,
-                 sos_eos: bool = False, mask: bool = False, params: Union[str, Path, PurePath, Dict[str, Any]] = None):
+                 sos_eos: bool = False, mask: bool = False, unique_track: bool = False,
+                 params: Union[str, Path, PurePath, Dict[str, Any]] = None):
         # Initialize params
         self.vocab = None
         if params is None:
@@ -50,6 +55,7 @@ class MIDITokenizer(ABC):
             self._pad = pad
             self._sos_eos = sos_eos
             self._mask = mask
+            self.unique_track = unique_track
         else:
             self.load_params(params)
 
@@ -582,26 +588,32 @@ class MIDITokenizer(ABC):
         with open(path) as file:
             return json.load(file)
 
-    def save_params(self, out_dir: Union[str, Path, PurePath]):
+    def save_params(self, out_path: Union[str, Path, PurePath], additional_attributes: Dict = None):
         r"""Saves the base parameters of this encoding in a txt file
         Useful to keep track of how a dataset has been tokenized / encoded
         It will also save the name of the class used, i.e. the encoding strategy
         NOTE: as json cant save tuples as keys, the beat ranges are saved as strings
         with the form startingBeat_endingBeat (underscore separating these two values)
 
-        :param out_dir: output directory to save the file
+        :param out_path: output path to save the file
+        :param additional_attributes: any additional information to store in the config file.
+                It can be used to override the default attributes saved in the parent method. (default: None)
         """
-        Path(out_dir).mkdir(parents=True, exist_ok=True)
-        with open(PurePath(out_dir, 'config').with_suffix(".txt"), 'w') as outfile:
-            json.dump({'pitch_range': (self.pitch_range.start, self.pitch_range.stop),
-                       'beat_res': {f'{k1}_{k2}': v for (k1, k2), v in self.beat_res.items()},
-                       'nb_velocities': len(self.velocities),
-                       'additional_tokens': self.additional_tokens,
-                       '_pad': self._pad,
-                       '_sos_eos': self._sos_eos,
-                       '_mask': self._mask,
-                       'encoding': self.__class__.__name__,
-                       'miditok_version': CURRENT_PACKAGE_VERSION}, outfile, indent=4)
+        if additional_attributes is None:
+            additional_attributes = {}
+        params = {'pitch_range': (self.pitch_range.start, self.pitch_range.stop),
+                  'beat_res': {f'{k1}_{k2}': v for (k1, k2), v in self.beat_res.items()},
+                  'nb_velocities': len(self.velocities),
+                  'additional_tokens': self.additional_tokens,
+                  '_pad': self._pad, '_sos_eos': self._sos_eos, '_mask': self._mask,
+                  'unique_track': self.unique_track,
+                  'encoding': self.__class__.__name__,
+                  'miditok_version': CURRENT_PACKAGE_VERSION,
+                  **additional_attributes}
+
+        (out_path := Path(out_path)).parent.mkdir(parents=True, exist_ok=True)
+        with open(out_path, 'w') as outfile:
+            json.dump(params, outfile, indent=4)
 
     def load_params(self, params: Union[str, Path, PurePath]):
         r"""Load parameters and set the encoder attributes
@@ -611,8 +623,7 @@ class MIDITokenizer(ABC):
         with open(params) as param_file:
             params = json.load(param_file)
 
-        if not isinstance(params['pitch_range'], range):
-            params['pitch_range'] = range(*params['pitch_range'])
+        params['pitch_range'] = range(*params['pitch_range'])
 
         for key, value in params.items():
             if key in ['encoding', 'miditok_version']:
@@ -646,3 +657,14 @@ class MIDITokenizer(ABC):
             return self.vocab[item[0]].token_to_event[item[1]]
         else:
             raise IndexError('The index must be an integer or a string')
+
+    def __eq__(self, other) -> bool:
+        """Checks if two tokenizers are identical. This is essentially done by comparing their vocabularies,
+        as they are built depending on most of their attributes.
+
+        :param other: tokenizer to compare.
+        :return: True if the vocabulary(ies) are identical, False otherwise.
+        """
+        if isinstance(other, MIDITokenizer):
+            return self.vocab == other.vocab
+        return False

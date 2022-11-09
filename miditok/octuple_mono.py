@@ -13,8 +13,7 @@ from miditoolkit import Instrument, Note, TempoChange
 
 from .midi_tokenizer_base import MIDITokenizer
 from .vocabulary import Vocabulary
-from .constants import PITCH_RANGE, NB_VELOCITIES, BEAT_RES, ADDITIONAL_TOKENS, TIME_DIVISION, TEMPO, \
-    MIDI_INSTRUMENTS, CURRENT_PACKAGE_VERSION
+from .constants import PITCH_RANGE, NB_VELOCITIES, BEAT_RES, ADDITIONAL_TOKENS, TIME_DIVISION, TEMPO, MIDI_INSTRUMENTS
 
 
 class OctupleMono(MIDITokenizer):
@@ -44,28 +43,22 @@ class OctupleMono(MIDITokenizer):
         additional_tokens['Program'] = False
         # used in place of positional encoding
         self.max_bar_embedding = 60  # this attribute might increase during encoding
-        super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, pad, sos_eos, mask, params)
+        super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, pad, sos_eos, mask, params=params)
 
-    def save_params(self, out_dir: Union[str, Path, PurePath]):
+    def save_params(self, out_path: Union[str, Path, PurePath], additional_attributes: Dict = None):
         r"""Override the parent class method to include additional parameter drum pitch range
         Saves the base parameters of this encoding in a txt file
         Useful to keep track of how a dataset has been tokenized / encoded
         It will also save the name of the class used, i.e. the encoding strategy
 
-        :param out_dir: output directory to save the file
+        :param out_path: output path to save the file
+        :param additional_attributes: any additional information to store in the config file.
+                It can be used to override the default attributes saved in the parent method. (default: None)
         """
-        Path(out_dir).mkdir(parents=True, exist_ok=True)
-        with open(PurePath(out_dir, 'config').with_suffix(".txt"), 'w') as outfile:
-            json.dump({'pitch_range': (self.pitch_range.start, self.pitch_range.stop),
-                       'beat_res': {f'{k1}_{k2}': v for (k1, k2), v in self.beat_res.items()},
-                       'nb_velocities': len(self.velocities),
-                       'additional_tokens': self.additional_tokens,
-                       '_sos_eos': self._sos_eos,
-                       '_mask': self._mask,
-                       'encoding': self.__class__.__name__,
-                       'miditok_version': CURRENT_PACKAGE_VERSION,
-                       'max_bar_embedding': self.max_bar_embedding},
-                      outfile)
+        if additional_attributes is None:
+            additional_attributes = {}
+        additional_attributes_tmp = {'max_bar_embedding': self.max_bar_embedding, **additional_attributes}
+        super().save_params(out_path, additional_attributes_tmp)
 
     def track_to_tokens(self, track: Instrument) -> List[List[int]]:
         r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens

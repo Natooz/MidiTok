@@ -161,6 +161,20 @@ class Vocabulary:
         self.add_event(*other if isinstance(other, tuple) else other)
         return self
 
+    def __eq__(self, other) -> bool:
+        """Checks if another vocabulary is identical.
+
+        :param other: vocabulary to inspect
+        :return: True if _event_to_token, _token_to_event and _token_types_indexes attributes are identical
+                for both Vocabularies, False otherwise.
+        """
+        if isinstance(other, Vocabulary):
+            if all([self._event_to_token == other._event_to_token, self._token_to_event == other._token_to_event,
+                    self._token_types_indexes == other._token_types_indexes]):
+                return True
+            return False
+        return False
+
     def __repr__(self):
         return f'Vocabulary - {len(self._event_to_token)} tokens of {len(self._token_types_indexes)} types'
 

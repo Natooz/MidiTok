@@ -38,7 +38,7 @@ class REMI(MIDITokenizer):
                  nb_velocities: int = NB_VELOCITIES, additional_tokens: Dict[str, Union[bool, int]] = ADDITIONAL_TOKENS,
                  pad: bool = True, sos_eos: bool = False, mask: bool = False, params=None):
         additional_tokens['TimeSignature'] = False  # not compatible
-        super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, pad, sos_eos, mask, params)
+        super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, pad, sos_eos, mask, params=params)
 
     def track_to_tokens(self, track: Instrument) -> List[int]:
         r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens

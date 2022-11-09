@@ -47,7 +47,7 @@ class Structured(MIDITokenizer):
         additional_tokens['Rest'] = False
         additional_tokens['Tempo'] = False
         additional_tokens['TimeSignature'] = False
-        super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, pad, sos_eos, mask, params)
+        super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, pad, sos_eos, mask, params=params)
 
     def track_to_tokens(self, track: Instrument) -> List[int]:
         r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens

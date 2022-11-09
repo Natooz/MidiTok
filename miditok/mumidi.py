@@ -4,7 +4,6 @@ https://arxiv.org/abs/2008.07703
 """
 
 from math import ceil
-import json
 from pathlib import Path, PurePath
 from typing import List, Tuple, Dict, Optional, Union
 
@@ -15,7 +14,7 @@ from .midi_tokenizer_base import MIDITokenizer
 from .vocabulary import Vocabulary, Event
 from .utils import detect_chords
 from .constants import PITCH_RANGE, NB_VELOCITIES, BEAT_RES, ADDITIONAL_TOKENS, TIME_DIVISION, TEMPO, \
-    MIDI_INSTRUMENTS, CHORD_MAPS, CURRENT_PACKAGE_VERSION
+    MIDI_INSTRUMENTS, CHORD_MAPS
 
 
 # recommended range from the GM2 specs
@@ -52,27 +51,34 @@ class MuMIDI(MIDITokenizer):
         self.programs = list(range(-1, 128)) if programs is None else programs
         # used in place of positional encoding
         self.max_bar_embedding = 60  # this attribute might increase during encoding
-        super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, pad, sos_eos, mask, params)
+        super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, pad, sos_eos, mask, True,
+                         params=params)
 
-    def save_params(self, out_dir: Union[str, Path, PurePath]):
+    def save_params(self, out_path: Union[str, Path, PurePath], additional_attributes: Dict = None):
         r"""Override the parent class method to include additional parameter drum pitch range
         Saves the base parameters of this encoding in a txt file
         Useful to keep track of how a dataset has been tokenized / encoded
         It will also save the name of the class used, i.e. the encoding strategy
 
-        :param out_dir: output directory to save the file
+        :param out_path: output path to save the file
+        :param additional_attributes: any additional information to store in the config file.
+                It can be used to override the default attributes saved in the parent method. (default: None)
         """
-        Path(out_dir).mkdir(parents=True, exist_ok=True)
-        with open(PurePath(out_dir, 'config').with_suffix(".txt"), 'w') as outfile:
-            json.dump({'pitch_range': (self.pitch_range.start, self.pitch_range.stop),
-                       'drum_pitch_range': (self.drum_pitch_range.start, self.drum_pitch_range.stop),
-                       'beat_res': {f'{k1}_{k2}': v for (k1, k2), v in self.beat_res.items()},
-                       'nb_velocities': len(self.velocities),
-                       'additional_tokens': self.additional_tokens,
-                       'encoding': self.__class__.__name__,
-                       'miditok_version': CURRENT_PACKAGE_VERSION,
-                       'max_bar_embedding': self.max_bar_embedding},
-                      outfile)
+        if additional_attributes is None:
+            additional_attributes = {}
+        additional_attributes_tmp = {'max_bar_embedding': self.max_bar_embedding,
+                                     'programs': self.programs,
+                                     'drum_pitch_range': (self.drum_pitch_range.start, self.drum_pitch_range.stop),
+                                     **additional_attributes}
+        super().save_params(out_path, additional_attributes_tmp)
+
+    def load_params(self, params: Union[str, Path, PurePath]):
+        r"""Load parameters and set the encoder attributes
+
+        :param params: can be a path to the parameter (json encoded) file
+        """
+        super().load_params(params)
+        self.drum_pitch_range = range(*self.drum_pitch_range)
 
     def midi_to_tokens(self, midi: MidiFile, *args, **kwargs) -> List[List[int]]:
         r"""Override the parent class method
