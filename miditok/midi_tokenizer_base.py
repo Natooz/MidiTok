@@ -511,7 +511,8 @@ class MIDITokenizer(ABC):
         :param save_programs: will also save the programs of the tracks of the MIDI(default: True)
         :param logging: logs progress bar
         """
-        Path(out_dir).mkdir(parents=True, exist_ok=True)
+        out_dir = Path(out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
         self.save_params(out_dir / 'config.txt')  # Saves the parameters with which the MIDIs are converted
 
         for midi_path in tqdm(midi_paths, desc='Converting MIDIs to tokens') if logging else enumerate(midi_paths):
