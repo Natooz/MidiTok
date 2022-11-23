@@ -51,7 +51,7 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
             out_dir.mkdir(parents=True, exist_ok=True)
             files_paths = list(Path(tokens_path).glob('**/*.json'))
             files_paths_bpe = choices(files_paths, k=files_lim) if \
-                (files_lim is not None and files_lim > len(files_paths)) else files_paths
+                (files_lim is not None and files_lim < len(files_paths)) else files_paths
             samples = []
             samples_paths = []
             original_lengths = []
