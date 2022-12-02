@@ -25,7 +25,6 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
             if self.has_bpe:  # loaded from config file
                 self.add_bpe_to_tokens_type_graph()
                 self.set_bpe_tokens_successions()
-                self.vocab.update_token_types_indexes()
 
         def bpe(self, tokens_path: Union[Path, PurePath, str], vocab_size: int, out_dir: Union[Path, PurePath, str],
                 files_lim: int = None, save_converted_samples: bool = False, print_seq_len_variation: bool = True):
