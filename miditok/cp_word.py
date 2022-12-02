@@ -27,7 +27,7 @@ class CPWord(MIDITokenizer):
         4. Duration
         (5. Program) optional, associated with notes (pitch/velocity/duration) or chords
         (6. Chord) optional, chords occurring with position tokens
-        (7. Rest) optional, rest acting as a time-shift token
+        (7. Rest) optional, rest acting as a TimeShift token
         (8. Tempo) optional, occurring with position tokens
     This means a "compound token" can contain between 5 and 7 elements depending on
     your encoding parameters (additional tokens).
@@ -182,7 +182,7 @@ class CPWord(MIDITokenizer):
             4. Duration
             (5. Program) optional, associated with notes (pitch/velocity/duration) or chords
             (6. Chord) optional, chords occurring with position tokens
-            (7. Rest) optional, rest acting as a time-shift token
+            (7. Rest) optional, rest acting as a TimeShift token
             (8. Tempo) optional, occurring with position tokens
         NOTE: the first Family token (first in list) will be given as an Event object to keep track
         of time easily so that other method can sort CP tokens afterwards.

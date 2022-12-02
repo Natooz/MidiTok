@@ -68,7 +68,7 @@ class Structured(MIDITokenizer):
             else:
                 time_shift = track.notes[0].start
             index = np.argmin(np.abs(dur_bins - time_shift))
-            events.append(Event(type_='Time-Shift', value='.'.join(map(str, self.durations[index])), time=0,
+            events.append(Event(type_='TimeShift', value='.'.join(map(str, self.durations[index])), time=0,
                                 desc=f'{time_shift} ticks'))
 
         # Creates the Pitch, Velocity, Duration and Time Shift events
@@ -82,10 +82,10 @@ class Structured(MIDITokenizer):
             index = np.argmin(np.abs(dur_bins - duration))
             events.append(Event(type_='Duration', value='.'.join(map(str, self.durations[index])), time=note.start,
                                 desc=f'{duration} ticks'))
-            # Time-Shift
+            # TimeShift
             time_shift = track.notes[n + 1].start - note.start
             index = np.argmin(np.abs(dur_bins - time_shift))
-            events.append(Event(type_='Time-Shift', time=note.start, desc=f'{time_shift} ticks',
+            events.append(Event(type_='TimeShift', time=note.start, desc=f'{time_shift} ticks',
                                 value='.'.join(map(str, self.durations[index])) if time_shift != 0 else '0.0.1'))
         # Adds the last note
         if track.notes[-1].pitch not in self.pitch_range:
@@ -132,7 +132,7 @@ class Structured(MIDITokenizer):
                         count += 3
                 except IndexError:
                     count += 1
-            elif events[count].type == 'Time-Shift':
+            elif events[count].type == 'TimeShift':
                 beat, pos, res = map(int, events[count].value.split('.'))
                 current_tick += (beat * res + pos) * time_division // res  # time shift
                 count += 1
@@ -164,8 +164,8 @@ class Structured(MIDITokenizer):
         vocab.add_event(f'Duration_{".".join(map(str, duration))}' for duration in self.durations)
 
         # TIME SHIFT (same as durations)
-        vocab.add_event('Time-Shift_0.0.1')  # for a time shift of 0
-        vocab.add_event(f'Time-Shift_{".".join(map(str, duration))}' for duration in self.durations)
+        vocab.add_event('TimeShift_0.0.1')  # for a time shift of 0
+        vocab.add_event(f'TimeShift_{".".join(map(str, duration))}' for duration in self.durations)
 
         # PROGRAM
         if self.additional_tokens['Program']:
@@ -181,7 +181,7 @@ class Structured(MIDITokenizer):
 
         :return: the token types transitions dictionary
         """
-        dic = {'Pitch': ['Velocity'], 'Velocity': ['Duration'], 'Duration': ['Time-Shift'], 'Time-Shift': ['Pitch']}
+        dic = {'Pitch': ['Velocity'], 'Velocity': ['Duration'], 'Duration': ['TimeShift'], 'TimeShift': ['Pitch']}
         self._add_special_tokens_to_types_graph(dic)
         return dic
 
@@ -210,7 +210,7 @@ class Structured(MIDITokenizer):
                         err += 1  # pitch already played at current position
                     else:
                         current_pitches.append(int(token_value))
-                elif token_type == 'Time-Shift':
+                elif token_type == 'TimeShift':
                     if self._token_duration_to_ticks(token_value, 48) > 0:
                         current_pitches = []  # moving in time, list reset
             # Bad token type

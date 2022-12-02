@@ -1,4 +1,4 @@
-"""Similar to MIDI-Like but with Duration tokens instead of Note-Off
+"""Similar to MIDI-Like but with Duration tokens instead of NoteOff
 
 """
 
@@ -15,8 +15,8 @@ from .constants import PITCH_RANGE, NB_VELOCITIES, BEAT_RES, ADDITIONAL_TOKENS, 
 
 
 class TSD(MIDITokenizer):
-    r"""TSD, for Time-Shift Duration.
-    It is similar to MIDI-Like but with Duration tokens instead of Note-Off
+    r"""TSD, for TimeShift Duration.
+    It is similar to MIDI-Like but with Duration tokens instead of NoteOff
 
     :param pitch_range: range of used MIDI pitches
     :param beat_res: beat resolutions, with the form:
@@ -104,14 +104,14 @@ class TSD(MIDITokenizer):
                 if rest_pos > 0:
                     time_shift = round(rest_pos * ticks_per_sample)
                     index = np.argmin(np.abs(dur_bins - time_shift))
-                    events.append(Event(type_='Time-Shift', value='.'.join(map(str, self.durations[index])),
+                    events.append(Event(type_='TimeShift', value='.'.join(map(str, self.durations[index])),
                                         time=previous_tick, desc=f'{time_shift} ticks'))
 
             # Time shift
             else:
                 time_shift = event.time - previous_tick
                 index = np.argmin(np.abs(dur_bins - time_shift))
-                events.append(Event(type_='Time-Shift', value='.'.join(map(str, self.durations[index])),
+                events.append(Event(type_='TimeShift', value='.'.join(map(str, self.durations[index])),
                                     time=previous_tick, desc=f'{time_shift} ticks'))
 
             if event.type == 'Pitch':
@@ -155,7 +155,7 @@ class TSD(MIDITokenizer):
                         ei += 1
                 except IndexError:
                     pass
-            elif events[ei].type == 'Time-Shift':
+            elif events[ei].type == 'TimeShift':
                 current_tick += self._token_duration_to_ticks(events[ei].value, time_division)
             elif events[ei].type == 'Rest':
                 beat, pos = map(int, events[ei].value.split('.'))
@@ -190,7 +190,7 @@ class TSD(MIDITokenizer):
         vocab.add_event(f'Duration_{".".join(map(str, duration))}' for duration in self.durations)
 
         # TIME SHIFTS
-        vocab.add_event(f'Time-Shift_{".".join(map(str, self.durations[i]))}' for i in range(len(self.durations)))
+        vocab.add_event(f'TimeShift_{".".join(map(str, self.durations[i]))}' for i in range(len(self.durations)))
 
         # CHORD
         if self.additional_tokens['Chord']:
@@ -223,21 +223,21 @@ class TSD(MIDITokenizer):
 
         dic['Pitch'] = ['Velocity']
         dic['Velocity'] = ['Duration']
-        dic['Duration'] = ['Pitch', 'Time-Shift']
-        dic['Time-Shift'] = ['Pitch']
+        dic['Duration'] = ['Pitch', 'TimeShift']
+        dic['TimeShift'] = ['Pitch']
 
         if self.additional_tokens['Chord']:
             dic['Chord'] = ['Pitch']
-            dic['Time-Shift'] += ['Chord']
+            dic['TimeShift'] += ['Chord']
 
         if self.additional_tokens['Tempo']:
-            dic['Time-Shift'] += ['Tempo']
-            dic['Tempo'] = ['Pitch', 'Time-Shift']
+            dic['TimeShift'] += ['Tempo']
+            dic['Tempo'] = ['Pitch', 'TimeShift']
             if self.additional_tokens['Chord']:
                 dic['Tempo'] += ['Chord']
 
         if self.additional_tokens['Rest']:
-            dic['Rest'] = ['Rest', 'Pitch', 'Time-Shift']
+            dic['Rest'] = ['Rest', 'Pitch', 'TimeShift']
             if self.additional_tokens['Chord']:
                 dic['Rest'] += ['Chord']
             dic['Duration'] += ['Rest']
@@ -271,7 +271,7 @@ class TSD(MIDITokenizer):
                         err += 1  # pitch already being played
                     else:
                         current_pitches.append(int(token_value))
-                elif token_type in ['Time-Shift', 'Rest']:
+                elif token_type in ['TimeShift', 'Rest']:
                     current_pitches = []  # moving in time, list reset
             # Bad token type
             else:
@@ -311,7 +311,7 @@ class TSD(MIDITokenizer):
 
             if x_type == 'Pitch':
                 current_pitches.append(int(x_value))
-            elif x_type in ['Time-Shift', 'Rest']:
+            elif x_type in ['TimeShift', 'Rest']:
                 current_pitches = []  # moving in time, list reset
 
             # Good token type
@@ -337,7 +337,7 @@ class TSD(MIDITokenizer):
             return 1
         elif x.type == "Chord":
             return 2
-        elif x.type == 'Time-Shift' or x.type == 'Rest':
+        elif x.type == 'TimeShift' or x.type == 'Rest':
             return 1000  # always last
         else:  # for other types of events, the order should be handle when inserting the events in the sequence
             return 4

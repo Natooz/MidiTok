@@ -401,9 +401,9 @@ class MIDITokenizer(ABC):
     def _token_duration_to_ticks(token_duration: str, time_division: int) -> int:
         r"""Converts a duration token value of the form x.x.x, for beat.position.resolution,
         in ticks.
-        Is also used for Time-Shifts.
+        Is also used for TimeShift tokens.
 
-        :param token_duration: Duration / Time-Shift token value
+        :param token_duration: Duration / TimeShift token value
         :param time_division: time division
         :return: the duration / time-shift in ticks
         """
