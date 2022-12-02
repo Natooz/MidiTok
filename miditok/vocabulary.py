@@ -62,7 +62,6 @@ class Vocabulary:
         # Add custom events and updates _token_types_indexes
         if events is not None:
             self.add_event(event for event in events)
-        self.update_token_types_indexes()
 
     def add_event(self, event: Union[Event, str, Generator]):
         r"""Adds one or multiple entries to the vocabulary.
