@@ -189,7 +189,7 @@ class MIDITokenizer(ABC):
             print('\033[93mmiditok warning: tokens_to_events method no longer need multi_voc argument as '
                   'it is now a class attribute, it will be removed in future updates.\033[0m')
         events = []
-        if isinstance(self.vocab, list):  # multiple vocabularies
+        if self.is_multi_voc:  # multiple vocabularies
             for multi_token in tokens:
                 multi_event = []
                 for i, token in enumerate(multi_token):
@@ -648,11 +648,14 @@ class MIDITokenizer(ABC):
         if '_mask' not in params:  # miditok < v1.2.0
             self._mask = False
 
+    @property
+    def is_multi_voc(self) -> bool: return isinstance(self.vocab, list)
+
     def __call__(self, midi: MidiFile, *args, **kwargs):
         return self.midi_to_tokens(midi, *args, **kwargs)
 
     def __len__(self) -> int:
-        if isinstance(self.vocab, list):
+        if self.is_multi_voc:
             warn('You are using a multi vocab tokenizer, returning the sum of the lengths of all vocabs.'
                  'If you want the len per vocab, use the tokenizer.len property.')
             return sum([len(v) for v in self.vocab])
@@ -660,14 +663,14 @@ class MIDITokenizer(ABC):
 
     @property
     def len(self) -> Union[int, List[int]]:
-        return [len(v) for v in self.vocab] if isinstance(self.vocab, list) else len(self.vocab)
+        return [len(v) for v in self.vocab] if self.is_multi_voc else len(self.vocab)
 
     def __getitem__(self, item: Union[int, str, Tuple[int, int]]) -> Union[str, int]:
         if isinstance(item, str):
             return self.vocab.event_to_token[item]
         elif isinstance(item, int):
             return self.vocab.token_to_event[item]
-        elif isinstance(item, tuple) and isinstance(self.vocab, list):
+        elif isinstance(item, tuple) and self.is_multi_voc:
             return self.vocab[item[0]].token_to_event[item[1]]
         else:
             raise IndexError('The index must be an integer or a string')
