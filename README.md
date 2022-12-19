@@ -120,7 +120,7 @@ tokenizer.apply_bpe_to_dataset(Path('path', 'to', 'dataset_tokenized'), Path('pa
 
 Read the [docstring](miditok/bpe.py) for the details.
 
-## Encodings
+## Tokenizations
 
 The figures represent the following music sheet as its corresponding token sequences.
 
@@ -130,7 +130,7 @@ _Tokens are vertically stacked at index 0 from the bottom up to the top._
 
 ### MIDI-Like
 
-Strategy used in the first symbolic music generative transformers and RNN / LSTM models. It consists of encoding the MIDI messages (Note On, Note Off, Velocity and Time Shift) into tokens as represented in a pure "MIDI way".
+Strategy used in the first symbolic music generative transformers and RNN / LSTM models. MIDI messages (Note On, Note Off, Velocity and Time Shift) are represented as tokens.
 
 NOTES:
 * Rests act exactly like time-shifts. It is then recommended choosing a minimum rest range of the same first beat resolution so the time is shifted with the same accuracy. For instance if your first beat resolution is ```(0, 4): 8```, you should choose a minimum rest of ```8```.
@@ -156,7 +156,7 @@ NOTES:
 
 ### Compound Word
 
-Introduced with the [Compound Word Transformer](https://arxiv.org/abs/2101.02402) this representation is similar to the REMI encoding. The key difference is that tokens of different types of a same "event" are combined and processed at the same time by the model.
+Introduced with the [Compound Word Transformer](https://arxiv.org/abs/2101.02402) this representation is similar to REMI. The key difference is that tokens of different types of a same "event" are combined and processed at the same time by the model.
 _Pitch_, _Velocity_ and _Durations_ tokens of a same note will be combined for instance. The greatest benefit of this encoding strategy is the **reduced sequence lengths** that it creates, which means less time and memory consumption as transformers (with softmax attention) have a quadratic complexity.
 
 You can combine them in your model the way you want. CP Word authors concatenated each embeddings and projected the sequence with a projection matrix, resulting in a _d_-dimensional vector (_d_ being the model size).
@@ -167,8 +167,8 @@ At decoding, the easiest way to predict multiple tokens (employed by the origina
 
 ### Structured
 
-Presented with the [Piano Inpainting Application](https://arxiv.org/abs/2107.05944), it is similar to the MIDI-Like encoding but with _Duration_ tokens instead NoteOff.
-The main advantage of this encoding is the consistent token type transitions it imposes, which can greatly speed up training. The structure is as: _Pitch_ -> _Velocity_ -> _Duration_ -> _Time Shift_ -> ... (pitch again)
+Presented with the [Piano Inpainting Application](https://arxiv.org/abs/2107.05944), it is similar to MIDI-Like but with _Duration_ tokens instead NoteOff.
+Its main advantage is the consistent token type transitions it imposes, which can greatly speed up training. The structure is as: _Pitch_ -> _Velocity_ -> _Duration_ -> _Time Shift_ -> ... (pitch again)
 To keep this property, no additional token can be inserted in MidiTok's implementation.
 
 ![Structured figure](https://github.com/Natooz/MidiTok/blob/assets/assets/structured.png?raw=true "Structured MIDI encoding, the token types always follow the same transition pattern")
@@ -176,7 +176,7 @@ To keep this property, no additional token can be inserted in MidiTok's implemen
 ### Octuple
 
 Introduced with [Symbolic Music Understanding with Large-Scale Pre-Training](https://arxiv.org/abs/2106.05630). Each note of each track is the combination of multiple embeddings: _Pitch_, _Velocity_, _Duration_, _Track_, current _Bar_, current _Position_ and additional tokens.
-The main benefit is the reduction of the sequence lengths, its multitrack capabilities, and its simple structure easy to decode.
+Its considerably reduces the sequence lengths, while handling multitrack. Generating with it requires however to sample from several distributions and can be delicate.
 The Bar and Position embeddings can act as a positional encoding, but the authors of the original paper still applied a token-wise positional encoding afterward.
 
 NOTES:
@@ -190,7 +190,7 @@ NOTES:
 ### MuMIDI
 
 Presented with the [PopMAG](https://arxiv.org/abs/2008.07703) model, this representation is mostly suited for multitrack tasks. The time is based on _Position_ and _Bar_ tokens as REMI and Compound Word.
-The key idea of MuMIDI is to represent every track in a single sequence. At each time step, "_Track_" tokens preceding note tokens indicate from which track they are.
+The key idea of MuMIDI is to represent every track in a single sequence. At each time step, "_Track_" tokens preceding note tokens indicate from which track they are. Generating with it requires however to sample from several distributions and can be delicate.
 MuMIDI also include a "built-in" positional encoding mechanism. At each time step, embeddings of the current bar and current position are merged with the token. For a note, the _Pitch_, _Velocity_ and _Duration_ embeddings are also merged together.
 
 NOTES:
@@ -262,7 +262,7 @@ Future updates will support other time signatures, and time signature changes fo
 
 ## Contributions
 
-Contributions are gratefully welcomed, feel free to open an issue or send a PR if you want to add an encoding strategy or speed up the code. Just make sure to pass the [tests](tests).
+Contributions are gratefully welcomed, feel free to open an issue or send a PR if you want to add a tokenization or speed up the code. Just make sure to pass the [tests](tests).
 
 ## Todo
 
