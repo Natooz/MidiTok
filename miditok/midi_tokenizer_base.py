@@ -516,8 +516,8 @@ class MIDITokenizer(ABC):
         out_dir.mkdir(parents=True, exist_ok=True)
         self.save_params(out_dir / 'config.txt')  # Saves the parameters with which the MIDIs are converted
 
-        for midi_path in tqdm(midi_paths, desc='Converting MIDIs to tokens') if logging else enumerate(midi_paths):
-            # Some MIDIs can contains errors that are raised by Mido, if so the loop continues
+        for midi_path in tqdm(midi_paths, desc=f'Tokenizing MIDIs ({out_dir.name})') if logging else midi_paths:
+            # Some MIDIs can contain errors that are raised by Mido, if so the loop continues
             try:
                 midi = MidiFile(PurePath(midi_path))
             except FileNotFoundError:
