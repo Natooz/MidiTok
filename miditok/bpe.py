@@ -261,7 +261,8 @@ def bpe(tokenizer: Type[MIDITokenizer], *args, **kwargs):
             for token, event in token_to_event.items():
                 if '-' in event and event.split('_')[0] != 'BPE':  # for config files created with < v1.3.3
                     event = ''.join(event.split('-'))  # we remove hyphens to comply with convention
-                self.vocab.add_event(event)
+                self.vocab._token_to_event[int(token)] = event
+                self.vocab._event_to_token[event] = int(token)
             self.vocab.update_token_types_indexes()
             self.has_bpe = len(self.vocab.tokens_of_type('BPE')) > 0
 
