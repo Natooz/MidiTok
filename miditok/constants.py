@@ -2,7 +2,7 @@
 
 """
 
-CURRENT_PACKAGE_VERSION = '1.3.3'  # used un setup and when saving the config of a tokenizer
+CURRENT_PACKAGE_VERSION = '1.3.4'  # used un setup and when saving the config of a tokenizer
 
 # MIDI encodings default parameters, used when tokenizing a dataset and using tokens
 # These are the parameters from which a MIDI file will be tokenized
