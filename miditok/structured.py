@@ -123,14 +123,14 @@ class Structured(MIDITokenizer):
 
         while count < len(events):
             if events[count].type == 'Pitch':
-                try:
-                    if events[count + 1].type == 'Velocity' and events[count + 2].type == 'Duration':
-                        pitch = int(events[count].value)
-                        vel = int(events[count + 1].value)
-                        duration = self._token_duration_to_ticks(events[count + 2].value, time_division)
-                        instrument.notes.append(Note(vel, pitch, current_tick, current_tick + duration))
-                        count += 3
-                except IndexError:
+                if count + 2 < len(events) and events[count + 1].type == 'Velocity' \
+                        and events[count + 2].type == 'Duration':
+                    pitch = int(events[count].value)
+                    vel = int(events[count + 1].value)
+                    duration = self._token_duration_to_ticks(events[count + 2].value, time_division)
+                    instrument.notes.append(Note(vel, pitch, current_tick, current_tick + duration))
+                    count += 3
+                else:
                     count += 1
             elif events[count].type == 'TimeShift':
                 beat, pos, res = map(int, events[count].value.split('.'))
