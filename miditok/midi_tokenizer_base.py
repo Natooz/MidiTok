@@ -921,8 +921,11 @@ class MIDITokenizer(ABC):
     @property
     def is_multi_voc(self) -> bool: return isinstance(self.vocab, list)
 
-    def __call__(self, midi: MidiFile, *args, **kwargs):
-        return self.midi_to_tokens(midi, *args, **kwargs)  # TODO midi / tokens
+    def __call__(self, obj: Any, *args, **kwargs):
+        if isinstance(obj, MidiFile):
+            return self.midi_to_tokens(obj, *args, **kwargs)
+        else:
+            return self.tokens_to_midi(obj, *args, **kwargs)
 
     def __len__(self) -> int:
         if self.is_multi_voc:

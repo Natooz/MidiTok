@@ -22,7 +22,7 @@ def test_convert_tensors():
             tensor = convert_to_tensor(original)
         else:
             tensor = type_(original)
-        tokenizer.tokens_to_midi(tensor)  # to make sure it passes
+        tokenizer(tensor)  # to make sure it passes
         as_list = miditok.midi_tokenizer_base.convert_tokens_tensors_to_list(nothing)(tensor)
         assert as_list == original
 
