@@ -21,6 +21,35 @@ from .utils import remove_duplicated_notes, get_midi_programs
 from .constants import TIME_DIVISION, CURRENT_VERSION_PACKAGE
 
 
+def convert_tokens_tensors_to_list(func: Callable):
+    """Decorator to handle tensor objects, for methods receiving tokens.
+    Tokens have to be the first argument of the method (second for non-static).
+
+    :param func: method to decorate
+    :return: decorated method
+    """
+    def wrapper(*args, **kwargs):
+        # Get tokens
+        tokens_arg_id = 0 if not isinstance(args[0], MIDITokenizer) else 1
+        tokens = args[tokens_arg_id]
+
+        # Convert tokens to list if necessary
+        if not isinstance(tokens, list):
+            if type(tokens).__name__ in ['Tensor', 'EagerTensor']:
+                tokens = tokens.numpy()
+            if not isinstance(tokens, np.ndarray):
+                raise TypeError(
+                    'The tokens must be given as a list of integers, np.ndarray, PyTorch or Tensorflow tensor'
+                )
+
+            args = list(args)
+            args[tokens_arg_id] = tokens.astype(int).tolist()  # np.ndarray --> List[int]
+
+        return func(*args, **kwargs)
+
+    return wrapper
+
+
 class MIDITokenizer(ABC):
     r"""MIDI encoding base class, containing common parameters to all encodings
     and common methods.
@@ -295,7 +324,8 @@ class MIDITokenizer(ABC):
                 events.append(Event(name, val))
         return events
 
-    def tokens_to_midi(self, tokens: List[List[Union[int, List[int]]]],
+    @convert_tokens_tensors_to_list
+    def tokens_to_midi(self, tokens: Union[List, np.ndarray, Any],
                        programs: Optional[List[Tuple[int, bool]]] = None, output_path: Optional[str] = None,
                        time_division: Optional[int] = TIME_DIVISION) -> MidiFile:
         r"""Convert multiple sequences of tokens into a multitrack MIDI and save it.
@@ -313,8 +343,10 @@ class MIDITokenizer(ABC):
         """
         midi = MidiFile(ticks_per_beat=time_division)
         for i, track_tokens in enumerate(tokens):
-            prog = programs[i] if programs is not None else None
-            track, tempo_changes = self.tokens_to_track(track_tokens, time_division, prog)
+            if programs is not None:
+                track, tempo_changes = self.tokens_to_track(track_tokens, time_division, programs[i])
+            else:
+                track, tempo_changes = self.tokens_to_track(track_tokens, time_division)
             midi.instruments.append(track)
             if i == 0:  # only keep tempo changes of the first track
                 midi.tempo_changes = tempo_changes
@@ -791,7 +823,9 @@ class MIDITokenizer(ABC):
         return err / nb_tok_predicted
 
     @staticmethod
-    def save_tokens(tokens, path: Union[str, Path, PurePath], programs: List[Tuple[int, bool]] = None, **kwargs):
+    @convert_tokens_tensors_to_list
+    def save_tokens(tokens: Union[List, np.ndarray, Any], path: Union[str, Path, PurePath],
+                    programs: List[Tuple[int, bool]] = None, **kwargs):
         r"""Saves tokens as a JSON file.
         Use kwargs to save any additional information within the JSON file.
 
