@@ -184,3 +184,7 @@ class Vocabulary:
     @property
     def token_to_event(self):
         return self._token_to_event
+
+    @property
+    def token_types(self) -> List[str]:
+        return list(self._token_types_indexes.keys())

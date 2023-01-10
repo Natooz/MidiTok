@@ -255,6 +255,11 @@ class TSD(MIDITokenizer):
         :param consider_pad: if True will continue the error detection after the first PAD token (default: False)
         :return: the error ratio (lower is better)
         """
+        nb_tok_predicted = len(tokens)  # used to norm the score
+        tokens = self.decompose_bpe(tokens) if self.has_bpe else tokens
+
+        # Override from here
+
         err = 0
         previous_type = self.vocab.token_type(tokens[0])
         current_pitches = []
@@ -287,7 +292,7 @@ class TSD(MIDITokenizer):
                     break
                 check(token)
 
-        return err / len(tokens)
+        return err / nb_tok_predicted
 
     def token_types_errors_training(self, x_tokens: List[int], y_tokens: List[int]) -> Tuple[Union[float, Any]]:
         r"""Checks if a sequence of tokens is constituted of good token types

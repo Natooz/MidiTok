@@ -292,6 +292,11 @@ class MIDILike(MIDITokenizer):
         :param consider_pad: if True will continue the error detection after the first PAD token (default: False)
         :return: the error ratio (lower is better)
         """
+        nb_tok_predicted = len(tokens)  # used to norm the score
+        tokens = self.decompose_bpe(tokens) if self.has_bpe else tokens
+
+        # Override from here
+
         err = 0
         current_pitches = []
         max_duration = self.durations[-1][0] * max(self.beat_res.values())
@@ -331,7 +336,7 @@ class MIDILike(MIDITokenizer):
             else:
                 err += 1
 
-        return err / len(tokens)
+        return err / nb_tok_predicted
 
     @staticmethod
     def _order(x: Event) -> int:

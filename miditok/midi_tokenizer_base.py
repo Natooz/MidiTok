@@ -7,6 +7,8 @@ from abc import ABC, abstractmethod
 import math
 from pathlib import Path, PurePath
 import json
+from random import choices
+from copy import deepcopy
 from typing import List, Tuple, Dict, Union, Callable, Optional, Any
 from warnings import warn
 
@@ -16,7 +18,7 @@ from miditoolkit import MidiFile, Instrument, Note, TempoChange, TimeSignature
 
 from .vocabulary import Vocabulary, Event
 from .utils import remove_duplicated_notes, get_midi_programs
-from .constants import TIME_DIVISION, CURRENT_PACKAGE_VERSION
+from .constants import TIME_DIVISION, CURRENT_VERSION_PACKAGE
 
 
 class MIDITokenizer(ABC):
@@ -48,6 +50,7 @@ class MIDITokenizer(ABC):
                  params: Union[str, Path, PurePath, Dict[str, Any]] = None):
         # Initialize params
         self.vocab = None
+        self.has_bpe = False
         if params is None:
             self.pitch_range = pitch_range
             self.beat_res = beat_res
@@ -92,6 +95,12 @@ class MIDITokenizer(ABC):
             self.vocab = self._create_vocabulary()
         self.tokens_types_graph = self._create_token_types_graph()
 
+        # BPE attributes
+        self.bpe_successions = {}
+        if self.has_bpe:  # loaded from config file
+            self._add_bpe_to_tokens_type_graph()
+            self.set_bpe_tokens_successions()
+
         # Keep in memory durations in ticks for seen time divisions so these values
         # are not calculated each time a MIDI is processed
         self.durations_ticks = {}
@@ -99,34 +108,6 @@ class MIDITokenizer(ABC):
         # Holds the tempo changes, time signature, time division and key signature of a
         # MIDI (being parsed) so that methods processing tracks can access them
         self.current_midi_metadata = {}  # needs to be updated each time a MIDI is read
-
-    def midi_to_tokens(self, midi: MidiFile, *args, **kwargs) -> List[List[Union[int, List[int]]]]:
-        r"""Converts a MIDI file in a tokens representation.
-        NOTE: if you override this method, be sure to keep the first lines in your method
-
-        :param midi: the MIDI objet to convert
-        :return: the token representation, i.e. tracks converted into sequences of tokens
-        """
-        # Check if the durations values have been calculated before for this time division
-        if midi.ticks_per_beat not in self.durations_ticks:
-            self.durations_ticks[midi.ticks_per_beat] = np.array([(beat * res + pos) * midi.ticks_per_beat // res
-                                                                  for beat, pos, res in self.durations])
-
-        # Preprocess the MIDI file
-        self.preprocess_midi(midi)
-
-        # Register MIDI metadata
-        self.current_midi_metadata = {'time_division': midi.ticks_per_beat,
-                                      'tempo_changes': midi.tempo_changes,
-                                      'time_sig_changes': midi.time_signature_changes,
-                                      'key_sig_changes': midi.key_signature_changes}
-
-        # **************** OVERRIDE FROM HERE, KEEP THE LINES ABOVE IN YOUR METHOD ****************
-
-        # Convert each track to tokens
-        tokens = [self.track_to_tokens(track) for track in midi.instruments]
-
-        return tokens
 
     def preprocess_midi(self, midi: MidiFile):
         r"""Will process a MIDI file so it can be used to train a model.
@@ -157,97 +138,6 @@ class MIDITokenizer(ABC):
             midi.time_signature_changes.append(TimeSignature(4, 4, 0))  # 4/4 by default in this case
         if self.additional_tokens['TimeSignature']:
             self.quantize_time_signatures(midi.time_signature_changes, midi.ticks_per_beat)
-
-    @abstractmethod
-    def track_to_tokens(self, track: Instrument) -> List[Union[int, List[int]]]:
-        r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
-
-        :param track: MIDI track to convert
-        :return: sequence of corresponding tokens
-        """
-        raise NotImplementedError
-
-    def events_to_tokens(self, events: List[Event]) -> List[int]:
-        r"""Converts a list of Event objects into a list of tokens
-        You can override this method if necessary
-
-        :param events: list of Events objects to convert
-        :return: list of corresponding tokens
-        """
-        return [self.vocab.event_to_token[str(event)] for event in events]
-
-    def tokens_to_events(self, tokens: List[Union[int, List[int]]], multi_voc: bool = None) \
-            -> List[Union[Event, List[Event]]]:
-        r"""Convert a sequence of tokens in their respective event objects
-        You can override this method if necessary
-
-        :param tokens: sequence of tokens to convert
-        :param multi_voc: DEPRECIATED, no longer needed nor used (default: None)
-        :return: the sequence of corresponding events
-        """
-        if multi_voc is not None:
-            print('\033[93mmiditok warning: tokens_to_events method no longer need multi_voc argument as '
-                  'it is now a class attribute, it will be removed in future updates.\033[0m')
-        events = []
-        if self.is_multi_voc:  # multiple vocabularies
-            for multi_token in tokens:
-                multi_event = []
-                for i, token in enumerate(multi_token):
-                    name, val = self.vocab[i].token_to_event[token].split('_')
-                    multi_event.append(Event(name, val))
-                events.append(multi_event)
-        else:
-            for token in tokens:
-                name, val = self.vocab.token_to_event[token].split('_')
-                events.append(Event(name, val))
-        return events
-
-    def tokens_to_midi(self, tokens: List[List[Union[int, List[int]]]],
-                       programs: Optional[List[Tuple[int, bool]]] = None, output_path: Optional[str] = None,
-                       time_division: Optional[int] = TIME_DIVISION) -> MidiFile:
-        r"""Convert multiple sequences of tokens into a multitrack MIDI and save it.
-        The tokens will be converted to event objects and then to a miditoolkit.MidiFile object.
-        NOTE: With Remi, MIDI-Like, CP Word or other encoding methods that process tracks
-        independently, only the tempo changes of the first track in tokens will be used
-
-        :param tokens: list of lists of tokens to convert, each list inside the
-                       first list corresponds to a track
-        :param programs: programs of the tracks
-        :param output_path: path to save the file (with its name, e.g. music.mid),
-                        leave None to not save the file
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create)
-        :return: the midi object (miditoolkit.MidiFile)
-        """
-        midi = MidiFile(ticks_per_beat=time_division)
-        for i, track_tokens in enumerate(tokens):
-            if programs is not None:
-                track, tempo_changes = self.tokens_to_track(track_tokens, time_division, programs[i])
-            else:
-                track, tempo_changes = self.tokens_to_track(track_tokens, time_division)
-            midi.instruments.append(track)
-            if i == 0:  # only keep tempo changes of the first track
-                midi.tempo_changes = tempo_changes
-                midi.tempo_changes[0].time = 0
-        midi.max_tick = max([max([note.end for note in track.notes]) if len(track.notes) > 0 else 0
-                             for track in midi.instruments])
-
-        # Write MIDI file
-        if output_path:
-            Path(output_path).mkdir(parents=True, exist_ok=True)
-            midi.dump(output_path)
-        return midi
-
-    @abstractmethod
-    def tokens_to_track(self, tokens: List[Union[int, List[int]]], time_division: Optional[int] = TIME_DIVISION,
-                        program: Optional[Tuple[int, bool]] = (0, False)) -> Tuple[Instrument, List[TempoChange]]:
-        r"""Converts a sequence of tokens into a track object
-
-        :param tokens: sequence of tokens to convert
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create)
-        :param program: the MIDI program of the produced track and if it drum, (default (0, False), piano)
-        :return: the miditoolkit instrument object and the possible tempo changes
-        """
-        raise NotImplementedError
 
     def quantize_notes(self, notes: List[Note], time_division: int, pitch_range: range = None):
         r"""Quantize the notes items, i.e. their pitch, velocity, start and end values.
@@ -333,6 +223,123 @@ class MIDITokenizer(ABC):
             prev_time_sig = time_sig
             i += 1
 
+    def midi_to_tokens(self, midi: MidiFile, *args, **kwargs) -> List[List[Union[int, List[int]]]]:
+        r"""Converts a MIDI file in a tokens representation.
+        NOTE: if you override this method, be sure to keep the first lines in your method
+
+        :param midi: the MIDI objet to convert
+        :return: the token representation, i.e. tracks converted into sequences of tokens
+        """
+        # Check if the durations values have been calculated before for this time division
+        if midi.ticks_per_beat not in self.durations_ticks:
+            self.durations_ticks[midi.ticks_per_beat] = np.array([(beat * res + pos) * midi.ticks_per_beat // res
+                                                                  for beat, pos, res in self.durations])
+
+        # Preprocess the MIDI file
+        self.preprocess_midi(midi)
+
+        # Register MIDI metadata
+        self.current_midi_metadata = {'time_division': midi.ticks_per_beat,
+                                      'tempo_changes': midi.tempo_changes,
+                                      'time_sig_changes': midi.time_signature_changes,
+                                      'key_sig_changes': midi.key_signature_changes}
+
+        # **************** OVERRIDE FROM HERE, KEEP THE LINES ABOVE IN YOUR METHOD ****************
+
+        # Convert each track to tokens
+        tokens = [self.track_to_tokens(track) for track in midi.instruments]
+
+        return tokens
+
+    @abstractmethod
+    def track_to_tokens(self, track: Instrument) -> List[Union[int, List[int]]]:
+        r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
+
+        :param track: MIDI track to convert
+        :return: sequence of corresponding tokens
+        """
+        raise NotImplementedError
+
+    def events_to_tokens(self, events: List[Event]) -> List[int]:
+        r"""Converts a list of Event objects into a list of tokens
+        Will apply BPE if it has been learned.
+
+        :param events: list of Events objects to convert
+        :return: list of corresponding tokens
+        """
+        tokens = [self.vocab.event_to_token[str(event)] for event in events]
+        if self.has_bpe:  # this might take some time
+            tokens = self.apply_bpe(tokens)
+        return tokens
+
+    def tokens_to_events(self, tokens: List[Union[int, List[int]]]) \
+            -> List[Union[Event, List[Event]]]:  # TODO handle tensors / tf / np / jax
+        r"""Convert a sequence of tokens in their respective event objects.
+        BPE tokens will be decoded.
+
+        :param tokens: sequence of tokens to convert
+        :return: the sequence of corresponding events
+        """
+        events = []
+        if self.is_multi_voc:  # multiple vocabularies
+            for multi_token in tokens:
+                multi_event = []
+                for i, token in enumerate(multi_token):
+                    name, val = self.vocab[i].token_to_event[token].split('_')
+                    multi_event.append(Event(name, val))
+                events.append(multi_event)
+        else:
+            tokens_ = self.decompose_bpe(tokens) if self.has_bpe else tokens
+            for token in tokens_:
+                name, val = self.vocab.token_to_event[token].split('_')
+                events.append(Event(name, val))
+        return events
+
+    def tokens_to_midi(self, tokens: List[List[Union[int, List[int]]]],
+                       programs: Optional[List[Tuple[int, bool]]] = None, output_path: Optional[str] = None,
+                       time_division: Optional[int] = TIME_DIVISION) -> MidiFile:
+        r"""Convert multiple sequences of tokens into a multitrack MIDI and save it.
+        The tokens will be converted to event objects and then to a miditoolkit.MidiFile object.
+        NOTE: With Remi, MIDI-Like, CP Word or other encoding methods that process tracks
+        independently, only the tempo changes of the first track in tokens will be used
+
+        :param tokens: list of lists of tokens to convert, each list inside the
+                       first list corresponds to a track
+        :param programs: programs of the tracks
+        :param output_path: path to save the file (with its name, e.g. music.mid),
+                        leave None to not save the file
+        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create)
+        :return: the midi object (miditoolkit.MidiFile)
+        """
+        midi = MidiFile(ticks_per_beat=time_division)
+        for i, track_tokens in enumerate(tokens):
+            prog = programs[i] if programs is not None else None
+            track, tempo_changes = self.tokens_to_track(track_tokens, time_division, prog)
+            midi.instruments.append(track)
+            if i == 0:  # only keep tempo changes of the first track
+                midi.tempo_changes = tempo_changes
+                midi.tempo_changes[0].time = 0
+        midi.max_tick = max([max([note.end for note in track.notes]) if len(track.notes) > 0 else 0
+                             for track in midi.instruments])
+
+        # Write MIDI file
+        if output_path:
+            Path(output_path).mkdir(parents=True, exist_ok=True)
+            midi.dump(output_path)
+        return midi
+
+    @abstractmethod
+    def tokens_to_track(self, tokens: List[Union[int, List[int]]], time_division: Optional[int] = TIME_DIVISION,
+                        program: Optional[Tuple[int, bool]] = (0, False)) -> Tuple[Instrument, List[TempoChange]]:
+        r"""Converts a sequence of tokens into a track object
+
+        :param tokens: sequence of tokens to convert
+        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create)
+        :param program: the MIDI program of the produced track and if it drum, (default (0, False), piano)
+        :return: the miditoolkit instrument object and the possible tempo changes
+        """
+        raise NotImplementedError
+
     def add_sos_eos_to_seq(self, seq: List[int]):
         r"""Adds Start Of Sequence (SOS) and End Of Sequence EOS tokens to a sequence of tokens:
         SOS at the beginning, EOS at the end.
@@ -378,6 +385,15 @@ class MIDITokenizer(ABC):
             dic['MASK'] = list(dic.keys())
             for value in dic.values():
                 value.append('MASK')
+
+    def _add_bpe_to_tokens_type_graph(self):
+        r"""Adds BPE to the tokens_types_graph.
+        You must manually call this method after loading a BPE tokenizer from params (config file) if
+        you intend to use tokens_types_graph.
+        """
+        for val in self.tokens_types_graph.values():
+            val.append('BPE')
+        self.tokens_types_graph['BPE'] = list(self.tokens_types_graph.keys())
 
     def __create_durations_tuples(self) -> List[Tuple]:
         r"""Creates the possible durations in beat / position units, as tuple of the form:
@@ -496,6 +512,206 @@ class MIDITokenizer(ABC):
         numerator, denominator = map(int, token_time_sig.split('/'))
         return numerator, denominator
 
+    def learn_bpe(self, tokens_path: Union[Path, PurePath, str], vocab_size: int, out_dir: Union[Path, PurePath, str],
+                  files_lim: int = None, save_converted_samples: bool = False, print_seq_len_variation: bool = True) \
+            -> Tuple[List[float], List[int], List[float]]:
+        r"""Byte Pair Encoding (BPE) method to build the vocabulary.
+        This method will build (modify) the vocabulary by analyzing an already tokenized dataset to find
+        the most recurrent token successions.
+        Note that this implementation is in pure Python and will be slow if you use a large amount of
+        tokens files. You might use the files_lim argument.
+
+        :param tokens_path: path to token files to learn the BPE combinations from
+        :param vocab_size: the new vocabulary size
+        :param out_dir: directory to save the tokenizer's parameters and vocabulary after BPE learning is finished
+        :param files_lim: limit of token files to use (default: None)
+        :param save_converted_samples: will save in out_path the samples that have been used
+                to create the BPE vocab. Files will keep the same name and relative path (default: True)
+        :param print_seq_len_variation: prints the mean sequence length before and after BPE,
+                and the variation in %. (default: True)
+        :return: learning metrics, as lists of:
+                - the average number of token combinations covered by the newly created BPE tokens
+                - the maximum number of token combinations
+                - the average sequence length
+                Each index in the list correspond to a learning step.
+        """
+        assert not self.is_multi_voc, f'You are using a multi-vocabulary tokenizer, ' \
+                                      f'it is not compatible with byte pair encoding'
+        assert vocab_size > len(self.vocab), f'vocab_size ({vocab_size}) need to be higher than the size' \
+                                             f'of the current vocabulary ({len(self.vocab)})'
+        if isinstance(out_dir, str):
+            out_dir = Path(out_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        files_paths = list(Path(tokens_path).glob('**/*.json'))
+        assert len(files_paths) > 0, f'BPE learning: the specified path does not contain tokens files (json)'
+        files_paths_bpe = choices(files_paths, k=files_lim) if \
+            (files_lim is not None and files_lim < len(files_paths)) else files_paths
+        samples, samples_paths = [], []
+        original_lengths = []
+
+        # Loads tokens / samples to analyze
+        for file_path in tqdm(files_paths_bpe, desc='Loading token files'):
+            file = self.load_tokens(file_path)
+            samples.append(file)
+            samples_paths.append(file_path.relative_to(tokens_path))
+            original_lengths += [len(file['tokens'])] if self.unique_track else [len(track) for track in file['tokens']]
+
+        def replace_token_in_seq(seq: List[int], succession: Tuple[int, int], new_event: str):
+            j = 0
+            while j < len(seq) - 1:
+                if tuple(seq[j: j + 2]) == succession:
+                    seq[j] = self.vocab[f'BPE_{new_event}']
+                    del seq[j + 1]
+                j += 1
+
+        # Learning Byte Pair Encoding
+        avg_seq_len = [sum(original_lengths) / len(original_lengths)]
+        bpe_comb_nb, bpe_comb_means, bpe_comb_max = [], [], []
+        pbar = tqdm(total=vocab_size - len(self.vocab), desc='Learning byte pair encoding')
+        while len(self.vocab) < vocab_size:
+            occurrences = {}  # count occurrences of successive tokens
+            for sample in samples:
+                tracks = [sample['tokens']] if self.unique_track else sample['tokens']
+                for track in tracks:
+                    for i in range(len(track) - 1):
+                        try:
+                            occurrences[tuple(track[i: i + 2])] += 1
+                        except KeyError:
+                            occurrences[tuple(track[i: i + 2])] = 1
+
+            # Add new BPE token to vocabulary
+            most_rec_tok_succession = max(occurrences, key=occurrences.get)  # most recurrent succession of two tokens
+            prime_tokens_eq = []  # the equivalent succession with decomposed BPE tokens
+            for token in most_rec_tok_succession:
+                if self.vocab.token_to_event[token].split('_')[0] == 'BPE':
+                    prime_tokens_eq += map(int,
+                                           self.vocab.token_to_event[token].split('_')[1].split('.')[1].split('-'))
+                else:
+                    prime_tokens_eq.append(token)
+            final_event_val = '-'.join(map(str, most_rec_tok_succession)) + '.' + '-'.join(map(str, prime_tokens_eq))
+            self.vocab.add_event(Event(type_='BPE', time=0, value=final_event_val, desc=''))
+
+            # Replace newly created token in learning samples
+            for sample in samples:
+                if self.unique_track:
+                    replace_token_in_seq(sample['tokens'], most_rec_tok_succession, final_event_val)
+                else:
+                    for track in sample['tokens']:
+                        replace_token_in_seq(track, most_rec_tok_succession, final_event_val)
+
+            # Compute metrics
+            avg = []
+            for sample in samples:
+                if self.unique_track:
+                    avg.append(len(sample['tokens']))
+                else:
+                    avg += [len(track) for track in sample['tokens']]
+            avg_seq_len.append(np.mean(np.array(avg)).item(0))
+            nb_combs = np.array([len(prime_tokens_eq)])  # bpe-combs.prime-combs
+            bpe_comb_nb = np.concatenate([bpe_comb_nb, nb_combs]) if isinstance(bpe_comb_nb,
+                                                                                np.ndarray) else nb_combs
+            bpe_comb_means.append(np.mean(bpe_comb_nb).item(0))
+            bpe_comb_max.append(np.max(bpe_comb_nb).item(0))
+            pbar.set_postfix({'seq_len_variation': f'{(avg_seq_len[-1] - avg_seq_len[0]) / avg_seq_len[0] * 100:.2f}',
+                              'avg_nb_token_combs': f'{bpe_comb_means[-1]:.2f}',
+                              'max_nb_token_combs': f'{bpe_comb_max[-1]}'},
+                             refresh=False)
+            pbar.update(1)
+
+        # Saves dictionary and prints the difference in sequence length
+        pbar.close()
+        self.has_bpe = True
+        self.set_bpe_tokens_successions()
+        self._add_bpe_to_tokens_type_graph()
+        self.vocab.update_token_types_indexes()
+        if save_converted_samples:
+            for sample, path in zip(samples, samples_paths):
+                self.save_tokens(sample['tokens'], PurePath(out_dir, path).with_suffix(".json"), sample['programs'])
+        if print_seq_len_variation:
+            print(f'Mean of original lengths: {avg_seq_len[0]}\nMean length after BPE: {avg_seq_len[-1]}')
+            print(f'Variation from original: {(avg_seq_len[-1] - avg_seq_len[0]) / avg_seq_len[0] * 100:.2f} %')
+        self.save_params(out_dir / 'config.txt')  # Saves the parameters with which the MIDIs are converted
+
+        return bpe_comb_means, bpe_comb_max, avg_seq_len
+
+    def set_bpe_tokens_successions(self):
+        """Creates the bpe_successions attributes, as a dictionary of the form {bpe_token: (tok1, tok2, tok3...)}
+        """
+        self.bpe_successions = {tok: list(map(int, self.vocab.token_to_event[tok].split('_')[1].split('.')[0].
+                                              split('-'))) for tok in self.vocab.tokens_of_type('BPE')}
+
+    def apply_bpe(self, tokens: List[int]) -> List[int]:
+        r"""Converts a sequence of tokens into tokens with BPE.
+
+        :param tokens: tokens to convert.
+        :return:
+        """
+        if not self.has_bpe:
+            return tokens
+
+        previous_len = len(tokens) + 1  # + 1 to fool when entering the loop the first time
+        while previous_len != len(tokens):  # if this is True, it means no more BPE combinations is possible
+            previous_len = len(tokens)  # length of the token sequence before applying BPE
+            for tok, token_succession in self.bpe_successions.items():  # loops over BPE tokens from the vocabulary
+                occurrences = self.__find_subseq(tokens, token_succession)
+                for idx in reversed(occurrences):
+                    tokens[idx] = tok
+                    for _ in range(len(token_succession) - 1):
+                        del tokens[idx + 1]
+        return tokens
+
+    @staticmethod
+    def __find_subseq(in_list: List[int], pattern: List[int]) -> List[int]:
+        """Finds the locations of a pattern within a list.
+        Adapted from: https://stackoverflow.com/questions/10106901/elegant-find-sub-list-in-list
+        Related: https://www.reddit.com/r/learnpython/comments/2xqlwj/using_npwhere_to_find_subarrays/
+        After testing, the numba jit version does not seem to be much faster.
+        The conversion of python lists to numba.typed.List() seems to also take time.
+
+        :param in_list: input list to analyze
+        :param pattern: pattern to detect
+        :return: indices of in_list where the pattern has been found
+        """
+        matches = []
+        for i in range(len(in_list)):
+            if in_list[i] == pattern[0] and in_list[i:i + len(pattern)] == pattern:
+                matches.append(i)
+        return matches
+
+    def apply_bpe_to_dataset(self, dataset_path: Union[Path, PurePath, str], out_path: Union[Path, PurePath, str]):
+        r"""Apply BPE to an already tokenized dataset (with no BPE).
+
+        :param dataset_path: path to token files to load
+        :param out_path: output directory to save
+        """
+        if not self.has_bpe:
+            return
+
+        files_paths = list(Path(dataset_path).glob('**/*.json'))
+        for path in tqdm(files_paths, desc='Applying BPE to dataset'):
+            sample = self.load_tokens(path)
+            sample_bpe = self.apply_bpe(sample['tokens']) if self.unique_track \
+                else [self.apply_bpe(track) for track in sample['tokens']]
+            self.save_tokens(sample_bpe, Path(out_path) / path.relative_to(dataset_path), sample['programs'])
+
+    def decompose_bpe(self, tokens: List[int]) -> List[int]:
+        r"""Decomposes a sequence of tokens containing BP encoded tokens into "prime" tokens.
+        It is an inplace operation.
+
+        :param tokens: token sequence to decompose
+        :return: decomposed token sequence
+        """
+        tokens = deepcopy(tokens)
+        i = 0
+        while i < len(tokens):
+            token_type, token_val = self.vocab[tokens[i]].split('_')
+            if token_type == 'BPE':
+                del tokens[i]
+                for j, to_insert in enumerate(map(int, token_val.split('.')[1].split('-'))):
+                    tokens.insert(i + j, to_insert)
+            i += 1
+        return tokens
+
     def tokenize_midi_dataset(self, midi_paths: Union[List[str], List[Path], List[PurePath]],
                               out_dir: Union[str, Path, PurePath], validation_fn: Callable[[MidiFile], bool] = None,
                               save_programs: bool = True, logging: bool = True):
@@ -516,7 +732,8 @@ class MIDITokenizer(ABC):
         out_dir.mkdir(parents=True, exist_ok=True)
         self.save_params(out_dir / 'config.txt')  # Saves the parameters with which the MIDIs are converted
 
-        for midi_path in tqdm(midi_paths, desc=f'Tokenizing MIDIs ({out_dir.name})') if logging else midi_paths:
+        for midi_path in tqdm(midi_paths, desc=f'Tokenizing MIDIs ({"/".join(list(out_dir.parts[-2:]))})') if logging \
+                else midi_paths:
             # Some MIDIs can contain errors that are raised by Mido, if so the loop continues
             try:
                 midi = MidiFile(PurePath(midi_path))
@@ -546,11 +763,17 @@ class MIDITokenizer(ABC):
         successions and returns the error ratio (lower is better).
         The implementation in MIDITokenizer class only checks the token types,
         in child class the methods also consider the position and pitch values.
+        Overridden methods must call decompose_bpe at the beginning if BPE is used!
 
         :param tokens: sequence of tokens to check
         :param consider_pad: if True will continue the error detection after the first PAD token (default: False)
         :return: the error ratio (lower is better)
         """
+        nb_tok_predicted = len(tokens)  # used to norm the score
+        tokens = self.decompose_bpe(tokens) if self.has_bpe else tokens
+
+        # Override from here
+
         err = 0
         previous_type = self.vocab.token_type(tokens[0])
         if consider_pad:
@@ -565,7 +788,7 @@ class MIDITokenizer(ABC):
                 if self.vocab.token_type(token) not in self.tokens_types_graph[previous_type]:
                     err += 1
                 previous_type = self.vocab.token_type(token)
-        return err / len(tokens)
+        return err / nb_tok_predicted
 
     @staticmethod
     def save_tokens(tokens, path: Union[str, Path, PurePath], programs: List[Tuple[int, bool]] = None, **kwargs):
@@ -606,14 +829,17 @@ class MIDITokenizer(ABC):
         """
         if additional_attributes is None:
             additional_attributes = {}
+        if self.has_bpe and 'vocab' not in additional_attributes:  # saves whole vocab if BPE
+            additional_attributes['vocab'] = self.vocab.token_to_event
+
         params = {'pitch_range': (self.pitch_range.start, self.pitch_range.stop),
                   'beat_res': {f'{k1}_{k2}': v for (k1, k2), v in self.beat_res.items()},
                   'nb_velocities': len(self.velocities),
                   'additional_tokens': self.additional_tokens,
                   '_pad': self._pad, '_sos_eos': self._sos_eos, '_mask': self._mask,
                   'unique_track': self.unique_track,
-                  'encoding': self.__class__.__name__,
-                  'miditok_version': CURRENT_PACKAGE_VERSION,
+                  'tokenization': self.__class__.__name__,
+                  'miditok_version': CURRENT_VERSION_PACKAGE,
                   **additional_attributes}
 
         out_path = Path(out_path)
@@ -632,12 +858,22 @@ class MIDITokenizer(ABC):
         params['pitch_range'] = range(*params['pitch_range'])
 
         for key, value in params.items():
-            if key in ['encoding', 'miditok_version']:
+            if key in ['tokenization', 'miditok_version']:
                 continue
             elif key == 'beat_res':
                 value = {tuple(map(int, beat_range.split('_'))): res for beat_range, res in value.items()}
             elif key == 'additional_tokens':
                 value['TimeSignature'] = value.get('TimeSignature', False)
+            elif key == 'vocab':
+                self.vocab = Vocabulary(pad=False)
+                for token, event in value.items():
+                    if '-' in event and event.split('_')[0] != 'BPE':  # for config files created with < v1.3.3
+                        event = ''.join(event.split('-'))  # we remove hyphens to comply with the camelcase convention
+                    self.vocab._token_to_event[int(token)] = event  # we modify protected attribute to keep the exact
+                    self.vocab._event_to_token[event] = int(token)  # same token <--> event pairs
+                self.vocab.update_token_types_indexes()
+                self.has_bpe = len(self.vocab.tokens_of_type('BPE')) > 0
+                continue
             setattr(self, key, value)
 
         # when loading from params of miditok of previous versions
@@ -652,7 +888,7 @@ class MIDITokenizer(ABC):
     def is_multi_voc(self) -> bool: return isinstance(self.vocab, list)
 
     def __call__(self, midi: MidiFile, *args, **kwargs):
-        return self.midi_to_tokens(midi, *args, **kwargs)
+        return self.midi_to_tokens(midi, *args, **kwargs)  # TODO midi / tokens
 
     def __len__(self) -> int:
         if self.is_multi_voc:
@@ -664,6 +900,10 @@ class MIDITokenizer(ABC):
     @property
     def len(self) -> Union[int, List[int]]:
         return [len(v) for v in self.vocab] if self.is_multi_voc else len(self.vocab)
+
+    def __repr__(self):
+        return f'{len(self.len)} tokens {"(multi-voc)" if self.is_multi_voc else ""} ' \
+               f'of {len(self.vocab.token_types)} types{" with BPE" if self.has_bpe else ""}'
 
     def __getitem__(self, item: Union[int, str, Tuple[int, int]]) -> Union[str, int]:
         if isinstance(item, str):

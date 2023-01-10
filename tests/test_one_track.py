@@ -18,7 +18,7 @@ import miditok
 from miditoolkit import MidiFile, Marker
 from tqdm import tqdm
 
-from .tests_utils import track_equals, tempo_changes_equals, time_signature_changes_equals
+from tests_utils import track_equals, tempo_changes_equals, time_signature_changes_equals
 
 # Special beat res for test, up to 64 beats so the duration and time-shift values are
 # long enough for MIDI-Like and Structured encodings, and with a single beat resolution

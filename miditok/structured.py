@@ -195,6 +195,11 @@ class Structured(MIDITokenizer):
         :param consider_pad: if True will continue the error detection after the first PAD token (default: False)
         :return: the error ratio (lower is better)
         """
+        nb_tok_predicted = len(tokens)  # used to norm the score
+        tokens = self.decompose_bpe(tokens) if self.has_bpe else tokens
+
+        # Override from here
+
         err = 0
         previous_type = self.vocab.token_type(tokens[0])
         current_pitches = []
@@ -226,4 +231,4 @@ class Structured(MIDITokenizer):
                 if previous_type == 'PAD':
                     break
                 check(token)
-        return err / len(tokens)
+        return err / nb_tok_predicted
