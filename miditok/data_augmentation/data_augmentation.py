@@ -11,24 +11,22 @@ import numpy as np
 from tqdm import tqdm
 from miditoolkit import MidiFile
 
-from miditok.midi_tokenizer_base import MIDITokenizer
-
 
 def data_augmentation_dataset(data_path: Union[Path, str],
-                              nb_scales_offset: int,
+                              nb_octave_offset: int,
                               out_path: Union[Path, str] = None,
-                              tokenizer: MIDITokenizer = None,
+                              tokenizer=None,
                               pitch_range: range = range(0, 128)):
     r"""Perform data augmentation on a whole dataset, on the pitch dimension.
     Drum tracks are not augmented.
 
     :param data_path: root path to the folder containing tokenized json files.
-    :param tokenizer: tokenizer, needs to have 'Pitch' tokens.
+    :param tokenizer: tokenizer, needs to have 'Pitch' or 'NoteOn' tokens. Has to be given
+            if performing augmentation on tokens (default: None).
     :param out_path: output path to save the augmented files. Original (non-augmented) MIDIs will be
             saved to this location. If none is given, they will be saved in the same location an the
             data_path. (default: None)
-    :param nb_scales_offset: number of pitch scales to perform data augmentation. Has to be given
-            if performing augmentation on tokens (default: None).
+    :param nb_octave_offset: number of pitch octaves offset to perform data augmentation.
     :param pitch_range: minimum and maximum pitch to consider (default: range(0, 128)).
     """
     if out_path is None:
@@ -52,17 +50,17 @@ def data_augmentation_dataset(data_path: Union[Path, str],
                 tokens, programs = file['tokens'], file['programs']
 
             # Perform data augmentation for each track
-            augmented_tokens = {i: [] for i in range(-nb_scales_offset, nb_scales_offset + 1)}
+            augmented_tokens = {i: [] for i in range(-nb_octave_offset, nb_octave_offset + 1)}
             del augmented_tokens[0]
             if tokenizer.unique_track:
                 tokens = [tokens]
             for track, (_, is_drum) in zip(tokens, programs):
                 if is_drum:
-                    for i in range(-nb_scales_offset, nb_scales_offset + 1):
+                    for i in range(-nb_octave_offset, nb_octave_offset + 1):
                         if i == 0:
                             continue
                         augmented_tokens[i].append(track)
-                aug = data_augmentation_tokens(np.array(track), tokenizer, nb_scales_offset)
+                aug = data_augmentation_tokens(np.array(track), tokenizer, nb_octave_offset)
                 for offset, seq in aug:
                     augmented_tokens[offset].append(seq)
 
@@ -81,7 +79,7 @@ def data_augmentation_dataset(data_path: Union[Path, str],
             except Exception:  # ValueError, OSError, FileNotFoundError, IOError, EOFError, mido.KeySignatureError
                 continue
 
-            augmented_midis = data_augmentation_midi(midi, pitch_range, nb_scales_offset)
+            augmented_midis = data_augmentation_midi(midi, pitch_range, nb_octave_offset)
             for offset, aug_midi in augmented_midis:
                 if len(aug_midi.instruments) == 0:
                     continue
@@ -99,15 +97,23 @@ def data_augmentation_dataset(data_path: Union[Path, str],
                    'nb_files_after': len(files_paths) + nb_augmentations}, outfile)
 
 
-def data_augmentation_midi(midi: MidiFile, pitch_range: range, nb_scales_offset: int) -> List[Tuple[int, MidiFile]]:
+def data_augmentation_midi(midi: MidiFile, pitch_range: range, nb_octave_offset: int) -> List[Tuple[int, MidiFile]]:
+    r"""Perform data augmentation on a MIDI object.
+    Drum tracks are not augmented, but copied as original in augmented MIDIs.
+
+    :param midi: midi object to augment
+    :param pitch_range: minimum and maximum pitch to consider.
+    :param nb_octave_offset: number of pitch octaves offset to perform data augmentation.
+    :return: augmented MIDI objects.
+    """
     # Get the maximum and lowest pitch in original track
     all_pitches = []
     for track in midi.instruments:
         if not track.is_drum:
             all_pitches += [note.pitch for note in track.notes]
     max_pitch, min_pitch = max(all_pitches), min(all_pitches)
-    offset_up = min(nb_scales_offset, (pitch_range.stop - 1 - int(max_pitch)) // 12)
-    offset_down = min(nb_scales_offset, (int(min_pitch) - pitch_range.start) // 12)
+    offset_up = min(nb_octave_offset, (pitch_range.stop - 1 - int(max_pitch)) // 12)
+    offset_down = min(nb_octave_offset, (int(min_pitch) - pitch_range.start) // 12)
 
     # Perform augmentation on pitch
     augmented = []
@@ -129,7 +135,7 @@ def data_augmentation_midi(midi: MidiFile, pitch_range: range, nb_scales_offset:
     return augmented
 
 
-def data_augmentation_tokens(tokens: Union[np.ndarray, List[int]], tokenizer: MIDITokenizer, nb_scales_offset: int) \
+def data_augmentation_tokens(tokens: Union[np.ndarray, List[int]], tokenizer, nb_octave_offset: int) \
         -> List[Tuple[int, List[int]]]:
     r"""Perform data augmentation on a sequence of tokens, on the pitch dimension.
     NOTE: token sequences with BPE will be decoded during the augmentation, this might take some time.
@@ -141,7 +147,7 @@ def data_augmentation_tokens(tokens: Union[np.ndarray, List[int]], tokenizer: MI
 
     :param tokens: tokens to perform data augmentation on.
     :param tokenizer: tokenizer, needs to have 'Pitch' tokens.
-    :param nb_scales_offset: number of pitch scales to perform data augmentation.
+    :param nb_octave_offset: number of pitch octaves offset to perform data augmentation.
     :return: the several data augmentations that have been performed
     """
     # Decode BPE
@@ -181,8 +187,8 @@ def data_augmentation_tokens(tokens: Union[np.ndarray, List[int]], tokenizer: MI
                 tokens_pitch_idx.append(i)
         max_pitch = tokenizer.vocab[pitch_voc_idx][int(max(tokens_pitch))].split('_')[1]
         min_pitch = tokenizer.vocab[pitch_voc_idx][int(min(tokens_pitch))].split('_')[1]
-    offset_up = min(nb_scales_offset, (tokenizer.pitch_range.stop - 1 - int(max_pitch)) // 12)
-    offset_down = min(nb_scales_offset, (int(min_pitch) - tokenizer.pitch_range.start) // 12)
+    offset_up = min(nb_octave_offset, (tokenizer.pitch_range.stop - 1 - int(max_pitch)) // 12)
+    offset_down = min(nb_octave_offset, (int(min_pitch) - tokenizer.pitch_range.start) // 12)
 
     # Perform augmentation on pitch
     augmented = []

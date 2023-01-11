@@ -78,9 +78,10 @@ def test_data_augmentation():
 
         miditok.data_augmentation.data_augmentation_dataset(data_path, 2, Path('./tests/Multitrack_MIDIs_aug'),
                                                             tokenizer, tokenizer.pitch_range)  # as midi
-        tokenizer.tokenize_midi_dataset(files, Path('./tests/Multitrack_tokens'))
-        miditok.data_augmentation.data_augmentation_dataset(Path('./tests/Multitrack_tokens'), 2,
-                                                            Path('./tests/Multitrack_tokens_aug'), tokenizer)
+        tokenizer.tokenize_midi_dataset(files, Path(f'./tests/Multitrack_tokens/{tokenization}'))
+        miditok.data_augmentation.data_augmentation_dataset(Path(f'./tests/Multitrack_tokens/{tokenization}'), 2,
+                                                            Path(f'./tests/Multitrack_tokens_aug/{tokenization}'),
+                                                            tokenizer)
 
         for file_path in files:
             # Reads the MIDI

@@ -5,7 +5,7 @@ TODO time signature changes tokens
 """
 from abc import ABC, abstractmethod
 import math
-from pathlib import Path, PurePath
+from pathlib import Path
 import json
 from random import choices
 from copy import deepcopy
@@ -18,6 +18,7 @@ from miditoolkit import MidiFile, Instrument, Note, TempoChange, TimeSignature
 
 from .vocabulary import Vocabulary, Event
 from .utils import remove_duplicated_notes, get_midi_programs
+from .data_augmentation import data_augmentation_midi
 from .constants import TIME_DIVISION, CURRENT_VERSION_PACKAGE
 
 
@@ -76,7 +77,7 @@ class MIDITokenizer(ABC):
     def __init__(self, pitch_range: range, beat_res: Dict[Tuple[int, int], int], nb_velocities: int,
                  additional_tokens: Dict[str, Union[bool, int, Tuple[int, int]]], pad: bool = True,
                  sos_eos: bool = False, mask: bool = False, unique_track: bool = False,
-                 params: Union[str, Path, PurePath, Dict[str, Any]] = None):
+                 params: Union[str, Path, Dict[str, Any]] = None):
         # Initialize params
         self.vocab = None
         self.has_bpe = False
@@ -544,7 +545,7 @@ class MIDITokenizer(ABC):
         numerator, denominator = map(int, token_time_sig.split('/'))
         return numerator, denominator
 
-    def learn_bpe(self, tokens_path: Union[Path, PurePath, str], vocab_size: int, out_dir: Union[Path, PurePath, str],
+    def learn_bpe(self, tokens_path: Union[Path, str], vocab_size: int, out_dir: Union[Path, str],
                   files_lim: int = None, save_converted_samples: bool = False, print_seq_len_variation: bool = True) \
             -> Tuple[List[float], List[int], List[float]]:
         r"""Byte Pair Encoding (BPE) method to build the vocabulary.
@@ -567,15 +568,15 @@ class MIDITokenizer(ABC):
                 - the average sequence length
                 Each index in the list correspond to a learning step.
         """
-        assert not self.is_multi_voc, f'You are using a multi-vocabulary tokenizer, ' \
-                                      f'it is not compatible with byte pair encoding'
+        assert not self.is_multi_voc, 'You are using a multi-vocabulary tokenizer, ' \
+                                      'it is not compatible with byte pair encoding'
         assert vocab_size > len(self.vocab), f'vocab_size ({vocab_size}) need to be higher than the size' \
                                              f'of the current vocabulary ({len(self.vocab)})'
         if isinstance(out_dir, str):
             out_dir = Path(out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
         files_paths = list(Path(tokens_path).glob('**/*.json'))
-        assert len(files_paths) > 0, f'BPE learning: the specified path does not contain tokens files (json)'
+        assert len(files_paths) > 0, 'BPE learning: the specified path does not contain tokens files (json)'
         files_paths_bpe = choices(files_paths, k=files_lim) if \
             (files_lim is not None and files_lim < len(files_paths)) else files_paths
         samples, samples_paths = [], []
@@ -658,7 +659,7 @@ class MIDITokenizer(ABC):
         self.vocab.update_token_types_indexes()
         if save_converted_samples:
             for sample, path in zip(samples, samples_paths):
-                self.save_tokens(sample['tokens'], PurePath(out_dir, path).with_suffix(".json"), sample['programs'])
+                self.save_tokens(sample['tokens'], Path(out_dir, path).with_suffix(".json"), sample['programs'])
         if print_seq_len_variation:
             print(f'Mean of original lengths: {avg_seq_len[0]}\nMean length after BPE: {avg_seq_len[-1]}')
             print(f'Variation from original: {(avg_seq_len[-1] - avg_seq_len[0]) / avg_seq_len[0] * 100:.2f} %')
@@ -710,7 +711,7 @@ class MIDITokenizer(ABC):
                 matches.append(i)
         return matches
 
-    def apply_bpe_to_dataset(self, dataset_path: Union[Path, PurePath, str], out_path: Union[Path, PurePath, str]):
+    def apply_bpe_to_dataset(self, dataset_path: Union[Path, str], out_path: Union[Path, str]):
         r"""Apply BPE to an already tokenized dataset (with no BPE).
 
         :param dataset_path: path to token files to load
@@ -744,8 +745,10 @@ class MIDITokenizer(ABC):
             i += 1
         return tokens
 
-    def tokenize_midi_dataset(self, midi_paths: Union[List[str], List[Path], List[PurePath]],
-                              out_dir: Union[str, Path, PurePath], validation_fn: Callable[[MidiFile], bool] = None,
+    def tokenize_midi_dataset(self, midi_paths: Union[List[str], List[Path]],
+                              out_dir: Union[str, Path],
+                              validation_fn: Callable[[MidiFile], bool] = None,
+                              data_augment_nb_octave_offset: int = None,
                               save_programs: bool = True, logging: bool = True):
         r"""Converts a dataset / list of MIDI files, into their token version and save them as json files
         The resulting Json files will have the shape (T, *), first dimension is tracks, second tokens.
@@ -757,8 +760,10 @@ class MIDITokenizer(ABC):
         :param out_dir: output directory to save the converted files
         :param validation_fn: a function checking if the MIDI is valid on your requirements
                             (e.g. time signature, minimum/maximum length, instruments ...)
+        :param data_augment_nb_octave_offset: number of pitch octaves offset to perform data augmentation.
+                            (default: None)
         :param save_programs: will also save the programs of the tracks of the MIDI(default: True)
-        :param logging: logs progress bar TODO data augmentation
+        :param logging: logs progress bar
         """
         out_dir = Path(out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -767,8 +772,9 @@ class MIDITokenizer(ABC):
         for midi_path in tqdm(midi_paths, desc=f'Tokenizing MIDIs ({"/".join(list(out_dir.parts[-2:]))})') if logging \
                 else midi_paths:
             # Some MIDIs can contain errors that are raised by Mido, if so the loop continues
+            midi_path = Path(midi_path)
             try:
-                midi = MidiFile(PurePath(midi_path))
+                midi = MidiFile(midi_path)
             except FileNotFoundError:
                 if logging:
                     print(f'File not found: {midi_path}')
@@ -784,11 +790,17 @@ class MIDITokenizer(ABC):
                 if not validation_fn(midi):
                     continue
 
+            # Perform data augmentation if ordered
+            if data_augment_nb_octave_offset is not None:
+                midis = data_augmentation_midi(midi, self.pitch_range, data_augment_nb_octave_offset) + [(0, midi)]
+            else:
+                midis = [(0, midi)]
+
             # Converting the MIDI to tokens and saving them as json
-            tokens = self.midi_to_tokens(midi)
-            midi_name = PurePath(midi_path).stem
-            self.save_tokens(tokens, PurePath(out_dir, midi_name).with_suffix(".json"),
-                             get_midi_programs(midi) if save_programs else None)
+            for octave_offset, midi in midis:
+                tokens = self.midi_to_tokens(midi)
+                midi_name = f'{midi_path.stem}.json' if octave_offset == 0 else f'{midi_path.stem}_{octave_offset}.json'
+                self.save_tokens(tokens, out_dir / midi_name, get_midi_programs(midi) if save_programs else None)
 
     def token_types_errors(self, tokens: List[int], consider_pad: bool = False) -> float:
         r"""Checks if a sequence of tokens is constituted of good token types
@@ -824,7 +836,7 @@ class MIDITokenizer(ABC):
 
     @staticmethod
     @convert_tokens_tensors_to_list
-    def save_tokens(tokens: Union[List, np.ndarray, Any], path: Union[str, Path, PurePath],
+    def save_tokens(tokens: Union[List, np.ndarray, Any], path: Union[str, Path],
                     programs: List[Tuple[int, bool]] = None, **kwargs):
         r"""Saves tokens as a JSON file.
         Use kwargs to save any additional information within the JSON file.
@@ -839,7 +851,7 @@ class MIDITokenizer(ABC):
             json.dump({'tokens': tokens, 'programs': programs if programs is not None else [], **kwargs}, outfile)
 
     @staticmethod
-    def load_tokens(path: Union[str, Path, PurePath]) -> Union[List[Any], Dict]:
+    def load_tokens(path: Union[str, Path]) -> Union[List[Any], Dict]:
         r"""Loads tokens saved as JSON files.
 
         :param path: path of the file to load
@@ -848,7 +860,7 @@ class MIDITokenizer(ABC):
         with open(path) as file:
             return json.load(file)
 
-    def save_params(self, out_path: Union[str, Path, PurePath], additional_attributes: Dict = None):
+    def save_params(self, out_path: Union[str, Path], additional_attributes: Dict = None):
         r"""Saves the config / base parameters of the tokenizer in a file.
         Useful to keep track of how a dataset has been tokenized / encoded
         It will also save the name of the class used, i.e. the encoding strategy.
@@ -881,7 +893,7 @@ class MIDITokenizer(ABC):
         with open(out_path, 'w') as outfile:
             json.dump(params, outfile, indent=4)
 
-    def load_params(self, params: Union[str, Path, PurePath]):
+    def load_params(self, params: Union[str, Path]):
         r"""Load parameters and set the encoder attributes
 
         :param params: can be a path to the parameter (json encoded) file

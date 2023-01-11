@@ -135,7 +135,7 @@ def midi_to_tokens_to_midi(tokenizer: miditok.MIDITokenizer, midi: MidiFile) -> 
     tokens = tokenizer.midi_to_tokens(midi)
     if len(tokens) == 0:  # no track after notes quantization, this can happen
         return MidiFile()
-    inf = miditok.get_midi_programs(midi)  # programs of tracks
+    inf = miditok.utils.get_midi_programs(midi)  # programs of tracks
     new_midi = tokenizer.tokens_to_midi(tokens, inf, time_division=midi.ticks_per_beat)
 
     return new_midi
