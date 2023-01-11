@@ -1,4 +1,4 @@
-"""Useful functions
+"""Useful methods
 
 """
 
@@ -8,8 +8,8 @@ from collections import Counter
 from miditoolkit import MidiFile, Note, Instrument
 import numpy as np
 
-from .vocabulary import Event
-from .constants import CHORD_MAPS, INSTRUMENT_CLASSES, MIDI_INSTRUMENTS
+from miditok.vocabulary import Event
+from miditok.constants import CHORD_MAPS, INSTRUMENT_CLASSES, MIDI_INSTRUMENTS
 
 
 def get_midi_programs(midi: MidiFile) -> List[Tuple[int, bool]]:

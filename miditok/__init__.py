@@ -6,8 +6,11 @@ from .cp_word import CPWord
 from .mumidi import MuMIDI
 from .octuple import Octuple
 from .octuple_mono import OctupleMono
-from .midi_tokenizer_base import MIDITokenizer, get_midi_programs
+from .midi_tokenizer_base import MIDITokenizer
 from .vocabulary import Vocabulary, Event
+
+from .utils import utils
+from .data_augmentation import data_augmentation
 
 
 def _changed_class_warning(class_obj):

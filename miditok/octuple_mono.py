@@ -4,7 +4,6 @@ To use mainly for tasks handling a single track.
 """
 
 from math import ceil
-import json
 from pathlib import Path, PurePath
 from typing import List, Tuple, Dict, Optional, Union
 
@@ -43,6 +42,12 @@ class OctupleMono(MIDITokenizer):
         additional_tokens['Program'] = False
         # used in place of positional encoding
         self.max_bar_embedding = 60  # this attribute might increase during encoding
+        token_types = ['Pitch', 'Velocity', 'Duration', 'Position', 'Bar']
+        if additional_tokens['Tempo']:
+            token_types.append('Tempo')
+        if additional_tokens['TimeSignature']:
+            token_types.append('TimeSignature')
+        self.vocab_types_idx = {type_: idx for idx, type_ in enumerate(token_types)}  # used for data augmentation
         super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, pad, sos_eos, mask, params=params)
 
     def save_params(self, out_path: Union[str, Path, PurePath], additional_attributes: Dict = None):

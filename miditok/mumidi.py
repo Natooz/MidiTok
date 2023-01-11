@@ -51,6 +51,14 @@ class MuMIDI(MIDITokenizer):
         self.programs = list(range(-1, 128)) if programs is None else programs
         # used in place of positional encoding
         self.max_bar_embedding = 60  # this attribute might increase during encoding
+        self.vocab_types_idx = {'Pitch': 0, 'DrumPitch': 0, 'Position': 0, 'Bar': 0, 'Program': 0, 'Velocity': 1,
+                                'Duration': 2}
+        if additional_tokens['Chord']:
+            self.vocab_types_idx['Chord'] = 0
+        if additional_tokens['Rest']:
+            self.vocab_types_idx['Rest'] = 0
+        if additional_tokens['Tempo']:
+            self.vocab_types_idx['Tempo'] = -1
         super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, pad, sos_eos, mask, True,
                          params=params)
 
@@ -319,11 +327,11 @@ class MuMIDI(MIDITokenizer):
         r"""Creates the Vocabulary object of the tokenizer.
         See the docstring of the Vocabulary class for more details about how to use it.
         NOTE: token index 0 is used as a padding index for training.
-        0: Pitch / Position / Bar / Program / (Chord)
-        (1: Velocity)
-        (2: Duration)
-        1 or 3: Current Bar embedding
-        2 or 4: Current Position embedding
+        0: Pitch / DrumPitch / Position / Bar / Program / (Chord) / (Rest)
+        1: Velocity
+        2: Duration
+        3: Current Bar embedding
+        4: Current Position embedding
         (-1: Tempo)
 
         :param sos_eos_tokens: DEPRECIATED, will include Start Of Sequence (SOS) and End Of Sequence (tokens)

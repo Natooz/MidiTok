@@ -53,20 +53,14 @@ class CPWord(MIDITokenizer):
                  nb_velocities: int = NB_VELOCITIES, additional_tokens: Dict[str, bool] = ADDITIONAL_TOKENS,
                  pad: bool = True, sos_eos: bool = False, mask: bool = False, params=None):
         # Indexes of additional token types within a compound token
-        add_idx = 5
         additional_tokens['TimeSignature'] = False  # not compatible
-        self.program_ixd = self.chord_idx = self.rest_idx = self.tempo_idx = None
-        if additional_tokens['Program']:
-            self.program_ixd = add_idx
-            add_idx += 1
-        if additional_tokens['Chord']:
-            self.chord_idx = add_idx
-            add_idx += 1
-        if additional_tokens['Rest']:
-            self.rest_idx = add_idx
-            add_idx += 1
-        if additional_tokens['Tempo']:
-            self.tempo_idx = add_idx
+        token_types = ['Family', 'Position', 'Pitch', 'Velocity', 'Duration']
+        add_tokens = ['Program', 'Chord', 'Rest', 'Tempo']
+        for add_token in add_tokens:
+            if additional_tokens[add_token]:
+                token_types.append(add_token)
+        self.vocab_types_idx = {type_: idx for idx, type_ in enumerate(token_types)}  # used for data augmentation
+        self.vocab_types_idx['Bar'] = 1  # same as position
 
         super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, pad, sos_eos, mask, params=params)
 
@@ -105,12 +99,12 @@ class CPWord(MIDITokenizer):
                     rest_pos = round(rest_pos / ticks_per_sample)
 
                     if rest_beat > 0:
-                        tokens.append(self.create_cp_token(previous_note_end, rest=f'{rest_beat}.0', desc='Rest'))
+                        tokens.append(self.__create_cp_token(previous_note_end, rest=f'{rest_beat}.0', desc='Rest'))
                         previous_tick += rest_beat * self.current_midi_metadata['time_division']
 
                     while rest_pos >= self.rests[0][1]:
                         rest_pos_temp = min([r[1] for r in self.rests], key=lambda x: abs(x - rest_pos))
-                        tokens.append(self.create_cp_token(previous_note_end, rest=f'0.{rest_pos_temp}', desc='Rest'))
+                        tokens.append(self.__create_cp_token(previous_note_end, rest=f'0.{rest_pos_temp}', desc='Rest'))
                         previous_tick += round(rest_pos_temp * ticks_per_sample)
                         rest_pos -= rest_pos_temp
 
@@ -132,22 +126,22 @@ class CPWord(MIDITokenizer):
                 # Bar
                 nb_new_bars = note.start // ticks_per_bar - current_bar
                 for i in range(nb_new_bars):
-                    tokens.append(self.create_cp_token((current_bar + i + 1) * ticks_per_bar, bar=True, desc='Bar'))
+                    tokens.append(self.__create_cp_token((current_bar + i + 1) * ticks_per_bar, bar=True, desc='Bar'))
                 current_bar += nb_new_bars
 
                 # Position
                 pos_index = int((note.start % ticks_per_bar) / ticks_per_sample)
-                tokens.append(self.create_cp_token(int(note.start), pos=pos_index,
-                                                   tempo=current_tempo if self.additional_tokens['Tempo'] else None,
-                                                   desc='Position'))
+                tokens.append(self.__create_cp_token(int(note.start), pos=pos_index,
+                                                     tempo=current_tempo if self.additional_tokens['Tempo'] else None,
+                                                     desc='Position'))
                 previous_tick = note.start
 
             # Note
             duration = note.end - note.start
             dur_index = np.argmin(np.abs(dur_bins - duration))
             dur_value = '.'.join(map(str, self.durations[dur_index]))
-            tokens.append(self.create_cp_token(int(note.start), pitch=note.pitch, vel=note.velocity, dur=dur_value,
-                                               desc=f'{duration} ticks'))
+            tokens.append(self.__create_cp_token(int(note.start), pitch=note.pitch, vel=note.velocity, dur=dur_value,
+                                                 desc=f'{duration} ticks'))
             previous_note_end = max(previous_note_end, note.end)
 
         tokens.sort(key=lambda x: x[0].time)
@@ -159,8 +153,8 @@ class CPWord(MIDITokenizer):
             for chord_event in chord_events:
                 for e, cp_token in enumerate(tokens[count:]):
                     if cp_token[0].time == chord_event.time and cp_token[0].desc == 'Position':
-                        cp_token[self.chord_idx] = \
-                            self.vocab[self.chord_idx].event_to_token[f'Chord_{chord_event.value}']
+                        cp_token[self.vocab_types_idx['Chord']] = \
+                            self.vocab[self.vocab_types_idx['Chord']].event_to_token[f'Chord_{chord_event.value}']
                         count = e
                         break
 
@@ -170,9 +164,9 @@ class CPWord(MIDITokenizer):
 
         return tokens
 
-    def create_cp_token(self, time: int, bar: bool = False, pos: int = None, pitch: int = None, vel: int = None,
-                        dur: str = None, chord: str = None, rest: str = None, tempo: int = None, program: int = None,
-                        desc: str = '') -> List[Union[Event, int]]:
+    def __create_cp_token(self, time: int, bar: bool = False, pos: int = None, pitch: int = None, vel: int = None,
+                          dur: str = None, chord: str = None, rest: str = None, tempo: int = None, program: int = None,
+                          desc: str = '') -> List[Union[Event, int]]:
         r"""Create a CP Word token, with the following structure:
             (index. Token type)
             0. Family
@@ -206,32 +200,35 @@ class CPWord(MIDITokenizer):
                              self.vocab[3].event_to_token['Velocity_Ignore'],
                              self.vocab[4].event_to_token['Duration_Ignore']]
         if self.additional_tokens['Program']:
-            cp_token_template.append(self.vocab[self.program_ixd].event_to_token['Program_Ignore'])
+            cp_token_template.append(self.vocab[self.vocab_types_idx['Program']].event_to_token['Program_Ignore'])
         if self.additional_tokens['Chord']:
-            cp_token_template.append(self.vocab[self.chord_idx].event_to_token['Chord_Ignore'])
+            cp_token_template.append(self.vocab[self.vocab_types_idx['Chord']].event_to_token['Chord_Ignore'])
         if self.additional_tokens['Rest']:
-            cp_token_template.append(self.vocab[self.rest_idx].event_to_token['Rest_Ignore'])
+            cp_token_template.append(self.vocab[self.vocab_types_idx['Rest']].event_to_token['Rest_Ignore'])
         if self.additional_tokens['Tempo']:
-            cp_token_template.append(self.vocab[self.tempo_idx].event_to_token['Tempo_Ignore'])
+            cp_token_template.append(self.vocab[self.vocab_types_idx['Tempo']].event_to_token['Tempo_Ignore'])
 
         if bar:
             cp_token_template[1] = self.vocab[1].event_to_token['Bar_None']
         elif pos is not None:
             cp_token_template[1] = self.vocab[1].event_to_token[f'Position_{pos}']
             if chord is not None:
-                cp_token_template[self.chord_idx] = self.vocab[self.chord_idx].event_to_token[f'Chord_{chord}']
+                cp_token_template[self.vocab_types_idx['Chord']] = \
+                    self.vocab[self.vocab_types_idx['Chord']].event_to_token[f'Chord_{chord}']
             if tempo is not None:
-                cp_token_template[self.tempo_idx] = self.vocab[self.tempo_idx].event_to_token[f'Tempo_{tempo}']
+                cp_token_template[self.vocab_types_idx['Tempo']] = \
+                    self.vocab[self.vocab_types_idx['Tempo']].event_to_token[f'Tempo_{tempo}']
         elif rest is not None:
-            cp_token_template[self.rest_idx] = self.vocab[self.rest_idx].event_to_token[f'Rest_{rest}']
+            cp_token_template[self.vocab_types_idx['Rest']] = \
+                self.vocab[self.vocab_types_idx['Rest']].event_to_token[f'Rest_{rest}']
         elif pitch is not None:
             cp_token_template[0].value = 'Note'
             cp_token_template[2] = self.vocab[2].event_to_token[f'Pitch_{pitch}']
             cp_token_template[3] = self.vocab[3].event_to_token[f'Velocity_{vel}']
             cp_token_template[4] = self.vocab[4].event_to_token[f'Duration_{dur}']
             if program is not None:
-                cp_token_template[self.program_ixd] = \
-                    self.vocab[self.program_ixd].event_to_token[f'Program_{program}']
+                cp_token_template[self.vocab_types_idx['Program']] = \
+                    self.vocab[self.vocab_types_idx['Program']].event_to_token[f'Program_{program}']
 
         return cp_token_template
 
@@ -279,10 +276,10 @@ class CPWord(MIDITokenizer):
                         tempo = int(compound_token[-1].value)
                         if tempo != tempo_changes[-1].tempo:
                             tempo_changes.append(TempoChange(tempo, current_tick))
-                elif self.additional_tokens['Rest'] and compound_token[self.rest_idx].value != 'Ignore':
+                elif self.additional_tokens['Rest'] and compound_token[self.vocab_types_idx['Rest']].value != 'Ignore':
                     if current_tick < previous_note_end:  # if in case successive rest happen
                         current_tick = previous_note_end
-                    beat, pos = map(int, compound_token[self.rest_idx].value.split('.'))
+                    beat, pos = map(int, compound_token[self.vocab_types_idx['Rest']].value.split('.'))
                     current_tick += beat * time_division + pos * ticks_per_sample
                     current_bar = current_tick // ticks_per_bar
         if len(tempo_changes) > 1:

@@ -302,7 +302,7 @@ class MIDITokenizer(ABC):
         return tokens
 
     def tokens_to_events(self, tokens: List[Union[int, List[int]]]) \
-            -> List[Union[Event, List[Event]]]:  # TODO handle tensors / tf / np / jax
+            -> List[Union[Event, List[Event]]]:
         r"""Convert a sequence of tokens in their respective event objects.
         BPE tokens will be decoded.
 
@@ -758,7 +758,7 @@ class MIDITokenizer(ABC):
         :param validation_fn: a function checking if the MIDI is valid on your requirements
                             (e.g. time signature, minimum/maximum length, instruments ...)
         :param save_programs: will also save the programs of the tracks of the MIDI(default: True)
-        :param logging: logs progress bar
+        :param logging: logs progress bar TODO data augmentation
         """
         out_dir = Path(out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)

@@ -42,6 +42,12 @@ class Octuple(MIDITokenizer):
         # used in place of positional encoding
         self.programs = list(range(-1, 128)) if programs is None else programs
         self.max_bar_embedding = 60  # this attribute might increase during encoding
+        token_types = ['Pitch', 'Velocity', 'Duration', 'Program', 'Position', 'Bar']
+        if additional_tokens['Tempo']:
+            token_types.append('Tempo')
+        if additional_tokens['TimeSignature']:
+            token_types.append('TimeSignature')
+        self.vocab_types_idx = {type_: idx for idx, type_ in enumerate(token_types)}  # used for data augmentation
         super().__init__(pitch_range, beat_res, nb_velocities, additional_tokens, pad, sos_eos, mask, True,
                          params=params)
 
