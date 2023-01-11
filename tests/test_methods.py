@@ -49,8 +49,8 @@ def time_data_augmentation_tokens_vs_mid():
         midis = miditok.data_augmentation.data_augmentation_midi(midi, tokenizer.pitch_range, 2)
         for _, aug_mid in midis:
             _ = tokenizer(aug_mid)
-    print(f'Opening midi -> augment midis -> tokenize midis: took {(tt := time() - t0):.2f} sec '
-          f'({tt / len(files):.2f} sec/file)')
+    tt = time() - t0
+    print(f'Opening midi -> augment midis -> tokenize midis: took {tt:.2f} sec ({tt / len(files):.2f} sec/file)')
 
     # Testing opening midi -> tokenize midi -> augment tokens
     t0 = time()
@@ -64,8 +64,8 @@ def time_data_augmentation_tokens_vs_mid():
         tokens = tokenizer(midi)
         for track_tokens in tokens:
             _ = miditok.data_augmentation.data_augmentation_tokens(track_tokens, tokenizer, 2)
-    print(f'Opening midi -> tokenize midi -> augment tokens: took {(tt := time() - t0):.2f} sec '
-          f'({tt / len(files):.2f} sec/file)')
+    tt = time() - t0
+    print(f'Opening midi -> tokenize midi -> augment tokens: took {tt:.2f} sec ({tt / len(files):.2f} sec/file)')
 
 
 def test_data_augmentation():
