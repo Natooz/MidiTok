@@ -13,17 +13,19 @@ class Event:
     used in the Vocabulary class to map an event to its corresponding token.
     """
 
-    def __init__(self, type_: str, value: Union[str, int], time: Union[int, float] = 0, desc=None):
+    def __init__(
+        self, type_: str, value: Union[str, int], time: Union[int, float] = 0, desc=None
+    ):
         self.type = type_
         self.value = value
         self.time = time
         self.desc = desc
 
     def __str__(self):
-        return f'{self.type}_{self.value}'
+        return f"{self.type}_{self.value}"
 
     def __repr__(self):
-        return f'Event(type={self.type}, value={self.value}, time={self.time}, desc={self.desc})'
+        return f"Event(type={self.type}, value={self.value}, time={self.time}, desc={self.desc})"
 
 
 class Vocabulary:
@@ -45,8 +47,13 @@ class Vocabulary:
     :param events: a list of events to add to the vocabulary when creating it. (default: None)
     """
 
-    def __init__(self, pad: bool = True, mask: bool = False, sos_eos: bool = False,
-                 events: List[Union[str, Event]] = None):
+    def __init__(
+        self,
+        pad: bool = True,
+        mask: bool = False,
+        sos_eos: bool = False,
+        events: List[Union[str, Event]] = None,
+    ):
         self._event_to_token = {}
         self._token_to_event = {}
         self._token_types_indexes = {}
@@ -84,7 +91,7 @@ class Vocabulary:
         """
         if isinstance(event, str):
             event_str = event
-            event_type = event.split('_')[0]
+            event_type = event.split("_")[0]
         else:
             event_str = str(event)
             event_type = event.type
@@ -104,13 +111,12 @@ class Vocabulary:
         :param token: token to get type from
         :return: the type of the token, as a string
         """
-        return self._token_to_event[token].split('_')[0]
+        return self._token_to_event[token].split("_")[0]
 
     def update_token_types_indexes(self):
-        r"""Updates the _token_types_indexes attribute according to _event_to_token.
-        """
+        r"""Updates the _token_types_indexes attribute according to _event_to_token."""
         for event, token in self._event_to_token.items():
-            token_type = event.split('_')[0]
+            token_type = event.split("_")[0]
             if token_type in self._token_types_indexes:
                 self._token_types_indexes[token_type].append(token)
             else:
@@ -128,22 +134,21 @@ class Vocabulary:
             return []
 
     def __add_pad(self):
-        r"""Adds a PAD token to the vocabulary. It is usually at index 0.
-        """
-        self.__add_distinct_event('PAD_None')
+        r"""Adds a PAD token to the vocabulary. It is usually at index 0."""
+        self.__add_distinct_event("PAD_None")
 
     def __add_sos_eos(self):
         r"""Adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens
         to the vocabulary.
         """
-        self.__add_distinct_event('SOS_None')
-        self.__add_distinct_event('EOS_None')
+        self.__add_distinct_event("SOS_None")
+        self.__add_distinct_event("EOS_None")
 
     def __add_mask(self):
         r"""Adds a MASK token to the vocabulary. This may be used to
         pre-train a model, such as for BERT, before finetuning it.
         """
-        self.__add_distinct_event('MASK_None')
+        self.__add_distinct_event("MASK_None")
 
     def __getitem__(self, item: Union[int, str]) -> Union[str, int]:
         if isinstance(item, str):
@@ -151,12 +156,14 @@ class Vocabulary:
         elif isinstance(item, int):
             return self._token_to_event[item]
         else:
-            raise IndexError('The index must be an integer or a string')
+            raise IndexError("The index must be an integer or a string")
 
     def __len__(self) -> int:
         return len(self._event_to_token)
 
-    def __iadd__(self, other: Union[Generator, Event, str, Tuple[Union[str, Event], int]]):
+    def __iadd__(
+        self, other: Union[Generator, Event, str, Tuple[Union[str, Event], int]]
+    ):
         self.add_event(*other if isinstance(other, tuple) else other)
         return self
 
@@ -168,14 +175,19 @@ class Vocabulary:
                 for both Vocabularies, False otherwise.
         """
         if isinstance(other, Vocabulary):
-            if all([self._event_to_token == other._event_to_token, self._token_to_event == other._token_to_event,
-                    self._token_types_indexes == other._token_types_indexes]):
+            if all(
+                [
+                    self._event_to_token == other._event_to_token,
+                    self._token_to_event == other._token_to_event,
+                    self._token_types_indexes == other._token_types_indexes,
+                ]
+            ):
                 return True
             return False
         return False
 
     def __repr__(self):
-        return f'Vocabulary - {len(self._event_to_token)} tokens of {len(self._token_types_indexes)} types'
+        return f"Vocabulary - {len(self._event_to_token)} tokens of {len(self._token_types_indexes)} types"
 
     @property
     def event_to_token(self):

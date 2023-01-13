@@ -9,7 +9,11 @@ import json
 
 import numpy as np
 from miditoolkit import MidiFile
-from torch import Tensor as ptTensor, IntTensor as ptIntTensor, FloatTensor as ptFloatTensor
+from torch import (
+    Tensor as ptTensor,
+    IntTensor as ptIntTensor,
+    FloatTensor as ptFloatTensor,
+)
 from tensorflow import Tensor as tfTensor, convert_to_tensor
 
 import miditok
@@ -29,11 +33,13 @@ def test_convert_tensors():
         else:
             tensor = type_(original)
         tokenizer(tensor)  # to make sure it passes
-        as_list = miditok.midi_tokenizer_base.convert_tokens_tensors_to_list(nothing)(tensor)
+        as_list = miditok.midi_tokenizer_base.convert_tokens_tensors_to_list(nothing)(
+            tensor
+        )
         assert as_list == original
 
 
-'''def time_data_augmentation_tokens_vs_mid():
+"""def time_data_augmentation_tokens_vs_mid():
     from time import time
     tokenizers = [miditok.TSD(), miditok.REMI()]
     data_paths = [Path('./tests/Maestro_MIDIs'), Path('./tests/Multitrack_MIDIs')]
@@ -75,102 +81,145 @@ def test_convert_tensors():
                     _ = miditok.data_augmentation.data_augmentation_tokens(track_tokens, tokenizer, *offsets)
             tt = time() - t0
             print(f'Opening midi -> tokenize midi -> augment tokens: took {tt:.2f} sec '
-                  f'({tt / len(files):.2f} sec/file)')'''
+                  f'({tt / len(files):.2f} sec/file)')"""
 
 
 def test_data_augmentation():
-    data_path = Path('./tests/Multitrack_MIDIs')
-    tokenizations = ['TSD', 'MIDILike', 'REMI', 'Structured', 'CPWord', 'Octuple', 'OctupleMono']
-    original_midi_paths = list(data_path.glob('**/*.mid'))
+    data_path = Path("./tests/Multitrack_MIDIs")
+    tokenizations = [
+        "TSD",
+        "MIDILike",
+        "REMI",
+        "Structured",
+        "CPWord",
+        "Octuple",
+        "OctupleMono",
+    ]
+    original_midi_paths = list(data_path.glob("**/*.mid"))
 
     for tokenization in tokenizations:
-        print(f'TESTING WITH {tokenization}')
+        print(f"TESTING WITH {tokenization}")
         tokenizer = getattr(miditok, tokenization)()
-        midi_aug_path = Path('tests', 'Multitrack_MIDIs_aug', tokenization)
-        tokens_path = Path('tests', 'Multitrack_tokens', tokenization)
-        tokens_aug_path = Path('tests', 'Multitrack_tokens_aug', tokenization)
+        midi_aug_path = Path("tests", "Multitrack_MIDIs_aug", tokenization)
+        tokens_path = Path("tests", "Multitrack_tokens", tokenization)
+        tokens_aug_path = Path("tests", "Multitrack_tokens_aug", tokenization)
 
-        print('PERFORMING DATA AUGMENTATION ON MIDIS')
-        miditok.data_augmentation.data_augmentation_dataset(data_path, tokenizer, 2, 2, 2, out_path=midi_aug_path,
-                                                            copy_original_in_new_location=False)
-        aug_midi_paths = list(midi_aug_path.glob('**/*.mid'))
+        print("PERFORMING DATA AUGMENTATION ON MIDIS")
+        miditok.data_augmentation.data_augmentation_dataset(
+            data_path,
+            tokenizer,
+            2,
+            2,
+            2,
+            out_path=midi_aug_path,
+            copy_original_in_new_location=False,
+        )
+        aug_midi_paths = list(midi_aug_path.glob("**/*.mid"))
         for aug_midi_path in aug_midi_paths:
             # Determine offsets of file
-            parts = aug_midi_path.stem.split('§')
-            original_stem, offsets_str = parts[0], parts[1].split('_')
+            parts = aug_midi_path.stem.split("§")
+            original_stem, offsets_str = parts[0], parts[1].split("_")
             offsets = [0, 0, 0]
             for offset_str in offsets_str:
-                for pos, letter in enumerate(['p', 'v', 'd']):
+                for pos, letter in enumerate(["p", "v", "d"]):
                     if offset_str[0] == letter:
                         offsets[pos] = int(offset_str[1:])
 
             # Loads MIDIs to compare
             try:
                 aug_midi = MidiFile(aug_midi_path)
-                original_midi = MidiFile(data_path / f'{original_stem}.mid')
+                original_midi = MidiFile(data_path / f"{original_stem}.mid")
             except Exception:  # ValueError, OSError, FileNotFoundError, IOError, EOFError, mido.KeySignatureError
                 continue
 
             # Compare them
-            for original_track, aug_track in zip(original_midi.instruments, aug_midi.instruments):
+            for original_track, aug_track in zip(
+                original_midi.instruments, aug_midi.instruments
+            ):
                 if original_track.is_drum:
                     continue
-                original_track.notes.sort(key=lambda x: (x.start, x.pitch, x.end, x.velocity))  # sort notes
-                aug_track.notes.sort(key=lambda x: (x.start, x.pitch, x.end, x.velocity))  # sort notes
+                original_track.notes.sort(
+                    key=lambda x: (x.start, x.pitch, x.end, x.velocity)
+                )  # sort notes
+                aug_track.notes.sort(
+                    key=lambda x: (x.start, x.pitch, x.end, x.velocity)
+                )  # sort notes
                 for note_o, note_s in zip(original_track.notes, aug_track.notes):
                     assert note_s.pitch == note_o.pitch + offsets[0]
-                    assert note_s.velocity in [tokenizer.velocities[0],
-                                               tokenizer.velocities[-1],
-                                               note_o.velocity + offsets[1]]
+                    assert note_s.velocity in [
+                        tokenizer.velocities[0],
+                        tokenizer.velocities[-1],
+                        note_o.velocity + offsets[1],
+                    ]
 
-        print('PERFORMING DATA AUGMENTATION ON TOKENS')
+        print("PERFORMING DATA AUGMENTATION ON TOKENS")
         tokenizer.tokenize_midi_dataset(original_midi_paths, tokens_path)
-        miditok.data_augmentation.data_augmentation_dataset(tokens_path, tokenizer, 2, 2, 2, out_path=tokens_aug_path,
-                                                            copy_original_in_new_location=False)
+        miditok.data_augmentation.data_augmentation_dataset(
+            tokens_path,
+            tokenizer,
+            2,
+            2,
+            2,
+            out_path=tokens_aug_path,
+            copy_original_in_new_location=False,
+        )
 
         # Getting tokens idx from tokenizer for assertions
-        aug_tokens_paths = list(tokens_aug_path.glob('**/*.json'))
+        aug_tokens_paths = list(tokens_aug_path.glob("**/*.json"))
         pitch_voc_idx, vel_voc_idx, dur_voc_idx = None, None, None
         note_off_tokens = []
         if tokenizer.is_multi_voc:
-            pitch_voc_idx = tokenizer.vocab_types_idx['Pitch']
-            vel_voc_idx = tokenizer.vocab_types_idx['Velocity']
-            dur_voc_idx = tokenizer.vocab_types_idx['Duration']
-            pitch_tokens = np.array(tokenizer.vocab[pitch_voc_idx].tokens_of_type('Pitch'))
-            vel_tokens = np.array(tokenizer.vocab[vel_voc_idx].tokens_of_type('Velocity'))
-            dur_tokens = np.array(tokenizer.vocab[dur_voc_idx].tokens_of_type('Duration'))
+            pitch_voc_idx = tokenizer.vocab_types_idx["Pitch"]
+            vel_voc_idx = tokenizer.vocab_types_idx["Velocity"]
+            dur_voc_idx = tokenizer.vocab_types_idx["Duration"]
+            pitch_tokens = np.array(
+                tokenizer.vocab[pitch_voc_idx].tokens_of_type("Pitch")
+            )
+            vel_tokens = np.array(
+                tokenizer.vocab[vel_voc_idx].tokens_of_type("Velocity")
+            )
+            dur_tokens = np.array(
+                tokenizer.vocab[dur_voc_idx].tokens_of_type("Duration")
+            )
         else:
-            pitch_tokens = np.array(tokenizer.vocab.tokens_of_type('Pitch') + tokenizer.vocab.tokens_of_type('NoteOn'))
-            vel_tokens = np.array(tokenizer.vocab.tokens_of_type('Velocity'))
-            dur_tokens = np.array(tokenizer.vocab.tokens_of_type('Duration'))
-            note_off_tokens = np.array(tokenizer.vocab.tokens_of_type('NoteOff'))  # for MidiLike
+            pitch_tokens = np.array(
+                tokenizer.vocab.tokens_of_type("Pitch")
+                + tokenizer.vocab.tokens_of_type("NoteOn")
+            )
+            vel_tokens = np.array(tokenizer.vocab.tokens_of_type("Velocity"))
+            dur_tokens = np.array(tokenizer.vocab.tokens_of_type("Duration"))
+            note_off_tokens = np.array(
+                tokenizer.vocab.tokens_of_type("NoteOff")
+            )  # for MidiLike
         tok_vel_min, tok_vel_max = vel_tokens[0], vel_tokens[-1]
         tok_dur_min, tok_dur_max = None, None
-        if tokenization != 'MIDILike':
+        if tokenization != "MIDILike":
             tok_dur_min, tok_dur_max = dur_tokens[0], dur_tokens[-1]
 
         for aug_token_path in aug_tokens_paths:
             # Determine offsets of file
-            parts = aug_token_path.stem.split('§')
-            original_stem, offsets_str = parts[0], parts[1].split('_')
+            parts = aug_token_path.stem.split("§")
+            original_stem, offsets_str = parts[0], parts[1].split("_")
             offsets = [0, 0, 0]
             for offset_str in offsets_str:
-                for pos, letter in enumerate(['p', 'v', 'd']):
+                for pos, letter in enumerate(["p", "v", "d"]):
                     if offset_str[0] == letter:
                         offsets[pos] = int(offset_str[1:])
 
             # Loads tokens to compare
             with open(aug_token_path) as json_file:
                 file = json.load(json_file)
-                aug_tokens, aug_programs = file['tokens'], file['programs']
-            with open(tokens_path / f'{original_stem}.json') as json_file:
+                aug_tokens, aug_programs = file["tokens"], file["programs"]
+            with open(tokens_path / f"{original_stem}.json") as json_file:
                 file = json.load(json_file)
-                original_tokens, original_programs = file['tokens'], file['programs']
+                original_tokens, original_programs = file["tokens"], file["programs"]
 
             # Compare them
             if tokenizer.unique_track:
                 original_tokens, aug_tokens = [original_tokens], [aug_tokens]
-            for original_track, aug_track, (_, is_drum) in zip(original_tokens, aug_tokens, original_programs):
+            for original_track, aug_track, (_, is_drum) in zip(
+                original_tokens, aug_tokens, original_programs
+            ):
                 if is_drum:
                     continue
                 for original_token, aug_token in zip(original_track, aug_track):
@@ -178,20 +227,42 @@ def test_data_augmentation():
                         if original_token in pitch_tokens:
                             assert aug_token == original_token + offsets[0]
                         elif original_token in vel_tokens:
-                            assert aug_token in [original_token + offsets[1], tok_vel_min, tok_vel_max]
-                        elif original_token in dur_tokens and tokenization != 'MIDILike':
-                            assert aug_token in [original_token + offsets[2], tok_dur_min, tok_dur_max]
+                            assert aug_token in [
+                                original_token + offsets[1],
+                                tok_vel_min,
+                                tok_vel_max,
+                            ]
+                        elif (
+                            original_token in dur_tokens and tokenization != "MIDILike"
+                        ):
+                            assert aug_token in [
+                                original_token + offsets[2],
+                                tok_dur_min,
+                                tok_dur_max,
+                            ]
                         elif original_token in note_off_tokens:
                             assert aug_token == original_token + offsets[0]
                     else:
                         if original_token[pitch_voc_idx] in pitch_tokens:
-                            assert aug_token[pitch_voc_idx] == original_token[pitch_voc_idx] + offsets[0]
+                            assert (
+                                aug_token[pitch_voc_idx]
+                                == original_token[pitch_voc_idx] + offsets[0]
+                            )
                         elif original_token[vel_voc_idx] in vel_tokens:
-                            assert aug_token[vel_voc_idx] in [original_token[vel_voc_idx] + offsets[1],
-                                                              tok_vel_min, tok_vel_max]
-                        elif original_token[dur_voc_idx] in dur_tokens and tokenization != 'MIDILike':
-                            assert aug_token[dur_voc_idx] in [original_token[dur_voc_idx] + offsets[2],
-                                                              tok_dur_min, tok_dur_max]
+                            assert aug_token[vel_voc_idx] in [
+                                original_token[vel_voc_idx] + offsets[1],
+                                tok_vel_min,
+                                tok_vel_max,
+                            ]
+                        elif (
+                            original_token[dur_voc_idx] in dur_tokens
+                            and tokenization != "MIDILike"
+                        ):
+                            assert aug_token[dur_voc_idx] in [
+                                original_token[dur_voc_idx] + offsets[2],
+                                tok_dur_min,
+                                tok_dur_max,
+                            ]
 
 
 if __name__ == "__main__":

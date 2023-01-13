@@ -3,29 +3,32 @@
 Python package to tokenize MIDI music files, presented at the ISMIR 2021 LBD.
 
 [![PyPI version fury.io](https://badge.fury.io/py/miditok.svg)](https://pypi.python.org/pypi/miditok/)
-[![GitHub workflow](https://img.shields.io/github/workflow/status/Natooz/MidiTok/Testing)](https://github.com/Natooz/MidiTok/actions)
+[![Python 3.7](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/release/)
+![GitHub CI](https://github.com/Natooz/MidiTok/actions/workflows/pytest.yml/badge.svg)
 [![Codecov](https://img.shields.io/codecov/c/github/Natooz/MidiTok)](https://codecov.io/gh/Natooz/MidiTok)
 [![GitHub license](https://img.shields.io/github/license/Natooz/MidiTok.svg)](https://github.com/Natooz/MidiTok/blob/main/LICENSE)
+[![GitHub license](https://pepy.tech/badge/MidiTok)](https://pepy.tech/project/MidiTok)
 
 ![MidiTok Logo](https://github.com/Natooz/MidiTok/blob/assets/assets/logo.png?raw=true "")
 
 
 MidiTok converts MIDI music files into sequences of tokens, i.e. integers, ready to be fed to sequential neural networks like Transformers or RNNs.
-MidiTok features most known MIDI tokenization strategies, and is built around the idea that they all share common parameters and methods. It contains method that allows to properly pre-process any MIDI file, and also supports Byte Pair Encoding (BPE).
+MidiTok features most known MIDI tokenization strategies, and is built around the idea that they all share common parameters and methods. It contains methods allowing to properly pre-process any MIDI file, and also supports Byte Pair Encoding (BPE).
 
 ## Install
 
 ```shell
 pip install miditok
 ```
-MidiTok uses MIDIToolkit, which itself uses Mido to read and write MIDI files.
+MidiTok uses [MIDIToolkit](https://github.com/YatingMusic/miditoolkit), which itself uses [Mido](https://github.com/mido/mido) to read and write MIDI files.
 
 ## Examples
 
 ### Tokenize a MIDI file
 
 ```python
-from miditok import REMI, get_midi_programs
+from miditok import REMI
+from miditok.utils import get_midi_programs
 from miditoolkit import MidiFile
 
 # Our parameters
@@ -42,8 +45,8 @@ tokenizer = REMI(pitch_range, beat_res, nb_velocities, additional_tokens, mask=T
 midi = MidiFile('path/to/your_midi.mid')
 
 # Converts MIDI to tokens, and back to a MIDI
-tokens = tokenizer.midi_to_tokens(midi)
-converted_back_midi = tokenizer.tokens_to_midi(tokens, get_midi_programs(midi))
+tokens = tokenizer(midi)  # automatically detects MIDIs and tokens before converting
+converted_back_midi = tokenizer(tokens, get_midi_programs(midi))
 
 # Converts just a selected track
 tokenizer.current_midi_metadata = {'time_division': midi.ticks_per_beat, 'tempo_changes': midi.tempo_changes}
@@ -53,7 +56,7 @@ piano_tokens = tokenizer.track_to_tokens(midi.instruments[0])
 converted_back_track, tempo_changes = tokenizer.tokens_to_track(piano_tokens, midi.ticks_per_beat, (0, False))
 ```
 
-### Tokenize a dataset
+### Tokenize a dataset, perform data augmentation and apply Byte Pair Encoding
 
 MidiTok will save your encoding parameters in a ```config.txt``` file to keep track of how they were converted.
 
@@ -62,8 +65,8 @@ from miditok import REMI
 from pathlib import Path
 
 # Creates the tokenizer and list the file paths
-tokenizer = REMI(mask=True)  # using defaults parameters (constants.py), with MASK tokens for pre-training
-paths = list(Path('path', 'to', 'dataset').glob('**/*.mid'))
+tokenizer = REMI(mask=True)  # using defaults parameters (constants.py)
+midi_paths = list(Path('path', 'to', 'dataset').glob('**/*.mid'))
 
 # A validation method to discard MIDIs we do not want
 # It can also be used for custom pre-processing, for instance if you want to merge
@@ -76,7 +79,15 @@ def midi_valid(midi) -> bool:
     return True
 
 # Converts MIDI files to tokens saved as JSON files
-tokenizer.tokenize_midi_dataset(paths, 'path/to/save', midi_valid)
+data_augmentation_offsets = [2, 2, 1]  # perform data augmentation on 2 pitch octaves, 2 velocity and 1 duration values
+tokenizer.tokenize_midi_dataset(midi_paths, Path('path', 'to', 'tokens_noBPE'), midi_valid, data_augmentation_offsets)
+
+# Constructs the vocabulary with BPE
+tokenizer.learn_bpe(tokens_path=Path('path', 'to', 'tokens_noBPE'), vocab_size=500,
+                    out_dir=Path('path', 'to', 'tokens_BPE'), files_lim=300)
+
+# Converts the tokenized musics into tokens with BPE
+tokenizer.apply_bpe_to_dataset(Path('path', 'to', 'tokens_noBPE'), Path('path', 'to', 'tokens_BPE'))
 ```
 
 ### Write a MIDI file from tokens
@@ -86,7 +97,7 @@ from miditok import REMI
 import torch
 
 # Creates the tokenizer
-tokenizer = REMI(mask=True)  # using defaults parameters (constants.py), with MASK tokens for pre-training
+tokenizer = REMI()  # using defaults parameters (constants.py)
 
 # The tokens, let's say produced by your Transformer, 4 tracks of 500 tokens
 tokens = torch.randint(low=0, high=len(tokenizer.vocab), size=(4, 500)).tolist()
@@ -98,27 +109,6 @@ programs = [(0, False), (41, False), (61, False), (0, True)]
 generated_midi = tokenizer.tokens_to_midi(tokens, programs)
 generated_midi.dump('path/to/save/file.mid')  # could have been done above by giving the path argument
 ```
-
-### Apply Byte Pair Encoding
-
-```python
-from miditok import REMI, bpe
-from pathlib import Path
-
-# Creates the tokenizer, bpe method takes a class and its constructor arguments as arguments
-tokenizer = bpe(REMI, mask=True)  # as is, its exactly like a standard REMI tokenizer
-midi_paths = list(Path('path', 'to', 'dataset').glob('**/*.mid'))
-tokenizer.tokenize_midi_dataset(midi_paths, Path('path', 'to', 'dataset_tokenized'))
-
-# Constructs the vocabulary with BPE
-tokenizer.bpe(tokens_path=Path('path', 'to', 'dataset_tokenized'), vocab_size=500,
-              out_dir=Path('path', 'to', 'dataset_tokenized_bpe'), files_lim=300)
-
-# Converts the tokenized musics into tokens with BPE
-tokenizer.apply_bpe_to_dataset(Path('path', 'to', 'dataset_tokenized'), Path('path', 'to', 'dataset_tokenized_bpe'))
-```
-
-Read the [docstring](miditok/bpe.py) for the details.
 
 ## Tokenizations
 
@@ -132,14 +122,12 @@ _Tokens are vertically stacked at index 0 from the bottom up to the top._
 
 Strategy used in the first symbolic music generative transformers and RNN / LSTM models. MIDI messages (Note On, Note Off, Velocity and Time Shift) are represented as tokens.
 
-NOTES:
-* Rests act exactly like time-shifts. It is then recommended choosing a minimum rest range of the same first beat resolution so the time is shifted with the same accuracy. For instance if your first beat resolution is ```(0, 4): 8```, you should choose a minimum rest of ```8```.
 
 ![MIDI-Like figure](https://github.com/Natooz/MidiTok/blob/assets/assets/midi_like.png?raw=true "MIDI-Like token sequence, with TimeShift and NoteOff tokens")
 
 ### TimeShift Duration (TSD)
 
-A strategy similar to MIDI-Like, but uses explicit `Duration` tokens to represent note durations.
+A strategy similar to MIDI-Like, but uses explicit `Duration` tokens to represent note durations, which have showed [better results](https://arxiv.org/abs/2002.00212), helping models to learn better.
 
 ![MIDI-Like figure](https://github.com/Natooz/MidiTok/blob/assets/assets/tsd.png?raw=true "MIDI-Like token sequence, with TimeShifts and NoteOff tokens")
 
@@ -147,21 +135,17 @@ A strategy similar to MIDI-Like, but uses explicit `Duration` tokens to represen
 
 Proposed with the [Pop Music Transformer](https://arxiv.org/abs/2002.00212), it is a "position-based" representation. The time is represented with "_Bar_" and "_Position_" tokens that indicate respectively when a new bar is beginning, and the current position within a bar. A note is represented as a succession of a _Pitch_, _Velocity_ and _Duration_ tokens.
 
-NOTES:
+NOTE:
 * In the original REMI paper, the tempo information are in fact the succession of two token types: a "_Token Class_" which indicate if the tempo is fast or slow, and a "_Token Value_" which represents its value with respect to the tempo class. In MidiTok we only encode one _Tempo_ token which encode its value, quantized in a number of bins set in parameters (as done for velocities).
-* Including tempo tokens in a multitrack task with REMI is not recommended. Generating several tracks would lead to multiple and ambiguous tempo changes. So in MidiTok only the tempo changes of the first track will be kept in the final created MIDI.
-* Position tokens are always following Rest tokens to make sure the position of the following notes are explicitly stated. Bar tokens can follow Rest tokens depending on their respective value and your parameters.
 
 ![REMI figure](https://github.com/Natooz/MidiTok/blob/assets/assets/remi.png?raw=true "REMI sequence, time is tracked with Bar and position tokens")
 
 ### Compound Word
 
-Introduced with the [Compound Word Transformer](https://arxiv.org/abs/2101.02402) this representation is similar to REMI. The key difference is that tokens of different types of a same "event" are combined and processed at the same time by the model.
-_Pitch_, _Velocity_ and _Durations_ tokens of a same note will be combined for instance. The greatest benefit of this encoding strategy is the **reduced sequence lengths** that it creates, which means less time and memory consumption as transformers (with softmax attention) have a quadratic complexity.
+Introduced with the [Compound Word Transformer](https://arxiv.org/abs/2101.02402), this tokenization is similar to REMI but uses embedding pooling operations to reduce the overall sequence length: some tokens are first converted to embeddings by a model, them merged / pooled into a single one.
+_Pitch_, _Velocity_ and _Durations_ tokens of a same note will be combined. The **sequence length reduction** means less time and memory complexity.
 
-You can combine them in your model the way you want. CP Word authors concatenated each embeddings and projected the sequence with a projection matrix, resulting in a _d_-dimensional vector (_d_ being the model size).
-
-At decoding, the easiest way to predict multiple tokens (employed by the original authors) is to project the output vector of your model with several projection matrices, one for each token type.
+For generation tasks, the decoding implies to project the last hidden states to several output layers, one for each token type, and samples from the multiple output distributions.
 
 ![Compound Word figure](https://github.com/Natooz/MidiTok/blob/assets/assets/cp_word.png?raw=true "CP Word sequence, tokens of the same family are grouped together")
 
@@ -176,34 +160,32 @@ To keep this property, no additional token can be inserted in MidiTok's implemen
 ### Octuple
 
 Introduced with [Symbolic Music Understanding with Large-Scale Pre-Training](https://arxiv.org/abs/2106.05630). Each note of each track is the combination of multiple embeddings: _Pitch_, _Velocity_, _Duration_, _Track_, current _Bar_, current _Position_ and additional tokens.
-Its considerably reduces the sequence lengths, while handling multitrack. Generating with it requires however to sample from several distributions and can be delicate.
+Its considerably reduces the sequence lengths, while handling multitrack. Generating with it requires however to sample from several distributions and can be delicate. This tokenization is best suited for MIR and classification tasks.
 The Bar and Position embeddings can act as a positional encoding, but the authors of the original paper still applied a token-wise positional encoding afterward.
 
 NOTES:
 * In MidiTok, the tokens are first sorted by time, then track, then pitch values.
 * This implementation uses _Program_ tokens to distinguish tracks, on their MIDI program. Hence, two tracks with the same program will be treated as being the same.
-* Time signature and Tempo tokens are optional in MidiTok, you can chose to use them or not with the ```additional_tokens``` parameter.
+* Time signature and Tempo tokens are optional, you can choose to use them or not with the ```additional_tokens``` parameter.
 * [Octuple Mono](miditok/octuple_mono.py) is a modified version with no program embedding at each time step.
 
 ![Octuple figure](https://github.com/Natooz/MidiTok/blob/assets/assets/octuple.png?raw=true "Octuple sequence, with a bar and position embeddings")
 
 ### MuMIDI
 
-Presented with the [PopMAG](https://arxiv.org/abs/2008.07703) model, this representation is mostly suited for multitrack tasks. The time is based on _Position_ and _Bar_ tokens as REMI and Compound Word.
+Presented with the [PopMAG](https://arxiv.org/abs/2008.07703) model, this tokenization made for multitrack tasks and uses embedding pooling. The time is based on _Position_ and _Bar_ tokens as REMI and Compound Word.
 The key idea of MuMIDI is to represent every track in a single sequence. At each time step, "_Track_" tokens preceding note tokens indicate from which track they are. Generating with it requires however to sample from several distributions and can be delicate.
-MuMIDI also include a "built-in" positional encoding mechanism. At each time step, embeddings of the current bar and current position are merged with the token. For a note, the _Pitch_, _Velocity_ and _Duration_ embeddings are also merged together.
+MuMIDI also include a "built-in" positional encoding mechanism. As in the original paper, the pitches of drums are distinct from those of all other instruments.
 
 NOTES:
 * In MidiTok, the tokens are first sorted by time, then track, then pitch values.
-* In the original MuMIDI, _Chord_ tokens are placed before Track tokens. We decided in MidiTok to put them after as chords are produced by one instrument, and several instruments can produce more than one chord at a time step.
 * This implementation uses _Program_ tokens to distinguish tracks, on their MIDI program. Hence, two tracks with the same program will be treated as being the same.
-* As in the original MuMIDI implementation, MidiTok distinguishes pitch tokens of drums from pitch tokens of other instruments. More details in the [code](miditok/mumidi.py).
 
 ![MuMIDI figure](https://github.com/Natooz/MidiTok/blob/assets/assets/mumidi.png?raw=true "MuMIDI sequence, with a bar and position embeddings")
 
 ### Create your own
 
-You can easily create your own encoding strategy and benefit from the MidiTok framework. Just create a class inheriting from the [MIDITokenizer](miditok/midi_tokenizer_base.py) base class, and override the ```track_to_tokens```, ```tokens_to_track```,  ```_create_vocabulary``` and ```_create_token_types_graph``` methods with your tokenization strategy.
+You can easily create your own tokenization and benefit from the MidiTok framework. Just create a class inheriting from the [MIDITokenizer](miditok/midi_tokenizer_base.py) base class, and override the ```track_to_tokens```, ```tokens_to_track```,  ```_create_vocabulary``` and ```_create_token_types_graph``` methods with your tokenization strategy.
 
 We encourage you to read the docstring of the [Vocabulary class](miditok/vocabulary.py) to learn how to use it for your strategy.
 
@@ -211,14 +193,22 @@ We encourage you to read the docstring of the [Vocabulary class](miditok/vocabul
 
 ### Common parameters
 
-Every encoding strategy share some common parameters around which the tokenizers are built:
+Every tokenization share some common parameters around which the tokenizers are built:
 
 * **Pitch range:** the MIDI norm can represent pitch values from 0 to 127, but the [GM2 specification](https://www.midi.org/specifications-old/item/general-midi-2) recommend from 21 to 108 for piano, which covers the recommended pitch values for all MIDI program. Notes with pitches under or above this range can be discarded or clipped to the limits.
-* **Beat resolution:** is the number of samples within a beat. MidiTok handles this with a flexible way: a dictionary of the form ```{(0, 4): 8, (3, 8): 4, ...}```. The keys are tuples indicating a range of beats, ex 0 to 4 for the first bar. The values are the resolutions, in samples per beat, of the given range, here 8 for the first. This way you can create a tokenizer with durations / time shifts of different lengths and resolutions.
-* **Number of velocities:** the number of velocity values you want represents. For instance if you set this parameter to 32, the velocities of the notes will be quantized into 32 velocity values from 0 to 127.
-* **Additional tokens:** specify which additional tokens bringing information like chords should be included. Note that each encoding is compatible with different additional tokens.
+* **Beat resolution:** the number of samples within a beat. MidiTok handles this with a flexible way: a dictionary of the form `{(0, 4): 8, (3, 8): 4, ...}`. The keys are tuples indicating a range of beats, ex 0 to 4 for the first bar. The values are the resolutions, in samples per beat, of the given range, here 8 for the first. This way you can create a tokenizer with durations / time shifts of different lengths and resolutions.
+* **Number of velocities:** the number of velocity values to represent. For instance with 32, the velocities of the notes will be quantized into 32 velocity values from 0 to 127.
+* **Additional tokens:** specify which additional tokens should be included. Note that each encoding is compatible with different additional tokens.
 
 Check [constants.py](miditok/constants.py) to see how these parameters are constructed.
+
+### Byte Pair Encoding (BPE)
+
+[BPE](https://www.derczynski.com/papers/archive/BPE_Gage.pdf) is a compression technique that originally combines the most recurrent byte pairs in a corpus.
+In the context of tokens, it allows to combine the most recurrent token successions by replacing them with a new created symbol (token). This naturally increases the size of the vocabulary, while reducing the overall sequence length.
+Today BPE is used to build almost all tokenizations of natural language, as [it allows to encode rare words and segmenting unknown or composed words as sequences of sub-word units](https://aclanthology.org/P16-1162/).
+You can apply it to symbolic music with MidiTok, by first learning the vocabulary (`tokenizer.learn_bpe()`), and then convert a dataset with BPE (`tokenizer.apply_bpe_to_dataset()`).
+All tokenizations not based on embedding pooling are compatible!
 
 ### Special tokens
 
@@ -242,23 +232,22 @@ These tokens bring additional information about the structure and content of MID
 Additionally, MidiTok offers to include *Program* tokens in the vocabulary of MIDI-Like, REMI and CP Word.
 We do not consider them additional tokens though as they are not used anywhere in MidiTok, but intended for you to insert them at the beginning of each sequence as *Start Of Sequence* tokens.
 
-|                |   MIDI-Like   | REMI          | Compound Word | Structured |    Octuple    |    MuMIDI     |
-|----------------|:-------------:|:--------------:|:--------------:|:--------:|:-------------:|:-------------:|
-| Chord          |       ✅       | ✅             | ✅             | ❌        |       ❌       |       ✅       |
-| Rest           |       ✅       | ✅             | ✅             | ❌        |       ❌       |       ❌       |
-| Tempo          | ✅<sup>1</sup> | ✅<sup>1</sup> | ✅<sup>1</sup> | ❌        |       ✅       |       ✅       |
-| Program        | ✅             | ✅             | ✅             | ✅        | ✅<sup>3</sup> | ✅<sup>3</sup> |
-| Time Signature |       ❌       | ❌             | ❌             | ❌        |      ✅        |      ❌        |
+| Token type     |   MIDI-Like   |      TSD      |     REMI      | Compound Word | Structured |    Octuple    |    MuMIDI     |
+|----------------|:-------------:|:-------------:|:-------------:|:-------------:|:----------:|:-------------:|:-------------:|
+| Chord          |       ✅       |       ✅       |       ✅       |       ✅       |     ❌      |       ❌       | ✅<sup>3</sup> |
+| Rest           |       ✅       |       ✅       | ✅<sup>2</sup> | ✅<sup>2</sup> |     ❌      |       ❌       |       ❌       |
+| Tempo          | ✅<sup>1</sup> | ✅<sup>1</sup> | ✅<sup>1</sup> | ✅<sup>1</sup> |     ❌      |       ✅       |       ✅       |
+| Program        |       ✅       |       ✅       |       ✅       |       ✅       |     ✅      | ✅<sup>5</sup> | ✅<sup>5</sup> |
+| Time signature |       ❌       |       ❌       |       ❌       |       ❌       |     ❌      |       ✅       |       ❌       |
 
 <sup>1</sup> Should not be used with multiple tracks. Otherwise, at decoding, only the events of the first track will be considered.\
-<sup>2</sup> Only used in the input as additional information. At decoding no tempo tokens should be predicted, i.e will be considered.\
-<sup>3</sup> Integrated by default.
+<sup>2</sup> Position tokens are always following Rest tokens to make sure the position of the following notes are explicitly stated. Bar tokens can follow Rest tokens depending on their respective value and your parameters.\
+<sup>3</sup> In the original MuMIDI paper, _Chord_ tokens are placed before Track tokens. We decided in MidiTok to put them after as chords are produced by one instrument, and several instruments can produce more than one chord at a time step.\
+<sup>4</sup> Integrated by default.
 
 ## Limitations
 
-For the tokenization methods using Bar tokens (REMI, Compound Word and MuMIDI), **MidiTok only considers a 4/x time signature** for now. This means that each bar is considered covering 4 beats.
-
-Future updates will support other time signatures, and time signature changes for compatible tokenizations.
+Tokenizations using Bar tokens (REMI, Compound Word and MuMIDI) **only considers a 4/x time signature** for now. This means that each bar is considered covering 4 beats.
 
 ## Contributions
 
@@ -268,7 +257,7 @@ Contributions are gratefully welcomed, feel free to open an issue or send a PR i
 
 * Time Signature
 * Control Change messages
-* Automatic data augmentation on pitch
+* Data augmentation on duration values at the MIDI level
 * Documentation website
 
 ## Citations
