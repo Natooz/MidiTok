@@ -413,7 +413,7 @@ class Octuple(MIDITokenizer):
             bar_value = int(self.vocab[5].token_to_event[token[5]].split('_')[1])
             pos_value = int(self.vocab[4].token_to_event[token[4]].split('_')[1])
             pitch_value = int(self.vocab[0].token_to_event[token[0]].split('_')[1])
-            program_value = int(self.vocab[0].token_to_event[token[0]].split('_')[1])
+            program_value = int(self.vocab[3].token_to_event[token[3]].split('_')[1])
 
             # Bar
             if bar_value < current_bar:

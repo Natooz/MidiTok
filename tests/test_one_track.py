@@ -67,7 +67,7 @@ def test_one_track_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] 
             tokens_types = tokenizer.token_types_errors(tokens[0] if encoding not in ['Octuple',
                                                                                       'MuMIDI'] else tokens)
             if tokens_types != 0.:
-                print(f'Validation of tokens types / values successions failed with {encoding}: {tokens_types}')
+                print(f'Validation of tokens types / values successions failed with {encoding}: {tokens_types:.2f}')
 
             # Convert back tokens into a track object
             tempo_changes = None

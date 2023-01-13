@@ -16,7 +16,7 @@ NOTE: encoded tracks has to be compared with the quantized original track.
 """
 
 from copy import deepcopy
-from pathlib import Path, PurePath
+from pathlib import Path
 from typing import Union
 
 import miditok
@@ -40,7 +40,7 @@ ADDITIONAL_TOKENS_TEST = {'Chord': True,
                           'time_signature_range': (16, 2)}
 
 
-def test_multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath] = './tests/Multitrack_MIDIs',
+def test_multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path] = './tests/Multitrack_MIDIs',
                                            saving_erroneous_midis: bool = True):
     r"""Reads a few MIDI files, convert them into token sequences, convert them back to MIDI files.
     The converted back MIDI files should identical to original one, expect with note starting and ending
@@ -55,7 +55,7 @@ def test_multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath]
 
         # Reads the MIDI
         try:
-            midi = MidiFile(PurePath(file_path))
+            midi = MidiFile(Path(file_path))
         except Exception:  # ValueError, OSError, FileNotFoundError, IOError, EOFError, mido.KeySignatureError
             continue
         if midi.ticks_per_beat % max(BEAT_RES_TEST.values()) != 0:
@@ -71,20 +71,28 @@ def test_multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath]
             for track in midi_to_compare.instruments:
                 if track.is_drum:
                     track.program = 0  # need to be done before sorting tracks per program
+
             # Sort and merge tracks if needed
             # MIDI produced with Octuple contains tracks ordered by program
-            if encoding == 'Octuple' or encoding == 'MuMIDI':
+            if encoding in ['Octuple', 'MuMIDI']:
                 miditok.utils.merge_same_program_tracks(midi_to_compare.instruments)  # merge tracks
             for track in midi_to_compare.instruments:  # reduce the duration of notes to long
-                reduce_note_durations(track.notes, max(tu[1] for tu in BEAT_RES_TEST) * midi.ticks_per_beat)
+                reduce_note_durations(track.notes, max(tu[1] for tu in BEAT_RES_TEST) * midi_to_compare.ticks_per_beat)
                 miditok.utils.remove_duplicated_notes(track.notes)
             if encoding == 'Octuple':  # needed
                 adapt_tempo_changes_times(midi_to_compare.instruments, midi_to_compare.tempo_changes)
 
             # MIDI -> Tokens -> MIDI
             midi_to_compare.instruments.sort(key=lambda x: (x.program, x.is_drum))  # sort tracks
-            new_midi = midi_to_tokens_to_midi(tokenizer, midi_to_compare)
+            tokens = tokenizer(midi_to_compare)
+            new_midi = tokenizer(tokens, miditok.utils.get_midi_programs(midi_to_compare),
+                                 time_division=midi_to_compare.ticks_per_beat)
             new_midi.instruments.sort(key=lambda x: (x.program, x.is_drum))
+
+            # Checks types and values conformity following the rules
+            tokens_types = tokenizer.token_types_errors(tokens[0] if not tokenizer.unique_track else tokens)
+            if tokens_types != 0.:
+                print(f'Validation of tokens types / values successions failed with {encoding}: {tokens_types:.2f}')
 
             # Checks notes
             errors = midis_equals(midi_to_compare, new_midi)
@@ -119,32 +127,15 @@ def test_multitrack_midi_to_tokens_to_midi(data_path: Union[str, Path, PurePath]
             if has_errors:
                 at_least_one_error = True
                 if saving_erroneous_midis:
-                    new_midi.dump(PurePath('tests', 'test_results', f'{file_path.stem}_{encoding}')
-                                  .with_suffix('.mid'))
+                    new_midi.dump(Path('tests', 'test_results', f'{file_path.stem}_{encoding}.mid'))
+                    midi_to_compare.dump(Path('tests', 'test_results', f'{file_path.stem}_{encoding}_original.mid'))
     assert not at_least_one_error
-
-
-def midi_to_tokens_to_midi(tokenizer: miditok.MIDITokenizer, midi: MidiFile) -> MidiFile:
-    r"""Converts a MIDI into tokens, and convert them back to MIDI
-    Useful to see if the conversion works well in both ways
-
-    :param tokenizer: the tokenizer
-    :param midi: MIDI object to convert
-    :return: The converted MIDI object
-    """
-    tokens = tokenizer.midi_to_tokens(midi)
-    if len(tokens) == 0:  # no track after notes quantization, this can happen
-        return MidiFile()
-    inf = miditok.utils.get_midi_programs(midi)  # programs of tracks
-    new_midi = tokenizer.tokens_to_midi(tokens, inf, time_division=midi.ticks_per_beat)
-
-    return new_midi
 
 
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description='MIDI Encoding test')
-    parser.add_argument('--data', type=str, default='Multitrack_MIDIs',
+    parser.add_argument('--data', type=str, default='tests/Multitrack_MIDIs',
                         help='directory of MIDI files to use for test')
     args = parser.parse_args()
 

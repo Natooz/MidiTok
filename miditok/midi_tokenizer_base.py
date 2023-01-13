@@ -10,7 +10,6 @@ import json
 from random import choices
 from copy import deepcopy
 from typing import List, Tuple, Dict, Union, Callable, Optional, Any
-from warnings import warn
 
 import numpy as np
 from tqdm import tqdm
@@ -941,8 +940,8 @@ class MIDITokenizer(ABC):
 
     def __len__(self) -> int:
         if self.is_multi_voc:
-            warn('You are using a multi vocab tokenizer, returning the sum of the lengths of all vocabs.'
-                 'If you want the len per vocab, use the tokenizer.len property.')
+            '''warn('You are using a multi vocab tokenizer, returning the sum of the lengths of all vocabs.'
+                 'If you want the len per vocab, use the tokenizer.len property.')'''
             return sum([len(v) for v in self.vocab])
         return len(self.vocab)
 
