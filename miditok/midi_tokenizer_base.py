@@ -17,7 +17,7 @@ from miditoolkit import MidiFile, Instrument, Note, TempoChange, TimeSignature
 
 from .vocabulary import Vocabulary, Event
 from .utils import remove_duplicated_notes, get_midi_programs
-from .data_augmentation import data_augmentation_midi
+from .data_augmentation import data_augmentation_dataset
 from .constants import TIME_DIVISION, CURRENT_VERSION_PACKAGE
 
 
@@ -747,7 +747,7 @@ class MIDITokenizer(ABC):
     def tokenize_midi_dataset(self, midi_paths: Union[List[str], List[Path]],
                               out_dir: Union[str, Path],
                               validation_fn: Callable[[MidiFile], bool] = None,
-                              data_augment_nb_octave_offset: int = None,
+                              data_augment_offsets=None,
                               save_programs: bool = True, logging: bool = True):
         r"""Converts a dataset / list of MIDI files, into their token version and save them as json files
         The resulting Json files will have the shape (T, *), first dimension is tracks, second tokens.
@@ -759,8 +759,9 @@ class MIDITokenizer(ABC):
         :param out_dir: output directory to save the converted files
         :param validation_fn: a function checking if the MIDI is valid on your requirements
                             (e.g. time signature, minimum/maximum length, instruments ...)
-        :param data_augment_nb_octave_offset: number of pitch octaves offset to perform data augmentation.
-                            (default: None)
+        :param data_augment_offsets: data augmentation arguments, to be passed to the
+            miditok.data_augmentation.data_augmentation_dataset method. Has to be given as a list / tuple
+            of offsets pitch octaves, velocities, durations, and finaly their directions (up/down). (default: None)
         :param save_programs: will also save the programs of the tracks of the MIDI(default: True)
         :param logging: logs progress bar
         """
@@ -789,17 +790,14 @@ class MIDITokenizer(ABC):
                 if not validation_fn(midi):
                     continue
 
-            # Perform data augmentation if ordered
-            if data_augment_nb_octave_offset is not None:
-                midis = data_augmentation_midi(midi, self.pitch_range, data_augment_nb_octave_offset) + [(0, midi)]
-            else:
-                midis = [(0, midi)]
-
             # Converting the MIDI to tokens and saving them as json
-            for octave_offset, midi in midis:
-                tokens = self.midi_to_tokens(midi)
-                midi_name = f'{midi_path.stem}.json' if octave_offset == 0 else f'{midi_path.stem}_{octave_offset}.json'
-                self.save_tokens(tokens, out_dir / midi_name, get_midi_programs(midi) if save_programs else None)
+            tokens = self.midi_to_tokens(midi)
+            self.save_tokens(tokens, Path(out_dir, f'{Path(midi_path).stem}.json').with_suffix(".json"),
+                             get_midi_programs(midi) if save_programs else None)
+
+            # Perform data augmentation if ordered
+            if data_augment_offsets is not None:
+                data_augmentation_dataset(out_dir, self, *data_augment_offsets)
 
     def token_types_errors(self, tokens: List[int], consider_pad: bool = False) -> float:
         r"""Checks if a sequence of tokens is constituted of good token types
