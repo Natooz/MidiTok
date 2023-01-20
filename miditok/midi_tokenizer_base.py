@@ -997,9 +997,9 @@ class MIDITokenizer(ABC):
                 get_midi_programs(midi) if save_programs else None,
             )
 
-            # Perform data augmentation if ordered
-            if data_augment_offsets is not None:
-                data_augmentation_dataset(out_dir, self, *data_augment_offsets)
+        # Perform data augmentation
+        if data_augment_offsets is not None:
+            data_augmentation_dataset(out_dir, self, *data_augment_offsets)
 
     def token_types_errors(
         self, tokens: List[int], consider_pad: bool = False
