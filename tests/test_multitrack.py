@@ -164,7 +164,10 @@ def test_multitrack_midi_to_tokens_to_midi(
                     )
 
             # Checks time signatures
-            if tokenizer.additional_tokens["TimeSignature"] and tokenization == "Octuple":
+            if (
+                tokenizer.additional_tokens["TimeSignature"]
+                and tokenization == "Octuple"
+            ):
                 time_sig_errors = time_signature_changes_equals(
                     midi_to_compare.time_signature_changes,
                     new_midi.time_signature_changes,
@@ -181,7 +184,9 @@ def test_multitrack_midi_to_tokens_to_midi(
                 if saving_erroneous_midis:
                     new_midi.dump(
                         Path(
-                            "tests", "test_results", f"{file_path.stem}_{tokenization}.mid"
+                            "tests",
+                            "test_results",
+                            f"{file_path.stem}_{tokenization}.mid",
                         )
                     )
                     midi_to_compare.dump(

@@ -327,16 +327,16 @@ def current_bar_pos(
     current_bar = len(bar_idx)
     # Current position value within the bar
     pos_idx = [
-        i for i, token in enumerate(seq[bar_idx[-1]:]) if token in position_tokens
+        i for i, token in enumerate(seq[bar_idx[-1] :]) if token in position_tokens
     ]
     current_pos = (
         len(pos_idx) - 1
     )  # position value, e.g. from 0 to 15, -1 means a bar with no Pos token following
     # Pitches played at the current position
-    current_pitches = [token for token in seq[pos_idx[-1]:] if token in pitch_tokens]
+    current_pitches = [token for token in seq[pos_idx[-1] :] if token in pitch_tokens]
     # Chord predicted
     if chord_tokens is not None:
-        chord_at_this_pos = any(token in chord_tokens for token in seq[pos_idx[-1]:])
+        chord_at_this_pos = any(token in chord_tokens for token in seq[pos_idx[-1] :])
     else:
         chord_at_this_pos = False
     return current_bar, current_pos, current_pitches, chord_at_this_pos

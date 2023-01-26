@@ -109,8 +109,8 @@ def test_data_augmentation():
             data_path,
             tokenizer,
             2,
-            2,
-            2,
+            1,
+            1,
             out_path=midi_aug_path,
             copy_original_in_new_location=False,
         )
@@ -158,8 +158,8 @@ def test_data_augmentation():
             tokens_path,
             tokenizer,
             2,
-            2,
-            2,
+            1,
+            1,
             out_path=tokens_aug_path,
             copy_original_in_new_location=False,
         )

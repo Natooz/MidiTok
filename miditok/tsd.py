@@ -38,6 +38,7 @@ class TSD(MIDITokenizer):
     :param sos_eos: adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens to the vocabulary.
             (default: False)
     :param mask: will add a MASK token to the vocabulary (default: False)
+    :param sep: will add a SEP token to the vocabulary (default: False)
     :param params: can be a path to the parameter (json encoded) file or a dictionary
     """
 
@@ -50,6 +51,7 @@ class TSD(MIDITokenizer):
         pad: bool = True,
         sos_eos: bool = False,
         mask: bool = False,
+        sep: bool = False,
         params=None,
     ):
         additional_tokens["TimeSignature"] = False  # not compatible
@@ -61,6 +63,7 @@ class TSD(MIDITokenizer):
             pad,
             sos_eos,
             mask,
+            sep,
             params=params,
         )
 
@@ -284,7 +287,9 @@ class TSD(MIDITokenizer):
         :param sos_eos_tokens: will include Start Of Sequence (SOS) and End Of Sequence (tokens)
         :return: the vocabulary object
         """
-        vocab = Vocabulary(pad=self._pad, sos_eos=self._sos_eos, mask=self._mask, sep=self._sep)
+        vocab = Vocabulary(
+            pad=self._pad, sos_eos=self._sos_eos, mask=self._mask, sep=self._sep
+        )
 
         # NOTE ON
         vocab.add_event(f"Pitch_{i}" for i in self.pitch_range)

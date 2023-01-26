@@ -46,6 +46,7 @@ class MuMIDI(MIDITokenizer):
     :param sos_eos: adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens to the vocabulary.
             (default: False)
     :param mask: will add a MASK token to the vocabulary (default: False)
+    :param sep: will add a SEP token to the vocabulary (default: False)
     :param params: can be a path to the parameter (json encoded) file or a dictionary
     :param drum_pitch_range: range of used MIDI pitches for drums exclusively
     """
@@ -60,6 +61,7 @@ class MuMIDI(MIDITokenizer):
         pad: bool = True,
         sos_eos: bool = False,
         mask: bool = False,
+        sep: bool = False,
         params=None,
         drum_pitch_range: range = DRUM_PITCH_RANGE,
     ):
@@ -94,6 +96,7 @@ class MuMIDI(MIDITokenizer):
             pad,
             sos_eos,
             mask,
+            sep,
             True,
             params=params,
         )
@@ -204,14 +207,20 @@ class MuMIDI(MIDITokenizer):
         current_pos = -1
         current_track = -2  # because -2 doesn't exist
         current_tempo_idx = 0
-        current_tempo = self.current_midi_metadata["tempo_changes"][current_tempo_idx].tempo
+        current_tempo = self.current_midi_metadata["tempo_changes"][
+            current_tempo_idx
+        ].tempo
         for note_token in note_tokens:
             # (Tempo) update tempo values current_tempo
             if self.additional_tokens["Tempo"]:
                 # If the current tempo is not the last one
-                if current_tempo_idx + 1 < len(self.current_midi_metadata["tempo_changes"]):
+                if current_tempo_idx + 1 < len(
+                    self.current_midi_metadata["tempo_changes"]
+                ):
                     # Will loop over incoming tempo changes
-                    for tempo_change in self.current_midi_metadata["tempo_changes"][current_tempo_idx + 1:]:
+                    for tempo_change in self.current_midi_metadata["tempo_changes"][
+                        current_tempo_idx + 1:
+                    ]:
                         # If this tempo change happened before the current moment
                         if tempo_change.time <= note_token[0].time:
                             current_tempo = tempo_change.tempo
@@ -489,7 +498,9 @@ class MuMIDI(MIDITokenizer):
                 "_create_vocabulary now uses self._sos_eos attribute set a class init \033[0m"
             )
         vocab = [
-            Vocabulary(pad=self._pad, sos_eos=self._sos_eos, mask=self._mask, sep=self._sep)
+            Vocabulary(
+                pad=self._pad, sos_eos=self._sos_eos, mask=self._mask, sep=self._sep
+            )
             for _ in range(3)
         ]
 

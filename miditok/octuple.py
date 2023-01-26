@@ -40,6 +40,7 @@ class Octuple(MIDITokenizer):
     :param sos_eos: adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens to the vocabulary.
             (default: False)
     :param mask: will add a MASK token to the vocabulary (default: False)
+    :param sep: will add a SEP token to the vocabulary (default: False)
     :param params: can be a path to the parameter (json encoded) file or a dictionary
     """
 
@@ -53,6 +54,7 @@ class Octuple(MIDITokenizer):
         pad: bool = True,
         sos_eos: bool = False,
         mask: bool = False,
+        sep: bool = False,
         params=None,
     ):
         additional_tokens["Chord"] = False  # Incompatible additional token
@@ -76,6 +78,7 @@ class Octuple(MIDITokenizer):
             pad,
             sos_eos,
             mask,
+            sep,
             True,
             params=params,
         )
@@ -253,7 +256,9 @@ class Octuple(MIDITokenizer):
                     self.current_midi_metadata["tempo_changes"]
                 ):
                     # Will loop over incoming tempo changes
-                    for tempo_change in self.current_midi_metadata["tempo_changes"][current_tempo_idx + 1:]:
+                    for tempo_change in self.current_midi_metadata["tempo_changes"][
+                        current_tempo_idx + 1:
+                    ]:
                         # If this tempo change happened before the current moment
                         if tempo_change.time <= note.start:
                             current_tempo = tempo_change.tempo
@@ -460,7 +465,9 @@ class Octuple(MIDITokenizer):
                 "_create_vocabulary now uses self._sos_eos attribute set a class init \033[0m"
             )
         vocab = [
-            Vocabulary(pad=self._pad, sos_eos=self._sos_eos, mask=self._mask, sep=self._sep)
+            Vocabulary(
+                pad=self._pad, sos_eos=self._sos_eos, mask=self._mask, sep=self._sep
+            )
             for _ in range(6)
         ]
 

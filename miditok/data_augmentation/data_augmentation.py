@@ -22,6 +22,7 @@ def data_augmentation_dataset(
     octave_directions: Tuple[bool, bool] = (True, True),
     vel_directions: Tuple[bool, bool] = (True, True),
     dur_directions: Tuple[bool, bool] = (True, True),
+    all_offset_combinations: bool = False,
     out_path: Union[Path, str] = None,
     copy_original_in_new_location: bool = True,
 ):
@@ -43,6 +44,9 @@ def data_augmentation_dataset(
             as a tuple of two booleans. (default: (True, True))
     :param dur_directions: directions to shift the duration augmentation, for up / down
             as a tuple of two booleans. (default: (True, True))
+    :param all_offset_combinations: will perform data augmentation on all the possible
+            combinations of offsets. If set to False, will perform data augmentation
+            only based on the original sample.
     :param out_path: output path to save the augmented files. Original (non-augmented) MIDIs will be
             saved to this location. If none is given, they will be saved in the same location an the
             data_path. (default: None)
@@ -89,7 +93,12 @@ def data_augmentation_dataset(
             for track, (_, is_drum) in zip(tokens, programs):
                 if is_drum:  # we dont augment drums
                     continue
-                aug = data_augmentation_tokens(np.array(track), tokenizer, *offsets)
+                aug = data_augmentation_tokens(
+                    np.array(track),
+                    tokenizer,
+                    *offsets,
+                    all_offset_combinations=all_offset_combinations,
+                )
                 if len(aug) == 0:
                     continue
                 for aug_offsets, seq in aug:
@@ -145,7 +154,12 @@ def data_augmentation_dataset(
                 dur_directions,
                 midi=midi,
             )
-            augmented_midis = data_augmentation_midi(midi, tokenizer, *offsets)
+            augmented_midis = data_augmentation_midi(
+                midi,
+                tokenizer,
+                *offsets,
+                all_offset_combinations=all_offset_combinations,
+            )
             for aug_offsets, aug_midi in augmented_midis:
                 if len(aug_midi.instruments) == 0:
                     continue
@@ -292,6 +306,7 @@ def data_augmentation_midi(
     pitch_offsets: List[int] = None,
     velocity_offsets: List[int] = None,
     duration_offsets: List[int] = None,
+    all_offset_combinations: bool = False,
 ) -> List[Tuple[Tuple[int, int, int], MidiFile]]:
     r"""Perform data augmentation on a MIDI object.
     Drum tracks are not augmented, but copied as original in augmented MIDIs.
@@ -301,6 +316,9 @@ def data_augmentation_midi(
     :param pitch_offsets: list of pitch offsets for augmentation.
     :param velocity_offsets: list of velocity offsets for augmentation.
     :param duration_offsets: list of duration offsets for augmentation.
+    :param all_offset_combinations: will perform data augmentation on all the possible
+            combinations of offsets. If set to False, will perform data augmentation
+            only based on the original sample.
     :return: augmented MIDI objects.
     """
     augmented = []
@@ -337,9 +355,12 @@ def data_augmentation_midi(
                 aug_.append(((offsets_[0], offset_, offsets_[2]), midi_aug_))
             return aug_
 
-        for i in range(len(augmented)):
-            offsets, midi_aug = augmented[i]
-            augmented += augment_vel(midi_aug, offsets)  # for already augmented midis
+        if all_offset_combinations:
+            for i in range(len(augmented)):
+                offsets, midi_aug = augmented[i]
+                augmented += augment_vel(
+                    midi_aug, offsets
+                )  # for already augmented midis
         augmented += augment_vel(midi, (0, 0, 0))  # for original midi
 
     # TODO Duration augmentation
@@ -361,9 +382,10 @@ def data_augmentation_midi(
                 aug_.append(((offsets_[0], offsets_[1], offset_), midi_aug_))
             return aug_
 
-        for i in range(len(augmented)):
-            offsets, midi_aug = augmented[i]
-            augmented += augment_dur(midi_aug, offsets)  # for already augmented midis
+        if all_offset_combinations:
+            for i in range(len(augmented)):
+                offsets, midi_aug = augmented[i]
+                augmented += augment_dur(midi_aug, offsets)  # for already augmented midis
         augmented += augment_dur(midi, (0, 0, 0))  # for original midi"""
 
     return augmented
@@ -375,6 +397,7 @@ def data_augmentation_tokens(
     pitch_offsets: List[int] = None,
     velocity_offsets: List[int] = None,
     duration_offsets: List[int] = None,
+    all_offset_combinations: bool = False,
 ) -> List[Tuple[Tuple[int, int, int], List[int]]]:
     r"""Perform data augmentation on a sequence of tokens, on the pitch dimension.
     NOTE: token sequences with BPE will be decoded during the augmentation, this might take some time.
@@ -389,6 +412,9 @@ def data_augmentation_tokens(
     :param pitch_offsets: list of pitch offsets for augmentation.
     :param velocity_offsets: list of velocity offsets for augmentation.
     :param duration_offsets: list of duration offsets for augmentation.
+    :param all_offset_combinations: will perform data augmentation on all the possible
+            combinations of offsets. If set to False, will perform data augmentation
+            only based on the original sample.
     :return: the several data augmentations that have been performed
     """
     augmented = []
@@ -464,9 +490,12 @@ def data_augmentation_tokens(
                 aug_.append(((offsets_[0], offset_, offsets_[2]), aug_seq))
             return aug_
 
-        for i in range(len(augmented)):
-            offsets, seq_aug = augmented[i]
-            augmented += augment_vel(seq_aug, offsets)  # for already augmented midis
+        if all_offset_combinations:
+            for i in range(len(augmented)):
+                offsets, seq_aug = augmented[i]
+                augmented += augment_vel(
+                    seq_aug, offsets
+                )  # for already augmented midis
         augmented += augment_vel(tokens, (0, 0, 0))  # for original midi
 
     # Duration augmentation
@@ -502,9 +531,12 @@ def data_augmentation_tokens(
                 aug_.append(((offsets_[0], offsets_[1], offset_), aug_seq))
             return aug_
 
-        for i in range(len(augmented)):
-            offsets, seq_aug = augmented[i]
-            augmented += augment_dur(seq_aug, offsets)  # for already augmented midis
+        if all_offset_combinations:
+            for i in range(len(augmented)):
+                offsets, seq_aug = augmented[i]
+                augmented += augment_dur(
+                    seq_aug, offsets
+                )  # for already augmented midis
         augmented += augment_dur(tokens, (0, 0, 0))  # for original midi
 
     # Convert all arrays to lists and reapply BPE if necessary

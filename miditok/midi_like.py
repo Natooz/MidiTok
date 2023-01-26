@@ -47,6 +47,7 @@ class MIDILike(MIDITokenizer):
     :param sos_eos: adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens to the vocabulary.
             (default: False)
     :param mask: will add a MASK token to the vocabulary (default: False)
+    :param sep: will add a SEP token to the vocabulary (default: False)
     :param params: can be a path to the parameter (json encoded) file or a dictionary
     """
 
@@ -59,6 +60,7 @@ class MIDILike(MIDITokenizer):
         pad: bool = True,
         sos_eos: bool = False,
         mask: bool = False,
+        sep: bool = False,
         params=None,
     ):
         additional_tokens["TimeSignature"] = False  # not compatible
@@ -70,6 +72,7 @@ class MIDILike(MIDITokenizer):
             pad,
             sos_eos,
             mask,
+            sep,
             params=params,
         )
 
@@ -321,7 +324,9 @@ class MIDILike(MIDITokenizer):
                 "\033[93msos_eos_tokens argument is depreciated and will be removed in a future update, "
                 "_create_vocabulary now uses self._sos_eos attribute set a class init \033[0m"
             )
-        vocab = Vocabulary(pad=self._pad, sos_eos=self._sos_eos, mask=self._mask, sep=self._sep)
+        vocab = Vocabulary(
+            pad=self._pad, sos_eos=self._sos_eos, mask=self._mask, sep=self._sep
+        )
 
         # NOTE ON
         vocab.add_event(f"NoteOn_{i}" for i in self.pitch_range)
