@@ -267,7 +267,7 @@ class OctupleMono(MIDITokenizer):
                 "_create_vocabulary now uses self._sos_eos attribute set a class init \033[0m"
             )
         vocab = [
-            Vocabulary(pad=self._pad, sos_eos=self._sos_eos, mask=self._mask)
+            Vocabulary(pad=self._pad, sos_eos=self._sos_eos, mask=self._mask, sep=self._sep)
             for _ in range(5)
         ]
 

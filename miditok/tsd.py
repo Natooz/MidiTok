@@ -284,7 +284,7 @@ class TSD(MIDITokenizer):
         :param sos_eos_tokens: will include Start Of Sequence (SOS) and End Of Sequence (tokens)
         :return: the vocabulary object
         """
-        vocab = Vocabulary(pad=self._pad, sos_eos=self._sos_eos, mask=self._mask)
+        vocab = Vocabulary(pad=self._pad, sos_eos=self._sos_eos, mask=self._mask, sep=self._sep)
 
         # NOTE ON
         vocab.add_event(f"Pitch_{i}" for i in self.pitch_range)

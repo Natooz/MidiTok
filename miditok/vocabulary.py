@@ -44,6 +44,7 @@ class Vocabulary:
                 If this argument is set to True, the PAD token will be at index 0. (default: True)
     :param sos_eos: will include Start Of Sequence (SOS) and End Of Sequence (tokens) (default: False)
     :param mask: will add a MASK token to the vocabulary. (default: False)
+    :param sep: will add a SEP token to the vocabulary. (default: False)
     :param events: a list of events to add to the vocabulary when creating it. (default: None)
     """
 
@@ -52,11 +53,13 @@ class Vocabulary:
         pad: bool = True,
         mask: bool = False,
         sos_eos: bool = False,
+        sep: bool = False,
         events: List[Union[str, Event]] = None,
     ):
         self._event_to_token = {}
         self._token_to_event = {}
         self._token_types_indexes = {}
+        self.special_tokens = []
 
         # Adds (if specified) special tokens first
         if pad:
@@ -65,6 +68,8 @@ class Vocabulary:
             self.__add_sos_eos()
         if mask:
             self.__add_mask()
+        if sep:
+            self.__add_sep()
 
         # Add custom events and updates _token_types_indexes
         if events is not None:
@@ -136,6 +141,7 @@ class Vocabulary:
     def __add_pad(self):
         r"""Adds a PAD token to the vocabulary. It is usually at index 0."""
         self.__add_distinct_event("PAD_None")
+        self.special_tokens.append(self._event_to_token["PAD_None"])
 
     def __add_sos_eos(self):
         r"""Adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens
@@ -143,12 +149,23 @@ class Vocabulary:
         """
         self.__add_distinct_event("SOS_None")
         self.__add_distinct_event("EOS_None")
+        self.special_tokens.append(self._event_to_token["SOS_None"])
+        self.special_tokens.append(self._event_to_token["EOS_None"])
 
     def __add_mask(self):
         r"""Adds a MASK token to the vocabulary. This may be used to
-        pre-train a model, such as for BERT, before finetuning it.
+        pre-train a model, such as for BERT.
         """
         self.__add_distinct_event("MASK_None")
+        self.special_tokens.append(self._event_to_token["MASK_None"])
+
+    def __add_sep(self):
+        r"""Adds a SEP token to the vocabulary. This may be used to
+        pre-train a model with a "next sentence prediction" objective,
+        such as for BERT.
+        """
+        self.__add_distinct_event("SEP_None")
+        self.special_tokens.append(self._event_to_token["SEP_None"])
 
     def __getitem__(self, item: Union[int, str]) -> Union[str, int]:
         if isinstance(item, str):

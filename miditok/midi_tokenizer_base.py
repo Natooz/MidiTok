@@ -69,6 +69,7 @@ class MIDITokenizer(ABC):
     :param sos_eos: adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens to the vocabulary.
             (default: False)
     :param mask: will add a MASK token to the vocabulary (default: False)
+    :param sep: will add a SEP token to the vocabulary (default: False)
     :param unique_track: set to True if the tokenizer works only with a unique track.
             Tokens will be saved as a single track. This applies to representations that natively handle
             multiple tracks such as Octuple, resulting in a single "stream" of tokens for all tracks.
@@ -85,6 +86,7 @@ class MIDITokenizer(ABC):
         pad: bool = True,
         sos_eos: bool = False,
         mask: bool = False,
+        sep: bool = False,
         unique_track: bool = False,
         params: Union[str, Path, Dict[str, Any]] = None,
     ):
@@ -99,6 +101,7 @@ class MIDITokenizer(ABC):
             self._pad = pad
             self._sos_eos = sos_eos
             self._mask = mask
+            self._sep = sep
             self.unique_track = unique_track
         else:
             self.load_params(params)
@@ -484,7 +487,7 @@ class MIDITokenizer(ABC):
         raise NotImplementedError
 
     def _add_special_tokens_to_types_graph(self, dic: Dict[str, List[str]]):
-        r"""Inplace adds special tokens (PAD, EOS, SOS, MASK) types to the token types graph dictionary.
+        r"""Inplace adds special tokens (PAD, EOS, SOS, MASK, SEP) types to the token types graph dictionary.
 
         :param dic: token types graph to add PAD type
         """
@@ -501,6 +504,10 @@ class MIDITokenizer(ABC):
             dic["MASK"] = list(dic.keys())
             for value in dic.values():
                 value.append("MASK")
+        if self._sep:
+            dic["SEP"] = list(dic.keys())
+            for value in dic.values():
+                value.append("SEP")
 
     def _add_bpe_to_tokens_type_graph(self):
         r"""Adds BPE to the tokens_types_graph.
@@ -1108,6 +1115,7 @@ class MIDITokenizer(ABC):
             "_pad": self._pad,
             "_sos_eos": self._sos_eos,
             "_mask": self._mask,
+            "_sep": self._sep,
             "unique_track": self.unique_track,
             "tokenization": self.__class__.__name__,
             "miditok_version": CURRENT_VERSION_PACKAGE,
@@ -1166,10 +1174,16 @@ class MIDITokenizer(ABC):
             self._sos_eos = False
         if "_mask" not in params:  # miditok < v1.2.0
             self._mask = False
+        if "_sep" not in params:  # miditok < v1.2.0
+            self._sep = False
 
     @property
     def is_multi_voc(self) -> bool:
         return isinstance(self.vocab, list)
+
+    @property
+    def special_tokens(self) -> List[int]:
+        return self.vocab.special_tokens
 
     def __call__(self, obj: Any, *args, **kwargs):
         if isinstance(obj, MidiFile):

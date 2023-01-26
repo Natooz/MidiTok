@@ -52,14 +52,14 @@ ADDITIONAL_TOKENS_TEST = {
 
 def test_multitrack_midi_to_tokens_to_midi(
     data_path: Union[str, Path] = "./tests/Multitrack_MIDIs",
-    saving_erroneous_midis: bool = True,
+    saving_erroneous_midis: bool = False,
 ):
     r"""Reads a few MIDI files, convert them into token sequences, convert them back to MIDI files.
     The converted back MIDI files should identical to original one, expect with note starting and ending
     times quantized, and maybe a some duplicated notes removed
 
     """
-    encodings = ["REMI", "CPWord", "Octuple", "OctupleMono", "MuMIDI"]
+    tokenizations = ["REMI", "CPWord", "Octuple", "OctupleMono", "MuMIDI"]
     files = list(Path(data_path).glob("**/*.mid"))
     at_least_one_error = False
 
@@ -74,10 +74,14 @@ def test_multitrack_midi_to_tokens_to_midi(
             continue
         has_errors = False
 
-        for encoding in encodings:
-            tokenizer = getattr(miditok, encoding)(
+        for tokenization in tokenizations:
+            tokenizer = getattr(miditok, tokenization)(
                 beat_res=BEAT_RES_TEST,
                 additional_tokens=deepcopy(ADDITIONAL_TOKENS_TEST),
+                pad=True,
+                sos_eos=True,
+                mask=True,
+                sep=True,
             )
 
             # Process the MIDI
@@ -92,7 +96,7 @@ def test_multitrack_midi_to_tokens_to_midi(
 
             # Sort and merge tracks if needed
             # MIDI produced with Octuple contains tracks ordered by program
-            if encoding in ["Octuple", "MuMIDI"]:
+            if tokenization in ["Octuple", "MuMIDI"]:
                 miditok.utils.merge_same_program_tracks(
                     midi_to_compare.instruments
                 )  # merge tracks
@@ -104,7 +108,7 @@ def test_multitrack_midi_to_tokens_to_midi(
                     max(tu[1] for tu in BEAT_RES_TEST) * midi_to_compare.ticks_per_beat,
                 )
                 miditok.utils.remove_duplicated_notes(track.notes)
-            if encoding == "Octuple":  # needed
+            if tokenization == "Octuple":  # needed
                 adapt_tempo_changes_times(
                     midi_to_compare.instruments, midi_to_compare.tempo_changes
                 )
@@ -127,7 +131,7 @@ def test_multitrack_midi_to_tokens_to_midi(
             )
             if tokens_types != 0.0:
                 print(
-                    f"Validation of tokens types / values successions failed with {encoding}: {tokens_types:.2f}"
+                    f"Validation of tokens types / values successions failed with {tokenization}: {tokens_types:.2f}"
                 )
 
             # Checks notes
@@ -137,17 +141,17 @@ def test_multitrack_midi_to_tokens_to_midi(
                 """for track_err in errors:
                     if track_err[-1][0] != 'len':
                         for err, note, exp in track_err[-1]:
-                            new_midi.markers.append(Marker(f'ERR {encoding} with note {err} (pitch {note.pitch})',
+                            new_midi.markers.append(Marker(f'ERR {tokenization} with note {err} (pitch {note.pitch})',
                                                            note.start))"""
                 print(
                     f"MIDI {i} - {file_path} failed to encode/decode NOTES with "
-                    f"{encoding} ({sum(len(t[2]) for t in errors)} errors)"
+                    f"{tokenization} ({sum(len(t[2]) for t in errors)} errors)"
                 )
                 # return False
 
             # Checks tempos
             if (
-                tokenizer.additional_tokens["Tempo"] and encoding != "MuMIDI"
+                tokenizer.additional_tokens["Tempo"] and tokenization != "MuMIDI"
             ):  # MuMIDI doesn't decode tempos
                 tempo_errors = tempo_changes_equals(
                     midi_to_compare.tempo_changes, new_midi.tempo_changes
@@ -156,11 +160,11 @@ def test_multitrack_midi_to_tokens_to_midi(
                     has_errors = True
                     print(
                         f"MIDI {i} - {file_path} failed to encode/decode TEMPO changes with "
-                        f"{encoding} ({len(tempo_errors)} errors)"
+                        f"{tokenization} ({len(tempo_errors)} errors)"
                     )
 
             # Checks time signatures
-            if tokenizer.additional_tokens["TimeSignature"] and encoding == "Octuple":
+            if tokenizer.additional_tokens["TimeSignature"] and tokenization == "Octuple":
                 time_sig_errors = time_signature_changes_equals(
                     midi_to_compare.time_signature_changes,
                     new_midi.time_signature_changes,
@@ -169,7 +173,7 @@ def test_multitrack_midi_to_tokens_to_midi(
                     has_errors = True
                     print(
                         f"MIDI {i} - {file_path} failed to encode/decode TIME SIGNATURE changes with "
-                        f"{encoding} ({len(time_sig_errors)} errors)"
+                        f"{tokenization} ({len(time_sig_errors)} errors)"
                     )
 
             if has_errors:
@@ -177,14 +181,14 @@ def test_multitrack_midi_to_tokens_to_midi(
                 if saving_erroneous_midis:
                     new_midi.dump(
                         Path(
-                            "tests", "test_results", f"{file_path.stem}_{encoding}.mid"
+                            "tests", "test_results", f"{file_path.stem}_{tokenization}.mid"
                         )
                     )
                     midi_to_compare.dump(
                         Path(
                             "tests",
                             "test_results",
-                            f"{file_path.stem}_{encoding}_original.mid",
+                            f"{file_path.stem}_{tokenization}_original.mid",
                         )
                     )
     assert not at_least_one_error

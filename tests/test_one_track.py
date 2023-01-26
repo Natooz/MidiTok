@@ -51,7 +51,7 @@ def test_one_track_midi_to_tokens_to_midi(
     :param data_path: root path to the data to test
     :param saving_erroneous_midis: will save MIDIs converted back with errors, to be used to debug
     """
-    encodings = [
+    tokenizations = [
         "MIDILike",
         "TSD",
         "Structured",
@@ -71,15 +71,20 @@ def test_one_track_midi_to_tokens_to_midi(
         tracks = [deepcopy(midi.instruments[0])]
         has_errors = False
 
-        for encoding in encodings:
+        for tokenization in tokenizations:
             add_tokens = deepcopy(ADDITIONAL_TOKENS_TEST)
-            if encoding in ["MIDILike", "TSD"]:
+            if tokenization in ["MIDILike", "TSD"]:
                 add_tokens["rest_range"] = (
                     add_tokens["rest_range"][0],
                     max(t[1] for t in BEAT_RES_TEST),
                 )
-            tokenizer = getattr(miditok, encoding)(
-                beat_res=BEAT_RES_TEST, additional_tokens=add_tokens
+            tokenizer = getattr(miditok, tokenization)(
+                beat_res=BEAT_RES_TEST,
+                additional_tokens=add_tokens,
+                pad=True,
+                sos_eos=True,
+                mask=True,
+                sep=True,
             )
 
             # Convert the track in tokens
@@ -87,22 +92,22 @@ def test_one_track_midi_to_tokens_to_midi(
 
             # Checks types and values conformity following the rules
             tokens_types = tokenizer.token_types_errors(
-                tokens[0] if encoding not in ["Octuple", "MuMIDI"] else tokens
+                tokens[0] if tokenization not in ["Octuple", "MuMIDI"] else tokens
             )
             if tokens_types != 0.0:
                 print(
-                    f"Validation of tokens types / values successions failed with {encoding}: {tokens_types:.2f}"
+                    f"Validation of tokens types / values successions failed with {tokenization}: {tokens_types:.2f}"
                 )
 
             # Convert back tokens into a track object
             tempo_changes = None
             time_sig_changes = None
-            if encoding == "Octuple" or encoding == "MuMIDI":
+            if tokenization == "Octuple" or tokenization == "MuMIDI":
                 new_midi = tokenizer.tokens_to_midi(
                     tokens, time_division=midi.ticks_per_beat
                 )
                 track = new_midi.instruments[0]
-                if encoding == "Octuple":
+                if tokenization == "Octuple":
                     tempo_changes = new_midi.tempo_changes
                     time_sig_changes = new_midi.time_signature_changes
             else:
@@ -118,15 +123,15 @@ def test_one_track_midi_to_tokens_to_midi(
                     for err, note, exp in errors:
                         midi.markers.append(
                             Marker(
-                                f"ERR {encoding} with note {err} (pitch {note.pitch})",
+                                f"ERR {tokenization} with note {err} (pitch {note.pitch})",
                                 note.start,
                             )
                         )
                 print(
-                    f"MIDI {i} - {file_path} failed to encode/decode NOTES with {encoding} ({len(errors)} errors)"
+                    f"MIDI {i} - {file_path} failed to encode/decode NOTES with {tokenization} ({len(errors)} errors)"
                 )
                 # return False
-            track.name = f"encoded with {encoding}"
+            track.name = f"encoded with {tokenization}"
             tracks.append(track)
 
             # Checks tempos
@@ -136,7 +141,7 @@ def test_one_track_midi_to_tokens_to_midi(
                     has_errors = True
                     print(
                         f"MIDI {i} - {file_path} failed to encode/decode TEMPO changes with "
-                        f"{encoding} ({len(tempo_errors)} errors)"
+                        f"{tokenization} ({len(tempo_errors)} errors)"
                     )
 
             # Checks time signatures
@@ -151,7 +156,7 @@ def test_one_track_midi_to_tokens_to_midi(
                     has_errors = True
                     print(
                         f"MIDI {i} - {file_path} failed to encode/decode TIME SIGNATURE changes with "
-                        f"{encoding} ({len(time_sig_errors)} errors)"
+                        f"{tokenization} ({len(time_sig_errors)} errors)"
                     )
 
         if has_errors:

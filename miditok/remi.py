@@ -327,7 +327,7 @@ class REMI(MIDITokenizer):
                 "\033[93msos_eos_tokens argument is depreciated and will be removed in a future update, "
                 "_create_vocabulary now uses self._sos_eos attribute set a class init \033[0m"
             )
-        vocab = Vocabulary(pad=self._pad, sos_eos=self._sos_eos, mask=self._mask)
+        vocab = Vocabulary(pad=self._pad, sos_eos=self._sos_eos, mask=self._mask, sep=self._sep)
 
         # BAR
         vocab.add_event("Bar_None")
