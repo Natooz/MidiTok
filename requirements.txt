@@ -1,6 +1,5 @@
 miditoolkit>=0.1.16
 tqdm~=4.64.0
 numpy>=1.19,<1.24
-setuptools>=59
 scipy  # needed for miditoolkit
 matplotlib  # needed for miditoolkit
