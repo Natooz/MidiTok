@@ -67,7 +67,6 @@ def data_augmentation_dataset(
 
     nb_augmentations, nb_tracks_augmented = 0, 0
     for file_path in tqdm(files_paths, desc="Performing data augmentation"):
-
         if as_tokens:
             with open(file_path) as json_file:
                 file = json.load(json_file)
@@ -141,7 +140,9 @@ def data_augmentation_dataset(
         else:  # as midi
             try:
                 midi = MidiFile(file_path)
-            except Exception:  # ValueError, OSError, FileNotFoundError, IOError, EOFError, mido.KeySignatureError
+            except (
+                Exception
+            ):  # ValueError, OSError, FileNotFoundError, IOError, EOFError, mido.KeySignatureError
                 continue
 
             offsets = get_offsets(

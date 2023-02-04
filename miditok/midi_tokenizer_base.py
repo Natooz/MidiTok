@@ -54,27 +54,30 @@ def convert_tokens_tensors_to_list(func: Callable):
 
 
 class MIDITokenizer(ABC):
-    r"""MIDI encoding base class, containing common parameters to all encodings
+    r"""MIDI tokenizer base class, containing common parameters to all tokenizers
     and common methods.
 
-    :param pitch_range: range of used MIDI pitches
-    :param beat_res: beat resolutions, with the form:
+    :param pitch_range: range of MIDI pitches to use
+    :param beat_res: beat resolutions, as a dictionary:
             {(beat_x1, beat_x2): beat_res_1, (beat_x2, beat_x3): beat_res_2, ...}
-            The keys of the dict are tuples indicating a range of beats, ex 0 to 3 for the first bar
-            The values are the resolution, in samples per beat, of the given range, ex 8
+            The keys are tuples indicating a range of beats, ex 0 to 3 for the first bar, and
+            the values are the resolution to apply to the ranges, in samples per beat, ex 8
     :param nb_velocities: number of velocity bins
-    :param additional_tokens: specifies additional tokens (chords, rests, tempo, time signature...)
-    :param pad: will include a PAD token, used when training a model with batch of sequences of
-            unequal lengths, and usually at index 0 of the vocabulary. (default: True)
-    :param sos_eos: adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens to the vocabulary.
-            (default: False)
-    :param mask: will add a MASK token to the vocabulary (default: False)
-    :param sep: will add a SEP token to the vocabulary (default: False)
+    :param additional_tokens: additional tokens (chords, time signature, rests, tempo...) to use,
+            to be given as a dictionary. (default: None is used)
+    :param pad: will add a special *PAD* token to the vocabulary, to use to pad sequences when
+            training a model with batches of different sequence lengths. (default: True)
+    :param sos_eos: adds special Start Of Sequence (*SOS*) and End Of Sequence (*EOS*) tokens
+            to the vocabulary. (default: False)
+    :param mask: will add a special *MASK* token to the vocabulary (default: False)
+    :param sep: will add a special *SEP* token to the vocabulary (default: False)
     :param unique_track: set to True if the tokenizer works only with a unique track.
             Tokens will be saved as a single track. This applies to representations that natively handle
             multiple tracks such as Octuple, resulting in a single "stream" of tokens for all tracks.
             This attribute will be saved in config files of the tokenizer. (default: False)
-    :param params: can be a path to the parameter (json encoded) file or a dictionary
+    :param params: path to a tokenizer config file. This will override other arguments and
+            load the tokenizer based on the config file. This is particularly useful if the
+            tokenizer learned Byte Pair Encoding. (default: None)
     """
 
     def __init__(
@@ -985,7 +988,9 @@ class MIDITokenizer(ABC):
                 if logging:
                     print(f"File not found: {midi_path}")
                 continue
-            except Exception:  # ValueError, OSError, FileNotFoundError, IOError, EOFError, mido.KeySignatureError
+            except (
+                Exception
+            ):  # ValueError, OSError, FileNotFoundError, IOError, EOFError, mido.KeySignatureError
                 continue
 
             # Checks the time division is valid

@@ -1,6 +1,3 @@
-"""Similar to MIDI-Like but with Duration tokens instead of NoteOff
-
-"""
 
 from typing import List, Tuple, Dict, Optional, Union, Any
 
@@ -23,23 +20,30 @@ from .constants import (
 
 
 class TSD(MIDITokenizer):
-    r"""TSD, for TimeShift Duration.
-    It is similar to MIDI-Like but with Duration tokens instead of NoteOff
+    r"""TSD, for Time Shift Duration, is similar to MIDI-Like :ref:`MIDI-Like`
+    but uses explicit *Duration* tokens to represent note durations, which have
+    showed `better results than with NoteOff tokens <https://arxiv.org/abs/2002.00212>`_.
+    **Note:** as TSD uses *TimeShifts* events to move the time from note to
+    note, it could be unsuited for tracks with long pauses. In such case, the
+    maximum *TimeShift* value will be used.
 
-    :param pitch_range: range of used MIDI pitches
-    :param beat_res: beat resolutions, with the form:
+    :param pitch_range: range of MIDI pitches to use
+    :param beat_res: beat resolutions, as a dictionary:
             {(beat_x1, beat_x2): beat_res_1, (beat_x2, beat_x3): beat_res_2, ...}
-            The keys of the dict are tuples indicating a range of beats, ex 0 to 3 for the first bar
-            The values are the resolution, in samples per beat, of the given range, ex 8
+            The keys are tuples indicating a range of beats, ex 0 to 3 for the first bar, and
+            the values are the resolution to apply to the ranges, in samples per beat, ex 8
     :param nb_velocities: number of velocity bins
-    :param additional_tokens: specifies additional tokens (chords, time signature, rests, tempo...)
-    :param pad: will include a PAD token, used when training a model with batch of sequences of
-            unequal lengths, and usually at index 0 of the vocabulary. (default: True)
-    :param sos_eos: adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens to the vocabulary.
-            (default: False)
-    :param mask: will add a MASK token to the vocabulary (default: False)
-    :param sep: will add a SEP token to the vocabulary (default: False)
-    :param params: can be a path to the parameter (json encoded) file or a dictionary
+    :param additional_tokens: additional tokens (chords, time signature, rests, tempo...) to use,
+            to be given as a dictionary. (default: None is used)
+    :param pad: will add a special *PAD* token to the vocabulary, to use to pad sequences when
+            training a model with batches of different sequence lengths. (default: True)
+    :param sos_eos: adds special Start Of Sequence (*SOS*) and End Of Sequence (*EOS*) tokens
+            to the vocabulary. (default: False)
+    :param mask: will add a special *MASK* token to the vocabulary (default: False)
+    :param sep: will add a special *SEP* token to the vocabulary (default: False)
+    :param params: path to a tokenizer config file. This will override other arguments and
+            load the tokenizer based on the config file. This is particularly useful if the
+            tokenizer learned Byte Pair Encoding. (default: None)
     """
 
     def __init__(
@@ -131,7 +135,6 @@ class TSD(MIDITokenizer):
         previous_tick = 0
         previous_note_end = track.notes[0].start + 1
         for e, event in enumerate(events.copy()):
-
             # No time shift
             if event.time == previous_tick:
                 pass

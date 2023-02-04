@@ -1,7 +1,3 @@
-"""Structured MIDI encoding method as using in the Piano Inpainting Application
-https://arxiv.org/abs/2107.05944
-
-"""
 
 from typing import List, Tuple, Dict, Optional, Union
 
@@ -22,31 +18,33 @@ from .constants import (
 
 
 class Structured(MIDITokenizer):
-    r"""Structured MIDI encoding method as using in the Piano Inpainting Application
-    https://arxiv.org/abs/2107.05944
-    The token types follows the specific pattern:
-    Pitch -> Velocity -> Duration -> Time Shift -> back to Pitch ...
-    NOTE: this encoding uses only "Time Shifts" events to move in the time, and only
-    from one note to another. Hence it is suitable to encode continuous sequences of
-    notes without long periods of silence. If your dataset contains music with long
-    pauses, you might handle them with an appropriate "time shift" dictionary
-    (which values are made from the beat_res dict) or with a different encoding.
+    r"""Introduced with the `Piano Inpainting Application <https://arxiv.org/abs/2002.00212>`_,
+    it is similar to :ref:`TSD` but is based on a consistent token type successions.
+    Token types always follow the same pattern: *Pitch* -> *Velocity* -> *Duration* -> *TimeShift*.
+    The latter is set to 0 for simultaneous notes.
+    To keep this property, no additional token can be inserted in MidiTok's implementation,
+    except *Program* that can be added to the vocabulary and are up to you to use.
+    **Note:** as Structured uses *TimeShifts* events to move the time from note to
+    note, it could be unsuited for tracks with long pauses. In such case, the
+    maximum *TimeShift* value will be used.
 
-    :param pitch_range: range of used MIDI pitches
-    :param beat_res: beat resolutions, with the form:
+    :param pitch_range: range of MIDI pitches to use
+    :param beat_res: beat resolutions, as a dictionary:
             {(beat_x1, beat_x2): beat_res_1, (beat_x2, beat_x3): beat_res_2, ...}
-            The keys of the dict are tuples indicating a range of beats, ex 0 to 3 for the first bar
-            The values are the resolution, in samples per beat, of the given range, ex 8
+            The keys are tuples indicating a range of beats, ex 0 to 3 for the first bar, and
+            the values are the resolution to apply to the ranges, in samples per beat, ex 8
     :param nb_velocities: number of velocity bins
-    :param additional_tokens: specifies additional tokens (chords, time signature, rests, tempo...), only programs
-            are considered here.
-    :param pad: will include a PAD token, used when training a model with batch of sequences of
-            unequal lengths, and usually at index 0 of the vocabulary. (default: True)
-    :param sos_eos: adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens to the vocabulary.
-            (default: False)
-    :param mask: will add a MASK token to the vocabulary (default: False)
-    :param sep: will add a SEP token to the vocabulary (default: False)
-    :param params: can be a path to the parameter (json encoded) file or a dictionary
+    :param additional_tokens: additional tokens (chords, time signature, rests, tempo...) to use,
+            to be given as a dictionary. (default: None is used)
+    :param pad: will add a special *PAD* token to the vocabulary, to use to pad sequences when
+            training a model with batches of different sequence lengths. (default: True)
+    :param sos_eos: adds special Start Of Sequence (*SOS*) and End Of Sequence (*EOS*) tokens
+            to the vocabulary. (default: False)
+    :param mask: will add a special *MASK* token to the vocabulary (default: False)
+    :param sep: will add a special *SEP* token to the vocabulary (default: False)
+    :param params: path to a tokenizer config file. This will override other arguments and
+            load the tokenizer based on the config file. This is particularly useful if the
+            tokenizer learned Byte Pair Encoding. (default: None)
     """
 
     def __init__(

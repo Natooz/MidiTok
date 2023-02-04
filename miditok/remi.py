@@ -1,7 +1,3 @@
-"""MIDI encoding method, similar to the REMI introduced in the Pop Music Transformer paper
-https://arxiv.org/abs/2002.00212
-
-"""
 
 from typing import List, Tuple, Dict, Optional, Union
 
@@ -24,23 +20,35 @@ from .constants import (
 
 
 class REMI(MIDITokenizer):
-    r"""MIDI encoding method, similar to the REMI introduced in the Pop Music Transformer paper
-    https://arxiv.org/abs/2002.00212
+    r"""REMI, standing for Revamped MIDI and introduced with the
+    `Pop Music Transformer (Huang and Yang) <https://dl.acm.org/doi/10.1145/3394171.3413671>`_,
+    is a tokenization that represents notes as successions of *Pitch*, *Velocity* and *Duration*
+    tokens, and time with *Bar* and *Position* tokens. A *Bar* token indicate that a new bar
+    is beginning, and *Position* the current position within the current bar. The number of
+    positions is determined by the ``beat_res`` argument, the maximum value will be used as
+    resolution.
+    **NOTE:** in the original paper, the tempo information is represented as the succession
+    of two token types: a *TempoClass* indicating if the tempo is fast or slow, and a
+    *TempoValue* indicating its value. MidiTok only uses one *Tempo* token for its value
+    (see :ref:`Additional tokens`).
 
-    :param pitch_range: range of used MIDI pitches
-    :param beat_res: beat resolutions, with the form:
+    :param pitch_range: range of MIDI pitches to use
+    :param beat_res: beat resolutions, as a dictionary:
             {(beat_x1, beat_x2): beat_res_1, (beat_x2, beat_x3): beat_res_2, ...}
-            The keys of the dict are tuples indicating a range of beats, ex 0 to 3 for the first bar
-            The values are the resolution, in samples per beat, of the given range, ex 8
+            The keys are tuples indicating a range of beats, ex 0 to 3 for the first bar, and
+            the values are the resolution to apply to the ranges, in samples per beat, ex 8
     :param nb_velocities: number of velocity bins
-    :param additional_tokens: specifies additional tokens (chords, time signature, rests, tempo...)
-    :param pad: will include a PAD token, used when training a model with batch of sequences of
-            unequal lengths, and usually at index 0 of the vocabulary. (default: True)
-    :param sos_eos: adds Start Of Sequence (SOS) and End Of Sequence (EOS) tokens to the vocabulary.
-            (default: False)
-    :param mask: will add a MASK token to the vocabulary (default: False)
-    :param sep: will add a SEP token to the vocabulary (default: False)
-    :param params: can be a path to the parameter (json encoded) file or a dictionary
+    :param additional_tokens: additional tokens (chords, time signature, rests, tempo...) to use,
+            to be given as a dictionary. (default: None is used)
+    :param pad: will add a special *PAD* token to the vocabulary, to use to pad sequences when
+            training a model with batches of different sequence lengths. (default: True)
+    :param sos_eos: adds special Start Of Sequence (*SOS*) and End Of Sequence (*EOS*) tokens
+            to the vocabulary. (default: False)
+    :param mask: will add a special *MASK* token to the vocabulary (default: False)
+    :param sep: will add a special *SEP* token to the vocabulary (default: False)
+    :param params: path to a tokenizer config file. This will override other arguments and
+            load the tokenizer based on the config file. This is particularly useful if the
+            tokenizer learned Byte Pair Encoding. (default: None)
     """
 
     def __init__(
@@ -102,7 +110,6 @@ class REMI(MIDITokenizer):
         ].tempo
         for note in track.notes:
             if note.start != previous_tick:
-
                 # (Rest)
                 if (
                     self.additional_tokens["Rest"]
@@ -309,7 +316,9 @@ class REMI(MIDITokenizer):
                         previous_note_end = max(
                             previous_note_end, current_tick + duration
                         )
-                except IndexError:  # A well constituted sequence should not raise an exception
+                except (
+                    IndexError
+                ):  # A well constituted sequence should not raise an exception
                     pass  # However with generated sequences this can happen, or if the sequence isn't finished
 
         if len(tempo_changes) > 1:
