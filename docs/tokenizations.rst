@@ -2,7 +2,7 @@
 Tokenizations
 =================
 
-This page details the tokenizations featured by MidiTok. They inherit from :ref:`MIDITokenizer`, see the documentation for learn to use the common methods. For each of them, the token equivalent of the lead sheet below is showed.
+This page details the tokenizations featured by MidiTok. They inherit from :class:`miditok.MIDITokenizer`, see the documentation for learn to use the common methods. For each of them, the token equivalent of the lead sheet below is showed.
 
 .. image:: https://github.com/Natooz/MidiTok/blob/assets/assets/music_sheet.png?raw=true
   :width: 800
@@ -52,7 +52,7 @@ Structured
     :noindex:
     :show-inheritance:
 
-Compound Word (CPWord)
+CPWord
 ------------------------
 
 .. image:: https://github.com/Natooz/MidiTok/blob/assets/assets/cp_word.png?raw=true
@@ -91,3 +91,12 @@ MuMIDI
 .. autoclass:: miditok.MuMIDI
     :noindex:
     :show-inheritance:
+
+
+Create yours
+------------------------
+
+You can easily create your own tokenization and benefit from the MidiTok framework. Just create a class inheriting from :class:`miditok.MIDITokenizer`, and override the :py:func:`miditok.MIDITokenizer.track_to_tokens`, :py:func:`miditok.MIDITokenizer.tokens_to_track`, :py:func:`miditok.MIDITokenizer._create_vocabulary` and :py:func:`miditok.MIDITokenizer._create_token_types_graph` methods with your tokenization strategy.
+
+We encourage you to read the documentation of the :ref:`Vocabulary` class to learn how to use it for your tokenization.
+If you think people can benefit from it, feel free to send a pull request on `Github <https://github.com/Natooz/MidiTok>`_.

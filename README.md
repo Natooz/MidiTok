@@ -5,6 +5,7 @@ Python package to tokenize MIDI music files, presented at the ISMIR 2021 LBD.
 [![PyPI version fury.io](https://badge.fury.io/py/miditok.svg)](https://pypi.python.org/pypi/miditok/)
 [![Python 3.7](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/release/)
 ![GitHub CI](https://github.com/Natooz/MidiTok/actions/workflows/pytest.yml/badge.svg)
+[![Documentation Status](https://readthedocs.org/projects/miditok/badge/?version=latest)](https://miditok.readthedocs.io/en/latest/?badge=latest)
 [![Codecov](https://img.shields.io/codecov/c/github/Natooz/MidiTok)](https://codecov.io/gh/Natooz/MidiTok)
 [![GitHub license](https://img.shields.io/github/license/Natooz/MidiTok.svg)](https://github.com/Natooz/MidiTok/blob/main/LICENSE)
 [![Downloads](https://pepy.tech/badge/MidiTok)](https://pepy.tech/project/MidiTok)
@@ -15,6 +16,8 @@ Python package to tokenize MIDI music files, presented at the ISMIR 2021 LBD.
 
 MidiTok converts MIDI music files into sequences of tokens, i.e. integers, ready to be fed to sequential neural networks like Transformers or RNNs.
 MidiTok features most known MIDI tokenization strategies, and is built around the idea that they all share common parameters and methods. It contains methods allowing to properly pre-process any MIDI file, and also supports Byte Pair Encoding (BPE).
+
+Read the doc on [miditok.readthedoc.io](https://miditok.readthedocs.io/en/latest/) (WIP).
 
 ## Install
 
@@ -259,7 +262,7 @@ Contributions are gratefully welcomed, feel free to open an issue or send a PR i
 * Time Signature
 * Control Change messages
 * Data augmentation on duration values at the MIDI level
-* Documentation website
+* [WIP] Documentation website
 
 ## Citations
 

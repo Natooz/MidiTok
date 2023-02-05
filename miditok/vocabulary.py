@@ -1,6 +1,3 @@
-"""Vocabulary class
-
-"""
 
 from typing import List, Tuple, Union, Generator
 
@@ -31,13 +28,10 @@ class Event:
 class Vocabulary:
     r"""Vocabulary class.
     Get an element of the vocabulary from its index, such as:
-        token = vocab['Pitch_80']  # gets the token of this event
-        event = vocab[140]  # gets the event corresponding to token 140
-    You can also use the event_to_token and token_to_event properties,
-    which will be faster if you run this in heavy loops.
+    * token = vocab['Pitch_80']  # gets the token of this event
+    * event = vocab[140]  # gets the event corresponding to token 140
 
-    Use add_event or the += operator to add an event to the vocab.
-    Read add_event docstring for how to give arguments.
+    Use :py:func:`miditok.Vocabulary.add_event` or the += operator to add an event to the vocab.
 
     :param pad: will include a PAD token, used when training a model with batch of sequences of
                 unequal lengths, and usually at index 0 of the vocabulary.
@@ -77,6 +71,9 @@ class Vocabulary:
 
     def add_event(self, event: Union[Event, str, Generator]):
         r"""Adds one or multiple entries to the vocabulary.
+        This method accepts generators.
+        The index of the newly added event will be equal to the length of the vocabulary
+        at the moment of adding it.
 
         :param event: event to add, either as an Event object or string of the form "Type_Value", e.g. Pitch_80
         """

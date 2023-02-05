@@ -54,23 +54,22 @@ def convert_tokens_tensors_to_list(func: Callable):
 
 
 class MIDITokenizer(ABC):
-    r"""MIDI tokenizer base class, containing common parameters to all tokenizers
-    and common methods.
+    r"""MIDI tokenizer base class, containing common methods and attributes for all tokenizers.
 
-    :param pitch_range: range of MIDI pitches to use
+    :param pitch_range: range of MIDI pitches to use.
     :param beat_res: beat resolutions, as a dictionary:
             {(beat_x1, beat_x2): beat_res_1, (beat_x2, beat_x3): beat_res_2, ...}
             The keys are tuples indicating a range of beats, ex 0 to 3 for the first bar, and
-            the values are the resolution to apply to the ranges, in samples per beat, ex 8
-    :param nb_velocities: number of velocity bins
+            the values are the resolution to apply to the ranges, in samples per beat, ex 8.
+    :param nb_velocities: number of velocity bins.
     :param additional_tokens: additional tokens (chords, time signature, rests, tempo...) to use,
             to be given as a dictionary. (default: None is used)
     :param pad: will add a special *PAD* token to the vocabulary, to use to pad sequences when
             training a model with batches of different sequence lengths. (default: True)
     :param sos_eos: adds special Start Of Sequence (*SOS*) and End Of Sequence (*EOS*) tokens
             to the vocabulary. (default: False)
-    :param mask: will add a special *MASK* token to the vocabulary (default: False)
-    :param sep: will add a special *SEP* token to the vocabulary (default: False)
+    :param mask: will add a special *MASK* token to the vocabulary. (default: False)
+    :param sep: will add a special *SEP* token to the vocabulary. (default: False)
     :param unique_track: set to True if the tokenizer works only with a unique track.
             Tokens will be saved as a single track. This applies to representations that natively handle
             multiple tracks such as Octuple, resulting in a single "stream" of tokens for all tracks.
@@ -153,7 +152,7 @@ class MIDITokenizer(ABC):
         self.bpe_successions = {}
         if self.has_bpe:  # loaded from config file
             self._add_bpe_to_tokens_type_graph()
-            self.set_bpe_tokens_successions()
+            self.__set_bpe_tokens_successions()
 
         # Keep in memory durations in ticks for seen time divisions so these values
         # are not calculated each time a MIDI is processed
@@ -164,12 +163,13 @@ class MIDITokenizer(ABC):
         self.current_midi_metadata = {}  # needs to be updated each time a MIDI is read
 
     def preprocess_midi(self, midi: MidiFile):
-        r"""Will process a MIDI file so it can be used to train a model.
-        Its notes attribute (times, pitches, velocities) will be quantized and sorted, duplicated
-        notes removed, as well as tempos.
-        NOTE: empty tracks (with no note) will be removed from the MIDI object
+        r"""Pre-process (in place) a MIDI file to quantize its time and note attributes
+        before tokenizing it. Its notes attribute (times, pitches, velocities) will be
+        quantized and sorted, duplicated notes removed, as well as tempos. Empty tracks
+        (with no note) will be removed from the MIDI object. Notes with pitches outside
+        of self.pitch_range will be deleted.
 
-        :param midi: MIDI object to preprocess
+        :param midi: MIDI object to preprocess.
         """
         t = 0
         while t < len(midi.instruments):
@@ -206,22 +206,20 @@ class MIDITokenizer(ABC):
             )
 
     def quantize_notes(
-        self, notes: List[Note], time_division: int, pitch_range: range = None
+        self, notes: List[Note], time_division: int
     ):
-        r"""Quantize the notes items, i.e. their pitch, velocity, start and end values.
-        It shifts the notes so they start at times that match the quantization (e.g. 16 samples per bar)
-        Notes with pitches outside of self.pitch_range will simply be deleted.
+        r"""Quantize the notes attributes: their pitch, velocity, start and end values.
+        It shifts the notes so that they start at times that match the time resolution
+        (e.g. 16 samples per bar).
+        Notes with pitches outside of self.pitch_range will be deleted.
 
-        :param notes: notes to quantize
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
-        :param pitch_range: pitch range from within notes should be (default None -> self.pitch_range)
+        :param notes: notes to quantize.
+        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed).
         """
-        if pitch_range is None:
-            pitch_range = self.pitch_range
         ticks_per_sample = int(time_division / max(self.beat_res.values()))
         i = 0
         while i < len(notes):
-            if notes[i].pitch not in pitch_range:
+            if notes[i].pitch not in self.pitch_range:
                 del notes[i]
                 continue
             start_offset = notes[i].start % ticks_per_sample
@@ -257,8 +255,8 @@ class MIDITokenizer(ABC):
         r"""Quantize the times and tempo values of tempo change events.
         Consecutive identical tempo changes will be removed.
 
-        :param tempos: tempo changes to quantize
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
+        :param tempos: tempo changes to quantize.
+        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed).
         """
         ticks_per_sample = int(time_division / max(self.beat_res.values()))
         prev_tempo = -1
@@ -284,8 +282,8 @@ class MIDITokenizer(ABC):
         See MIDI 1.0 Detailed specifications, pages 54 - 56, for more information on
         delayed time signature messages.
 
-        :param time_sigs: time signature changes to quantize
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
+        :param time_sigs: time signature changes to quantize.
+        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed).
         """
         ticks_per_bar = time_division * time_sigs[0].numerator
         current_bar = 0
@@ -323,8 +321,8 @@ class MIDITokenizer(ABC):
         r"""Tokenize a MIDI file.
         **If you override this method, be sure to keep the first lines in your method.**
 
-        :param midi: the MIDI objet to convert
-        :return: sequences of tokens
+        :param midi: the MIDI objet to convert.
+        :return: sequences of tokens.
         """
         # Check if the durations values have been calculated before for this time division
         if midi.ticks_per_beat not in self.durations_ticks:
@@ -355,19 +353,20 @@ class MIDITokenizer(ABC):
 
     @abstractmethod
     def track_to_tokens(self, track: Instrument) -> List[Union[int, List[int]]]:
-        r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
+        r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens.
+        This method is unimplemented and need to be overridden by inheriting classes.
 
-        :param track: MIDI track to convert
-        :return: sequence of corresponding tokens
+        :param track: MIDI track to convert.
+        :return: sequence of corresponding tokens.
         """
         raise NotImplementedError
 
     def events_to_tokens(self, events: List[Event]) -> List[int]:
-        r"""Converts a list of Event objects into a list of tokens
-        Will apply BPE if it has been learned.
+        r"""Converts a list of Event objects into a list of tokens.
+        It will apply BPE if it has been learned.
 
-        :param events: list of Events objects to convert
-        :return: list of corresponding tokens
+        :param events: list of Events objects to convert.
+        :return: list of corresponding tokens.
         """
         tokens = [self.vocab.event_to_token[str(event)] for event in events]
         if self.has_bpe:  # this might take some time
@@ -380,8 +379,8 @@ class MIDITokenizer(ABC):
         r"""Convert a sequence of tokens in their respective event objects.
         BPE tokens will be decoded.
 
-        :param tokens: sequence of tokens to convert
-        :return: the sequence of corresponding events
+        :param tokens: sequence of tokens to convert.
+        :return: the sequence of corresponding events.
         """
         events = []
         if self.is_multi_voc:  # multiple vocabularies
@@ -411,13 +410,14 @@ class MIDITokenizer(ABC):
         NOTE: With Remi, MIDI-Like, CP Word or other encoding methods that process tracks
         independently, only the tempo changes of the first track in tokens will be used
 
-        :param tokens: list of lists of tokens to convert, each list inside the
-                       first list corresponds to a track
-        :param programs: programs of the tracks
+        :param tokens: list, numpy array or pytorch / tensorflow tensor.
+                The first dimension represent tracks, the second the tokens,
+                except if tokenizer.unique_track == True.
+        :param programs: programs of the tracks.
         :param output_path: path to save the file (with its name, e.g. music.mid),
-                        leave None to not save the file
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create)
-        :return: the midi object (miditoolkit.MidiFile)
+                        leave None to not save the file.
+        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create).
+        :return: the midi object (miditoolkit.MidiFile).
         """
         midi = MidiFile(ticks_per_beat=time_division)
         for i, track_tokens in enumerate(tokens):
@@ -451,20 +451,21 @@ class MIDITokenizer(ABC):
         time_division: Optional[int] = TIME_DIVISION,
         program: Optional[Tuple[int, bool]] = (0, False),
     ) -> Tuple[Instrument, List[TempoChange]]:
-        r"""Converts a sequence of tokens into a track object
+        r"""Converts a sequence of tokens into a track object.
+        This method is unimplemented and need to be overridden by inheriting classes.
 
-        :param tokens: sequence of tokens to convert
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create)
-        :param program: the MIDI program of the produced track and if it drum, (default (0, False), piano)
-        :return: the miditoolkit instrument object and the possible tempo changes
+        :param tokens: sequence of tokens to convert.
+        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create).
+        :param program: the MIDI program of the produced track and if it drum. (default (0, False), piano)
+        :return: the miditoolkit instrument object and the possible tempo changes.
         """
         raise NotImplementedError
 
     def add_sos_eos_to_seq(self, seq: List[int]):
-        r"""Adds Start Of Sequence (SOS) and End Of Sequence EOS tokens to a sequence of tokens:
-        SOS at the beginning, EOS at the end.
+        r"""Adds Start Of Sequence (*SOS*) and End Of Sequence (*EOS*) tokens to a sequence of tokens:
+        *SOS* at the beginning, *EOS* at the end.
 
-        :param seq: sequence of tokens
+        :param seq: sequence of tokens.
         """
         seq.insert(0, self.vocab["SOS_None"])
         seq.append(self.vocab["EOS_None"])
@@ -474,25 +475,26 @@ class MIDITokenizer(ABC):
         self, *args, **kwargs
     ) -> Union[Vocabulary, List[Vocabulary]]:
         r"""Creates the Vocabulary object of the tokenizer.
-        See the docstring of the Vocabulary class for more details about how to use it.
-        NOTE: token index 0 is often used as a padding index during training
-        NOTE 2: SOS and EOS tokens should be set to -1 and -2 respectively.
-                use Vocabulary.add_sos_eos_to_vocab to add them
+        This method is unimplemented and need to be overridden by inheriting classes.
+        See :class:`miditok.Vocabulary` to learn how to build it.
 
-        :return: the vocabulary object
+        :return: the vocabulary object(s).
         """
         raise NotImplementedError
 
     @abstractmethod
     def _create_token_types_graph(self) -> Dict[str, List[str]]:
-        r"""Creates a dictionary for the directions of the token types of the encoding
-        See other classes (REMI, MIDILike ...) for examples of how to implement it."""
+        r"""Creates a dictionary describing the possible token type successions.
+        This method is unimplemented and need to be overridden by inheriting classes.
+        See other classes (:class:`miditok.REMI._create_token_types_graph`, ...)
+        for examples of how to implement it."""
         raise NotImplementedError
 
     def _add_special_tokens_to_types_graph(self, dic: Dict[str, List[str]]):
-        r"""Inplace adds special tokens (PAD, EOS, SOS, MASK, SEP) types to the token types graph dictionary.
+        r"""Adds (inplace) special tokens (*PAD*, *EOS*, *EOS*, *MASK*, *SEP*) types
+        to the token types graph dictionary.
 
-        :param dic: token types graph to add PAD type
+        :param dic: token types graph to add special tokens.
         """
         if self._pad:
             for value in dic.values():
@@ -514,8 +516,7 @@ class MIDITokenizer(ABC):
 
     def _add_bpe_to_tokens_type_graph(self):
         r"""Adds BPE to the tokens_types_graph.
-        You must manually call this method after loading a BPE tokenizer from params (config file) if
-        you intend to use tokens_types_graph.
+        This method will be called after loading a BPE tokenizer from params (config file).
         """
         for val in self.tokens_types_graph.values():
             val.append("BPE")
@@ -524,13 +525,13 @@ class MIDITokenizer(ABC):
     def __create_durations_tuples(self) -> List[Tuple]:
         r"""Creates the possible durations in beat / position units, as tuple of the form:
         (beat, pos, res) where beat is the number of beats, pos the number of "samples"
-        ans res the beat resolution considered (samples per beat)
+        and res the beat resolution considered (samples per beat).
         Example: (2, 5, 8) means the duration is 2 beat long + position 5 / 8 of the ongoing beat
         In pure ticks we have: duration = (beat * res + pos) * time_division // res
             Is equivalent to: duration = nb_of_samples * ticks_per_sample
         So in the last example, if time_division is 384: duration = (2 * 8 + 5) * 384 // 8 = 1008 ticks
 
-        :return: the duration bins
+        :return: the duration bins.
         """
         durations = []
         for beat_range, beat_res in self.beat_res.items():
@@ -547,9 +548,8 @@ class MIDITokenizer(ABC):
 
     @staticmethod
     def _token_duration_to_ticks(token_duration: str, time_division: int) -> int:
-        r"""Converts a duration token value of the form x.x.x, for beat.position.resolution,
-        in ticks.
-        Is also used for TimeShift tokens.
+        r"""Converts a *Duration* token value of the form x.x.x, for beat.position.resolution,
+        in ticks. Can also be used for *TimeShift* tokens.
 
         :param token_duration: Duration / TimeShift token value
         :param time_division: time division
@@ -571,7 +571,7 @@ class MIDITokenizer(ABC):
         Example: (4, 6) and a first beat resolution of 8 will give the rests:
             [(0, 2), (0, 4), (1, 0), (2, 0), (3, 0), (4, 0), (5, 0), (6, 0)]
 
-        :return: the rests
+        :return: the rests.
         """
         div, max_beat = self.additional_tokens["rest_range"]
         assert (
@@ -589,7 +589,7 @@ class MIDITokenizer(ABC):
         (nb_beats, beat_res) where nb_beats is the number of beats per bar.
         Example: (3, 4) means one bar is 3 beat long and each beat is a quarter note.
 
-        :return: the time signatures
+        :return: the time signatures.
         """
         max_beat_res, nb_notes = self.additional_tokens.get(
             "time_signature_range", (4, 1)
@@ -613,11 +613,11 @@ class MIDITokenizer(ABC):
         If time signature's numerator (bar length in beats) is larger than nb_notes * denominator,
         the numerator is replaced with its GCD not larger than nb_notes * denominator.
 
-        Example: (10, 4), max_beat_res of 8, and nb_notes of 2 will convert the signature into (5, 4)
+        Example: (10, 4), max_beat_res of 8, and nb_notes of 2 will convert the signature into (5, 4).
 
-        :param numerator: time signature's numerator (bar length in beats)
-        :param denominator: time signature's denominator (beat resolution)
-        :return: the numerator and denominator of a reduced and decomposed time signature
+        :param numerator: time signature's numerator (bar length in beats).
+        :param denominator: time signature's denominator (beat resolution).
+        :return: the numerator and denominator of a reduced and decomposed time signature.
         """
         max_beat_res, nb_notes = self.additional_tokens["time_signature_range"]
 
@@ -647,8 +647,8 @@ class MIDITokenizer(ABC):
         r"""Converts a time signature token value of the form x/x into a tuple of integers,
         time signature's numerator (bar length in beats) and denominator (beat resolution).
 
-        :param token_time_sig: TimeSig token value
-        :return: the numerator and denominator of a time signature
+        :param token_time_sig: TimeSig token value.
+        :return: the numerator and denominator of a time signature.
         """
         numerator, denominator = map(int, token_time_sig.split("/"))
         return numerator, denominator
@@ -668,12 +668,12 @@ class MIDITokenizer(ABC):
         Note that this implementation is in pure Python and will be slow if you use a large amount of
         tokens files. You might use the files_lim argument.
 
-        :param tokens_path: path to token files to learn the BPE combinations from
-        :param vocab_size: the new vocabulary size
-        :param out_dir: directory to save the tokenizer's parameters and vocabulary after BPE learning is finished
-        :param files_lim: limit of token files to use (default: None)
+        :param tokens_path: path to token files to learn the BPE combinations from.
+        :param vocab_size: the new vocabulary size.
+        :param out_dir: directory to save the tokenizer's parameters and vocabulary after BPE learning is finished.
+        :param files_lim: limit of token files to use. (default: None)
         :param save_converted_samples: will save in out_path the samples that have been used
-                to create the BPE vocab. Files will keep the same name and relative path (default: True)
+                to create the BPE vocab. Files will keep the same name and relative path. (default: True)
         :param print_seq_len_variation: prints the mean sequence length before and after BPE,
                 and the variation in %. (default: True)
         :return: learning metrics, as lists of:
@@ -809,7 +809,7 @@ class MIDITokenizer(ABC):
         # Saves dictionary and prints the difference in sequence length
         pbar.close()
         self.has_bpe = True
-        self.set_bpe_tokens_successions()
+        self.__set_bpe_tokens_successions()
         self._add_bpe_to_tokens_type_graph()
         self.vocab.update_token_types_indexes()
         if save_converted_samples:
@@ -832,7 +832,7 @@ class MIDITokenizer(ABC):
 
         return bpe_comb_means, bpe_comb_max, avg_seq_len
 
-    def set_bpe_tokens_successions(self):
+    def __set_bpe_tokens_successions(self):
         """Creates the bpe_successions attributes, as a dictionary of the form {bpe_token: (tok1, tok2, tok3...)}"""
         self.bpe_successions = {
             tok: list(
@@ -851,7 +851,7 @@ class MIDITokenizer(ABC):
         r"""Converts a sequence of tokens into tokens with BPE.
 
         :param tokens: tokens to convert.
-        :return:
+        :return: the tokens with BPE applied.
         """
         if not self.has_bpe:
             return tokens
@@ -886,9 +886,9 @@ class MIDITokenizer(ABC):
         After testing, the numba jit version does not seem to be much faster.
         The conversion of python lists to numba.typed.List() seems to also take time.
 
-        :param in_list: input list to analyze
-        :param pattern: pattern to detect
-        :return: indices of in_list where the pattern has been found
+        :param in_list: input list to analyze.
+        :param pattern: pattern to detect.
+        :return: indices of in_list where the pattern has been found.
         """
         matches = []
         for i in range(len(in_list)):
@@ -901,8 +901,8 @@ class MIDITokenizer(ABC):
     ):
         r"""Apply BPE to an already tokenized dataset (with no BPE).
 
-        :param dataset_path: path to token files to load
-        :param out_path: output directory to save
+        :param dataset_path: path to token files to load.
+        :param out_path: output directory to save.
         """
         if not self.has_bpe:
             return
@@ -925,8 +925,8 @@ class MIDITokenizer(ABC):
         r"""Decomposes a sequence of tokens containing BP encoded tokens into "prime" tokens.
         It is an inplace operation.
 
-        :param tokens: token sequence to decompose
-        :return: decomposed token sequence
+        :param tokens: token sequence to decompose.
+        :return: decomposed token sequence.
         """
         tokens = deepcopy(tokens)
         i = 0
@@ -956,15 +956,15 @@ class MIDITokenizer(ABC):
         for programs the first value is the program, second a bool indicating if the track is drums.
         The config of the tokenizer will be saved as a "config.txt" file by default.
 
-        :param midi_paths: paths of the MIDI files
-        :param out_dir: output directory to save the converted files
+        :param midi_paths: paths of the MIDI files.
+        :param out_dir: output directory to save the converted files.
         :param validation_fn: a function checking if the MIDI is valid on your requirements
-                            (e.g. time signature, minimum/maximum length, instruments ...)
+                            (e.g. time signature, minimum/maximum length, instruments ...).
         :param data_augment_offsets: data augmentation arguments, to be passed to the
             miditok.data_augmentation.data_augmentation_dataset method. Has to be given as a list / tuple
-            of offsets pitch octaves, velocities, durations, and finaly their directions (up/down). (default: None)
-        :param save_programs: will also save the programs of the tracks of the MIDI(default: True)
-        :param logging: logs progress bar
+            of offsets pitch octaves, velocities, durations, and finally their directions (up/down). (default: None)
+        :param save_programs: will also save the programs of the tracks of the MIDI. (default: True)
+        :param logging: logs progress bar.
         """
         out_dir = Path(out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -1024,7 +1024,7 @@ class MIDITokenizer(ABC):
 
         :param tokens: sequence of tokens to check.
         :param consider_pad: if True will continue the error detection after the first PAD token (default: False).
-        :return: the error ratio (lower is better)
+        :return: the error ratio (lower is better).
         """
         nb_tok_predicted = len(tokens)  # used to norm the score
         tokens = self.decompose_bpe(tokens) if self.has_bpe else tokens
@@ -1096,7 +1096,7 @@ class MIDITokenizer(ABC):
         r"""Saves the config / parameters of the tokenizer in a json encoded file.
         This can be useful to keep track of how a dataset has been tokenized.
         **Note:** if you override this method, you should probably call it (super()) at the end
-            and use the additional_attributes argument.
+        and use the additional_attributes argument.
 
         :param out_path: output path to save the file.
         :param additional_attributes: any additional information to store in the config file.
