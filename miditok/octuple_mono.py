@@ -1,7 +1,3 @@
-"""Modified version of Octuple with no Program (Track) tokens
-To use mainly for tasks handling a single track.
-
-"""
 
 from math import ceil
 from pathlib import Path, PurePath
@@ -24,8 +20,17 @@ from .constants import (
 
 
 class OctupleMono(MIDITokenizer):
-    r"""Modified version of Octuple with no Program (Track) tokens
-    To use mainly for tasks handling a single track.
+    r"""OctupleMono is similar to :ref:`Octuple`
+    (`MusicBert (Zeng et al.) <https://arxiv.org/abs/2106.05630>`_) but without the
+    *Program* token. OctupleMono is hence better suited for tasks with one track.
+    Each pooled token will be a list of the form (index: Token type):
+    * 0: Pitch
+    * 1: Velocity
+    * 2: Duration
+    * 3: Position
+    * 4: Bar
+    * (+ Optional) Tempo
+    * (+ Optional) TimeSignature
 
     :param pitch_range: range of MIDI pitches to use
     :param beat_res: beat resolutions, as a dictionary:
@@ -56,7 +61,7 @@ class OctupleMono(MIDITokenizer):
         sos_eos: bool = False,
         mask: bool = False,
         sep: bool = False,
-        params=None,
+        params: Union[str, Path] = None,
     ):
         additional_tokens["Chord"] = False  # Incompatible additional token
         additional_tokens["Rest"] = False
@@ -86,16 +91,10 @@ class OctupleMono(MIDITokenizer):
     def save_params(
         self, out_path: Union[str, Path, PurePath], additional_attributes: Dict = None
     ):
-        r"""Overrides the parent class method to include max_bar_embedding.
-        Saves the config / base parameters of the tokenizer in a file.
-        Useful to keep track of how a dataset has been tokenized / encoded
-        It will also save the name of the class used, i.e. the encoding strategy.
-        NOTE: if you override this method, you should probably call it (super()) at the end
-            and use the additional_attributes argument.
-        NOTE 2: as json cant save tuples as keys, the beat ranges are saved as strings
-        with the form startingBeat_endingBeat (underscore separating these two values)
+        r"""Saves the config / parameters of the tokenizer in a json encoded file.
+        This can be useful to keep track of how a dataset has been tokenized.
 
-        :param out_path: output path to save the file
+        :param out_path: output path to save the file.
         :param additional_attributes: any additional information to store in the config file.
                 It can be used to override the default attributes saved in the parent method. (default: None)
         """
@@ -320,9 +319,9 @@ class OctupleMono(MIDITokenizer):
     def token_types_errors(
         self, tokens: List[List[int]], consider_pad: bool = False
     ) -> float:
-        r"""Checks if a sequence of tokens is constituted of good token values and
+        r"""Checks if a sequence of tokens is made of good token values and
         returns the error ratio (lower is better).
-        The token types are always the same in Octuple so this methods only checks
+        The token types are always the same in Octuple so this method only checks
         if their values are correct:
             - a bar token value cannot be < to the current bar (it would go back in time)
             - same for positions

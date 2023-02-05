@@ -1,5 +1,6 @@
 
 from typing import List, Tuple, Dict, Optional, Union
+from pathlib import Path
 
 import numpy as np
 from miditoolkit import Instrument, Note, TempoChange
@@ -57,7 +58,7 @@ class Structured(MIDITokenizer):
         sos_eos: bool = False,
         mask: bool = False,
         sep: bool = False,
-        params=None,
+        params: Union[str, Path] = None,
     ):
         # No additional tokens
         additional_tokens["Chord"] = False  # Incompatible additional token
@@ -288,7 +289,7 @@ class Structured(MIDITokenizer):
     def token_types_errors(
         self, tokens: List[int], consider_pad: bool = False
     ) -> float:
-        r"""Checks if a sequence of tokens is constituted of good token types
+        r"""Checks if a sequence of tokens is made of good token types
         successions and returns the error ratio (lower is better).
         The Pitch values are also analyzed:
             - a pitch token should not be present if the same pitch is already played at the time

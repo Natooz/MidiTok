@@ -1,5 +1,6 @@
 
-from typing import List, Tuple, Dict, Optional
+from typing import List, Tuple, Dict, Optional, Union
+from pathlib import Path
 
 import numpy as np
 from miditoolkit import Instrument, Note, TempoChange
@@ -58,7 +59,7 @@ class MIDILike(MIDITokenizer):
         sos_eos: bool = False,
         mask: bool = False,
         sep: bool = False,
-        params=None,
+        params: Union[str, Path] = None,
     ):
         additional_tokens["TimeSignature"] = False  # not compatible
         super().__init__(
@@ -397,7 +398,7 @@ class MIDILike(MIDITokenizer):
     def token_types_errors(
         self, tokens: List[int], consider_pad: bool = False
     ) -> float:
-        r"""Checks if a sequence of tokens is constituted of good token types
+        r"""Checks if a sequence of tokens is made of good token types
         successions and returns the error ratio (lower is better).
         The Pitch and Position values are also analyzed:
             - a NoteOn token should not be present if the same pitch is already being played

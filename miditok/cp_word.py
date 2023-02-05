@@ -1,9 +1,6 @@
-""" MIDI encoding method, similar to Compound Word
-https://arxiv.org/abs/2101.02402
-
-"""
 
 from typing import List, Tuple, Dict, Optional, Union
+from pathlib import Path
 
 import numpy as np
 from miditoolkit import Instrument, Note, TempoChange
@@ -24,23 +21,26 @@ from .constants import (
 
 
 class CPWord(MIDITokenizer):
-    r"""MIDI encoding method, similar to Compound Word
-    https://arxiv.org/abs/2101.02402
-    Each compound token will be a list of the form:
-        (index. Token type)
-        0. Family
-        1. Bar/Position
-        2. Pitch
-        3. Velocity
-        4. Duration
-        (5. Program) optional, associated with notes (pitch/velocity/duration) or chords
-        (6. Chord) optional, chords occurring with position tokens
-        (7. Rest) optional, rest acting as a TimeShift token
-        (8. Tempo) optional, occurring with position tokens
-    This means a "compound token" can contain between 5 and 7 elements depending on
-    your encoding parameters (additional tokens).
-    (the choice of using indexes instead of dictionary with keys is to reduce the memory
-    and storage usage for saved token files)
+    r"""Introduced with the
+    `Compound Word Transformer (Hsiao et al.) <https://ojs.aaai.org/index.php/AAAI/article/view/16091>`_,
+    this tokenization is similar to :ref:`REMI` but uses embedding pooling operations to reduce
+    the overall sequence length: note tokens (*Pitch*, *Velocity* and *Duration*) are first
+    independently converted to embeddings which are then merged (pooled) into a single one.
+    Each compound token will be a list of the form (index: Token type):
+    * 0: Family
+    * 1: Bar/Position
+    * 2: Pitch
+    * 3: Velocity
+    * 4: Duration
+    * (+ Optional) Program: associated with notes (pitch/velocity/duration) or chords
+    * (+ Optional) Chord: chords occurring with position tokens
+    * (+ Optional) Rest: rest acting as a TimeShift token
+    * (+ Optional) Tempo: occurring with position tokens
+
+    The output hidden states of the model will then be fed to several output layers
+    (one per token type). This means that the training requires to add multiple losses.
+    For generation, the decoding implies sample from several distributions, which can be
+    very delicate. Hence, we do not recommend this tokenization for generation with small models.
 
     :param pitch_range: range of MIDI pitches to use
     :param beat_res: beat resolutions, as a dictionary:
@@ -71,7 +71,7 @@ class CPWord(MIDITokenizer):
         sos_eos: bool = False,
         mask: bool = False,
         sep: bool = False,
-        params=None,
+        params: Union[str, Path] = None,
     ):
         # Indexes of additional token types within a compound token
         additional_tokens["TimeSignature"] = False  # not compatible
@@ -547,7 +547,7 @@ class CPWord(MIDITokenizer):
     def token_types_errors(
         self, tokens: List[List[int]], consider_pad: bool = False
     ) -> float:
-        r"""Checks if a sequence of tokens is constituted of good token types
+        r"""Checks if a sequence of tokens is made of good token types
         successions and returns the error ratio (lower is better).
         The Pitch and Position values are also analyzed:
             - a position token cannot have a value <= to the current position (it would go back in time)

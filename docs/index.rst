@@ -10,7 +10,7 @@ Welcome to MidiTok's documentation!
 
 .. toctree::
    midi_tokenizer
-   tokenizers
+   tokenizations
 
 
 

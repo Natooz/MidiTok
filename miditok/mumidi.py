@@ -1,7 +1,3 @@
-""" MuMIDI encoding method, as introduced in PopMag
-https://arxiv.org/abs/2008.07703
-
-"""
 
 from math import ceil
 from pathlib import Path, PurePath
@@ -22,17 +18,34 @@ from .constants import (
     TEMPO,
     MIDI_INSTRUMENTS,
     CHORD_MAPS,
+    DRUM_PITCH_RANGE,
 )
 
 
-# recommended range from the GM2 specs
-# note: we ignore the "Applause" at pitch 88 of the orchestra drum set, increase to 89 if you need it
-DRUM_PITCH_RANGE = range(27, 88)
-
-
 class MuMIDI(MIDITokenizer):
-    r"""MuMIDI encoding method, as introduced in PopMag
-    https://arxiv.org/abs/2008.07703
+    r"""Introduced with `PopMAG (Ren et al.) <https://arxiv.org/abs/2008.07703>`_,
+    this tokenization made for multitrack tasks and uses embedding pooling. Time is
+    represented with *Bar* and *Position* tokens. The key idea of MuMIDI is to represent
+    all tracks in a single token sequence. At each time step, *Track* tokens preceding
+    note tokens indicate their track. MuMIDI also include a "built-in" and learned
+    positional encoding. As in the original paper, the pitches of drums are distinct
+    from those of all other instruments.
+    Each pooled token will be a list of the form (index: Token type):
+    * 0: Pitch / DrumPitch / Position / Bar / Program / (Chord) / (Rest)
+    * 1: BarPosEnc
+    * 2: PositionPosEnc
+    * (-3 / 3: Tempo)
+    * -2: Velocity
+    * -1: Duration
+
+    The output hidden states of the model will then be fed to several output layers
+    (one per token type). This means that the training requires to add multiple losses.
+    For generation, the decoding implies sample from several distributions, which can be
+    very delicate. Hence, we do not recommend this tokenization for generation with small models.
+
+    **Notes:**
+        * Tokens are first sorted by time, then track, then pitch values.
+        * Tracks with the same *Program* will be merged.
 
     :param pitch_range: range of MIDI pitches to use
     :param beat_res: beat resolutions, as a dictionary:
@@ -65,7 +78,7 @@ class MuMIDI(MIDITokenizer):
         sos_eos: bool = False,
         mask: bool = False,
         sep: bool = False,
-        params=None,
+        params: Union[str, Path] = None,
         drum_pitch_range: range = DRUM_PITCH_RANGE,
     ):
         additional_tokens["Rest"] = False
@@ -107,16 +120,12 @@ class MuMIDI(MIDITokenizer):
     def save_params(
         self, out_path: Union[str, Path, PurePath], additional_attributes: Dict = None
     ):
-        r"""Overrides the parent class method to include additional parameter drum pitch range
-        Saves the config / base parameters of the tokenizer in a file.
-        Useful to keep track of how a dataset has been tokenized / encoded
-        It will also save the name of the class used, i.e. the encoding strategy.
-        NOTE: if you override this method, you should probably call it (super()) at the end
+        r"""Saves the config / parameters of the tokenizer in a json encoded file.
+        This can be useful to keep track of how a dataset has been tokenized.
+        **Note:** if you override this method, you should probably call it (super()) at the end
             and use the additional_attributes argument.
-        NOTE 2: as json cant save tuples as keys, the beat ranges are saved as strings
-        with the form startingBeat_endingBeat (underscore separating these two values)
 
-        :param out_path: output path to save the file
+        :param out_path: output path to save the file.
         :param additional_attributes: any additional information to store in the config file.
                 It can be used to override the default attributes saved in the parent method. (default: None)
         """
@@ -133,28 +142,26 @@ class MuMIDI(MIDITokenizer):
         }
         super().save_params(out_path, additional_attributes_tmp)
 
-    def load_params(self, params: Union[str, Path, PurePath]):
-        r"""Load parameters and set the encoder attributes
+    def load_params(self, config_file_path: Union[str, Path, PurePath]):
+        r"""Load the parameters of the tokenizer from a config file.
 
-        :param params: can be a path to the parameter (json encoded) file
+        :param config_file_path: path to the tokenizer config file (encoded as json).
         """
-        super().load_params(params)
+        super().load_params(config_file_path)
         self.drum_pitch_range = range(*self.drum_pitch_range)
 
     def midi_to_tokens(self, midi: MidiFile, *args, **kwargs) -> List[List[int]]:
-        r"""Override the parent class method
-        Converts a MIDI file in a tokens representation, a sequence of "time steps".
-        A time step is a list of tokens where:
-            (list index: token type)
-            0: Pitch / DrumPitch / Position / Bar / Program / (Chord) / (Rest)
-            1: BarPosEnc
-            2: PositionPosEnc
-            (-3 / 3: Tempo)
-            -2: Velocity
-            -1: Duration
+        r"""Tokenize a MIDI file.
+        Each pooled token will be a list of the form (index: Token type):
+        * 0: Pitch / DrumPitch / Position / Bar / Program / (Chord) / (Rest)
+        * 1: BarPosEnc
+        * 2: PositionPosEnc
+        * (-3 / 3: Tempo)
+        * -2: Velocity
+        * -1: Duration
 
         :param midi: the MIDI objet to convert
-        :return: the token representation, i.e. tracks converted into sequences of tokens
+        :return: sequences of tokens
         """
         # Check if the durations values have been calculated before for this time division
         if midi.ticks_per_beat not in self.durations_ticks:
@@ -307,14 +314,13 @@ class MuMIDI(MIDITokenizer):
 
     def track_to_tokens(self, track: Instrument) -> List[List[Union[Event, int]]]:
         r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
-        For each note, it creates a time step as a list of tokens where:
-            (list index: token type)
-            0: Pitch (as an Event object for sorting purpose afterwards)
-            1: Velocity
-            2: Duration
+        For each note, it creates a time step as a list of tokens where (list index: token type):
+        * 0: Pitch (as an Event object for sorting purpose afterwards)
+        * 1: Velocity
+        * 2: Duration
 
-        :param track: track object to convert
-        :return: sequence of corresponding tokens
+        :param track: track object to convert.
+        :return: sequence of corresponding tokens.
         """
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
@@ -383,14 +389,13 @@ class MuMIDI(MIDITokenizer):
         r"""Override the parent class method
         Convert multiple sequences of tokens into a multitrack MIDI and save it.
         The tokens will be converted to event objects and then to a miditoolkit.MidiFile object.
-        A time step is a list of tokens where:
-            (list index: token type)
-            0: Pitch / DrumPitch / Position / Bar / Program / (Chord) / (Rest)
-            1: Current Bar embedding
-            2: Current Position embedding
-            (-3: Tempo)
-            -2: Velocity
-            -1: Duration
+        A time step is a list of tokens where (list index: token type):
+        * 0: Pitch / DrumPitch / Position / Bar / Program / (Chord) / (Rest)
+        * 1: BarPosEnc
+        * 2: PositionPosEnc
+        * (-3 / 3: Tempo)
+        * -2: Velocity
+        * -1: Duration
 
         :param tokens: list of lists of tokens to convert, each list inside the
                        first list corresponds to a track
@@ -485,12 +490,12 @@ class MuMIDI(MIDITokenizer):
         r"""Creates the Vocabulary object of the tokenizer.
         See the docstring of the Vocabulary class for more details about how to use it.
         NOTE: token index 0 is used as a padding index for training.
-        0: Pitch / DrumPitch / Position / Bar / Program / (Chord) / (Rest)
-        1: Current Bar embedding
-        2: Current Position embedding
-        (-3: Tempo)
-        -2: Velocity
-        -1: Duration
+        * 0: Pitch / DrumPitch / Position / Bar / Program / (Chord) / (Rest)
+        * 1: BarPosEnc
+        * 2: PositionPosEnc
+        * (-3 / 3: Tempo)
+        * -2: Velocity
+        * -1: Duration
 
         :param sos_eos_tokens: DEPRECIATED, will include Start Of Sequence (SOS) and End Of Sequence (tokens)
         :return: the vocabulary object
@@ -588,7 +593,7 @@ class MuMIDI(MIDITokenizer):
     def token_types_errors(
         self, tokens: List[List[int]], consider_pad: bool = False
     ) -> float:
-        r"""Checks if a sequence of tokens is constituted of good token types
+        r"""Checks if a sequence of tokens is made of good token types
         successions and returns the error ratio (lower is better).
         The Pitch and Position values are also analyzed:
             - a bar token value cannot be < to the current bar (it would go back in time)

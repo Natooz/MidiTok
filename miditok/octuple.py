@@ -1,7 +1,3 @@
-"""Octuple encoding method, as introduced in MusicBERT
-https://arxiv.org/abs/2106.05630
-
-"""
 
 from math import ceil
 from pathlib import Path, PurePath
@@ -25,8 +21,29 @@ from .constants import (
 
 
 class Octuple(MIDITokenizer):
-    r"""Octuple encoding method, as introduced in MusicBERT
-    https://arxiv.org/abs/2106.05630
+    r"""Introduced with `MusicBert (Zeng et al.) <https://arxiv.org/abs/2106.05630>`_,
+    the idea of Octuple is to use embedding pooling so that each pooled embedding
+    represents a single note. Tokens (*Pitch*, *Velocity*...) are first independently
+    converted to embeddings which are then merged (pooled) into a single one.
+    Each pooled token will be a list of the form (index: Token type):
+    * 0: Pitch
+    * 1: Velocity
+    * 2: Duration
+    * 3: Program (track)
+    * 4: Position
+    * 5: Bar
+    * (+ Optional) Tempo
+    * (+ Optional) TimeSignature
+
+    Its considerably reduces the sequence lengths, while handling multitrack.
+    The output hidden states of the model will then be fed to several output layers
+    (one per token type). This means that the training requires to add multiple losses.
+    For generation, the decoding implies sample from several distributions, which can be
+    very delicate. Hence, we do not recommend this tokenization for generation with small models.
+
+    **Notes:**
+    * Tokens are first sorted by time, then track, then pitch values.
+    * Tracks with the same *Program* will be merged.
 
     :param pitch_range: range of MIDI pitches to use
     :param beat_res: beat resolutions, as a dictionary:
@@ -58,7 +75,7 @@ class Octuple(MIDITokenizer):
         sos_eos: bool = False,
         mask: bool = False,
         sep: bool = False,
-        params=None,
+        params: Union[str, Path] = None,
     ):
         additional_tokens["Chord"] = False  # Incompatible additional token
         additional_tokens["Rest"] = False
@@ -89,16 +106,12 @@ class Octuple(MIDITokenizer):
     def save_params(
         self, out_path: Union[str, Path, PurePath], additional_attributes: Dict = None
     ):
-        r"""Overrides the parent class method to include programs and max_bar_embedding.
-        Saves the config / base parameters of the tokenizer in a file.
-        Useful to keep track of how a dataset has been tokenized / encoded
-        It will also save the name of the class used, i.e. the encoding strategy.
-        NOTE: if you override this method, you should probably call it (super()) at the end
+        r"""Saves the config / parameters of the tokenizer in a json encoded file.
+        This can be useful to keep track of how a dataset has been tokenized.
+        **Note:** if you override this method, you should probably call it (super()) at the end
             and use the additional_attributes argument.
-        NOTE 2: as json cant save tuples as keys, the beat ranges are saved as strings
-        with the form startingBeat_endingBeat (underscore separating these two values)
 
-        :param out_path: output path to save the file
+        :param out_path: output path to save the file.
         :param additional_attributes: any additional information to store in the config file.
                 It can be used to override the default attributes saved in the parent method. (default: None)
         """
@@ -126,7 +139,7 @@ class Octuple(MIDITokenizer):
             (7: TimeSignature)
 
         :param midi: the MIDI objet to convert
-        :return: the token representation, i.e. tracks converted into sequences of tokens
+        :return: sequences of tokens
         """
         # Check if the durations values have been calculated before for this time division
         if midi.ticks_per_beat not in self.durations_ticks:
@@ -525,7 +538,7 @@ class Octuple(MIDITokenizer):
     def token_types_errors(
         self, tokens: List[List[int]], consider_pad: bool = False
     ) -> float:
-        r"""Checks if a sequence of tokens is constituted of good token values and
+        r"""Checks if a sequence of tokens is made of good token values and
         returns the error ratio (lower is better).
         The token types are always the same in Octuple so this methods only checks
         if their values are correct:

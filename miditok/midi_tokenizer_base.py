@@ -91,7 +91,7 @@ class MIDITokenizer(ABC):
         mask: bool = False,
         sep: bool = False,
         unique_track: bool = False,
-        params: Union[str, Path, Dict[str, Any]] = None,
+        params: Union[str, Path] = None,
     ):
         # Initialize params
         self.vocab = None
@@ -320,11 +320,11 @@ class MIDITokenizer(ABC):
     def midi_to_tokens(
         self, midi: MidiFile, *args, **kwargs
     ) -> List[List[Union[int, List[int]]]]:
-        r"""Converts a MIDI file in a tokens representation.
-        NOTE: if you override this method, be sure to keep the first lines in your method
+        r"""Tokenize a MIDI file.
+        **If you override this method, be sure to keep the first lines in your method.**
 
         :param midi: the MIDI objet to convert
-        :return: the token representation, i.e. tracks converted into sequences of tokens
+        :return: sequences of tokens
         """
         # Check if the durations values have been calculated before for this time division
         if midi.ticks_per_beat not in self.durations_ticks:
@@ -1016,14 +1016,14 @@ class MIDITokenizer(ABC):
     def token_types_errors(
         self, tokens: List[int], consider_pad: bool = False
     ) -> float:
-        r"""Checks if a sequence of tokens is constituted of good token types
+        r"""Checks if a sequence of tokens is made of good token types
         successions and returns the error ratio (lower is better).
         The implementation in MIDITokenizer class only checks the token types,
         in child class the methods also consider the position and pitch values.
         Overridden methods must call decompose_bpe at the beginning if BPE is used!
 
-        :param tokens: sequence of tokens to check
-        :param consider_pad: if True will continue the error detection after the first PAD token (default: False)
+        :param tokens: sequence of tokens to check.
+        :param consider_pad: if True will continue the error detection after the first PAD token (default: False).
         :return: the error ratio (lower is better)
         """
         nb_tok_predicted = len(tokens)  # used to norm the score
@@ -1064,10 +1064,10 @@ class MIDITokenizer(ABC):
         r"""Saves tokens as a JSON file.
         Use kwargs to save any additional information within the JSON file.
 
-        :param tokens: tokens, as any format
-        :param path: path of the file to save
+        :param tokens: tokens, as list, numpy array, torch or tensorflow Tensor.
+        :param path: path of the file to save.
         :param programs: (optional), programs of the associated tokens, should be
-                        given as a tuples (int, bool) for (program, is_drum)
+                        given as a tuples (int, bool) for (program, is_drum).
         :param kwargs: any additional information to save within the JSON file.
         """
         with open(path, "w") as outfile:
@@ -1084,8 +1084,8 @@ class MIDITokenizer(ABC):
     def load_tokens(path: Union[str, Path]) -> Union[List[Any], Dict]:
         r"""Loads tokens saved as JSON files.
 
-        :param path: path of the file to load
-        :return: the tokens, with the associated programs if saved with
+        :param path: path of the file to load.
+        :return: the tokens, with the associated information saved with.
         """
         with open(path) as file:
             return json.load(file)
@@ -1093,15 +1093,12 @@ class MIDITokenizer(ABC):
     def save_params(
         self, out_path: Union[str, Path], additional_attributes: Dict = None
     ):
-        r"""Saves the config / base parameters of the tokenizer in a file.
-        Useful to keep track of how a dataset has been tokenized / encoded
-        It will also save the name of the class used, i.e. the encoding strategy.
-        NOTE: if you override this method, you should probably call it (super()) at the end
+        r"""Saves the config / parameters of the tokenizer in a json encoded file.
+        This can be useful to keep track of how a dataset has been tokenized.
+        **Note:** if you override this method, you should probably call it (super()) at the end
             and use the additional_attributes argument.
-        NOTE 2: as json cant save tuples as keys, the beat ranges are saved as strings
-        with the form startingBeat_endingBeat (underscore separating these two values)
 
-        :param out_path: output path to save the file
+        :param out_path: output path to save the file.
         :param additional_attributes: any additional information to store in the config file.
                 It can be used to override the default attributes saved in the parent method. (default: None)
         """
@@ -1132,12 +1129,12 @@ class MIDITokenizer(ABC):
         with open(out_path, "w") as outfile:
             json.dump(params, outfile, indent=4)
 
-    def load_params(self, params: Union[str, Path]):
-        r"""Load parameters and set the encoder attributes
+    def load_params(self, config_file_path: Union[str, Path]):
+        r"""Loads the parameters of the tokenizer from a config file.
 
-        :param params: can be a path to the parameter (json encoded) file
+        :param config_file_path: path to the tokenizer config file (encoded as json).
         """
-        with open(params) as param_file:
+        with open(config_file_path) as param_file:
             params = json.load(param_file)
 
         params["pitch_range"] = range(*params["pitch_range"])
@@ -1161,10 +1158,10 @@ class MIDITokenizer(ABC):
                         event = "".join(
                             event.split("-")
                         )  # we remove hyphens to comply with the camelcase convention
-                    self.vocab._token_to_event[
+                    self.vocab.token_to_event[
                         int(token)
                     ] = event  # we modify protected attribute to keep the exact
-                    self.vocab._event_to_token[event] = int(
+                    self.vocab.event_to_token[event] = int(
                         token
                     )  # same token <--> event pairs
                 self.vocab.update_token_types_indexes()
@@ -1184,27 +1181,54 @@ class MIDITokenizer(ABC):
 
     @property
     def is_multi_voc(self) -> bool:
+        """Returns a bool indicating if the tokenizer uses embedding
+        pooling, and so have multiple vocabularies.
+
+        :return: True is the tokenizer uses embedding pooling else False
+        """
         return isinstance(self.vocab, list)
 
     @property
     def special_tokens(self) -> List[int]:
-        return self.vocab.special_tokens
+        """Returns the list of special tokens: *PAD*, *SOS*, *EOS*, *MASK*, *SEP*
+
+        :return: list of special tokens
+        """
+        return self.vocab.special_tokens if not self.is_multi_voc else [v.special_tokens for v in self.vocab]
 
     def __call__(self, obj: Any, *args, **kwargs):
+        r"""Automatically tokenize a MIDI file, or detokenize a sequence of tokens.
+        This will call the :py:func:`miditok.MIDITokenizer.midi_to_tokens` if you provide
+        a MIDI object, or the :py:func:`miditok.MIDITokenizer.tokens_to_midi` method else.
+
+        :param obj: a MIDI object or sequence of tokens.
+        :return: the converted object.
+        """
         if isinstance(obj, MidiFile):
             return self.midi_to_tokens(obj, *args, **kwargs)
         else:
             return self.tokens_to_midi(obj, *args, **kwargs)
 
     def __len__(self) -> int:
+        r"""Returns the length of the vocabulary. If the tokenizer uses embedding
+        pooling / have multiple vocabularies, it will return the **sum** of their lengths.
+        Use the :py:func:`miditok.MIDITokenizer.len` property (``tokenizer.len``) to have the list of lengths.
+
+        :return: length of the vocabulary.
+        """
         if self.is_multi_voc:
-            """warn('You are using a multi vocab tokenizer, returning the sum of the lengths of all vocabs.'
-            'If you want the len per vocab, use the tokenizer.len property.')"""
             return sum([len(v) for v in self.vocab])
         return len(self.vocab)
 
     @property
     def len(self) -> Union[int, List[int]]:
+        r"""Returns the length of the vocabulary. If the tokenizer uses embedding
+        pooling / have multiple vocabularies, it will return the **list** of their lengths.
+        Use the :py:func:`miditok.MIDITokenizer.__len__` magic method (``len(tokenizer)``)
+        to get the sum of the lengths.
+
+        :return: length of the vocabulary.
+        """
         return [len(v) for v in self.vocab] if self.is_multi_voc else len(self.vocab)
 
     def __repr__(self):
@@ -1214,17 +1238,23 @@ class MIDITokenizer(ABC):
         )
 
     def __getitem__(self, item: Union[int, str, Tuple[int, int]]) -> Union[str, int]:
+        r"""Convert a token (int) to an event (str), or vice-versa.
+
+        :param item: a token (int) or an event (str). For embedding pooling, you must
+                provide a tuple where the first element in the index of the vocabulary.
+        :return: the converted object.
+        """
         if isinstance(item, str):
             return self.vocab.event_to_token[item]
         elif isinstance(item, int):
             return self.vocab.token_to_event[item]
         elif isinstance(item, tuple) and self.is_multi_voc:
-            return self.vocab[item[0]].token_to_event[item[1]]
+            return self.vocab[item[0]][item[1]]
         else:
             raise IndexError("The index must be an integer or a string")
 
     def __eq__(self, other) -> bool:
-        """Checks if two tokenizers are identical. This is essentially done by comparing their vocabularies,
+        r"""Checks if two tokenizers are identical. This is essentially done by comparing their vocabularies,
         as they are built depending on most of their attributes.
 
         :param other: tokenizer to compare.
