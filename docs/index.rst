@@ -3,8 +3,8 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to MidiTok's documentation!
-===================================
+Welcome to MidiTok's documentation! (WIP)
+=========================================
 
 .. image:: https://github.com/Natooz/MidiTok/blob/assets/assets/logo.png?raw=true
   :width: 600

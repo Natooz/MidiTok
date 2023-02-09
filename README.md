@@ -4,8 +4,8 @@ Python package to tokenize MIDI music files, presented at the ISMIR 2021 LBD.
 
 [![PyPI version fury.io](https://badge.fury.io/py/miditok.svg)](https://pypi.python.org/pypi/miditok/)
 [![Python 3.7](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/release/)
-![GitHub CI](https://github.com/Natooz/MidiTok/actions/workflows/pytest.yml/badge.svg)
 [![Documentation Status](https://readthedocs.org/projects/miditok/badge/?version=latest)](https://miditok.readthedocs.io/en/latest/?badge=latest)
+![GitHub CI](https://github.com/Natooz/MidiTok/actions/workflows/pytest.yml/badge.svg)
 [![Codecov](https://img.shields.io/codecov/c/github/Natooz/MidiTok)](https://codecov.io/gh/Natooz/MidiTok)
 [![GitHub license](https://img.shields.io/github/license/Natooz/MidiTok.svg)](https://github.com/Natooz/MidiTok/blob/main/LICENSE)
 [![Downloads](https://pepy.tech/badge/MidiTok)](https://pepy.tech/project/MidiTok)
@@ -16,8 +16,6 @@ Python package to tokenize MIDI music files, presented at the ISMIR 2021 LBD.
 
 MidiTok converts MIDI music files into sequences of tokens, i.e. integers, ready to be fed to sequential neural networks like Transformers or RNNs.
 MidiTok features most known MIDI tokenization strategies, and is built around the idea that they all share common parameters and methods. It contains methods allowing to properly pre-process any MIDI file, and also supports Byte Pair Encoding (BPE).
-
-Read the doc on [miditok.readthedoc.io](https://miditok.readthedocs.io/en/latest/) (WIP).
 
 ## Install
 
@@ -232,9 +230,6 @@ These tokens bring additional information about the structure and content of MID
 * **Tempos:** specifies the current tempo. This allows to train a model to predict tempo changes alongside with the notes, unless specified in the chart below. Tempo values are quantized on your specified range and number (default is 32 tempos from 40 to 250).
 * **Programs:** used to specify an instrument / MIDI program. MidiTok only offers the possibility to include these tokens in the vocabulary for you, but won't use them. If you need model multitrack symbolic music with other methods than Octuple / MuMIDI, MidiTok leaves you the choice / task to represent the track information the way you want. You can do it as in [LakhNES](https://github.com/chrisdonahue/LakhNES) or [MMM](https://metacreation.net/mmm-multi-track-music-machine/).
 * **Time Signature:** specifies the current time signature. Only implemented with Octuple in MidiTok a.t.w.
-
-Additionally, MidiTok offers to include *Program* tokens in the vocabulary of MIDI-Like, REMI and CP Word.
-We do not consider them additional tokens though as they are not used anywhere in MidiTok, but intended for you to insert them at the beginning of each sequence as *Start Of Sequence* tokens.
 
 | Token type     |   MIDI-Like   |      TSD      |     REMI      | Compound Word | Structured |    Octuple    |    MuMIDI     |
 |----------------|:-------------:|:-------------:|:-------------:|:-------------:|:----------:|:-------------:|:-------------:|

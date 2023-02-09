@@ -18,7 +18,7 @@ from miditoolkit import MidiFile, Instrument, Note, TempoChange, TimeSignature
 from .vocabulary import Vocabulary, Event
 from .utils import remove_duplicated_notes, get_midi_programs
 from .data_augmentation import data_augmentation_dataset
-from .constants import TIME_DIVISION, CURRENT_VERSION_PACKAGE
+from .constants import TIME_DIVISION, CURRENT_VERSION_PACKAGE, PITCH_RANGE, BEAT_RES, NB_VELOCITIES, ADDITIONAL_TOKENS
 
 
 def convert_tokens_tensors_to_list(func: Callable):
@@ -56,14 +56,27 @@ def convert_tokens_tensors_to_list(func: Callable):
 class MIDITokenizer(ABC):
     r"""MIDI tokenizer base class, containing common methods and attributes for all tokenizers.
 
-    :param pitch_range: range of MIDI pitches to use.
-    :param beat_res: beat resolutions, as a dictionary:
-            {(beat_x1, beat_x2): beat_res_1, (beat_x2, beat_x3): beat_res_2, ...}
+    :param pitch_range: (default: range(21, 109)) range of MIDI pitches to use. Pitches can take
+            values between 0 and 127 (included).
+            The `General MIDI 2 (GM2) specifications <https://www.midi.org/specifications-old/item/general-midi-2>`_
+            indicate the **recommended** ranges of pitches per MIDI program (instrument).
+            These recommended ranges can also be found in ``miditok.constants``.
+            In all cases, the range from 21 to 108 (included) covers all the recommended values.
+            When processing a MIDI, the notes with pitches under or above this range can be discarded.
+    :param beat_res: (default: `{(0, 4): 8, (4, 12): 4}`) beat resolutions, as a dictionary in the form:
+            ``{(beat_x1, beat_x2): beat_res_1, (beat_x2, beat_x3): beat_res_2, ...}``
             The keys are tuples indicating a range of beats, ex 0 to 3 for the first bar, and
-            the values are the resolution to apply to the ranges, in samples per beat, ex 8.
-    :param nb_velocities: number of velocity bins.
-    :param additional_tokens: additional tokens (chords, time signature, rests, tempo...) to use,
-            to be given as a dictionary. (default: None is used)
+            the values are the resolution (in samples per beat) to apply to the ranges, ex 8.
+            This allows to use **Duration** / **TimeShift** tokens of different lengths / resolutions.
+            Note: for tokenization with **Position** tokens, the total number of possible positions will
+            be set at four times the maximum resolution given (``max(beat_res.values)``).
+    :param nb_velocities: (default: 32) number of velocity bins. In the MIDI norm, velocities can take
+            up to 128 values (0 to 127). This parameter allows to reduce the number of velocity values.
+            The velocities of the MIDIs resolution will be downsampled to ``nb_velocities`` values, equally
+            separated between 0 and 127.
+    :param additional_tokens: (default: None used) specify which additional tokens to use.
+            Compatibilities between tokenization and additiona tokens may vary.
+            See :ref:`Additional tokens` for the details and available tokens.
     :param pad: will add a special *PAD* token to the vocabulary, to use to pad sequences when
             training a model with batches of different sequence lengths. (default: True)
     :param sos_eos: adds special Start Of Sequence (*SOS*) and End Of Sequence (*EOS*) tokens
@@ -81,10 +94,10 @@ class MIDITokenizer(ABC):
 
     def __init__(
         self,
-        pitch_range: range,
-        beat_res: Dict[Tuple[int, int], int],
-        nb_velocities: int,
-        additional_tokens: Dict[str, Union[bool, int, Tuple[int, int]]],
+        pitch_range: range = PITCH_RANGE,
+        beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
+        nb_velocities: int = NB_VELOCITIES,
+        additional_tokens: Dict[str, Union[bool, int, Tuple[int, int]]] = ADDITIONAL_TOKENS,
         pad: bool = True,
         sos_eos: bool = False,
         mask: bool = False,
@@ -96,6 +109,10 @@ class MIDITokenizer(ABC):
         self.vocab = None
         self.has_bpe = False
         if params is None:
+            assert pitch_range.start >= 0 and pitch_range.stop <= 128, \
+                "You must specify a pitch_range between 0 and 127 (included, i.e. range.stop at 128)"
+            assert 0 < nb_velocities < 128,\
+                "You must specify a nb_velocities between 0 and 127 (included)"
             self.pitch_range = pitch_range
             self.beat_res = beat_res
             self.additional_tokens = additional_tokens
