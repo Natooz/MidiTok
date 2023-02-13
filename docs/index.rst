@@ -10,18 +10,36 @@ Welcome to MidiTok's documentation! (WIP)
   :width: 600
   :alt:
 
-**MidiTok** is a Python package for MIDI file tokenization, presented at the `ISMIR 2021 LBDs <https://archives.ismir.net/ismir2021/latebreaking/000005.pdf>`_.
-Tt converts MIDI files to sequences of tokens (integers) ready to be fed to sequential Deep Learning models such as Transformers.
+**MidiTok** is a Python package for MIDI file tokenization, presented at the ISMIR 2021 LBDs `(paper) <https://archives.ismir.net/ismir2021/latebreaking/000005.pdf>`_.
+It converts MIDI files to sequences of tokens ready to be fed to sequential Deep Learning models such as Transformers.
 
-MidiTok features most known MIDI tokenization strategies, and is built around the idea that they all share common methods. It properly pre-process MIDI files, and supports Byte Pair Encoding (BPE).
+MidiTok features most known MIDI :ref:`tokenizations`, and is built around the idea that they all share common methods. It properly pre-process MIDI files, and supports :ref:`Byte Pair Encoding (BPE)`.
 
 Installation
 ==================
 
 ..  code-block:: bash
-    :caption: You can install it with PIP
 
     pip install miditok
+
+MidiTok uses `(MIDIToolkit) <https://github.com/YatingMusic/miditoolkit>`_ and `(Mido) <https://github.com/mido/mido>`_ to read and write MIDI files.
+
+Citation
+==================
+
+If you use MidiTok for your research, a citation in your manuscript would be gladly appreciated. ❤️
+
+You can also find BibTeX :ref:`citations` of tokenizations.
+
+..  code-block:: bib
+
+    @inproceedings{miditok2021,
+        title={{MidiTok}: A Python package for {MIDI} file tokenization},
+        author={Fradet, Nathan and Briot, Jean-Pierre and Chhel, Fabien and El Fallah Seghrouchni, Amal and Gutowski, Nicolas},
+        booktitle={Extended Abstracts for the Late-Breaking Demo Session of the 22nd International Society for Music Information Retrieval Conference},
+        year={2021},
+        url={https://archives.ismir.net/ismir2021/latebreaking/000005.pdf},
+    }
 
 Contents
 ==================
@@ -31,4 +49,5 @@ Contents
    examples
    tokenizations
    bpe
+   citations
 
