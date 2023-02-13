@@ -1271,7 +1271,7 @@ class MIDITokenizer(ABC):
             raise IndexError("The index must be an integer or a string")
 
     def __eq__(self, other) -> bool:
-        r"""Checks if two tokenizers are identical. This is essentially done by comparing their vocabularies,
+        r"""Checks if two tokenizers are identical. This is done by comparing their vocabularies,
         as they are built depending on most of their attributes.
 
         :param other: tokenizer to compare.
