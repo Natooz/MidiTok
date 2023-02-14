@@ -17,7 +17,7 @@ Python package to tokenize MIDI music files, presented at the ISMIR 2021 LBD.
 MidiTok converts MIDI music files into sequences of tokens, ready to be fed to sequential deep learning models like Transformers.
 MidiTok features most known [MIDI tokenizations](https://miditok.readthedocs.io/en/latest/tokenizations.html) (e.g. [REMI](https://arxiv.org/abs/2002.00212), [Compound Word](https://arxiv.org/abs/2101.02402)...), and is built around the idea that they all share common parameters and methods. It contains methods allowing to properly pre-process any MIDI file, and also supports Byte Pair Encoding (BPE).
 
-Documentation: [miditok.readthedocs.com](https://miditok.readthedocs.io/en/latest/index.html)
+**Documentation:** [miditok.readthedocs.com](https://miditok.readthedocs.io/en/latest/index.html)
 
 ## Install
 
@@ -26,9 +26,9 @@ pip install miditok
 ```
 MidiTok uses [MIDIToolkit](https://github.com/YatingMusic/miditoolkit), which itself uses [Mido](https://github.com/mido/mido) to read and write MIDI files.
 
-## Toy example
+## Usage example
 
-The most basics and useful methods are summurized here.
+The most basic and useful methods are summurized here.
 
 ```python
 from miditok import REMI
@@ -37,7 +37,7 @@ from miditoolkit import MidiFile
 from pathlib import Path
 
 # Creates the tokenizer and loads a MIDI
-tokenizer = REMI()
+tokenizer = REMI()  # using the default parameters, read the documentation to customize your tokenizer
 midi = MidiFile('path/to/your_midi.mid')
 
 # Converts MIDI to tokens, and back to a MIDI
@@ -46,7 +46,7 @@ converted_back_midi = tokenizer(tokens, get_midi_programs(midi))  # PyTorch / Te
 
 # Converts MIDI files to tokens saved as JSON files
 midi_paths = list(Path('path', 'to', 'dataset').glob('**/*.mid'))
-data_augmentation_offsets = [2, 2, 1]  # perform data augmentation on 2 pitch octaves, 2 velocity and 1 duration values
+data_augmentation_offsets = [2, 2, 1]  # data augmentation on 2 pitch octaves, 2 velocity and 1 duration values
 tokenizer.tokenize_midi_dataset(midi_paths, Path('path', 'to', 'tokens_noBPE'),
                                 data_augment_offsets=data_augmentation_offsets)
 
