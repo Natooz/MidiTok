@@ -1,7 +1,5 @@
-"""MIDI encoding base class and methods
-TODO Control change messages (sustain, modulation, pitch bend)
-TODO time signature changes tokens
-
+"""
+MIDI encoding base class and methods
 """
 from abc import ABC, abstractmethod
 import math
@@ -168,7 +166,6 @@ class MIDITokenizer(ABC):
         # BPE attributes
         self.bpe_successions = {}
         if self.has_bpe:  # loaded from config file
-            self._add_bpe_to_tokens_type_graph()
             self.__set_bpe_tokens_successions()
 
         # Keep in memory durations in ticks for seen time divisions so these values
@@ -508,36 +505,16 @@ class MIDITokenizer(ABC):
         raise NotImplementedError
 
     def _add_special_tokens_to_types_graph(self, dic: Dict[str, List[str]]):
-        r"""Adds (inplace) special tokens (*PAD*, *EOS*, *EOS*, *MASK*, *SEP*) types
+        r"""Adds (inplace) special tokens (*EOS* and *EOS* only) types
         to the token types graph dictionary.
 
         :param dic: token types graph to add special tokens.
         """
-        if self._pad:
-            for value in dic.values():
-                value.append("PAD")
-            dic["PAD"] = ["PAD"]
         if self._sos_eos:
             dic["SOS"] = list(dic.keys())
             dic["EOS"] = []
             for value in dic.values():
                 value.append("EOS")
-        if self._mask:
-            dic["MASK"] = list(dic.keys())
-            for value in dic.values():
-                value.append("MASK")
-        if self._sep:
-            dic["SEP"] = list(dic.keys())
-            for value in dic.values():
-                value.append("SEP")
-
-    def _add_bpe_to_tokens_type_graph(self):
-        r"""Adds BPE to the tokens_types_graph.
-        This method will be called after loading a BPE tokenizer from params (config file).
-        """
-        for val in self.tokens_types_graph.values():
-            val.append("BPE")
-        self.tokens_types_graph["BPE"] = list(self.tokens_types_graph.keys())
 
     def __create_durations_tuples(self) -> List[Tuple]:
         r"""Creates the possible durations in beat / position units, as tuple of the form:
@@ -827,7 +804,6 @@ class MIDITokenizer(ABC):
         pbar.close()
         self.has_bpe = True
         self.__set_bpe_tokens_successions()
-        self._add_bpe_to_tokens_type_graph()
         self.vocab.update_token_types_indexes()
         if save_converted_samples:
             for sample, path in zip(samples, samples_paths):
@@ -1030,17 +1006,17 @@ class MIDITokenizer(ABC):
         if data_augment_offsets is not None:
             data_augmentation_dataset(out_dir, self, *data_augment_offsets)
 
-    def token_types_errors(
-        self, tokens: List[int], consider_pad: bool = False
-    ) -> float:
+    @convert_tokens_tensors_to_list
+    def token_types_errors(self, tokens: List[int]) -> float:
         r"""Checks if a sequence of tokens is made of good token types
         successions and returns the error ratio (lower is better).
-        The implementation in MIDITokenizer class only checks the token types,
-        in child class the methods also consider the position and pitch values.
+        The common implementation in MIDITokenizer class will check token types,
+        duplicated notes and time errors. It works for REMI, TSD and Structured.
+        Other tokenizations override this method to include other errors
+        (like no NoteOff / NoteOn for MIDILike and embedding pooling).
         Overridden methods must call decompose_bpe at the beginning if BPE is used!
 
         :param tokens: sequence of tokens to check.
-        :param consider_pad: if True will continue the error detection after the first PAD token (default: False).
         :return: the error ratio (lower is better).
         """
         nb_tok_predicted = len(tokens)  # used to norm the score
@@ -1048,27 +1024,52 @@ class MIDITokenizer(ABC):
 
         # Override from here
 
-        err = 0
+        err_type = 0  # i.e. incompatible next type predicted
+        err_time = 0  # i.e. goes back or stay in time (does not go forward)
+        err_note = 0  # i.e. duplicated
         previous_type = self.vocab.token_type(tokens[0])
-        if consider_pad:
-            for token in tokens[1:]:
-                if (
-                    self.vocab.token_type(token)
-                    not in self.tokens_types_graph[previous_type]
-                ):
-                    err += 1
-                previous_type = self.vocab.token_type(token)
-        else:
-            for token in tokens[1:]:
-                if previous_type == "PAD":  # stop iteration at the first PAD token
-                    break
-                if (
-                    self.vocab.token_type(token)
-                    not in self.tokens_types_graph[previous_type]
-                ):
-                    err += 1
-                previous_type = self.vocab.token_type(token)
-        return err / nb_tok_predicted
+        current_pos = -1
+        current_pitches = []
+        note_tokens_types = ['Pitch', 'NoteOn']
+
+        # Init first note and current pitches if needed
+        if previous_type in note_tokens_types:
+            if previous_type in ['Pitch', 'NoteOn']:
+                pitch_val = int(self.vocab[tokens[0]].split('_')[1])
+            else:  # PitchVel or PitchVelDur
+                pitch_val = int(self.vocab[tokens[0]].split('_')[1].split('-')[0])
+            current_pitches.append(pitch_val)
+        elif previous_type == 'Position':
+            current_pos = int(self.vocab[tokens[0]].split('_')[1])
+
+        for token in tokens[1:]:
+            token_type, token_value = self.vocab.token_to_event[token].split('_')
+
+            # Good token type
+            if token_type in self.tokens_types_graph[previous_type]:
+                if token_type == 'Bar':  # reset
+                    current_pos = -1
+                    current_pitches = []
+                elif token_type in ['TimeShift', 'Time-Shift', 'Rest']:
+                    current_pitches = []
+                elif token_type in note_tokens_types:
+                    pitch_val = int(token_value)
+                    if pitch_val in current_pitches:
+                        err_note += 1  # pitch already played at current position
+                    else:
+                        current_pitches.append(pitch_val)
+                elif token_type == 'Position':
+                    if int(token_value) <= current_pos and previous_type != 'Rest':
+                        err_time += 1  # token position value <= to the current position
+                    else:
+                        current_pos = int(token_value)
+                        current_pitches = []
+            # Bad token type
+            else:
+                err_type += 1
+            previous_type = token_type
+
+        return (err_type + err_time + err_note) / nb_tok_predicted
 
     @staticmethod
     @convert_tokens_tensors_to_list

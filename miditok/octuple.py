@@ -6,7 +6,7 @@ from typing import List, Tuple, Dict, Optional, Union
 import numpy as np
 from miditoolkit import MidiFile, Instrument, Note, TempoChange, TimeSignature
 
-from .midi_tokenizer_base import MIDITokenizer
+from .midi_tokenizer_base import MIDITokenizer, convert_tokens_tensors_to_list
 from .vocabulary import Vocabulary, Event
 from .constants import (
     PITCH_RANGE,
@@ -124,9 +124,10 @@ class Octuple(MIDITokenizer):
         }
         super().save_params(out_path, additional_attributes_tmp)
 
+    @convert_tokens_tensors_to_list
     def midi_to_tokens(self, midi: MidiFile, *args, **kwargs) -> List[List[int]]:
         r"""Override the parent class method
-        Converts a MIDI file in a tokens representation, a sequence of "time steps".
+        Converts a MIDI file in a token representation, a sequence of "time steps".
         A time step is a list of tokens where:
             (list index: token type)
             0: Pitch
@@ -455,7 +456,7 @@ class Octuple(MIDITokenizer):
         time_division: Optional[int] = TIME_DIVISION,
         program: Optional[Tuple[int, bool]] = (0, False),
     ) -> Tuple[Instrument, List[TempoChange]]:
-        r"""NOT RELEVANT / IMPLEMENTED IN OCTUPLE
+        r"""NOT RELEVANT / IMPLEMENTED FOR OCTUPLE
         Use tokens_to_midi instead
 
         :param tokens: sequence of tokens to convert
@@ -535,9 +536,8 @@ class Octuple(MIDITokenizer):
         """
         return {}  # not relevant for this encoding
 
-    def token_types_errors(
-        self, tokens: List[List[int]], consider_pad: bool = False
-    ) -> float:
+    @convert_tokens_tensors_to_list
+    def token_types_errors(self, tokens: List[List[int]]) -> float:
         r"""Checks if a sequence of tokens is made of good token values and
         returns the error ratio (lower is better).
         The token types are always the same in Octuple so this methods only checks
@@ -547,7 +547,6 @@ class Octuple(MIDITokenizer):
             - a pitch token should not be present if the same pitch is already played at the current position
 
         :param tokens: sequence of tokens to check
-        :param consider_pad: if True will continue the error detection after the first PAD token (default: False)
         :return: the error ratio (lower is better)
         """
         err = 0
@@ -555,10 +554,6 @@ class Octuple(MIDITokenizer):
         current_pitches = {p: [] for p in self.programs}
 
         for token in tokens:
-            if consider_pad and all(
-                token[i] == self.vocab[i]["PAD_None"] for i in range(len(token))
-            ):
-                break
             if any(
                 self.vocab[i][token].split("_")[1] == "None"
                 for i, token in enumerate(token)

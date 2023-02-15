@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 from miditoolkit import Instrument, Note, TempoChange
 
-from .midi_tokenizer_base import MIDITokenizer
+from .midi_tokenizer_base import MIDITokenizer, convert_tokens_tensors_to_list
 from .vocabulary import Vocabulary, Event
 from .utils import detect_chords
 from .constants import (
@@ -544,9 +544,8 @@ class CPWord(MIDITokenizer):
         self._add_special_tokens_to_types_graph(dic)
         return dic
 
-    def token_types_errors(
-        self, tokens: List[List[int]], consider_pad: bool = False
-    ) -> float:
+    @convert_tokens_tensors_to_list
+    def token_types_errors(self, tokens: List[List[int]]) -> float:
         r"""Checks if a sequence of tokens is made of good token types
         successions and returns the error ratio (lower is better).
         The Pitch and Position values are also analyzed:
@@ -554,7 +553,6 @@ class CPWord(MIDITokenizer):
             - a pitch token should not be present if the same pitch is already played at the current position
 
         :param tokens: sequence of tokens to check
-        :param consider_pad: if True will continue the error detection after the first PAD token (default: False)
         :return: the error ratio (lower is better)
         """
 
@@ -584,9 +582,8 @@ class CPWord(MIDITokenizer):
         current_pos = -1
         current_pitches = []
 
-        def check(tok: List[int]):
-            nonlocal err, previous_type, current_pos, current_pitches
-            token_type, token_value = cp_token_type(tok)
+        for token in tokens[1:]:
+            token_type, token_value = cp_token_type(token)
             # Good token type
             if token_type in self.tokens_types_graph[previous_type]:
                 if token_type == "Bar":  # reset
@@ -608,12 +605,4 @@ class CPWord(MIDITokenizer):
                 err += 1
             previous_type = token_type
 
-        if consider_pad:
-            for token in tokens[1:]:
-                check(token)
-        else:
-            for token in tokens[1:]:
-                if previous_type == "PAD":
-                    break
-                check(token)
         return err / len(tokens)

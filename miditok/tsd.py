@@ -367,57 +367,6 @@ class TSD(MIDITokenizer):
         self._add_special_tokens_to_types_graph(dic)
         return dic
 
-    def token_types_errors(
-        self, tokens: List[int], consider_pad: bool = False
-    ) -> float:
-        r"""Checks if a sequence of tokens is made of good token types
-        successions and returns the error ratio (lower is better).
-        The Pitch and Position values are also analyzed:
-            - a Pitch token should not be present if the same pitch is already being played
-
-        :param tokens: sequence of tokens to check
-        :param consider_pad: if True will continue the error detection after the first PAD token (default: False)
-        :return: the error ratio (lower is better)
-        """
-        nb_tok_predicted = len(tokens)  # used to norm the score
-        tokens = self.decompose_bpe(tokens) if self.has_bpe else tokens
-
-        # Override from here
-
-        err = 0
-        previous_type = self.vocab.token_type(tokens[0])
-        current_pitches = []
-        if previous_type == "Pitch":
-            current_pitches.append(int(self.vocab[tokens[0]].split("_")[1]))
-
-        def check(tok: int):
-            nonlocal err, previous_type, current_pitches
-            token_type, token_value = self.vocab.token_to_event[tok].split("_")
-            # Good token type
-            if token_type in self.tokens_types_graph[previous_type]:
-                if token_type == "Pitch":
-                    if int(token_value) in current_pitches:
-                        err += 1  # pitch already being played
-                    else:
-                        current_pitches.append(int(token_value))
-                elif token_type in ["TimeShift", "Rest"]:
-                    current_pitches = []  # moving in time, list reset
-            # Bad token type
-            else:
-                err += 1
-            previous_type = token_type
-
-        if consider_pad:
-            for token in tokens[1:]:
-                check(token)
-        else:
-            for token in tokens[1:]:
-                if previous_type == "PAD":
-                    break
-                check(token)
-
-        return err / nb_tok_predicted
-
     def token_types_errors_training(
         self, x_tokens: List[int], y_tokens: List[int]
     ) -> Tuple[Union[float, Any]]:

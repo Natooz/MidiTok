@@ -6,7 +6,7 @@ from typing import List, Tuple, Dict, Optional, Union
 import numpy as np
 from miditoolkit import Instrument, Note, TempoChange
 
-from .midi_tokenizer_base import MIDITokenizer
+from .midi_tokenizer_base import MIDITokenizer, convert_tokens_tensors_to_list
 from .vocabulary import Vocabulary
 from .constants import (
     PITCH_RANGE,
@@ -316,9 +316,8 @@ class OctupleMono(MIDITokenizer):
         """
         return {}  # not relevant for this encoding
 
-    def token_types_errors(
-        self, tokens: List[List[int]], consider_pad: bool = False
-    ) -> float:
+    @convert_tokens_tensors_to_list
+    def token_types_errors(self, tokens: List[List[int]]) -> float:
         r"""Checks if a sequence of tokens is made of good token values and
         returns the error ratio (lower is better).
         The token types are always the same in Octuple so this method only checks
@@ -328,7 +327,6 @@ class OctupleMono(MIDITokenizer):
             - a pitch token should not be present if the same pitch is already played at the current position
 
         :param tokens: sequence of tokens to check
-        :param consider_pad: if True will continue the error detection after the first PAD token (default: False)
         :return: the error ratio (lower is better)
         """
         err = 0
@@ -336,10 +334,6 @@ class OctupleMono(MIDITokenizer):
         current_pitches = []
 
         for token in tokens:
-            if consider_pad and all(
-                token[i] == self.vocab[i]["PAD_None"] for i in range(len(token))
-            ):
-                break
             if any(
                 self.vocab[i][token].split("_")[1] == "None"
                 for i, token in enumerate(token)

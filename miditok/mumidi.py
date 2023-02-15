@@ -6,7 +6,7 @@ from typing import List, Tuple, Dict, Optional, Union
 import numpy as np
 from miditoolkit import MidiFile, Instrument, Note, TempoChange
 
-from .midi_tokenizer_base import MIDITokenizer
+from .midi_tokenizer_base import MIDITokenizer, convert_tokens_tensors_to_list
 from .vocabulary import Vocabulary, Event
 from .utils import detect_chords
 from .constants import (
@@ -379,6 +379,7 @@ class MuMIDI(MIDITokenizer):
 
         return tokens
 
+    @convert_tokens_tensors_to_list
     def tokens_to_midi(
         self,
         tokens: List[List[int]],
@@ -474,7 +475,7 @@ class MuMIDI(MIDITokenizer):
         time_division: Optional[int] = TIME_DIVISION,
         program: Optional[Tuple[int, bool]] = (0, False),
     ):
-        r"""NOT RELEVANT / IMPLEMENTED IN MUMIDI
+        r"""NOT RELEVANT / IMPLEMENTED FOR MUMIDI
         Use tokens_to_midi instead
 
         :param tokens: sequence of tokens to convert
@@ -590,9 +591,8 @@ class MuMIDI(MIDITokenizer):
         self._add_special_tokens_to_types_graph(dic)
         return dic
 
-    def token_types_errors(
-        self, tokens: List[List[int]], consider_pad: bool = False
-    ) -> float:
+    @convert_tokens_tensors_to_list
+    def token_types_errors(self, tokens: List[List[int]]) -> float:
         r"""Checks if a sequence of tokens is made of good token types
         successions and returns the error ratio (lower is better).
         The Pitch and Position values are also analyzed:
@@ -601,7 +601,6 @@ class MuMIDI(MIDITokenizer):
             - a pitch token should not be present if the same pitch is already played at the current position
 
         :param tokens: sequence of tokens to check
-        :param consider_pad: if True will continue the error detection after the first PAD token (default: False)
         :return: the error ratio (lower is better)
         """
         err = 0
@@ -613,8 +612,6 @@ class MuMIDI(MIDITokenizer):
 
         for token in tokens[1:]:
             # debug = {j: self.tokens_to_events([tokens[1:][j]])[0] for j in range(i - 4, min(i + 4, len(tokens[1:])))}
-            if not consider_pad and previous_type == "PAD":
-                break
             bar_value = int(self.vocab[1].token_to_event[token[1]].split("_")[1])
             pos_value = self.vocab[2].token_to_event[token[2]].split("_")[1]
             pos_value = int(pos_value) if pos_value != "None" else -1

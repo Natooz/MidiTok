@@ -3,7 +3,7 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to MidiTok's documentation! (WIP)
+Welcome to MidiTok's documentation!
 =========================================
 
 .. image:: https://github.com/Natooz/MidiTok/blob/assets/assets/logo.png?raw=true
@@ -14,6 +14,7 @@ Welcome to MidiTok's documentation! (WIP)
 It converts MIDI files to sequences of tokens ready to be fed to sequential Deep Learning models such as Transformers.
 
 MidiTok features most known MIDI :ref:`tokenizations`, and is built around the idea that they all share common methods. It properly pre-process MIDI files, and supports :ref:`Byte Pair Encoding (BPE)`.
+`Github repository <https://github.com/Natooz/MidiTok>`_
 
 Installation
 ==================
@@ -22,7 +23,7 @@ Installation
 
     pip install miditok
 
-MidiTok uses `(MIDIToolkit) <https://github.com/YatingMusic/miditoolkit>`_ and `(Mido) <https://github.com/mido/mido>`_ to read and write MIDI files.
+MidiTok uses `MIDIToolkit <https://github.com/YatingMusic/miditoolkit>`_ and `Mido <https://github.com/mido/mido>`_ to read and write MIDI files.
 
 Citation
 ==================

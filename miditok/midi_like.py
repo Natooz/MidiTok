@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 from miditoolkit import Instrument, Note, TempoChange
 
-from .midi_tokenizer_base import MIDITokenizer
+from .midi_tokenizer_base import MIDITokenizer, convert_tokens_tensors_to_list
 from .vocabulary import Vocabulary, Event
 from .utils import detect_chords
 from .constants import (
@@ -395,9 +395,8 @@ class MIDILike(MIDITokenizer):
         self._add_special_tokens_to_types_graph(dic)
         return dic
 
-    def token_types_errors(
-        self, tokens: List[int], consider_pad: bool = False
-    ) -> float:
+    @convert_tokens_tensors_to_list
+    def token_types_errors(self, tokens: List[int]) -> float:
         r"""Checks if a sequence of tokens is made of good token types
         successions and returns the error ratio (lower is better).
         The Pitch and Position values are also analyzed:
@@ -405,7 +404,6 @@ class MIDILike(MIDITokenizer):
             - a NoteOff token should not be present the note is not being played
 
         :param tokens: sequence of tokens to check
-        :param consider_pad: if True will continue the error detection after the first PAD token (default: False)
         :return: the error ratio (lower is better)
         """
         nb_tok_predicted = len(tokens)  # used to norm the score
@@ -453,8 +451,6 @@ class MIDILike(MIDITokenizer):
                         err += 1  # this pitch wasn't being played
                     else:
                         current_pitches.remove(int(events[i].value))
-                elif not consider_pad and events[i].type == "PAD":
-                    break
 
             # Bad token type
             else:
