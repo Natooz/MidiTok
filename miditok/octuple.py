@@ -124,7 +124,6 @@ class Octuple(MIDITokenizer):
         }
         super().save_params(out_path, additional_attributes_tmp)
 
-    @convert_tokens_tensors_to_list
     def midi_to_tokens(self, midi: MidiFile, *args, **kwargs) -> List[List[int]]:
         r"""Override the parent class method
         Converts a MIDI file in a token representation, a sequence of "time steps".
@@ -319,6 +318,7 @@ class Octuple(MIDITokenizer):
 
         return events
 
+    @convert_tokens_tensors_to_list
     def tokens_to_midi(
         self,
         tokens: List[List[int]],
