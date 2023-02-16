@@ -23,7 +23,7 @@ def get_midi_programs(midi: MidiFile) -> List[Tuple[int, bool]]:
 
 
 def remove_duplicated_notes(notes: List[Note]):
-    r"""Remove possible duplicated notes, i.e. with the same pitch, starting and ending times.
+    r"""Removes (inplace) possible duplicated notes, i.e. with the same pitch, starting and ending times.
     Before running this function make sure the notes has been sorted by start then pitch then end values:
     notes.sort(key=lambda x: (x.start, x.pitch, x.end))
 
@@ -46,9 +46,9 @@ def detect_chords(
     only_known_chord: bool = False,
     simul_notes_limit: int = 20,
 ) -> List[Event]:
-    r"""Chord detection method.
-    NOTE: make sure to sort notes by start time then pitch before: notes.sort(key=lambda x: (x.start, x.pitch))
-    NOTE2: on very large tracks with high note density this method can be very slow !
+    r"""Chord detection method. Make sure to sort notes by start time then pitch before:
+    ``notes.sort(key=lambda x: (x.start, x.pitch))``.
+    **On very large tracks with high note density this method can be very slow.**
     If you plan to use it with the Maestro or GiantMIDI datasets, it can take up to
     hundreds of seconds per MIDI depending on your cpu.
     One time step at a time, it will analyse the notes played together
@@ -86,7 +86,7 @@ def detect_chords(
             continue
 
         # Gathers the notes around the same time step
-        onset_notes = notes[count : count + simul_notes_limit]  # reduces the scope
+        onset_notes = notes[count: count + simul_notes_limit]  # reduces the scope
         onset_notes = onset_notes[
             np.where(onset_notes[:, 1] <= onset_notes[0, 1] + onset_offset)
         ]
@@ -139,13 +139,14 @@ def merge_tracks_per_class(
     r"""Merges per instrument class the tracks which are in the class in classes_to_merge.
     Example, a list of tracks / programs [0, 3, 8, 10, 11, 24, 25, 44, 47] will become [0, 8, 24, 25, 40] if
     classes_to_merge is [0, 1, 5].
-    See miditok.constants.INSTRUMENT_CLASSES
-    NOTE: programs of drum tracks will be set to -1.
+    The classes are in ``miditok.constants.INSTRUMENT_CLASSES``.
+
+    **Note:** programs of drum tracks will be set to -1.
 
     :param midi: MIDI object to merge tracks
     :param classes_to_merge: instrument classes to merge, to give as list of indexes
             (see miditok.constants.INSTRUMENT_CLASSES). Give None to merge nothing,
-             the function will still remove non-valid programs / tracks if given (default: None)
+            the function will still remove non-valid programs / tracks if given (default: None)
     :param new_program_per_class: new program of the final merged tracks, to be given per
             instrument class as a dict {class_id: program}
     :param max_nb_of_tracks_per_inst_class: max number of tracks per instrument class,
@@ -327,16 +328,16 @@ def current_bar_pos(
     current_bar = len(bar_idx)
     # Current position value within the bar
     pos_idx = [
-        i for i, token in enumerate(seq[bar_idx[-1] :]) if token in position_tokens
+        i for i, token in enumerate(seq[bar_idx[-1]:]) if token in position_tokens
     ]
     current_pos = (
         len(pos_idx) - 1
     )  # position value, e.g. from 0 to 15, -1 means a bar with no Pos token following
     # Pitches played at the current position
-    current_pitches = [token for token in seq[pos_idx[-1] :] if token in pitch_tokens]
+    current_pitches = [token for token in seq[pos_idx[-1]:] if token in pitch_tokens]
     # Chord predicted
     if chord_tokens is not None:
-        chord_at_this_pos = any(token in chord_tokens for token in seq[pos_idx[-1] :])
+        chord_at_this_pos = any(token in chord_tokens for token in seq[pos_idx[-1]:])
     else:
         chord_at_this_pos = False
     return current_bar, current_pos, current_pitches, chord_at_this_pos

@@ -50,5 +50,7 @@ Contents
    examples
    tokenizations
    bpe
+   data_augmentation
+   utils
    citations
 
