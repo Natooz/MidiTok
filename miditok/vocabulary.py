@@ -1,7 +1,9 @@
 
-from typing import List, Tuple, Union, Generator
+from typing import List, Tuple, Union, Generator, Any
+from dataclasses import dataclass
 
 
+@dataclass
 class Event:
     r"""Event class, representing a token and its characteristics
     The type corresponds to the token type (e.g. Pitch, Position ...);
@@ -9,14 +11,10 @@ class Event:
     These two attributes are used to build its string representation (__str__),
     used in the Vocabulary class to map an event to its corresponding token.
     """
-
-    def __init__(
-        self, type_: str, value: Union[str, int], time: Union[int, float] = 0, desc=None
-    ):
-        self.type = type_
-        self.value = value
-        self.time = time
-        self.desc = desc
+    type: str
+    value: Union[str, int]
+    time: Union[int, float] = None
+    desc: Any = None
 
     def __str__(self):
         return f"{self.type}_{self.value}"

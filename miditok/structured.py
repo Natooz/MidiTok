@@ -100,7 +100,7 @@ class Structured(MIDITokenizer):
             index = np.argmin(np.abs(dur_bins - time_shift))
             events.append(
                 Event(
-                    type_="TimeShift",
+                    type="TimeShift",
                     value=".".join(map(str, self.durations[index])),
                     time=0,
                     desc=f"{time_shift} ticks",
@@ -111,12 +111,12 @@ class Structured(MIDITokenizer):
         for n, note in enumerate(track.notes[:-1]):
             # Pitch
             events.append(
-                Event(type_="Pitch", value=note.pitch, time=note.start, desc=note.pitch)
+                Event(type="Pitch", value=note.pitch, time=note.start, desc=note.pitch)
             )
             # Velocity
             events.append(
                 Event(
-                    type_="Velocity",
+                    type="Velocity",
                     value=note.velocity,
                     time=note.start,
                     desc=f"{note.velocity}",
@@ -127,7 +127,7 @@ class Structured(MIDITokenizer):
             index = np.argmin(np.abs(dur_bins - duration))
             events.append(
                 Event(
-                    type_="Duration",
+                    type="Duration",
                     value=".".join(map(str, self.durations[index])),
                     time=note.start,
                     desc=f"{duration} ticks",
@@ -138,7 +138,7 @@ class Structured(MIDITokenizer):
             index = np.argmin(np.abs(dur_bins - time_shift))
             events.append(
                 Event(
-                    type_="TimeShift",
+                    type="TimeShift",
                     time=note.start,
                     desc=f"{time_shift} ticks",
                     value=".".join(map(str, self.durations[index]))
@@ -153,7 +153,7 @@ class Structured(MIDITokenizer):
         else:
             events.append(
                 Event(
-                    type_="Pitch",
+                    type="Pitch",
                     value=track.notes[-1].pitch,
                     time=track.notes[-1].start,
                     desc=track.notes[-1].pitch,
@@ -161,7 +161,7 @@ class Structured(MIDITokenizer):
             )
             events.append(
                 Event(
-                    type_="Velocity",
+                    type="Velocity",
                     value=track.notes[-1].velocity,
                     time=track.notes[-1].start,
                     desc=f"{track.notes[-1].velocity}",
@@ -171,7 +171,7 @@ class Structured(MIDITokenizer):
             index = np.argmin(np.abs(dur_bins - duration))
             events.append(
                 Event(
-                    type_="Duration",
+                    type="Duration",
                     value=".".join(map(str, self.durations[index])),
                     time=track.notes[-1].start,
                     desc=f"{duration} ticks",

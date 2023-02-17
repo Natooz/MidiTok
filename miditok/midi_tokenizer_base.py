@@ -759,7 +759,7 @@ class MIDITokenizer(ABC):
                 + "-".join(map(str, prime_tokens_eq))
             )
             self.vocab.add_event(
-                Event(type_="BPE", time=0, value=final_event_val, desc="")
+                Event(type="BPE", time=0, value=final_event_val, desc="")
             )
 
             # Replace newly created token in learning samples
@@ -892,7 +892,7 @@ class MIDITokenizer(ABC):
     def apply_bpe_to_dataset(
         self, dataset_path: Union[Path, str], out_path: Union[Path, str]
     ):
-        r"""Apply BPE to an already tokenized dataset (with no BPE).
+        r"""Applies BPE to an already tokenized dataset (with no BPE).
 
         :param dataset_path: path to token files to load.
         :param out_path: output directory to save.

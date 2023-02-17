@@ -335,7 +335,7 @@ class MuMIDI(MIDITokenizer):
                 tokens.append(
                     [
                         Event(
-                            type_="Pitch",
+                            type="Pitch",
                             value=note.pitch,
                             time=note.start,
                             desc=track.program,
@@ -350,7 +350,7 @@ class MuMIDI(MIDITokenizer):
                 tokens.append(
                     [
                         Event(
-                            type_="DrumPitch",
+                            type="DrumPitch",
                             value=note.pitch,
                             time=note.start,
                             desc=-1,

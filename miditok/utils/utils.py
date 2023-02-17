@@ -123,7 +123,7 @@ def detect_chords(
     events = []
     for chord in chords:
         events.append(
-            Event(type_="Chord", value=chord[0], time=chord[1], desc=chord[2])
+            Event(type="Chord", value=chord[0], time=chord[1], desc=chord[2])
         )
     return events
 
@@ -306,20 +306,14 @@ def merge_same_program_tracks(tracks: List[Instrument]):
             del tracks[i]
 
 
-def current_bar_pos(
-    seq: List[int],
-    bar_token: int,
-    position_tokens: List[int],
-    pitch_tokens: List[int],
-    chord_tokens: List[int] = None,
-) -> Tuple[int, int, List[int], bool]:
-    r"""Detects the current state of a sequence of tokens
+def nb_bar_pos(seq: List[int], bar_token: int, position_tokens: List[int]) -> Tuple[int, int]:
+    r"""Returns the number of bars and the last position of a sequence of tokens. This method
+    is compatible with tokenizations representing time with *Bar* and *Position* tokens, such as
+    :py:class:`miditok.REMI`.
 
     :param seq: sequence of tokens
     :param bar_token: the bar token value
     :param position_tokens: position tokens values
-    :param pitch_tokens: pitch tokens values
-    :param chord_tokens: chord tokens values
     :return: the current bar, current position within the bar, current pitches played at this position,
             and if a chord token has been predicted at this position
     """
@@ -333,11 +327,5 @@ def current_bar_pos(
     current_pos = (
         len(pos_idx) - 1
     )  # position value, e.g. from 0 to 15, -1 means a bar with no Pos token following
-    # Pitches played at the current position
-    current_pitches = [token for token in seq[pos_idx[-1]:] if token in pitch_tokens]
-    # Chord predicted
-    if chord_tokens is not None:
-        chord_at_this_pos = any(token in chord_tokens for token in seq[pos_idx[-1]:])
-    else:
-        chord_at_this_pos = False
-    return current_bar, current_pos, current_pitches, chord_at_this_pos
+
+    return current_bar, current_pos

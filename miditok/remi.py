@@ -128,7 +128,7 @@ class REMI(MIDITokenizer):
                     if rest_beat > 0:
                         events.append(
                             Event(
-                                type_="Rest",
+                                type="Rest",
                                 value=f"{rest_beat}.0",
                                 time=previous_note_end,
                                 desc=f"{rest_beat}.0",
@@ -144,7 +144,7 @@ class REMI(MIDITokenizer):
                         )
                         events.append(
                             Event(
-                                type_="Rest",
+                                type="Rest",
                                 value=f"0.{rest_pos_temp}",
                                 time=previous_note_end,
                                 desc=f"0.{rest_pos_temp}",
@@ -160,7 +160,7 @@ class REMI(MIDITokenizer):
                 for i in range(nb_new_bars):
                     events.append(
                         Event(
-                            type_="Bar",
+                            type="Bar",
                             value="None",
                             time=(current_bar + i + 1) * ticks_per_bar,
                             desc=0,
@@ -172,7 +172,7 @@ class REMI(MIDITokenizer):
                 pos_index = int((note.start % ticks_per_bar) / ticks_per_sample)
                 events.append(
                     Event(
-                        type_="Position",
+                        type="Position",
                         value=pos_index,
                         time=note.start,
                         desc=note.start,
@@ -199,7 +199,7 @@ class REMI(MIDITokenizer):
                                 break  # this tempo change is beyond the current time step, we break the loop
                     events.append(
                         Event(
-                            type_="Tempo",
+                            type="Tempo",
                             value=current_tempo,
                             time=note.start,
                             desc=note.start,
@@ -210,11 +210,11 @@ class REMI(MIDITokenizer):
 
             # Pitch / Velocity / Duration
             events.append(
-                Event(type_="Pitch", value=note.pitch, time=note.start, desc=note.pitch)
+                Event(type="Pitch", value=note.pitch, time=note.start, desc=note.pitch)
             )
             events.append(
                 Event(
-                    type_="Velocity",
+                    type="Velocity",
                     value=note.velocity,
                     time=note.start,
                     desc=f"{note.velocity}",
@@ -224,7 +224,7 @@ class REMI(MIDITokenizer):
             index = np.argmin(np.abs(dur_bins - duration))
             events.append(
                 Event(
-                    type_="Duration",
+                    type="Duration",
                     value=".".join(map(str, self.durations[index])),
                     time=note.start,
                     desc=f"{duration} ticks",

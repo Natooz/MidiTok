@@ -5,7 +5,7 @@ from .utils import (
     merge_tracks_per_class,
     merge_tracks,
     merge_same_program_tracks,
-    current_bar_pos,
+    nb_bar_pos,
 )
 
 __all__ = [
@@ -15,5 +15,5 @@ __all__ = [
     "merge_tracks_per_class",
     "merge_tracks",
     "merge_same_program_tracks",
-    "current_bar_pos",
+    "nb_bar_pos",
 ]

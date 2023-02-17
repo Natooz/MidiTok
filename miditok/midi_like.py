@@ -99,12 +99,12 @@ class MIDILike(MIDITokenizer):
         for n, note in enumerate(track.notes):
             # Note On
             events.append(
-                Event(type_="NoteOn", value=note.pitch, time=note.start, desc=note.end)
+                Event(type="NoteOn", value=note.pitch, time=note.start, desc=note.end)
             )
             # Velocity
             events.append(
                 Event(
-                    type_="Velocity",
+                    type="Velocity",
                     value=note.velocity,
                     time=note.start,
                     desc=f"{note.velocity}",
@@ -112,14 +112,14 @@ class MIDILike(MIDITokenizer):
             )
             # Note Off
             events.append(
-                Event(type_="NoteOff", value=note.pitch, time=note.end, desc=note.end)
+                Event(type="NoteOff", value=note.pitch, time=note.end, desc=note.end)
             )
         # Adds tempo events if specified
         if self.additional_tokens["Tempo"]:
             for tempo_change in self.current_midi_metadata["tempo_changes"]:
                 events.append(
                     Event(
-                        type_="Tempo",
+                        type="Tempo",
                         value=tempo_change.tempo,
                         time=tempo_change.time,
                         desc=tempo_change.tempo,
@@ -154,7 +154,7 @@ class MIDILike(MIDITokenizer):
                 if rest_beat > 0:
                     events.append(
                         Event(
-                            type_="Rest",
+                            type="Rest",
                             value=f"{rest_beat}.0",
                             time=rest_tick,
                             desc=f"{rest_beat}.0",
@@ -170,7 +170,7 @@ class MIDILike(MIDITokenizer):
                     )
                     events.append(
                         Event(
-                            type_="Rest",
+                            type="Rest",
                             value=f"0.{rest_pos_temp}",
                             time=rest_tick,
                             desc=f"0.{rest_pos_temp}",
@@ -185,7 +185,7 @@ class MIDILike(MIDITokenizer):
                     index = np.argmin(np.abs(dur_bins - time_shift))
                     events.append(
                         Event(
-                            type_="TimeShift",
+                            type="TimeShift",
                             value=".".join(map(str, self.durations[index])),
                             time=previous_tick,
                             desc=f"{time_shift} ticks",
@@ -198,7 +198,7 @@ class MIDILike(MIDITokenizer):
                 index = np.argmin(np.abs(dur_bins - time_shift))
                 events.append(
                     Event(
-                        type_="TimeShift",
+                        type="TimeShift",
                         value=".".join(map(str, self.durations[index])),
                         time=previous_tick,
                         desc=f"{time_shift} ticks",

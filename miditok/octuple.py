@@ -249,7 +249,7 @@ class Octuple(MIDITokenizer):
             dur_index = np.argmin(np.abs(dur_bins - duration))
             event = [
                 Event(
-                    type_="Pitch",
+                    type="Pitch",
                     value=note.pitch,
                     time=note.start,
                     desc=-1 if track.is_drum else track.program,

@@ -299,7 +299,7 @@ class CPWord(MIDITokenizer):
         :return: The compound token as a list of integers
         """
         cp_token_template = [
-            Event(type_="Family", value="Metric", time=time, desc=desc),
+            Event(type="Family", value="Metric", time=time, desc=desc),
             self.vocab[1].event_to_token["Ignore_None"],
             self.vocab[2].event_to_token["Ignore_None"],
             self.vocab[3].event_to_token["Ignore_None"],

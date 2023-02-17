@@ -97,11 +97,11 @@ class TSD(MIDITokenizer):
         for n, note in enumerate(track.notes):
             # Note On / Velocity / Duration
             events.append(
-                Event(type_="Pitch", value=note.pitch, time=note.start, desc=note.end)
+                Event(type="Pitch", value=note.pitch, time=note.start, desc=note.end)
             )
             events.append(
                 Event(
-                    type_="Velocity",
+                    type="Velocity",
                     value=note.velocity,
                     time=note.start,
                     desc=f"{note.velocity}",
@@ -111,7 +111,7 @@ class TSD(MIDITokenizer):
             index = np.argmin(np.abs(dur_bins - duration))
             events.append(
                 Event(
-                    type_="Duration",
+                    type="Duration",
                     value=".".join(map(str, self.durations[index])),
                     time=note.start,
                     desc=f"{duration} ticks",
@@ -122,7 +122,7 @@ class TSD(MIDITokenizer):
             for tempo_change in self.current_midi_metadata["tempo_changes"]:
                 events.append(
                     Event(
-                        type_="Tempo",
+                        type="Tempo",
                         value=tempo_change.tempo,
                         time=tempo_change.time,
                         desc=tempo_change.tempo,
@@ -157,7 +157,7 @@ class TSD(MIDITokenizer):
                 if rest_beat > 0:
                     events.append(
                         Event(
-                            type_="Rest",
+                            type="Rest",
                             value=f"{rest_beat}.0",
                             time=rest_tick,
                             desc=f"{rest_beat}.0",
@@ -173,7 +173,7 @@ class TSD(MIDITokenizer):
                     )
                     events.append(
                         Event(
-                            type_="Rest",
+                            type="Rest",
                             value=f"0.{rest_pos_temp}",
                             time=rest_tick,
                             desc=f"0.{rest_pos_temp}",
@@ -188,7 +188,7 @@ class TSD(MIDITokenizer):
                     index = np.argmin(np.abs(dur_bins - time_shift))
                     events.append(
                         Event(
-                            type_="TimeShift",
+                            type="TimeShift",
                             value=".".join(map(str, self.durations[index])),
                             time=previous_tick,
                             desc=f"{time_shift} ticks",
@@ -201,7 +201,7 @@ class TSD(MIDITokenizer):
                 index = np.argmin(np.abs(dur_bins - time_shift))
                 events.append(
                     Event(
-                        type_="TimeShift",
+                        type="TimeShift",
                         value=".".join(map(str, self.durations[index])),
                         time=previous_tick,
                         desc=f"{time_shift} ticks",
