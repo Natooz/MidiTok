@@ -14,6 +14,7 @@ from copy import deepcopy
 from pathlib import Path, PurePath
 from typing import Union
 import json
+from time import time
 
 import miditok
 from miditoolkit import MidiFile
@@ -44,13 +45,13 @@ def test_bpe_conversion(
 
     :param data_path: root path to the data to test
     """
-    encodings = ["Structured", "REMI", "MIDILike", "TSD"]
+    tokenizations = ["Structured", "REMI", "MIDILike", "TSD"]
     tokenizers = []
     data_path = Path(data_path)
     files = list(data_path.glob("**/*.mid"))
 
     # Creates tokenizers and computes BPE (build voc)
-    for encoding in encodings:
+    for encoding in tokenizations:
         add_tokens = deepcopy(ADDITIONAL_TOKENS_TEST)
         tokenizers.append(
             getattr(miditok, encoding)(
@@ -68,7 +69,7 @@ def test_bpe_conversion(
 
     # Reload (test) tokenizer from the saved config file
     tokenizers = []
-    for i, encoding in enumerate(encodings):
+    for i, encoding in enumerate(tokenizations):
         tokenizers.append(
             getattr(miditok, encoding)(
                 params=data_path / f"{encoding}_bpe" / "config.txt"
@@ -77,13 +78,17 @@ def test_bpe_conversion(
 
     at_least_one_error = False
 
+    tok_times = []
     for i, file_path in enumerate(tqdm(files, desc="Testing BPE")):
         # Reads the midi
         midi = MidiFile(file_path)
 
-        for encoding, tokenizer in zip(encodings, tokenizers):
+        for encoding, tokenizer in zip(tokenizations, tokenizers):
             # Convert the track in tokens
+            t0 = time()
             tokens = tokenizer.midi_to_tokens(deepcopy(midi))[0]  # with BPE
+            t1 = time() - t0
+            tok_times.append(t1)
             with open(
                 data_path / f"{encoding}" / f"{file_path.stem}.json"
             ) as json_file:
@@ -101,6 +106,7 @@ def test_bpe_conversion(
             if not no_error or not no_error_bpe:
                 at_least_one_error = True
                 print(f"error for {encoding} and {file_path.name}")
+    print(f"Mean tokenization time: {sum(tok_times) / len(tok_times):.2f}")
     assert not at_least_one_error
 
 
