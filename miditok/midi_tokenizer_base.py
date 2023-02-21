@@ -1255,21 +1255,17 @@ class MIDITokenizer(ABC):
             f'of {len(self.vocab.token_types)} types{" with BPE" if self.has_bpe else ""}'
         )
 
-    def __getitem__(self, item: Union[int, str, Tuple[int, int]]) -> Union[str, int]:
+    def __getitem__(self, item: Union[int, str, Tuple[int, Union[int, str]]]) -> Union[str, int]:
         r"""Convert a token (int) to an event (str), or vice-versa.
 
         :param item: a token (int) or an event (str). For embedding pooling, you must
                 provide a tuple where the first element in the index of the vocabulary.
         :return: the converted object.
         """
-        if isinstance(item, str):
-            return self.vocab.event_to_token[item]
-        elif isinstance(item, int):
-            return self.vocab.token_to_event[item]
-        elif isinstance(item, tuple) and self.is_multi_voc:
+        if isinstance(item, tuple) and self.is_multi_voc:
             return self.vocab[item[0]][item[1]]
         else:
-            raise IndexError("The index must be an integer or a string")
+            return self.vocab[item]
 
     def __eq__(self, other) -> bool:
         r"""Checks if two tokenizers are identical. This is done by comparing their vocabularies,
