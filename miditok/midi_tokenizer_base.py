@@ -884,9 +884,12 @@ class MIDITokenizer(ABC):
         :return: indices of in_list where the pattern has been found.
         """
         matches = []
+        next_possible_idx = 0
         for i in range(len(in_list)):
-            if in_list[i] == pattern[0] and in_list[i: i + len(pattern)] == pattern:
+            if in_list[i] == pattern[0] and in_list[i:i + len(pattern)] == pattern and i >= next_possible_idx:
                 matches.append(i)
+                next_possible_idx = i + len(pattern)
+        
         return matches
 
     def apply_bpe_to_dataset(
