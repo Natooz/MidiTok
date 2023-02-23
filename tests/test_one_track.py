@@ -81,10 +81,6 @@ def test_one_track_midi_to_tokens_to_midi(
             tokenizer = getattr(miditok, tokenization)(
                 beat_res=BEAT_RES_TEST,
                 additional_tokens=add_tokens,
-                pad=True,
-                sos_eos=True,
-                mask=True,
-                sep=True,
             )
 
             # Convert the track in tokens
@@ -92,7 +88,7 @@ def test_one_track_midi_to_tokens_to_midi(
 
             # Checks types and values conformity following the rules
             tokens_types = tokenizer.token_types_errors(
-                tokens[0] if tokenization not in ["Octuple", "MuMIDI"] else tokens
+                tokens[0] if not tokenizer.unique_track else tokens
             )
             if tokens_types != 0.0:
                 print(

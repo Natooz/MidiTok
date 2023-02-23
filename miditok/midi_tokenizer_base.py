@@ -7,16 +7,18 @@ from pathlib import Path
 import json
 from random import choices
 from copy import deepcopy
+from collections import OrderedDict
 from typing import List, Tuple, Dict, Union, Callable, Optional, Any
 
 import numpy as np
 from tqdm import tqdm
 from miditoolkit import MidiFile, Instrument, Note, TempoChange, TimeSignature
 
-from .vocabulary import Vocabulary, Event
+from .vocabulary import Event
 from .utils import remove_duplicated_notes, get_midi_programs
 from .data_augmentation import data_augmentation_dataset
-from .constants import TIME_DIVISION, CURRENT_VERSION_PACKAGE, PITCH_RANGE, BEAT_RES, NB_VELOCITIES, ADDITIONAL_TOKENS
+from .constants import TIME_DIVISION, CURRENT_VERSION_PACKAGE, PITCH_RANGE, BEAT_RES, NB_VELOCITIES, \
+    ADDITIONAL_TOKENS, SPECIAL_TOKENS
 
 
 def convert_tokens_tensors_to_list(func: Callable):
@@ -75,12 +77,8 @@ class MIDITokenizer(ABC):
     :param additional_tokens: (default: None used) specify which additional tokens to use.
             Compatibilities between tokenization and additiona tokens may vary.
             See :ref:`Additional tokens` for the details and available tokens.
-    :param pad: will add a special *PAD* token to the vocabulary, to use to pad sequences when
-            training a model with batches of different sequence lengths. (default: True)
-    :param sos_eos: adds special Start Of Sequence (*SOS*) and End Of Sequence (*EOS*) tokens
-            to the vocabulary. (default: False)
-    :param mask: will add a special *MASK* token to the vocabulary. (default: False)
-    :param sep: will add a special *SEP* token to the vocabulary. (default: False)
+    :param special_tokens: list of special tokens. This must be given as a list of strings given
+            only the names of the tokens. (default: ``["PAD", "BOS", "EOS", "MASK"]``)
     :param unique_track: set to True if the tokenizer works only with a unique track.
             Tokens will be saved as a single track. This applies to representations that natively handle
             multiple tracks such as Octuple, resulting in a single "stream" of tokens for all tracks.
@@ -96,10 +94,7 @@ class MIDITokenizer(ABC):
         beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
         nb_velocities: int = NB_VELOCITIES,
         additional_tokens: Dict[str, Union[bool, int, Tuple[int, int]]] = ADDITIONAL_TOKENS,
-        pad: bool = True,
-        sos_eos: bool = False,
-        mask: bool = False,
-        sep: bool = False,
+        special_tokens: List[str] = SPECIAL_TOKENS,
         unique_track: bool = False,
         params: Union[str, Path] = None,
     ):
@@ -113,12 +108,9 @@ class MIDITokenizer(ABC):
                 "You must specify a nb_velocities between 0 and 127 (included)"
             self.pitch_range = pitch_range
             self.beat_res = beat_res
-            self.additional_tokens = additional_tokens
             self.nb_velocities = nb_velocities
-            self._pad = pad
-            self._sos_eos = sos_eos
-            self._mask = mask
-            self._sep = sep
+            self.additional_tokens = additional_tokens
+            self.special_tokens = special_tokens
             self.unique_track = unique_track
         else:
             self.load_params(params)
@@ -160,8 +152,20 @@ class MIDITokenizer(ABC):
         if (
             self.vocab is None
         ):  # in case it was already loaded by an overridden load_params method, such as with BPE
-            self.vocab = self._create_vocabulary()
+            vocab_list = self._create_vocabulary()
+            if isinstance(vocab_list[0], list):
+                for i in range(len(vocab_list)):
+                    vocab_list[i] = special_tokens + vocab_list[i]
+            else:
+                vocab_list = special_tokens + vocab_list
+            self.vocab = self.__create_vocabulary(vocab_list)
         self.tokens_types_graph = self._create_token_types_graph()
+        if "BOS" in special_tokens or "EOS" in special_tokens:
+            self._add_bos_eos_to_types_graph()
+        if self.is_multi_voc:  # __vocab_inv is the inverse of self.vocab, allowing faster decoding
+            self.__vocab_inv = [{v: k for k, v in v.items()} for v in self.vocab]
+        else:
+            self.__vocab_inv = {v: k for k, v in self.vocab.items()}
 
         # BPE attributes
         self.bpe_successions = {}
@@ -382,7 +386,7 @@ class MIDITokenizer(ABC):
         :param events: list of Events objects to convert.
         :return: list of corresponding tokens.
         """
-        tokens = [self.vocab.event_to_token[str(event)] for event in events]
+        tokens = [self[str(event)] for event in events]
         if self.has_bpe:  # this might take some time
             tokens = self.apply_bpe(tokens)
         return tokens
@@ -401,13 +405,13 @@ class MIDITokenizer(ABC):
             for multi_token in tokens:
                 multi_event = []
                 for i, token in enumerate(multi_token):
-                    name, val = self.vocab[i].token_to_event[token].split("_")
+                    name, val = self[i, token].split("_")
                     multi_event.append(Event(name, val))
                 events.append(multi_event)
         else:
             tokens_ = self.decompose_bpe(tokens) if self.has_bpe else tokens
             for token in tokens_:
-                name, val = self.vocab.token_to_event[token].split("_")
+                name, val = self[token].split("_")
                 events.append(Event(name, val))
         return events
 
@@ -481,20 +485,59 @@ class MIDITokenizer(ABC):
 
         :param seq: sequence of tokens.
         """
-        seq.insert(0, self.vocab["SOS_None"])
-        seq.append(self.vocab["EOS_None"])
+        seq.insert(0, self["SOS_None"])
+        seq.append(self["EOS_None"])
 
     @abstractmethod
-    def _create_vocabulary(
-        self, *args, **kwargs
-    ) -> Union[Vocabulary, List[Vocabulary]]:
-        r"""Creates the Vocabulary object of the tokenizer.
+    def _create_vocabulary(self, *args, **kwargs) -> List[Union[str, List[str]]]:
+        r"""Creates the vocabulary, as a list of string events.
         This method is unimplemented and need to be overridden by inheriting classes.
-        See :class:`miditok.Vocabulary` to learn how to build it.
+        Each event as to be given as the form of "Type_Value", separated with an underscore.
+        Example: Pitch_58
+        The :class:`miditok.MIDITokenizer` main class will then create the "real" vocabulary as
+        a dictionary.
+        Do not include special tokens. These have to be given when creating the tokenizer, and
+        will be added to the vocabulary by :class:`miditok.MIDITokenizer`.
+
+        :return: the vocabulary as a list of string.
+        """
+        raise NotImplementedError
+
+    def __create_vocabulary(self, vocab: List[Union[str, List[str]]]) -> Union[OrderedDict, List[OrderedDict]]:
+        r"""Method actually creating the vocabulary object, as an OrderedDict, from a list
+        of token (str).
 
         :return: the vocabulary object(s).
         """
-        raise NotImplementedError
+        if isinstance(vocab[0], list):
+            return [self.__create_vocabulary(v) for v in vocab]
+
+        return OrderedDict([(event, i) for i, event in enumerate(vocab)])
+
+    def add_to_vocab(self, event: Union[str, Event], vocab_idx: int = None):
+        r"""Adds an event to the vocabulary. Its index (int) will be the length of the vocab.
+
+        :param event: event to add, as a formatted string of the form "Type_Value", e.g. Pitch_80
+        :param vocab_idx: idx of the vocabulary (in case of embedding pooling). (default: None)
+        """
+        event_str = event if isinstance(event, str) else str(event)
+
+        if vocab_idx is not None:
+            self.vocab[vocab_idx][event_str] = len(self.vocab[vocab_idx])
+            self.__vocab_inv[vocab_idx][len(self.__vocab_inv[vocab_idx])] = event_str
+        else:
+            self.vocab[event_str] = len(self.vocab)
+            self.__vocab_inv[len(self.__vocab_inv)] = event_str
+
+    def token_type(self, token: int, vocab_id: int = None) -> str:
+        r"""Returns the type of the given token.
+
+        :param token: token to get type from
+        :param vocab_id: index of the vocabulary associated to the token, if applicable. (default: None)
+        :return: the type of the token, as a string
+        """
+        event = self.__get_from_voc(token, vocab_id)
+        return event.split("_")[0]
 
     @abstractmethod
     def _create_token_types_graph(self) -> Dict[str, List[str]]:
@@ -504,17 +547,14 @@ class MIDITokenizer(ABC):
         for examples of how to implement it."""
         raise NotImplementedError
 
-    def _add_special_tokens_to_types_graph(self, dic: Dict[str, List[str]]):
+    def _add_bos_eos_to_types_graph(self):
         r"""Adds (inplace) special tokens (*EOS* and *EOS* only) types
         to the token types graph dictionary.
-
-        :param dic: token types graph to add special tokens.
         """
-        if self._sos_eos:
-            dic["SOS"] = list(dic.keys())
-            dic["EOS"] = []
-            for value in dic.values():
-                value.append("EOS")
+        self.tokens_types_graph["SOS"] = list(self.tokens_types_graph.keys())
+        self.tokens_types_graph["EOS"] = []
+        for value in self.tokens_types_graph.values():
+            value.append("EOS")
 
     def __create_durations_tuples(self) -> List[Tuple]:
         r"""Creates the possible durations in beat / position units, as tuple of the form:
@@ -716,7 +756,7 @@ class MIDITokenizer(ABC):
             j = 0
             while j < len(seq) - 1:
                 if tuple(seq[j: j + 2]) == succession:
-                    seq[j] = self.vocab[f"BPE_{new_event}"]
+                    seq[j] = self[f"BPE_{new_event}"]
                     del seq[j + 1]
                 j += 1
 
@@ -743,10 +783,10 @@ class MIDITokenizer(ABC):
             )  # most recurrent succession of two tokens
             prime_tokens_eq = []  # the equivalent succession with decomposed BPE tokens
             for token in most_rec_tok_succession:
-                if self.vocab.token_to_event[token].split("_")[0] == "BPE":
+                if self[token].split("_")[0] == "BPE":
                     prime_tokens_eq += map(
                         int,
-                        self.vocab.token_to_event[token]
+                        self[token]
                         .split("_")[1]
                         .split(".")[1]
                         .split("-"),
@@ -758,9 +798,7 @@ class MIDITokenizer(ABC):
                 + "."
                 + "-".join(map(str, prime_tokens_eq))
             )
-            self.vocab.add_event(
-                Event(type="BPE", time=0, value=final_event_val, desc="")
-            )
+            self.add_to_vocab(f"BPE_{final_event_val}")
 
             # Replace newly created token in learning samples
             for sample in samples:
@@ -804,7 +842,6 @@ class MIDITokenizer(ABC):
         pbar.close()
         self.has_bpe = True
         self.__set_bpe_tokens_successions()
-        self.vocab.update_token_types_indexes()
         if save_converted_samples:
             for sample, path in zip(samples, samples_paths):
                 self.save_tokens(
@@ -831,13 +868,13 @@ class MIDITokenizer(ABC):
             tok: list(
                 map(
                     int,
-                    self.vocab.token_to_event[tok]
+                    self[tok]
                     .split("_")[1]
                     .split(".")[0]
                     .split("-"),
                 )
             )
-            for tok in self.vocab.tokens_of_type("BPE")
+            for tok, event in enumerate(self.vocab) if event.split("_")[0] == "BPE"
         }
 
     def apply_bpe(self, tokens: List[int]) -> List[int]:
@@ -927,7 +964,7 @@ class MIDITokenizer(ABC):
         tokens = deepcopy(tokens)
         i = 0
         while i < len(tokens):
-            token_type, token_val = self.vocab[tokens[i]].split("_")
+            token_type, token_val = self[tokens[i]].split("_")
             if token_type == "BPE":
                 del tokens[i]
                 for j, to_insert in enumerate(
@@ -1030,7 +1067,7 @@ class MIDITokenizer(ABC):
         err_type = 0  # i.e. incompatible next type predicted
         err_time = 0  # i.e. goes back or stay in time (does not go forward)
         err_note = 0  # i.e. duplicated
-        previous_type = self.vocab.token_type(tokens[0])
+        previous_type = self.token_type(tokens[0])
         current_pos = -1
         current_pitches = []
         note_tokens_types = ['Pitch', 'NoteOn']
@@ -1038,15 +1075,15 @@ class MIDITokenizer(ABC):
         # Init first note and current pitches if needed
         if previous_type in note_tokens_types:
             if previous_type in ['Pitch', 'NoteOn']:
-                pitch_val = int(self.vocab[tokens[0]].split('_')[1])
+                pitch_val = int(self[tokens[0]].split('_')[1])
             else:  # PitchVel or PitchVelDur
-                pitch_val = int(self.vocab[tokens[0]].split('_')[1].split('-')[0])
+                pitch_val = int(self[tokens[0]].split('_')[1].split('-')[0])
             current_pitches.append(pitch_val)
         elif previous_type == 'Position':
-            current_pos = int(self.vocab[tokens[0]].split('_')[1])
+            current_pos = int(self[tokens[0]].split('_')[1])
 
         for token in tokens[1:]:
-            token_type, token_value = self.vocab.token_to_event[token].split('_')
+            token_type, token_value = self[token].split('_')
 
             # Good token type
             if token_type in self.tokens_types_graph[previous_type]:
@@ -1128,17 +1165,14 @@ class MIDITokenizer(ABC):
         if (
             self.has_bpe and "vocab" not in additional_attributes
         ):  # saves whole vocab if BPE
-            additional_attributes["vocab"] = self.vocab.token_to_event
+            additional_attributes["vocab"] = self.vocab
 
         params = {
             "pitch_range": (self.pitch_range.start, self.pitch_range.stop),
             "beat_res": {f"{k1}_{k2}": v for (k1, k2), v in self.beat_res.items()},
             "nb_velocities": len(self.velocities),
             "additional_tokens": self.additional_tokens,
-            "_pad": self._pad,
-            "_sos_eos": self._sos_eos,
-            "_mask": self._mask,
-            "_sep": self._sep,
+            "special_tokens": self.special_tokens,
             "unique_track": self.unique_track,
             "tokenization": self.__class__.__name__,
             "miditok_version": CURRENT_VERSION_PACKAGE,
@@ -1171,34 +1205,13 @@ class MIDITokenizer(ABC):
             elif key == "additional_tokens":
                 value["TimeSignature"] = value.get("TimeSignature", False)
             elif key == "vocab":
-                self.vocab = Vocabulary(pad=False)
-                for token, event in value.items():
-                    if (
-                        "-" in event and event.split("_")[0] != "BPE"
-                    ):  # for config files created with < v1.3.3
-                        event = "".join(
-                            event.split("-")
-                        )  # we remove hyphens to comply with the camelcase convention
-                    self.vocab.token_to_event[
-                        int(token)
-                    ] = event  # we modify protected attribute to keep the exact
-                    self.vocab.event_to_token[event] = int(
-                        token
-                    )  # same token <--> event pairs
-                self.vocab.update_token_types_indexes()
-                self.has_bpe = len(self.vocab.tokens_of_type("BPE")) > 0
+                self.vocab = OrderedDict(value)
+                for event in self.vocab.keys():
+                    if event.split("_")[0] == "BPE":
+                        self.has_bpe = True
+                        break
                 continue
             setattr(self, key, value)
-
-        # when loading from params of miditok of previous versions
-        if "_pad" not in params:  # miditok < v1.3.0
-            self._pad = False
-        if "_sos_eos" not in params:  # miditok < v1.2.0
-            self._sos_eos = False
-        if "_mask" not in params:  # miditok < v1.2.0
-            self._mask = False
-        if "_sep" not in params:  # miditok < v1.2.0
-            self._sep = False
 
     @property
     def is_multi_voc(self) -> bool:
@@ -1208,14 +1221,6 @@ class MIDITokenizer(ABC):
         :return: True is the tokenizer uses embedding pooling else False
         """
         return isinstance(self.vocab, list)
-
-    @property
-    def special_tokens(self) -> List[int]:
-        """Returns the list of special tokens: *PAD*, *SOS*, *EOS*, *MASK*, *SEP*
-
-        :return: list of special tokens
-        """
-        return self.vocab.special_tokens if not self.is_multi_voc else [v.special_tokens for v in self.vocab]
 
     def __call__(self, obj: Any, *args, **kwargs):
         r"""Automatically tokenize a MIDI file, or detokenize a sequence of tokens.
@@ -1254,8 +1259,8 @@ class MIDITokenizer(ABC):
 
     def __repr__(self):
         return (
-            f'{len(self.len)} tokens {"(multi-voc)" if self.is_multi_voc else ""} '
-            f'of {len(self.vocab.token_types)} types{" with BPE" if self.has_bpe else ""}'
+            f'{len(self.len)} tokens {"(multi-voc) " if self.is_multi_voc else ""}'
+            f'{"with BPE" if self.has_bpe else "without BPE"}'
         )
 
     def __getitem__(self, item: Union[int, str, Tuple[int, Union[int, str]]]) -> Union[str, int]:
@@ -1266,9 +1271,23 @@ class MIDITokenizer(ABC):
         :return: the converted object.
         """
         if isinstance(item, tuple) and self.is_multi_voc:
-            return self.vocab[item[0]][item[1]]
+            return self.__get_from_voc(item[1], item[0])
         else:
-            return self.vocab[item]
+            return self.__get_from_voc(item)
+
+    def __get_from_voc(self, item: Union[int, str], vocab_id: int = None) -> Union[int, str]:
+        r"""Get element from the vocabulary.
+        The method handles both token (int) <--> event (str) ways.
+
+        :param item: item to get / index.
+        :param vocab_id: index of the vocabulary associated to the token, if applicable. (default: None)
+        :return: the associated value.
+        """
+        if isinstance(item, str):
+            voc = self.vocab[vocab_id] if self.is_multi_voc else self.vocab
+        else:
+            voc = self.__vocab_inv[vocab_id] if self.is_multi_voc else self.__vocab_inv
+        return voc[item]
 
     def __eq__(self, other) -> bool:
         r"""Checks if two tokenizers are identical. This is done by comparing their vocabularies,

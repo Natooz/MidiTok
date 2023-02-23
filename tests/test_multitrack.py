@@ -78,10 +78,6 @@ def test_multitrack_midi_to_tokens_to_midi(
             tokenizer = getattr(miditok, tokenization)(
                 beat_res=BEAT_RES_TEST,
                 additional_tokens=deepcopy(ADDITIONAL_TOKENS_TEST),
-                pad=True,
-                sos_eos=True,
-                mask=True,
-                sep=True,
             )
 
             # Process the MIDI

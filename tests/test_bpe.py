@@ -51,28 +51,28 @@ def test_bpe_conversion(
     files = list(data_path.glob("**/*.mid"))
 
     # Creates tokenizers and computes BPE (build voc)
-    for encoding in tokenizations:
+    for tokenization in tokenizations:
         add_tokens = deepcopy(ADDITIONAL_TOKENS_TEST)
         tokenizers.append(
-            getattr(miditok, encoding)(
+            getattr(miditok, tokenization)(
                 beat_res=BEAT_RES_TEST, additional_tokens=add_tokens
             )
         )
-        tokenizers[-1].tokenize_midi_dataset(files, data_path / encoding)
+        tokenizers[-1].tokenize_midi_dataset(files, data_path / tokenization)
         tokenizers[-1].learn_bpe(
-            data_path / encoding,
+            data_path / tokenization,
             len(tokenizers[-1].vocab) + 60,
-            out_dir=data_path / f"{encoding}_bpe",
+            out_dir=data_path / f"{tokenization}_bpe",
             files_lim=None,
             save_converted_samples=True,
         )
 
     # Reload (test) tokenizer from the saved config file
     tokenizers = []
-    for i, encoding in enumerate(tokenizations):
+    for i, tokenization in enumerate(tokenizations):
         tokenizers.append(
-            getattr(miditok, encoding)(
-                params=data_path / f"{encoding}_bpe" / "config.txt"
+            getattr(miditok, tokenization)(
+                params=data_path / f"{tokenization}_bpe" / "config.txt"
             )
         )
 
@@ -83,19 +83,19 @@ def test_bpe_conversion(
         # Reads the midi
         midi = MidiFile(file_path)
 
-        for encoding, tokenizer in zip(tokenizations, tokenizers):
+        for tokenization, tokenizer in zip(tokenizations, tokenizers):
             # Convert the track in tokens
             t0 = time()
             tokens = tokenizer.midi_to_tokens(deepcopy(midi))[0]  # with BPE
             t1 = time() - t0
             tok_times.append(t1)
             with open(
-                data_path / f"{encoding}" / f"{file_path.stem}.json"
+                data_path / f"{tokenization}" / f"{file_path.stem}.json"
             ) as json_file:
                 tokens_no_bpe = json.load(json_file)["tokens"][0]  # no BPE
             tokens_no_bpe2 = tokenizer.decompose_bpe(deepcopy(tokens))  # BPE decomposed
             with open(
-                data_path / f"{encoding}_bpe" / f"{file_path.stem}.json"
+                data_path / f"{tokenization}_bpe" / f"{file_path.stem}.json"
             ) as json_file:
                 saved_tokens = json.load(json_file)["tokens"][
                     0
@@ -105,7 +105,7 @@ def test_bpe_conversion(
             no_error = tokens_no_bpe == tokens_no_bpe2 == saved_tokens_decomposed
             if not no_error or not no_error_bpe:
                 at_least_one_error = True
-                print(f"error for {encoding} and {file_path.name}")
+                print(f"error for {tokenization} and {file_path.name}")
     print(f"Mean tokenization time: {sum(tok_times) / len(tok_times):.2f}")
     assert not at_least_one_error
 

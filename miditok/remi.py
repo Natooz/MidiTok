@@ -6,13 +6,14 @@ import numpy as np
 from miditoolkit import Instrument, Note, TempoChange
 
 from .midi_tokenizer_base import MIDITokenizer
-from .vocabulary import Vocabulary, Event
+from .vocabulary import Event
 from .utils import detect_chords
 from .constants import (
     PITCH_RANGE,
     NB_VELOCITIES,
     BEAT_RES,
     ADDITIONAL_TOKENS,
+    SPECIAL_TOKENS,
     TIME_DIVISION,
     TEMPO,
     MIDI_INSTRUMENTS,
@@ -41,12 +42,8 @@ class REMI(MIDITokenizer):
     :param nb_velocities: number of velocity bins
     :param additional_tokens: additional tokens (chords, time signature, rests, tempo...) to use,
             to be given as a dictionary. (default: None is used)
-    :param pad: will add a special *PAD* token to the vocabulary, to use to pad sequences when
-            training a model with batches of different sequence lengths. (default: True)
-    :param sos_eos: adds special Start Of Sequence (*SOS*) and End Of Sequence (*EOS*) tokens
-            to the vocabulary. (default: False)
-    :param mask: will add a special *MASK* token to the vocabulary (default: False)
-    :param sep: will add a special *SEP* token to the vocabulary (default: False)
+    :param special_tokens: list of special tokens. This must be given as a list of strings given
+            only the names of the tokens. (default: ``["PAD", "BOS", "EOS", "MASK"]``)
     :param params: path to a tokenizer config file. This will override other arguments and
             load the tokenizer based on the config file. This is particularly useful if the
             tokenizer learned Byte Pair Encoding. (default: None)
@@ -58,22 +55,17 @@ class REMI(MIDITokenizer):
         beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
         nb_velocities: int = NB_VELOCITIES,
         additional_tokens: Dict[str, Union[bool, int]] = ADDITIONAL_TOKENS,
-        pad: bool = True,
-        sos_eos: bool = False,
-        mask: bool = False,
-        sep: bool = False,
+        special_tokens: List[str] = SPECIAL_TOKENS,
         params: Union[str, Path] = None,
     ):
+        self.encoder = []
         additional_tokens["TimeSignature"] = False  # not compatible
         super().__init__(
             pitch_range,
             beat_res,
             nb_velocities,
             additional_tokens,
-            pad,
-            sos_eos,
-            mask,
-            sep,
+            special_tokens,
             params=params,
         )
 
@@ -327,59 +319,52 @@ class REMI(MIDITokenizer):
         tempo_changes[0].time = 0
         return instrument, tempo_changes
 
-    def _create_vocabulary(self, sos_eos_tokens: bool = None) -> Vocabulary:
-        r"""Creates the Vocabulary object of the tokenizer.
-        See the docstring of the Vocabulary class for more details about how to use it.
-        NOTE: token index 0 is often used as a padding index during training
+    def _create_vocabulary(self, sos_eos_tokens: bool = None) -> List[str]:
+        r"""Creates the vocabulary, as a list of string events.
+        Each event will be given as the form of "Type_Value", separated with an underscore.
+        Example: Pitch_58
+        The :class:`miditok.MIDITokenizer` main class will then create the "real" vocabulary as
+        a dictionary.
+        Special tokens have to be given when creating the tokenizer, and
+        will be added to the vocabulary by :class:`miditok.MIDITokenizer`.
 
-        :param sos_eos_tokens: DEPRECIATED, will include Start Of Sequence (SOS) and End Of Sequence (tokens)
-        :return: the vocabulary object
+        :return: the vocabulary as a list of string.
         """
-        if sos_eos_tokens is not None:
-            print(
-                "\033[93msos_eos_tokens argument is depreciated and will be removed in a future update, "
-                "_create_vocabulary now uses self._sos_eos attribute set a class init \033[0m"
-            )
-        vocab = Vocabulary(
-            pad=self._pad, sos_eos=self._sos_eos, mask=self._mask, sep=self._sep
-        )
-
-        # BAR
-        vocab.add_event("Bar_None")
+        vocab = ["Bar_None"]
 
         # PITCH
-        vocab.add_event(f"Pitch_{i}" for i in self.pitch_range)
+        vocab += [f"Pitch_{i}" for i in self.pitch_range]
 
         # VELOCITY
-        vocab.add_event(f"Velocity_{i}" for i in self.velocities)
+        vocab += [f"Velocity_{i}" for i in self.velocities]
 
         # DURATION
-        vocab.add_event(
+        vocab += [
             f'Duration_{".".join(map(str, duration))}' for duration in self.durations
-        )
+        ]
 
         # POSITION
         nb_positions = max(self.beat_res.values()) * 4  # 4/4 time signature
-        vocab.add_event(f"Position_{i}" for i in range(nb_positions))
+        vocab += [f"Position_{i}" for i in range(nb_positions)]
 
         # CHORD
         if self.additional_tokens["Chord"]:
-            vocab.add_event(
+            vocab += [
                 f"Chord_{i}" for i in range(3, 6)
-            )  # non recognized chords (between 3 and 5 notes only)
-            vocab.add_event(f"Chord_{chord_quality}" for chord_quality in CHORD_MAPS)
+            ]  # non recognized chords (between 3 and 5 notes only)
+            vocab += [f"Chord_{chord_quality}" for chord_quality in CHORD_MAPS]
 
         # REST
         if self.additional_tokens["Rest"]:
-            vocab.add_event(f'Rest_{".".join(map(str, rest))}' for rest in self.rests)
+            vocab += [f'Rest_{".".join(map(str, rest))}' for rest in self.rests]
 
         # TEMPO
         if self.additional_tokens["Tempo"]:
-            vocab.add_event(f"Tempo_{i}" for i in self.tempos)
+            vocab += [f"Tempo_{i}" for i in self.tempos]
 
         # PROGRAM
         if self.additional_tokens["Program"]:
-            vocab.add_event(f"Program_{program}" for program in range(-1, 128))
+            vocab += [f"Program_{program}" for program in range(-1, 128)]
 
         return vocab
 
@@ -393,18 +378,15 @@ class REMI(MIDITokenizer):
         """
         dic = dict()
 
-        try:
-            _ = self.vocab.tokens_of_type("Program")
-            dic["Program"] = ["Bar"]
-        except KeyError:
-            pass
-
         dic["Bar"] = ["Position", "Bar"]
 
         dic["Position"] = ["Pitch"]
         dic["Pitch"] = ["Velocity"]
         dic["Velocity"] = ["Duration"]
         dic["Duration"] = ["Pitch", "Position", "Bar"]
+
+        if self.additional_tokens["Program"]:
+            dic["Program"] = ["Bar"]
 
         if self.additional_tokens["Chord"]:
             dic["Chord"] = ["Pitch"]
@@ -421,7 +403,6 @@ class REMI(MIDITokenizer):
             dic["Rest"] = ["Rest", "Position", "Bar"]
             dic["Duration"] += ["Rest"]
 
-        self._add_special_tokens_to_types_graph(dic)
         return dic
 
     @staticmethod

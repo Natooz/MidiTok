@@ -30,6 +30,7 @@ ADDITIONAL_TOKENS = {
     # time signature params
     "time_signature_range": (8, 2),
 }  # (max_beat_res, max_bar_length_in_NOTE)
+SPECIAL_TOKENS = ["PAD", "BOS", "EOS", "MASK"]  # default special tokens
 
 # For MuMIDI, recommended range from the GM2 specs
 # note: we ignore the "Applause" at pitch 88 of the orchestra drum set, increase to 89 if you need it
