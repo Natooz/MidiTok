@@ -147,8 +147,8 @@ def test_data_augmentation():
                 for note_o, note_s in zip(original_track.notes, aug_track.notes):
                     assert note_s.pitch == note_o.pitch + offsets[0]
                     assert note_s.velocity in [
-                        tokenizer.velocities[0],
-                        tokenizer.velocities[-1],
+                        tokenizer._velocities[0],
+                        tokenizer._velocities[-1],
                         note_o.velocity + offsets[1],
                     ]
 

@@ -268,10 +268,10 @@ def get_offsets(
                     int(np.min(np.concatenate(tokens_pitch)))
                 ].split("_")[1]
         offset_up = min(
-            nb_octave_offset, (tokenizer.pitch_range.stop - 1 - int(max_pitch)) // 12
+            nb_octave_offset, (tokenizer._pitch_range.stop - 1 - int(max_pitch)) // 12
         )
         offset_down = min(
-            nb_octave_offset, (int(min_pitch) - tokenizer.pitch_range.start) // 12
+            nb_octave_offset, (int(min_pitch) - tokenizer._pitch_range.start) // 12
         )
 
         off = []
@@ -282,7 +282,7 @@ def get_offsets(
         offsets.append(off)
 
     if nb_vel_offset is not None:
-        vel_dim = int(128 / len(tokenizer.velocities))
+        vel_dim = int(128 / len(tokenizer._velocities))
         off = []
         if vel_directions[0]:
             off += list(range(vel_dim, nb_vel_offset * vel_dim + 1, vel_dim))
@@ -347,11 +347,11 @@ def data_augmentation_midi(
                     for note_ in track_.notes:
                         if offset_ < 0:
                             note_.velocity = max(
-                                min(tokenizer.velocities), note_.velocity + offset_
+                                min(tokenizer._velocities), note_.velocity + offset_
                             )
                         else:
                             note_.velocity = min(
-                                max(tokenizer.velocities), note_.velocity + offset_
+                                max(tokenizer._velocities), note_.velocity + offset_
                             )
                 aug_.append(((offsets_[0], offset_, offsets_[2]), midi_aug_))
             return aug_

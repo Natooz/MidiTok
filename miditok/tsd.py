@@ -72,13 +72,13 @@ class TSD(MIDITokenizer):
         """
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
-        ticks_per_sample = self.current_midi_metadata["time_division"] / max(
-            self.beat_res.values()
+        ticks_per_sample = self._current_midi_metadata["time_division"] / max(
+            self._beat_res.values()
         )
-        dur_bins = self.durations_ticks[self.current_midi_metadata["time_division"]]
+        dur_bins = self._durations_ticks[self._current_midi_metadata["time_division"]]
         min_rest = (
-            self.current_midi_metadata["time_division"] * self.rests[0][0]
-            + ticks_per_sample * self.rests[0][1]
+            self._current_midi_metadata["time_division"] * self._rests[0][0]
+            + ticks_per_sample * self._rests[0][1]
             if self.additional_tokens["Rest"]
             else 0
         )
@@ -103,14 +103,14 @@ class TSD(MIDITokenizer):
             events.append(
                 Event(
                     type="Duration",
-                    value=".".join(map(str, self.durations[index])),
+                    value=".".join(map(str, self._durations[index])),
                     time=note.start,
                     desc=f"{duration} ticks",
                 )
             )
         # Adds tempo events if specified
         if self.additional_tokens["Tempo"]:
-            for tempo_change in self.current_midi_metadata["tempo_changes"]:
+            for tempo_change in self._current_midi_metadata["tempo_changes"]:
                 events.append(
                     Event(
                         type="Tempo",
@@ -139,9 +139,9 @@ class TSD(MIDITokenizer):
             ):
                 rest_beat, rest_pos = divmod(
                     event.time - previous_tick,
-                    self.current_midi_metadata["time_division"],
+                    self._current_midi_metadata["time_division"],
                 )
-                rest_beat = min(rest_beat, max([r[0] for r in self.rests]))
+                rest_beat = min(rest_beat, max([r[0] for r in self._rests]))
                 rest_pos = round(rest_pos / ticks_per_sample)
                 rest_tick = previous_tick  # untouched tick value to the order is not messed after sorting
 
@@ -155,12 +155,12 @@ class TSD(MIDITokenizer):
                         )
                     )
                     previous_tick += (
-                        rest_beat * self.current_midi_metadata["time_division"]
+                        rest_beat * self._current_midi_metadata["time_division"]
                     )
 
-                while rest_pos >= self.rests[0][1]:
+                while rest_pos >= self._rests[0][1]:
                     rest_pos_temp = min(
-                        [r[1] for r in self.rests], key=lambda x: abs(x - rest_pos)
+                        [r[1] for r in self._rests], key=lambda x: abs(x - rest_pos)
                     )
                     events.append(
                         Event(
@@ -180,7 +180,7 @@ class TSD(MIDITokenizer):
                     events.append(
                         Event(
                             type="TimeShift",
-                            value=".".join(map(str, self.durations[index])),
+                            value=".".join(map(str, self._durations[index])),
                             time=previous_tick,
                             desc=f"{time_shift} ticks",
                         )
@@ -193,7 +193,7 @@ class TSD(MIDITokenizer):
                 events.append(
                     Event(
                         type="TimeShift",
-                        value=".".join(map(str, self.durations[index])),
+                        value=".".join(map(str, self._durations[index])),
                         time=previous_tick,
                         desc=f"{time_shift} ticks",
                     )
@@ -207,7 +207,7 @@ class TSD(MIDITokenizer):
         if self.additional_tokens["Chord"] and not track.is_drum:
             events += detect_chords(
                 track.notes,
-                self.current_midi_metadata["time_division"],
+                self._current_midi_metadata["time_division"],
                 self._first_beat_res,
             )
 
@@ -228,7 +228,7 @@ class TSD(MIDITokenizer):
         :param program: the MIDI program of the produced track and if it drum, (default (0, False), piano)
         :return: the miditoolkit instrument object and tempo changes
         """
-        ticks_per_sample = time_division // max(self.beat_res.values())
+        ticks_per_sample = time_division // max(self._beat_res.values())
         events = self.tokens_to_events(tokens)
 
         name = "Drums" if program[1] else MIDI_INSTRUMENTS[program[0]]["name"]
@@ -288,20 +288,20 @@ class TSD(MIDITokenizer):
         vocab = []
 
         # NOTE ON
-        vocab += [f"Pitch_{i}" for i in self.pitch_range]
+        vocab += [f"Pitch_{i}" for i in self._pitch_range]
 
         # VELOCITY
-        vocab += [f"Velocity_{i}" for i in self.velocities]
+        vocab += [f"Velocity_{i}" for i in self._velocities]
 
         # DURATION
         vocab += [
-            f'Duration_{".".join(map(str, duration))}' for duration in self.durations
+            f'Duration_{".".join(map(str, duration))}' for duration in self._durations
         ]
 
         # TIME SHIFTS
         vocab += [
-            f'TimeShift_{".".join(map(str, self.durations[i]))}'
-            for i in range(len(self.durations))
+            f'TimeShift_{".".join(map(str, self._durations[i]))}'
+            for i in range(len(self._durations))
         ]
 
         # CHORD
@@ -313,11 +313,11 @@ class TSD(MIDITokenizer):
 
         # REST
         if self.additional_tokens["Rest"]:
-            vocab += [f'Rest_{".".join(map(str, rest))}' for rest in self.rests]
+            vocab += [f'Rest_{".".join(map(str, rest))}' for rest in self._rests]
 
         # TEMPO
         if self.additional_tokens["Tempo"]:
-            vocab += [f"Tempo_{i}" for i in self.tempos]
+            vocab += [f"Tempo_{i}" for i in self._tempos]
 
         # PROGRAM
         if self.additional_tokens["Program"]:

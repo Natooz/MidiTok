@@ -78,13 +78,13 @@ class Structured(MIDITokenizer):
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
         events = []
 
-        dur_bins = self.durations_ticks[self.current_midi_metadata["time_division"]]
+        dur_bins = self._durations_ticks[self._current_midi_metadata["time_division"]]
 
         # First time shift if needed
         if track.notes[0].start != 0:
             if track.notes[0].start > max(dur_bins):
                 time_shift = (
-                    track.notes[0].start % self.current_midi_metadata["time_division"]
+                    track.notes[0].start % self._current_midi_metadata["time_division"]
                 )  # beat wise
             else:
                 time_shift = track.notes[0].start
@@ -92,7 +92,7 @@ class Structured(MIDITokenizer):
             events.append(
                 Event(
                     type="TimeShift",
-                    value=".".join(map(str, self.durations[index])),
+                    value=".".join(map(str, self._durations[index])),
                     time=0,
                     desc=f"{time_shift} ticks",
                 )
@@ -119,7 +119,7 @@ class Structured(MIDITokenizer):
             events.append(
                 Event(
                     type="Duration",
-                    value=".".join(map(str, self.durations[index])),
+                    value=".".join(map(str, self._durations[index])),
                     time=note.start,
                     desc=f"{duration} ticks",
                 )
@@ -132,13 +132,13 @@ class Structured(MIDITokenizer):
                     type="TimeShift",
                     time=note.start,
                     desc=f"{time_shift} ticks",
-                    value=".".join(map(str, self.durations[index]))
+                    value=".".join(map(str, self._durations[index]))
                     if time_shift != 0
                     else "0.0.1",
                 )
             )
         # Adds the last note
-        if track.notes[-1].pitch not in self.pitch_range:
+        if track.notes[-1].pitch not in self._pitch_range:
             if len(events) > 0:
                 del events[-1]
         else:
@@ -163,7 +163,7 @@ class Structured(MIDITokenizer):
             events.append(
                 Event(
                     type="Duration",
-                    value=".".join(map(str, self.durations[index])),
+                    value=".".join(map(str, self._durations[index])),
                     time=track.notes[-1].start,
                     desc=f"{duration} ticks",
                 )
@@ -239,20 +239,20 @@ class Structured(MIDITokenizer):
         vocab = []
 
         # PITCH
-        vocab += [f"Pitch_{i}" for i in self.pitch_range]
+        vocab += [f"Pitch_{i}" for i in self._pitch_range]
 
         # VELOCITY
-        vocab += [f"Velocity_{i}" for i in self.velocities]
+        vocab += [f"Velocity_{i}" for i in self._velocities]
 
         # DURATION
         vocab += [
-            f'Duration_{".".join(map(str, duration))}' for duration in self.durations
+            f'Duration_{".".join(map(str, duration))}' for duration in self._durations
         ]
 
         # TIME SHIFT (same as durations)
         vocab.append("TimeShift_0.0.1")  # for a time shift of 0
         vocab += [
-            f'TimeShift_{".".join(map(str, duration))}' for duration in self.durations
+            f'TimeShift_{".".join(map(str, duration))}' for duration in self._durations
         ]
 
         # PROGRAM

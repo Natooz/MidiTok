@@ -24,7 +24,7 @@ from tqdm import tqdm
 # long enough for MIDI-Like and Structured encodings, and with a single beat resolution
 BEAT_RES_TEST = {(0, 4): 8, (4, 12): 4}
 ADDITIONAL_TOKENS_TEST = {
-    "Chord": False,  # set to false to speed up tests as it takes some time on maestro MIDIs
+    "Chord": False,  # set false to speed up tests as it takes some time on maestro MIDIs
     "Rest": True,
     "Tempo": True,
     "TimeSignature": True,
@@ -46,23 +46,20 @@ def test_bpe_conversion(
     :param data_path: root path to the data to test
     """
     tokenizations = ["Structured", "REMI", "MIDILike", "TSD"]
-    tokenizers = []
     data_path = Path(data_path)
     files = list(data_path.glob("**/*.mid"))
 
     # Creates tokenizers and computes BPE (build voc)
     for tokenization in tokenizations:
         add_tokens = deepcopy(ADDITIONAL_TOKENS_TEST)
-        tokenizers.append(
-            getattr(miditok, tokenization)(
-                beat_res=BEAT_RES_TEST, additional_tokens=add_tokens
-            )
+        tokenizer = getattr(miditok, tokenization)(
+            beat_res=BEAT_RES_TEST, additional_tokens=add_tokens
         )
-        tokenizers[-1].tokenize_midi_dataset(files, data_path / tokenization)
-        tokenizers[-1].learn_bpe(
+        tokenizer.tokenize_midi_dataset(files, Path("tests", "test_results", tokenization))
+        tokenizer.learn_bpe(
             data_path / tokenization,
-            len(tokenizers[-1].vocab) + 60,
-            out_dir=data_path / f"{tokenization}_bpe",
+            len(tokenizer.vocab) + 60,
+            out_dir=Path("tests", "test_results", f"{tokenization}_bpe"),
             files_lim=None,
             save_converted_samples=True,
         )
@@ -72,7 +69,7 @@ def test_bpe_conversion(
     for i, tokenization in enumerate(tokenizations):
         tokenizers.append(
             getattr(miditok, tokenization)(
-                params=data_path / f"{tokenization}_bpe" / "config.txt"
+                params=Path("tests", "test_results", f"{tokenization}_bpe") / "config.txt"
             )
         )
 
@@ -90,12 +87,12 @@ def test_bpe_conversion(
             t1 = time() - t0
             tok_times.append(t1)
             with open(
-                data_path / f"{tokenization}" / f"{file_path.stem}.json"
+                Path("tests", "test_results", tokenization, f"{file_path.stem}.json")
             ) as json_file:
                 tokens_no_bpe = json.load(json_file)["tokens"][0]  # no BPE
             tokens_no_bpe2 = tokenizer.decompose_bpe(deepcopy(tokens))  # BPE decomposed
             with open(
-                data_path / f"{tokenization}_bpe" / f"{file_path.stem}.json"
+                Path("tests", "test_results", f"{tokenization}_bpe", f"{file_path.stem}.json")
             ) as json_file:
                 saved_tokens = json.load(json_file)["tokens"][
                     0

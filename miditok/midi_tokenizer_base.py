@@ -13,6 +13,8 @@ from typing import List, Tuple, Dict, Union, Callable, Optional, Any
 import numpy as np
 from tqdm import tqdm
 from miditoolkit import MidiFile, Instrument, Note, TempoChange, TimeSignature
+from tokenizers import Tokenizer
+from tokenizers.models import BPE
 
 from .vocabulary import Event
 from .utils import remove_duplicated_notes, get_midi_programs
@@ -106,9 +108,9 @@ class MIDITokenizer(ABC):
                 "You must specify a pitch_range between 0 and 127 (included, i.e. range.stop at 128)"
             assert 0 < nb_velocities < 128,\
                 "You must specify a nb_velocities between 0 and 127 (included)"
-            self.pitch_range = pitch_range
-            self.beat_res = beat_res
-            self.nb_velocities = nb_velocities
+            self._pitch_range = pitch_range
+            self._beat_res = beat_res
+            self._nb_velocities = nb_velocities
             self.additional_tokens = additional_tokens
             self.special_tokens = special_tokens
             self.unique_track = unique_track
@@ -116,39 +118,43 @@ class MIDITokenizer(ABC):
             self.load_params(params)
 
         # Init duration and velocity values
-        self.durations = self.__create_durations_tuples()
-        self.velocities = np.linspace(0, 127, self.nb_velocities + 1, dtype=np.intc)[
+        self._durations = self.__create_durations_tuples()
+        self._velocities = np.linspace(0, 127, self._nb_velocities + 1, dtype=np.intc)[
             1:
-        ]  # remove velocity 0
-        self._first_beat_res = list(self.beat_res.values())[0]
-        for beat_range, res in self.beat_res.items():
+                           ]  # remove velocity 0
+        self._first_beat_res = list(self._beat_res.values())[0]
+        for beat_range, res in self._beat_res.items():
             if 0 in beat_range:
                 self._first_beat_res = res
                 break
 
         # Tempos
-        self.tempos = np.zeros(1)
+        self._tempos = np.zeros(1)
         if self.additional_tokens["Tempo"]:
-            self.tempos = np.linspace(
+            self._tempos = np.linspace(
                 *self.additional_tokens["tempo_range"],
                 self.additional_tokens["nb_tempos"],
                 dtype=np.intc,
             )
 
         # Rests
-        self.rests = []
+        self._rests = []
         if self.additional_tokens["Rest"]:
             assert (
                 self.additional_tokens["rest_range"][0] // 4 <= self._first_beat_res
             ), "The minimum rest value must be equal or superior to the initial beat resolution"
-            self.rests = self.__create_rests()
+            self._rests = self.__create_rests()
 
         # Time Signatures
-        self.time_signatures = []
+        self._time_signatures = []
         if self.additional_tokens["TimeSignature"]:
-            self.time_signatures = self.__create_time_signatures()
+            self._time_signatures = self.__create_time_signatures()
 
         # Vocabulary and token types graph
+        if special_tokens is not None:
+            special_tokens = [f"{tok}_None" for tok in special_tokens]
+        else:
+            special_tokens = []
         if (
             self.vocab is None
         ):  # in case it was already loaded by an overridden load_params method, such as with BPE
@@ -168,17 +174,33 @@ class MIDITokenizer(ABC):
             self.__vocab_inv = {v: k for k, v in self.vocab.items()}
 
         # BPE attributes
-        self.bpe_successions = {}
+        self.__bpe_successions = {}
         if self.has_bpe:  # loaded from config file
             self.__set_bpe_tokens_successions()
 
         # Keep in memory durations in ticks for seen time divisions so these values
         # are not calculated each time a MIDI is processed
-        self.durations_ticks = {}
+        self._durations_ticks = {}
 
         # Holds the tempo changes, time signature, time division and key signature of a
         # MIDI (being parsed) so that methods processing tracks can access them
-        self.current_midi_metadata = {}  # needs to be updated each time a MIDI is read
+        self._current_midi_metadata = {}  # needs to be updated each time a MIDI is read
+
+        # Fast BPE tokenizer backed with 🤗tokenizers
+        if not self.is_multi_voc:
+            self._bpe_model = Tokenizer(
+                BPE(
+                    vocab=self.vocab,
+                    merges=[],
+                    dropout=None,
+                    continuing_subword_prefix="",
+                    end_of_word_suffix="",
+                    fuse_unk=False,
+                )
+            )
+            self._bpe_model.add_special_tokens(special_tokens)
+        else:
+            self._bpe_model = None
 
     def preprocess_midi(self, midi: MidiFile):
         r"""Pre-process (in place) a MIDI file to quantize its time and note attributes
@@ -191,7 +213,7 @@ class MIDITokenizer(ABC):
         """
         t = 0
         while t < len(midi.instruments):
-            self.quantize_notes(
+            self._quantize_notes(
                 midi.instruments[t].notes, midi.ticks_per_beat
             )  # quantize notes attributes
             midi.instruments[t].notes.sort(
@@ -212,18 +234,18 @@ class MIDITokenizer(ABC):
             )
 
         if self.additional_tokens["Tempo"]:
-            self.quantize_tempos(midi.tempo_changes, midi.ticks_per_beat)
+            self._quantize_tempos(midi.tempo_changes, midi.ticks_per_beat)
 
         if len(midi.time_signature_changes) == 0:  # can sometimes happen
             midi.time_signature_changes.append(
                 TimeSignature(4, 4, 0)
             )  # 4/4 by default in this case
         if self.additional_tokens["TimeSignature"]:
-            self.quantize_time_signatures(
+            self._quantize_time_signatures(
                 midi.time_signature_changes, midi.ticks_per_beat
             )
 
-    def quantize_notes(
+    def _quantize_notes(
         self, notes: List[Note], time_division: int
     ):
         r"""Quantize the notes attributes: their pitch, velocity, start and end values.
@@ -234,10 +256,10 @@ class MIDITokenizer(ABC):
         :param notes: notes to quantize.
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed).
         """
-        ticks_per_sample = int(time_division / max(self.beat_res.values()))
+        ticks_per_sample = int(time_division / max(self._beat_res.values()))
         i = 0
         while i < len(notes):
-            if notes[i].pitch not in self.pitch_range:
+            if notes[i].pitch not in self._pitch_range:
                 del notes[i]
                 continue
             start_offset = notes[i].start % ticks_per_sample
@@ -263,26 +285,26 @@ class MIDITokenizer(ABC):
                 )
 
             notes[i].velocity = int(
-                self.velocities[
-                    int(np.argmin(np.abs(self.velocities - notes[i].velocity)))
+                self._velocities[
+                    int(np.argmin(np.abs(self._velocities - notes[i].velocity)))
                 ]
             )
             i += 1
 
-    def quantize_tempos(self, tempos: List[TempoChange], time_division: int):
+    def _quantize_tempos(self, tempos: List[TempoChange], time_division: int):
         r"""Quantize the times and tempo values of tempo change events.
         Consecutive identical tempo changes will be removed.
 
         :param tempos: tempo changes to quantize.
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed).
         """
-        ticks_per_sample = int(time_division / max(self.beat_res.values()))
+        ticks_per_sample = int(time_division / max(self._beat_res.values()))
         prev_tempo = -1
         i = 0
         while i < len(tempos):
             # Quantize tempo value
-            tempos[i].tempo = self.tempos[
-                np.argmin(np.abs(self.tempos - tempos[i].tempo))
+            tempos[i].tempo = self._tempos[
+                np.argmin(np.abs(self._tempos - tempos[i].tempo))
             ]
             if tempos[i].tempo == prev_tempo:
                 del tempos[i]
@@ -295,7 +317,7 @@ class MIDITokenizer(ABC):
             i += 1
 
     @staticmethod
-    def quantize_time_signatures(time_sigs: List[TimeSignature], time_division: int):
+    def _quantize_time_signatures(time_sigs: List[TimeSignature], time_division: int):
         r"""Quantize the time signature changes, delayed to the next bar.
         See MIDI 1.0 Detailed specifications, pages 54 - 56, for more information on
         delayed time signature messages.
@@ -343,11 +365,11 @@ class MIDITokenizer(ABC):
         :return: sequences of tokens.
         """
         # Check if the durations values have been calculated before for this time division
-        if midi.ticks_per_beat not in self.durations_ticks:
-            self.durations_ticks[midi.ticks_per_beat] = np.array(
+        if midi.ticks_per_beat not in self._durations_ticks:
+            self._durations_ticks[midi.ticks_per_beat] = np.array(
                 [
                     (beat * res + pos) * midi.ticks_per_beat // res
-                    for beat, pos, res in self.durations
+                    for beat, pos, res in self._durations
                 ]
             )
 
@@ -355,7 +377,7 @@ class MIDITokenizer(ABC):
         self.preprocess_midi(midi)
 
         # Register MIDI metadata
-        self.current_midi_metadata = {
+        self._current_midi_metadata = {
             "time_division": midi.ticks_per_beat,
             "tempo_changes": midi.tempo_changes,
             "time_sig_changes": midi.time_signature_changes,
@@ -528,6 +550,7 @@ class MIDITokenizer(ABC):
         else:
             self.vocab[event_str] = len(self.vocab)
             self.__vocab_inv[len(self.__vocab_inv)] = event_str
+            self._bpe_model.add_tokens([event_str])
 
     def token_type(self, token: int, vocab_id: int = None) -> str:
         r"""Returns the type of the given token.
@@ -568,14 +591,14 @@ class MIDITokenizer(ABC):
         :return: the duration bins.
         """
         durations = []
-        for beat_range, beat_res in self.beat_res.items():
+        for beat_range, beat_res in self._beat_res.items():
             durations += [
                 (beat, pos, beat_res)
                 for beat in range(*beat_range)
                 for pos in range(beat_res)
             ]
         durations += [
-            (max(max(self.beat_res)), 0, self.beat_res[max(self.beat_res)])
+            (max(max(self._beat_res)), 0, self._beat_res[max(self._beat_res)])
         ]  # the last one
         del durations[0]  # removes duration of 0
         return durations
@@ -864,7 +887,7 @@ class MIDITokenizer(ABC):
 
     def __set_bpe_tokens_successions(self):
         """Creates the bpe_successions attributes, as a dictionary of the form {bpe_token: (tok1, tok2, tok3...)}"""
-        self.bpe_successions = {
+        self.__bpe_successions = {
             tok: list(
                 map(
                     int,
@@ -899,7 +922,7 @@ class MIDITokenizer(ABC):
                 tok,
                 token_succession,
             ) in (
-                self.bpe_successions.items()
+                self.__bpe_successions.items()
             ):  # loops over BPE tokens from the vocabulary
                 occurrences = self.__find_subseq(tokens, token_succession)
                 for idx in reversed(occurrences):
@@ -1027,7 +1050,7 @@ class MIDITokenizer(ABC):
                 continue
 
             # Checks the time division is valid
-            if midi.ticks_per_beat < max(self.beat_res.values()) * 4:
+            if midi.ticks_per_beat < max(self._beat_res.values()) * 4:
                 continue
             # Passing the MIDI to validation tests if given
             if validation_fn is not None:
@@ -1168,9 +1191,9 @@ class MIDITokenizer(ABC):
             additional_attributes["vocab"] = self.vocab
 
         params = {
-            "pitch_range": (self.pitch_range.start, self.pitch_range.stop),
-            "beat_res": {f"{k1}_{k2}": v for (k1, k2), v in self.beat_res.items()},
-            "nb_velocities": len(self.velocities),
+            "pitch_range": (self._pitch_range.start, self._pitch_range.stop),
+            "beat_res": {f"{k1}_{k2}": v for (k1, k2), v in self._beat_res.items()},
+            "nb_velocities": len(self._velocities),
             "additional_tokens": self.additional_tokens,
             "special_tokens": self.special_tokens,
             "unique_track": self.unique_track,

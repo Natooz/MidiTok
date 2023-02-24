@@ -74,13 +74,13 @@ class MIDILike(MIDITokenizer):
         """
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
-        ticks_per_sample = self.current_midi_metadata["time_division"] / max(
-            self.beat_res.values()
+        ticks_per_sample = self._current_midi_metadata["time_division"] / max(
+            self._beat_res.values()
         )
-        dur_bins = self.durations_ticks[self.current_midi_metadata["time_division"]]
+        dur_bins = self._durations_ticks[self._current_midi_metadata["time_division"]]
         min_rest = (
-            self.current_midi_metadata["time_division"] * self.rests[0][0]
-            + ticks_per_sample * self.rests[0][1]
+            self._current_midi_metadata["time_division"] * self._rests[0][0]
+            + ticks_per_sample * self._rests[0][1]
             if self.additional_tokens["Rest"]
             else 0
         )
@@ -107,7 +107,7 @@ class MIDILike(MIDITokenizer):
             )
         # Adds tempo events if specified
         if self.additional_tokens["Tempo"]:
-            for tempo_change in self.current_midi_metadata["tempo_changes"]:
+            for tempo_change in self._current_midi_metadata["tempo_changes"]:
                 events.append(
                     Event(
                         type="Tempo",
@@ -136,9 +136,9 @@ class MIDILike(MIDITokenizer):
             ):
                 rest_beat, rest_pos = divmod(
                     event.time - previous_tick,
-                    self.current_midi_metadata["time_division"],
+                    self._current_midi_metadata["time_division"],
                 )
-                rest_beat = min(rest_beat, max([r[0] for r in self.rests]))
+                rest_beat = min(rest_beat, max([r[0] for r in self._rests]))
                 rest_pos = round(rest_pos / ticks_per_sample)
                 rest_tick = previous_tick  # untouched tick value to the order is not messed after sorting
 
@@ -152,12 +152,12 @@ class MIDILike(MIDITokenizer):
                         )
                     )
                     previous_tick += (
-                        rest_beat * self.current_midi_metadata["time_division"]
+                        rest_beat * self._current_midi_metadata["time_division"]
                     )
 
-                while rest_pos >= self.rests[0][1]:
+                while rest_pos >= self._rests[0][1]:
                     rest_pos_temp = min(
-                        [r[1] for r in self.rests], key=lambda x: abs(x - rest_pos)
+                        [r[1] for r in self._rests], key=lambda x: abs(x - rest_pos)
                     )
                     events.append(
                         Event(
@@ -177,7 +177,7 @@ class MIDILike(MIDITokenizer):
                     events.append(
                         Event(
                             type="TimeShift",
-                            value=".".join(map(str, self.durations[index])),
+                            value=".".join(map(str, self._durations[index])),
                             time=previous_tick,
                             desc=f"{time_shift} ticks",
                         )
@@ -190,7 +190,7 @@ class MIDILike(MIDITokenizer):
                 events.append(
                     Event(
                         type="TimeShift",
-                        value=".".join(map(str, self.durations[index])),
+                        value=".".join(map(str, self._durations[index])),
                         time=previous_tick,
                         desc=f"{time_shift} ticks",
                     )
@@ -204,7 +204,7 @@ class MIDILike(MIDITokenizer):
         if self.additional_tokens["Chord"] and not track.is_drum:
             events += detect_chords(
                 track.notes,
-                self.current_midi_metadata["time_division"],
+                self._current_midi_metadata["time_division"],
                 self._first_beat_res,
             )
 
@@ -228,11 +228,11 @@ class MIDILike(MIDITokenizer):
                                 note off event. Leave None to discard Note On with no Note Off event.
         :return: the miditoolkit instrument object and tempo changes
         """
-        ticks_per_sample = time_division // max(self.beat_res.values())
+        ticks_per_sample = time_division // max(self._beat_res.values())
         events = self.tokens_to_events(tokens)
 
-        max_duration = self.durations[-1][0] * time_division + self.durations[-1][1] * (
-            time_division // self.durations[-1][2]
+        max_duration = self._durations[-1][0] * time_division + self._durations[-1][1] * (
+            time_division // self._durations[-1][2]
         )
         name = "Drums" if program[1] else MIDI_INSTRUMENTS[program[0]]["name"]
         instrument = Instrument(program[0], is_drum=program[1], name=name)
@@ -313,16 +313,16 @@ class MIDILike(MIDITokenizer):
         vocab = []
 
         # NOTE ON
-        vocab += [f"NoteOn_{i}" for i in self.pitch_range]
+        vocab += [f"NoteOn_{i}" for i in self._pitch_range]
 
         # NOTE OFF
-        vocab += [f"NoteOff_{i}" for i in self.pitch_range]
+        vocab += [f"NoteOff_{i}" for i in self._pitch_range]
 
         # VELOCITY
-        vocab += [f"Velocity_{i}" for i in self.velocities]
+        vocab += [f"Velocity_{i}" for i in self._velocities]
 
         # TIME SHIFTS
-        vocab += [f'TimeShift_{".".join(map(str, duration))}' for duration in self.durations]
+        vocab += [f'TimeShift_{".".join(map(str, duration))}' for duration in self._durations]
 
         # CHORD
         if self.additional_tokens["Chord"]:
@@ -331,11 +331,11 @@ class MIDILike(MIDITokenizer):
 
         # REST
         if self.additional_tokens["Rest"]:
-            vocab += [f'Rest_{".".join(map(str, rest))}' for rest in self.rests]
+            vocab += [f'Rest_{".".join(map(str, rest))}' for rest in self._rests]
 
         # TEMPO
         if self.additional_tokens["Tempo"]:
-            vocab += [f"Tempo_{i}" for i in self.tempos]
+            vocab += [f"Tempo_{i}" for i in self._tempos]
 
         # PROGRAM
         if self.additional_tokens["Program"]:
@@ -395,9 +395,9 @@ class MIDILike(MIDITokenizer):
 
         err = 0
         current_pitches = []
-        max_duration = self.durations[-1][0] * max(self.beat_res.values())
-        max_duration += self.durations[-1][1] * (
-            max(self.beat_res.values()) // self.durations[-1][2]
+        max_duration = self._durations[-1][0] * max(self._beat_res.values())
+        max_duration += self._durations[-1][1] * (
+                max(self._beat_res.values()) // self._durations[-1][2]
         )
 
         events = self.tokens_to_events(tokens)
@@ -420,7 +420,7 @@ class MIDILike(MIDITokenizer):
                             break  # all good
                         elif events[j].type == "TimeShift":
                             offset_sample += self._token_duration_to_ticks(
-                                events[j].value, max(self.beat_res.values())
+                                events[j].value, max(self._beat_res.values())
                             )
 
                         if (

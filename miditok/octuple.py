@@ -133,11 +133,11 @@ class Octuple(MIDITokenizer):
         :return: sequences of tokens
         """
         # Check if the durations values have been calculated before for this time division
-        if midi.ticks_per_beat not in self.durations_ticks:
-            self.durations_ticks[midi.ticks_per_beat] = np.array(
+        if midi.ticks_per_beat not in self._durations_ticks:
+            self._durations_ticks[midi.ticks_per_beat] = np.array(
                 [
                     (beat * res + pos) * midi.ticks_per_beat // res
-                    for beat, pos, res in self.durations
+                    for beat, pos, res in self._durations
                 ]
             )
 
@@ -198,8 +198,8 @@ class Octuple(MIDITokenizer):
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
         time_division = self.current_midi_metadata["time_division"]
-        ticks_per_sample = time_division / max(self.beat_res.values())
-        dur_bins = self.durations_ticks[time_division]
+        ticks_per_sample = time_division / max(self._beat_res.values())
+        dur_bins = self._durations_ticks[time_division]
 
         events = []
         current_tick = -1
@@ -246,7 +246,7 @@ class Octuple(MIDITokenizer):
                 ),
                 self.vocab[1][f"Velocity_{note.velocity}"],
                 self.vocab[2][
-                    f'Duration_{".".join(map(str, self.durations[dur_index]))}'
+                    f'Duration_{".".join(map(str, self._durations[dur_index]))}'
                 ],
                 self.vocab[3][
                     f"Program_{-1 if track.is_drum else track.program}"
@@ -338,10 +338,10 @@ class Octuple(MIDITokenizer):
         :return: the midi object (miditoolkit.MidiFile)
         """
         assert (
-            time_division % max(self.beat_res.values()) == 0
-        ), f"Invalid time division, please give one divisible by {max(self.beat_res.values())}"
+                time_division % max(self._beat_res.values()) == 0
+        ), f"Invalid time division, please give one divisible by {max(self._beat_res.values())}"
         midi = MidiFile(ticks_per_beat=time_division)
-        ticks_per_sample = time_division // max(self.beat_res.values())
+        ticks_per_sample = time_division // max(self._beat_res.values())
         events = self.tokens_to_events(tokens)
 
         tempo_changes = [TempoChange(TEMPO, 0)]
@@ -472,21 +472,21 @@ class Octuple(MIDITokenizer):
         vocab = [[] for _ in range(6)]
 
         # PITCH
-        vocab[0] += [f"Pitch_{i}" for i in self.pitch_range]
+        vocab[0] += [f"Pitch_{i}" for i in self._pitch_range]
 
         # VELOCITY
-        vocab[1] += [f"Velocity_{i}" for i in self.velocities]
+        vocab[1] += [f"Velocity_{i}" for i in self._velocities]
 
         # DURATION
         vocab[2] += [
-            f'Duration_{".".join(map(str, duration))}' for duration in self.durations
+            f'Duration_{".".join(map(str, duration))}' for duration in self._durations
         ]
 
         # PROGRAM
         vocab[3] += [f"Program_{i}" for i in self.programs]
 
         # POSITION
-        nb_positions = max(self.beat_res.values()) * 4  # 4/4 time signature
+        nb_positions = max(self._beat_res.values()) * 4  # 4/4 time signature
         vocab[4] += [f"Position_{i}" for i in range(nb_positions)]
 
         # BAR
@@ -496,11 +496,11 @@ class Octuple(MIDITokenizer):
 
         # TEMPO
         if self.additional_tokens["Tempo"]:
-            vocab.append([f"Tempo_{i}" for i in self.tempos])
+            vocab.append([f"Tempo_{i}" for i in self._tempos])
 
         # TIME_SIGNATURE
         if self.additional_tokens["TimeSignature"]:
-            vocab.append([f"TimeSig_{i[0]}/{i[1]}" for i in self.time_signatures])
+            vocab.append([f"TimeSig_{i[0]}/{i[1]}" for i in self._time_signatures])
 
         return vocab
 
