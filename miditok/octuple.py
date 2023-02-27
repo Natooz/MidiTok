@@ -6,8 +6,8 @@ from typing import List, Tuple, Dict, Optional, Union
 import numpy as np
 from miditoolkit import MidiFile, Instrument, Note, TempoChange, TimeSignature
 
-from .midi_tokenizer_base import MIDITokenizer, convert_tokens_tensors_to_list
-from .vocabulary import Event
+from .midi_tokenizer_base import MIDITokenizer, _in_as_complete_seq, _out_as_complete_seq
+from .classes import Sequence, Event
 from .constants import (
     PITCH_RANGE,
     NB_VELOCITIES,
@@ -115,7 +115,8 @@ class Octuple(MIDITokenizer):
         }
         super().save_params(out_path, additional_attributes_tmp)
 
-    def midi_to_tokens(self, midi: MidiFile, *args, **kwargs) -> List[List[int]]:
+    @_out_as_complete_seq
+    def _midi_to_tokens(self, midi: MidiFile, *args, **kwargs) -> Sequence:
         r"""Override the parent class method
         Converts a MIDI file in a token representation, a sequence of "time steps".
         A time step is a list of tokens where:
@@ -177,7 +178,7 @@ class Octuple(MIDITokenizer):
                 f"{time_step[0].type}_{time_step[0].value}"
             ]
 
-        return tokens
+        return Sequence(ids=tokens)
 
     def track_to_tokens(self, track: Instrument) -> List[List[Union[Event, int]]]:
         r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
@@ -244,7 +245,7 @@ class Octuple(MIDITokenizer):
                     time=note.start,
                     desc=-1 if track.is_drum else track.program,
                 ),
-                self.vocab[1][f"Velocity_{note.velocity}"],
+                self.vocab[1][f"Velocity_{note.velocity}"],  # TODO remove all this, just use all events
                 self.vocab[2][
                     f'Duration_{".".join(map(str, self._durations[dur_index]))}'
                 ],
@@ -308,7 +309,7 @@ class Octuple(MIDITokenizer):
 
         return events
 
-    @convert_tokens_tensors_to_list
+    @_in_as_complete_seq
     def tokens_to_midi(
         self,
         tokens: List[List[int]],
@@ -342,7 +343,7 @@ class Octuple(MIDITokenizer):
         ), f"Invalid time division, please give one divisible by {max(self._beat_res.values())}"
         midi = MidiFile(ticks_per_beat=time_division)
         ticks_per_sample = time_division // max(self._beat_res.values())
-        events = self.tokens_to_events(tokens)
+        events = self._ids_to_tokens(tokens.ids, as_str=False)
 
         tempo_changes = [TempoChange(TEMPO, 0)]
         if self.additional_tokens["Tempo"]:
@@ -454,9 +455,7 @@ class Octuple(MIDITokenizer):
         :param program: the MIDI program of the produced track and if it drum, (default (0, False), piano)
         :return: the miditoolkit instrument object and tempo changes
         """
-        raise NotImplementedError(
-            "tokens_to_track not implemented for Octuple, use tokens_to_midi instead"
-        )
+        pass
 
     def _create_vocabulary(self) -> List[List[str]]:
         r"""Creates the vocabulary, as a list of string events.
@@ -513,8 +512,8 @@ class Octuple(MIDITokenizer):
         """
         return {}  # not relevant for this encoding
 
-    @convert_tokens_tensors_to_list
-    def token_types_errors(self, tokens: List[List[int]]) -> float:
+    @_in_as_complete_seq
+    def token_types_errors(self, tokens: Union[Sequence, List[List[int]]]) -> float:
         r"""Checks if a sequence of tokens is made of good token values and
         returns the error ratio (lower is better).
         The token types are always the same in Octuple so this methods only checks
@@ -530,7 +529,7 @@ class Octuple(MIDITokenizer):
         current_bar = current_pos = -1
         current_pitches = {p: [] for p in self.programs}
 
-        for token in tokens:
+        for token in tokens.ids:
             if any(
                 self[i, tok].split("_")[1] == "None"
                 for i, tok in enumerate(token)
@@ -538,7 +537,7 @@ class Octuple(MIDITokenizer):
                 err += 1
                 continue
             has_error = False
-            bar_value = int(self[5, token[5]].split("_")[1])
+            bar_value = int(self[5, token[5]].split("_")[1])  # TODO use tokens.tokens
             pos_value = int(self[4, token[4]].split("_")[1])
             pitch_value = int(self[0, token[0]].split("_")[1])
             program_value = int(self[3, token[3]].split("_")[1])

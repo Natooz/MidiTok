@@ -5,8 +5,8 @@ from pathlib import Path
 import numpy as np
 from miditoolkit import Instrument, Note, TempoChange
 
-from .midi_tokenizer_base import MIDITokenizer, convert_tokens_tensors_to_list
-from .vocabulary import Event
+from .midi_tokenizer_base import MIDITokenizer, _in_as_complete_seq, _out_as_complete_seq
+from .classes import Sequence, Event
 from .utils import detect_chords
 from .constants import (
     PITCH_RANGE,
@@ -88,7 +88,8 @@ class CPWord(MIDITokenizer):
             params=params,
         )
 
-    def track_to_tokens(self, track: Instrument) -> List[List[int]]:
+    @_out_as_complete_seq
+    def track_to_tokens(self, track: Instrument) -> Sequence:
         r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
 
         :param track: MIDI track to convert
@@ -246,7 +247,7 @@ class CPWord(MIDITokenizer):
         for cp_token in tokens:
             cp_token[0] = self[0, f"Family_{cp_token[0].value}"]
 
-        return tokens
+        return Sequence(ids=tokens)
 
     def __create_cp_token(
         self,
@@ -341,6 +342,7 @@ class CPWord(MIDITokenizer):
 
         return cp_token_template
 
+    @_in_as_complete_seq
     def tokens_to_track(
         self,
         tokens: List[List[int]],
@@ -357,7 +359,7 @@ class CPWord(MIDITokenizer):
         assert (
                 time_division % max(self._beat_res.values()) == 0
         ), f"Invalid time division, please give one divisible by {max(self._beat_res.values())}"
-        events = self.tokens_to_events(tokens)
+        events = self._ids_to_tokens(tokens.ids, as_str=False)
 
         ticks_per_sample = time_division // max(self._beat_res.values())
         ticks_per_bar = time_division * 4
@@ -507,8 +509,8 @@ class CPWord(MIDITokenizer):
 
         return dic
 
-    @convert_tokens_tensors_to_list
-    def token_types_errors(self, tokens: List[List[int]]) -> float:
+    @_in_as_complete_seq
+    def token_types_errors(self, tokens: Union[Sequence, List[List[int]]]) -> float:
         r"""Checks if a sequence of tokens is made of good token types
         successions and returns the error ratio (lower is better).
         The Pitch and Position values are also analyzed:
@@ -540,6 +542,7 @@ class CPWord(MIDITokenizer):
             else:  # Program
                 raise RuntimeError("No token type found, unknown error")
 
+        tokens = tokens.ids
         err = 0
         previous_type = cp_token_type(tokens[0])[0]
         current_pos = -1

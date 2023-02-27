@@ -1,4 +1,5 @@
 from .utils import (
+    convert_ids_tensors_to_list,
     get_midi_programs,
     remove_duplicated_notes,
     detect_chords,
@@ -9,6 +10,7 @@ from .utils import (
 )
 
 __all__ = [
+    "convert_ids_tensors_to_list",
     "get_midi_programs",
     "remove_duplicated_notes",
     "detect_chords",

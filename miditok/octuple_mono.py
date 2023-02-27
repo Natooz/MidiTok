@@ -6,7 +6,8 @@ from typing import List, Tuple, Dict, Optional, Union
 import numpy as np
 from miditoolkit import Instrument, Note, TempoChange
 
-from .midi_tokenizer_base import MIDITokenizer, convert_tokens_tensors_to_list
+from .midi_tokenizer_base import MIDITokenizer, _in_as_complete_seq, _out_as_complete_seq
+from .classes import Sequence
 from .constants import (
     PITCH_RANGE,
     NB_VELOCITIES,
@@ -96,7 +97,8 @@ class OctupleMono(MIDITokenizer):
         }
         super().save_params(out_path, additional_attributes_tmp)
 
-    def track_to_tokens(self, track: Instrument) -> List[List[int]]:
+    @_out_as_complete_seq
+    def track_to_tokens(self, track: Instrument) -> Sequence:
         r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
         A time step is a list of tokens where:
             (list index: token type)
@@ -179,8 +181,9 @@ class OctupleMono(MIDITokenizer):
 
             tokens.append(token_ts)
 
-        return tokens
+        return Sequence(ids=tokens)
 
+    @_in_as_complete_seq
     def tokens_to_track(
         self,
         tokens: List[List[int]],
@@ -206,7 +209,7 @@ class OctupleMono(MIDITokenizer):
         assert (
                 time_division % max(self._beat_res.values()) == 0
         ), f"Invalid time division, please give one divisible by {max(self._beat_res.values())}"
-        events = self.tokens_to_events(tokens)
+        events = self._ids_to_tokens(tokens.ids, as_str=False)
 
         ticks_per_sample = time_division // max(self._beat_res.values())
         name = "Drums" if program[1] else MIDI_INSTRUMENTS[program[0]]["name"]
@@ -296,8 +299,8 @@ class OctupleMono(MIDITokenizer):
         """
         return {}  # not relevant for this encoding
 
-    @convert_tokens_tensors_to_list
-    def token_types_errors(self, tokens: List[List[int]]) -> float:
+    @_in_as_complete_seq
+    def token_types_errors(self, tokens: Union[Sequence, List[List[int]]]) -> float:
         r"""Checks if a sequence of tokens is made of good token values and
         returns the error ratio (lower is better).
         The token types are always the same in Octuple so this method only checks
@@ -313,7 +316,7 @@ class OctupleMono(MIDITokenizer):
         current_bar = current_pos = -1
         current_pitches = []
 
-        for token in tokens:
+        for token in tokens.ids:  # TODO use events
             if any(
                 self[i, token].split("_")[1] == "None"
                 for i, token in enumerate(token)

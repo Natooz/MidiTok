@@ -5,8 +5,8 @@ from pathlib import Path
 import numpy as np
 from miditoolkit import Instrument, Note, TempoChange
 
-from .midi_tokenizer_base import MIDITokenizer
-from .vocabulary import Event
+from .midi_tokenizer_base import MIDITokenizer, _in_as_complete_seq, _out_as_complete_seq
+from .classes import Sequence, Event
 from .constants import (
     PITCH_RANGE,
     NB_VELOCITIES,
@@ -68,7 +68,8 @@ class Structured(MIDITokenizer):
             params=params,
         )
 
-    def track_to_tokens(self, track: Instrument) -> List[int]:
+    @_out_as_complete_seq
+    def track_to_tokens(self, track: Instrument) -> Sequence:
         r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
 
         :param track: MIDI track to convert
@@ -171,8 +172,9 @@ class Structured(MIDITokenizer):
 
         events.sort(key=lambda x: x.time)
 
-        return self.events_to_tokens(events)
+        return Sequence(events=events)
 
+    @_in_as_complete_seq
     def tokens_to_track(
         self,
         tokens: List[int],
@@ -186,7 +188,7 @@ class Structured(MIDITokenizer):
         :param program: the MIDI program of the produced track and if it drum, (default (0, False), piano)
         :return: the miditoolkit instrument object and a "Dummy" tempo change
         """
-        events = self.tokens_to_events(tokens)
+        events = tokens.events
 
         name = "Drums" if program[1] else MIDI_INSTRUMENTS[program[0]]["name"]
         instrument = Instrument(program[0], is_drum=program[1], name=name)

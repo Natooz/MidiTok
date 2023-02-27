@@ -5,8 +5,8 @@ from pathlib import Path
 import numpy as np
 from miditoolkit import Instrument, Note, TempoChange
 
-from .midi_tokenizer_base import MIDITokenizer, convert_tokens_tensors_to_list
-from .vocabulary import Event
+from .midi_tokenizer_base import MIDITokenizer, _in_as_complete_seq, _out_as_complete_seq
+from .classes import Sequence, Event
 from .utils import detect_chords
 from .constants import (
     PITCH_RANGE,
@@ -65,7 +65,8 @@ class MIDILike(MIDITokenizer):
             params=params,
         )
 
-    def track_to_tokens(self, track: Instrument) -> List[int]:
+    @_out_as_complete_seq
+    def track_to_tokens(self, track: Instrument) -> Sequence:
         r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
         (can probably be achieved faster with Mido objects)
 
@@ -210,8 +211,9 @@ class MIDILike(MIDITokenizer):
 
         events.sort(key=lambda x: (x.time, self._order(x)))
 
-        return self.events_to_tokens(events)
+        return Sequence(events=events)
 
+    @_in_as_complete_seq
     def tokens_to_track(
         self,
         tokens: List[int],
@@ -229,7 +231,7 @@ class MIDILike(MIDITokenizer):
         :return: the miditoolkit instrument object and tempo changes
         """
         ticks_per_sample = time_division // max(self._beat_res.values())
-        events = self.tokens_to_events(tokens)
+        events = tokens.events
 
         max_duration = self._durations[-1][0] * time_division + self._durations[-1][1] * (
             time_division // self._durations[-1][2]
@@ -377,8 +379,8 @@ class MIDILike(MIDITokenizer):
 
         return dic
 
-    @convert_tokens_tensors_to_list
-    def token_types_errors(self, tokens: List[int]) -> float:
+    @_in_as_complete_seq
+    def token_types_errors(self, tokens: Union[Sequence, List[int]]) -> float:
         r"""Checks if a sequence of tokens is made of good token types
         successions and returns the error ratio (lower is better).
         The Pitch and Position values are also analyzed:
@@ -400,7 +402,7 @@ class MIDILike(MIDITokenizer):
                 max(self._beat_res.values()) // self._durations[-1][2]
         )
 
-        events = self.tokens_to_events(tokens)
+        events = tokens.events
 
         for i in range(1, len(events)):
             # Good token type

@@ -2,14 +2,34 @@
 
 """
 
-from typing import List, Tuple, Dict, Union
+from typing import List, Tuple, Dict, Union, Any
 from collections import Counter
 
 from miditoolkit import MidiFile, Note, Instrument
 import numpy as np
 
-from miditok.vocabulary import Event
+from miditok.classes import Event
 from miditok.constants import CHORD_MAPS, INSTRUMENT_CLASSES, MIDI_INSTRUMENTS
+
+
+def convert_ids_tensors_to_list(ids: Any):
+    """Convert a PyTorch, Tensorflow Tensor or numpy array to a list of integers.
+    This method can be used seamlessly with Jax too.
+
+    :param ids: ids sequence to convert.
+    :return: the input, as a list of integers
+    """
+    # Convert tokens to list if necessary
+    if not isinstance(ids, list):
+        if type(ids).__name__ in ["Tensor", "EagerTensor"]:
+            ids = ids.numpy()
+        if not isinstance(ids, np.ndarray):
+            raise TypeError(
+                "The tokens must be given as a list of integers, np.ndarray, or PyTorch / Tensorflow tensor"
+            )
+        ids = ids.astype(int).tolist()
+
+    return ids
 
 
 def get_midi_programs(midi: MidiFile) -> List[Tuple[int, bool]]:

@@ -84,7 +84,7 @@ def test_one_track_midi_to_tokens_to_midi(
             )
 
             # Convert the track in tokens
-            tokens = tokenizer.midi_to_tokens(midi)
+            tokens = tokenizer(midi)
 
             # Checks types and values conformity following the rules
             tokens_types = tokenizer.token_types_errors(

@@ -6,8 +6,8 @@ from typing import List, Tuple, Dict, Optional, Union
 import numpy as np
 from miditoolkit import MidiFile, Instrument, Note, TempoChange
 
-from .midi_tokenizer_base import MIDITokenizer, convert_tokens_tensors_to_list
-from .vocabulary import Event
+from .midi_tokenizer_base import MIDITokenizer, _in_as_complete_seq, _out_as_complete_seq
+from .classes import Sequence, Event
 from .utils import detect_chords
 from .constants import (
     PITCH_RANGE,
@@ -141,7 +141,8 @@ class MuMIDI(MIDITokenizer):
         super().load_params(config_file_path)
         self.drum_pitch_range = range(*self.drum_pitch_range)
 
-    def midi_to_tokens(self, midi: MidiFile, *args, **kwargs) -> List[List[int]]:
+    @_out_as_complete_seq
+    def _midi_to_tokens(self, midi: MidiFile, *args, **kwargs) -> Sequence:
         r"""Tokenize a MIDI file.
         Each pooled token will be a list of the form (index: Token type):
         * 0: Pitch / DrumPitch / Position / Bar / Program / (Chord) / (Rest)
@@ -294,7 +295,7 @@ class MuMIDI(MIDITokenizer):
                 )
             tokens.append(note_token)
 
-        return tokens
+        return Sequence(ids=tokens)
 
     def track_to_tokens(self, track: Instrument) -> List[List[Union[Event, int]]]:
         r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
@@ -363,7 +364,7 @@ class MuMIDI(MIDITokenizer):
 
         return tokens
 
-    @convert_tokens_tensors_to_list
+    @_in_as_complete_seq
     def tokens_to_midi(
         self,
         tokens: List[List[int]],
@@ -401,8 +402,8 @@ class MuMIDI(MIDITokenizer):
         current_tick = 0
         current_bar = -1
         current_track = 0  # default set to piano
-        for time_step in tokens:
-            tok_type, tok_val = self[0, time_step[0]].split("_")
+        for time_step in tokens.tokens:
+            tok_type, tok_val = time_step[0].split("_")
             if tok_type == "Bar":
                 current_bar += 1
                 current_tick = current_bar * time_division * 4
@@ -422,7 +423,7 @@ class MuMIDI(MIDITokenizer):
                     tracks[current_track] = []
             elif tok_type == "Pitch" or tok_type == "DrumPitch":
                 vel, duration = (
-                    self[i, time_step[i]].split("_")[1]
+                    time_step[i].split("_")[1]
                     for i in (-2, -1)
                 )
                 if any(val == "None" for val in (vel, duration)):
@@ -559,8 +560,8 @@ class MuMIDI(MIDITokenizer):
 
         return dic
 
-    @convert_tokens_tensors_to_list
-    def token_types_errors(self, tokens: List[List[int]]) -> float:
+    @_in_as_complete_seq
+    def token_types_errors(self, tokens: Union[Sequence, List[List[int]]]) -> float:
         r"""Checks if a sequence of tokens is made of good token types
         successions and returns the error ratio (lower is better).
         The Pitch and Position values are also analyzed:
@@ -571,6 +572,7 @@ class MuMIDI(MIDITokenizer):
         :param tokens: sequence of tokens to check
         :return: the error ratio (lower is better)
         """
+        tokens = tokens.ids
         err = 0
         previous_type = self.token_type(tokens[0][0], 0)
         current_pitches = []

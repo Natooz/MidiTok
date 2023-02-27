@@ -5,8 +5,8 @@ from pathlib import Path
 import numpy as np
 from miditoolkit import Instrument, Note, TempoChange
 
-from .midi_tokenizer_base import MIDITokenizer
-from .vocabulary import Event
+from .midi_tokenizer_base import MIDITokenizer, _in_as_complete_seq, _out_as_complete_seq
+from .classes import Sequence, Event
 from .utils import detect_chords
 from .constants import (
     PITCH_RANGE,
@@ -63,7 +63,8 @@ class TSD(MIDITokenizer):
             params=params,
         )
 
-    def track_to_tokens(self, track: Instrument) -> List[int]:
+    @_out_as_complete_seq
+    def track_to_tokens(self, track: Instrument) -> Sequence:
         r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
         (can probably be achieved faster with Mido objects)
 
@@ -213,8 +214,9 @@ class TSD(MIDITokenizer):
 
         events.sort(key=lambda x: (x.time, self._order(x)))
 
-        return self.events_to_tokens(events)
+        return Sequence(events=events)
 
+    @_in_as_complete_seq
     def tokens_to_track(
         self,
         tokens: List[int],
@@ -229,7 +231,7 @@ class TSD(MIDITokenizer):
         :return: the miditoolkit instrument object and tempo changes
         """
         ticks_per_sample = time_division // max(self._beat_res.values())
-        events = self.tokens_to_events(tokens)
+        events = tokens.events
 
         name = "Drums" if program[1] else MIDI_INSTRUMENTS[program[0]]["name"]
         instrument = Instrument(program[0], is_drum=program[1], name=name)

@@ -7,8 +7,7 @@ from pathlib import Path
 import json
 from random import choices
 from copy import deepcopy
-from collections import OrderedDict
-from typing import List, Tuple, Dict, Union, Callable, Optional, Any
+from typing import List, Tuple, Dict, Union, Callable, Iterable, Optional, Any
 
 import numpy as np
 from tqdm import tqdm
@@ -17,41 +16,51 @@ from tokenizers import Tokenizer as TokenizerFast
 from tokenizers.models import BPE
 from tokenizers.trainers import BpeTrainer
 
-from .vocabulary import Event
-from .utils import remove_duplicated_notes, get_midi_programs
+from .classes import Event, Sequence
+from .utils import remove_duplicated_notes, get_midi_programs, convert_ids_tensors_to_list
 from .data_augmentation import data_augmentation_dataset
 from .constants import TIME_DIVISION, CURRENT_VERSION_PACKAGE, PITCH_RANGE, BEAT_RES, NB_VELOCITIES, \
-    ADDITIONAL_TOKENS, SPECIAL_TOKENS
+    ADDITIONAL_TOKENS, SPECIAL_TOKENS, CHR_ID_START
 
 
-def convert_tokens_tensors_to_list(func: Callable):
-    """Decorator to handle tensor objects, for methods receiving tokens.
-    Tokens have to be the first argument of the method (second for non-static).
-
-    :param func: method to decorate
-    :return: decorated method
+def _in_as_complete_seq(function: Callable):
+    """Decorator creating if necessary and completing a Sequence object before that the function is called.
+    ``track_to_tokens``
     """
 
     def wrapper(*args, **kwargs):
-        # Get tokens
-        tokens_arg_id = 0 if not isinstance(args[0], MIDITokenizer) else 1
-        tokens = args[tokens_arg_id]
+        self = args[0]
+        seq = args[1]
+        if not isinstance(seq, Sequence):
+            ids = tokens = events = None
+            if isinstance(seq[0], int) or (isinstance(seq[0], list) and isinstance(seq[0][0], int)):
+                ids = convert_ids_tensors_to_list(seq)
+            elif isinstance(seq[0], str) or (isinstance(seq[0], str) and isinstance(seq[0][0], str)):
+                tokens = seq
+            else:  # list of Event, very unlikely
+                events = seq
 
-        # Convert tokens to list if necessary
-        if not isinstance(tokens, list):
-            if type(tokens).__name__ in ["Tensor", "EagerTensor"]:
-                tokens = tokens.numpy()
-            if not isinstance(tokens, np.ndarray):
-                raise TypeError(
-                    "The tokens must be given as a list of integers, np.ndarray, PyTorch or Tensorflow tensor"
-                )
+            seq = Sequence(ids=ids, tokens=tokens, events=events)
 
-            args = list(args)
-            args[tokens_arg_id] = tokens.astype(
-                int
-            ).tolist()  # np.ndarray --> List[int]
+        self.complete_sequence(seq)
+        if self.has_bpe:
+            seq.ids = self.decompose_bpe(seq.ids)
 
-        return func(*args, **kwargs)
+        args = list(args)
+        args[1] = seq
+        return function(*args, **kwargs)
+
+    return wrapper
+
+
+def _out_as_complete_seq(function: Callable):
+    """Decorator completing a output Sequence object.
+    """
+    def wrapper(*args, **kwargs):
+        self = args[0]
+        res = function(*args, **kwargs)
+        self.complete_sequence(res)
+        return res
 
     return wrapper
 
@@ -102,9 +111,35 @@ class MIDITokenizer(ABC):
         params: Union[str, Path] = None,
     ):
         # Initialize params
-        self.vocab = None
+        self._vocab_base = {}  # vocab of prime tokens, can be viewed as unique char / bytes
+        self.__vocab_base_inv = {}  # the other way, to decode id (int) -> token (str)
+        self.__vocab_base_byte_to_token = {}  # byte (str) -> token (str), for basic tokens
+        self.__vocab_bpe_bytes_to_tokens = {}  # byte(s) -> token(s)
         self.has_bpe = False
-        if params is None:
+        if special_tokens is not None:
+            special_tokens = [f"{tok}_None" for tok in special_tokens]
+        else:
+            special_tokens = []
+
+        # Fast BPE tokenizer backed with 🤗tokenizers
+        if not self.is_multi_voc:
+            self._bpe_model = TokenizerFast(
+                BPE(
+                    vocab={},
+                    merges=[],
+                    dropout=None,
+                    continuing_subword_prefix="",
+                    end_of_word_suffix="",
+                    fuse_unk=False,
+                )
+            )
+        else:
+            self._bpe_model = None
+
+        # Loading params, or
+        if params is not None:
+            self.load_params(params)
+        else:
             assert pitch_range.start >= 0 and pitch_range.stop <= 128, \
                 "You must specify a pitch_range between 0 and 127 (included, i.e. range.stop at 128)"
             assert 0 < nb_velocities < 128,\
@@ -115,8 +150,6 @@ class MIDITokenizer(ABC):
             self.additional_tokens = additional_tokens
             self.special_tokens = special_tokens
             self.unique_track = unique_track
-        else:
-            self.load_params(params)
 
         # Init duration and velocity values
         self._durations = self.__create_durations_tuples()
@@ -152,32 +185,16 @@ class MIDITokenizer(ABC):
             self._time_signatures = self.__create_time_signatures()
 
         # Vocabulary and token types graph
-        if special_tokens is not None:
-            special_tokens = [f"{tok}_None" for tok in special_tokens]
-        else:
-            special_tokens = []
-        if (
-            self.vocab is None
-        ):  # in case it was already loaded by an overridden load_params method, such as with BPE
-            vocab_list = self._create_vocabulary()
-            if isinstance(vocab_list[0], list):
-                for i in range(len(vocab_list)):
-                    vocab_list[i] = special_tokens + vocab_list[i]
-            else:
-                vocab_list = special_tokens + vocab_list
-            self.vocab = self.__create_vocabulary(vocab_list)
+        if len(self.vocab) == 0:  # in case it was already loaded by an overridden load_params method, such as with BPE
+            self.__create_vocabulary()
         self.tokens_types_graph = self._create_token_types_graph()
         if "BOS" in special_tokens or "EOS" in special_tokens:
             self._add_bos_eos_to_types_graph()
-        if self.is_multi_voc:  # __vocab_inv is the inverse of self.vocab, allowing faster decoding
-            self.__vocab_inv = [{v: k for k, v in v.items()} for v in self.vocab]
-        else:
-            self.__vocab_inv = {v: k for k, v in self.vocab.items()}
 
-        # BPE attributes
+        # Slow BPE attributes
         self.__bpe_successions = {}
         if self.has_bpe:  # loaded from config file
-            self.__set_bpe_tokens_successions()
+            self.__set_bpe_slow_tokens_successions()
 
         # Keep in memory durations in ticks for seen time divisions so these values
         # are not calculated each time a MIDI is processed
@@ -187,21 +204,22 @@ class MIDITokenizer(ABC):
         # MIDI (being parsed) so that methods processing tracks can access them
         self._current_midi_metadata = {}  # needs to be updated each time a MIDI is read
 
-        # Fast BPE tokenizer backed with 🤗tokenizers
-        if not self.is_multi_voc:
-            self._bpe_model = TokenizerFast(
-                BPE(
-                    vocab=self.vocab,
-                    merges=[],
-                    dropout=None,
-                    continuing_subword_prefix="",
-                    end_of_word_suffix="",
-                    fuse_unk=False,
-                )
-            )
-            self._bpe_model.add_special_tokens(special_tokens)
-        else:
-            self._bpe_model = None
+    @property
+    def vocab(self) -> Union[Dict[str, int], List[Dict[str, int]]]:  # token (str) to its id (int)
+        """
+        Token: ``str`` describing a unique event, e.g. *Pitch_50*
+        Id: ``int`` the associated integer index of a token, to be fed to a model.
+
+        ``._vocab_base``: Dict[str: int] token -> id - Registers all known base tokens.
+        ``.__vocab_base_inv``: Dict[int: str] id -> token - Inverse of ``._base_vocab``, to go the other way.
+        ``._vocab_bpe_bytes_to_tokens``: Dict[str: List[str]] byte(s) -> token(s) used to decode BPE encoded sequences.
+        ``._bpe_model.get_vocab()``: Dict[str: int] byte -> id - bpe model vocabulary, based on unique bytes
+
+        Token to byte is achieved by doing ``char(self._vocab_base[token])``, basically we convert its id to a byte.
+
+        :return:
+        """
+        return self._vocab_base
 
     def preprocess_midi(self, midi: MidiFile):
         r"""Pre-process (in place) a MIDI file to quantize its time and note attributes
@@ -356,13 +374,31 @@ class MIDITokenizer(ABC):
             prev_time_sig = time_sig
             i += 1
 
-    def midi_to_tokens(
+    def _midi_to_tokens(
         self, midi: MidiFile, *args, **kwargs
-    ) -> List[List[Union[int, List[int]]]]:
-        r"""Tokenize a MIDI file.
-        **If you override this method, be sure to keep the first lines in your method.**
+    ) -> List[Sequence]:
+        r"""Converts a preprocessed MIDI object to a sequence of tokens.
+        Tokenization treating all tracks as a single token sequence might
+        override this method, e.g. Octuple or PopMAG.
 
         :param midi: the MIDI objet to convert.
+        :return: sequences of tokens.
+        """
+        # Convert each track to tokens
+        tokens = []
+        for track in midi.instruments:
+            tokens.append(self.track_to_tokens(track))
+            self.complete_sequence(tokens[-1])
+        return tokens
+
+    def midi_to_tokens(
+        self, midi: MidiFile, apply_bpe_if_possible: bool = True, *args, **kwargs
+    ) -> List[Sequence]:
+        r"""Tokenize a MIDI file.
+        **Override the ``_midi_to_tokens`` method if needed. This method implement necessary MIDI preprocessing.**
+
+        :param midi: the MIDI objet to convert.
+        :param apply_bpe_if_possible: will apply BPE if the tokenizer has learn it.
         :return: sequences of tokens.
         """
         # Check if the durations values have been calculated before for this time division
@@ -385,15 +421,15 @@ class MIDITokenizer(ABC):
             "key_sig_changes": midi.key_signature_changes,
         }
 
-        # **************** OVERRIDE FROM HERE, KEEP THE LINES ABOVE IN YOUR METHOD ****************
+        tokens = self._midi_to_tokens(midi, *args, **kwargs)
 
-        # Convert each track to tokens
-        tokens = [self.track_to_tokens(track) for track in midi.instruments]
+        if apply_bpe_if_possible and self.has_bpe:
+            self.apply_bpe(tokens)
 
         return tokens
 
     @abstractmethod
-    def track_to_tokens(self, track: Instrument) -> List[Union[int, List[int]]]:
+    def track_to_tokens(self, track: Instrument) -> Sequence:
         r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens.
         This method is unimplemented and need to be overridden by inheriting classes.
 
@@ -402,39 +438,114 @@ class MIDITokenizer(ABC):
         """
         raise NotImplementedError
 
-    def events_to_tokens(self, events: List[Event]) -> List[int]:
+    def complete_sequence(self, seq: Sequence):
+        r"""Completes (inplace) a Sequence object by converting its attributes.
+        The input sequence can miss some of its attributes (ids, tokens), but needs at least one for reference.
+        This method will create the missing ones from the present ones.
+        The ``events`` attribute will not be filled as it is only intended for debug purpose.
+
+        :param seq: input sequence, must have one defined.
+        """
+        if seq.tokens is None:
+            if seq.events is not None:
+                seq.tokens = [str(event) for event in seq.events]
+            elif seq.ids is not None:
+                seq.tokens = self._ids_to_tokens(seq.ids)
+            elif seq.bytes is not None:
+                seq.tokens = self.__bytes_to_tokens(seq.bytes)
+        if seq.ids is None:
+            seq.ids = self._tokens_to_ids(seq.tokens)
+
+        if self.has_bpe:
+            if seq.bytes is None:
+                seq.bytes = self.__ids_to_bytes(seq.ids)
+
+    def _tokens_to_ids(self, tokens: List[Union[str, List[str]]]) -> List[Union[int, List[int]]]:
         r"""Converts a list of Event objects into a list of tokens.
         It will apply BPE if it has been learned.
 
-        :param events: list of Events objects to convert.
+        :param tokens: list of tokens (str) to convert.
         :return: list of corresponding tokens.
         """
-        tokens = [self[str(event)] for event in events]
-        if self.has_bpe:  # this might take some time
-            tokens = self.apply_bpe(tokens)
-        return tokens
+        if isinstance(tokens[0], list):
+            ids = []
+            for i, seq in enumerate(tokens):
+                ids.append([self[i, token] for token in seq])
+        else:
+            ids = [self[token] for token in tokens]
+        return ids
 
-    def tokens_to_events(
-        self, tokens: List[Union[int, List[int]]], as_str: bool = True
+    def _ids_to_tokens(
+        self, ids: List[Union[int, List[int]]], as_str: bool = True
     ) -> List[Union[Union[str, Event], List[Union[str, Event]]]]:
         r"""Convert a sequence of tokens in their respective event objects.
         BPE tokens will be decoded.
 
-        :param tokens: sequence of tokens to convert.
-        :param as_str: return the events as string objects, otherwise Event objects (default: True)
-        :return: the sequence of corresponding events.
+        :param ids: sequence of tokens to convert.
+        :param as_str: return the tokens as string objects, otherwise Event objects (default: True)
+        :return: the sequence of corresponding tokens (str).
         """
-        events = []
-        if isinstance(tokens[0], list):  # multiple vocabularies
-            return [self.tokens_to_events(tok) for tok in tokens]
+        tokens = []
+        if isinstance(ids[0], list):  # multiple vocabularies
+            for multi_ids in ids:  # cannot use recursion here because of the vocabulary type id
+                multi_event = []
+                for i, token in enumerate(multi_ids):
+                    event_str = self[i, token]
+                    multi_event.append(event_str if as_str else Event(*event_str.split("_")))
+                tokens.append(multi_event)
+            return tokens
 
-        tokens_ = self.decompose_bpe(tokens) if self.has_bpe else tokens
-        for token in tokens_:
-            event_str = self[token]
-            events.append(event_str if as_str else Event(*event_str.split("_")))
-        return events
+        ids_ = self.decompose_bpe(ids) if self.has_bpe else ids
+        for id_ in ids_:
+            event_str = self[id_]
+            tokens.append(event_str if as_str else Event(*event_str.split("_")))
+        return tokens
 
-    @convert_tokens_tensors_to_list
+    def __ids_to_bytes(self, ids: List[Union[int, List[int]]], as_one_str: bool = False) -> Union[str, List[str]]:
+        r"""Converts a list of ids into a string of unique bytes.
+
+        :param ids: token ids (int) to convert.
+        :param as_one_str: will return the bytes all concatenated into one string. (default: False)
+        :return: the tokens converted into strings of unique bytes.
+        """
+        if isinstance(ids[0], list):
+            return [self.__ids_to_bytes(item) for item in ids]
+        bytes_ = [chr(i + CHR_ID_START) for i in ids]
+        return "".join(bytes_) if as_one_str else bytes_
+
+    def __tokens_to_bytes(self, tokens: List[Union[str, List[str]]], as_one_str: bool = False) -> Union[str, List[str]]:
+        r"""Converts a list of tokens into a string of unique bytes.
+
+        :param tokens: token ids (int) to convert.
+        :param as_one_str: will return the bytes all concatenated into one string. (default: False)
+        :return: the tokens converted into a string of unique bytes.
+        """
+        if isinstance(tokens[0], list):
+            return [self.__tokens_to_bytes(item) for item in tokens]
+        return self.__ids_to_bytes(self._tokens_to_ids(tokens), as_one_str)
+
+    def __bytes_to_tokens(
+        self, bytes_: Union[str, List[str]], as_str: bool = True
+    ) -> List[Union[Union[str, Event], List[Union[str, Event]]]]:
+        r"""Convert a sequence of tokens in their respective event objects.
+
+        :param bytes_: sequence of tokens to convert.
+        :param as_str: return the events as string objects, otherwise Event objects (default: True)
+        :return: the sequence of corresponding tokens (str).
+        """
+        if isinstance(bytes_[0], list):  # multiple vocabularies
+            return [self.__bytes_to_tokens(byte_) for byte_ in bytes_]
+
+        tokens = []
+        for byte_ in bytes_:
+            token_str = self.__vocab_bpe_bytes_to_tokens[byte_]
+            tokens.append(token_str if as_str else Event(*token_str.split("_")))
+        tokens = [tok for toks in tokens for tok in toks]  # flatten
+        return tokens
+
+    def convert_tokens_to_string(self, tokens: List[str]) -> str:
+        return self._bpe_model.decoder.decode(tokens)
+
     def tokens_to_midi(
         self,
         tokens: Union[List, np.ndarray, Any],
@@ -444,7 +555,7 @@ class MIDITokenizer(ABC):
     ) -> MidiFile:
         r"""Convert multiple sequences of tokens into a multitrack MIDI and save it.
         The tokens will be converted to event objects and then to a miditoolkit.MidiFile object.
-        NOTE: With Remi, MIDI-Like, CP Word or other encoding methods that process tracks
+        **NOTE:** With Remi, MIDI-Like, CP Word or other encoding methods that process tracks
         independently, only the tempo changes of the first track in tokens will be used
 
         :param tokens: list, numpy array or pytorch / tensorflow tensor.
@@ -484,7 +595,7 @@ class MIDITokenizer(ABC):
     @abstractmethod
     def tokens_to_track(
         self,
-        tokens: List[Union[int, List[int]]],
+        tokens: Sequence,
         time_division: Optional[int] = TIME_DIVISION,
         program: Optional[Tuple[int, bool]] = (0, False),
     ) -> Tuple[Instrument, List[TempoChange]]:
@@ -522,16 +633,24 @@ class MIDITokenizer(ABC):
         """
         raise NotImplementedError
 
-    def __create_vocabulary(self, vocab: List[Union[str, List[str]]]) -> Union[OrderedDict, List[OrderedDict]]:
-        r"""Method actually creating the vocabulary object, as an OrderedDict, from a list
-        of token (str).
-
-        :return: the vocabulary object(s).
+    def __create_vocabulary(self):
+        r"""Method actually creating the vocabulary object, as Dictionary, from the ``_create_vocabulary``
+        method implemented by tokenization classes.
+        This method is called at ``__init__``.
         """
-        if isinstance(vocab[0], list):
-            return [self.__create_vocabulary(v) for v in vocab]
+        vocab = self._create_vocabulary()
 
-        return OrderedDict([(event, i) for i, event in enumerate(vocab)])
+        if isinstance(vocab[0], list):  # multi-voc
+            self._vocab_base = [{} for _ in range(len(vocab))]
+            self.__vocab_base_inv = [{} for _ in range(len(vocab))]
+            for vid in range(len(vocab)):
+                vocab[vid] = self.special_tokens + vocab[vid]
+                for tok in vocab[vid]:
+                    self.add_to_vocab(tok, vid)
+        else:
+            vocab = self.special_tokens + vocab
+            for tok in vocab:
+                self.add_to_vocab(tok)
 
     def add_to_vocab(self, event: Union[str, Event], vocab_idx: int = None):
         r"""Adds an event to the vocabulary. Its index (int) will be the length of the vocab.
@@ -542,12 +661,11 @@ class MIDITokenizer(ABC):
         event_str = event if isinstance(event, str) else str(event)
 
         if vocab_idx is not None:
-            self.vocab[vocab_idx][event_str] = len(self.vocab[vocab_idx])
-            self.__vocab_inv[vocab_idx][len(self.__vocab_inv[vocab_idx])] = event_str
+            self._vocab_base[vocab_idx][event_str] = len(self._vocab_base[vocab_idx])
+            self.__vocab_base_inv[vocab_idx][len(self.__vocab_base_inv[vocab_idx])] = event_str
         else:
             self.vocab[event_str] = len(self.vocab)
-            self.__vocab_inv[len(self.__vocab_inv)] = event_str
-            self._bpe_model.add_tokens([event_str])
+            self.__vocab_base_inv[len(self.__vocab_base_inv)] = event_str
 
     def token_type(self, token: int, vocab_id: int = None) -> str:
         r"""Returns the type of the given token.
@@ -765,9 +883,9 @@ class MIDITokenizer(ABC):
             samples.append(file)
             samples_paths.append(file_path.relative_to(tokens_path))
             original_lengths += (
-                [len(file["tokens"])]
+                [len(file["ids"])]
                 if self.unique_track
-                else [len(track) for track in file["tokens"]]
+                else [len(track) for track in file["ids"]]
             )
 
         def replace_token_in_seq(
@@ -789,7 +907,7 @@ class MIDITokenizer(ABC):
         while len(self.vocab) < vocab_size:
             occurrences = {}  # count occurrences of successive tokens
             for sample in samples:
-                tracks = [sample["tokens"]] if self.unique_track else sample["tokens"]
+                tracks = [sample["ids"]] if self.unique_track else sample["ids"]
                 for track in tracks:
                     for i in range(len(track) - 1):
                         try:
@@ -824,10 +942,10 @@ class MIDITokenizer(ABC):
             for sample in samples:
                 if self.unique_track:
                     replace_token_in_seq(
-                        sample["tokens"], most_rec_tok_succession, final_event_val
+                        sample["ids"], most_rec_tok_succession, final_event_val
                     )
                 else:
-                    for track in sample["tokens"]:
+                    for track in sample["ids"]:
                         replace_token_in_seq(
                             track, most_rec_tok_succession, final_event_val
                         )
@@ -836,9 +954,9 @@ class MIDITokenizer(ABC):
             avg = []
             for sample in samples:
                 if self.unique_track:
-                    avg.append(len(sample["tokens"]))
+                    avg.append(len(sample["ids"]))
                 else:
-                    avg += [len(track) for track in sample["tokens"]]
+                    avg += [len(track) for track in sample["ids"]]
             avg_seq_len.append(np.mean(np.array(avg)).item(0))
             nb_combs = np.array([len(prime_tokens_eq)])  # bpe-combs.prime-combs
             bpe_comb_nb = (
@@ -861,11 +979,11 @@ class MIDITokenizer(ABC):
         # Saves dictionary and prints the difference in sequence length
         pbar.close()
         self.has_bpe = True
-        self.__set_bpe_tokens_successions()
+        self.__set_bpe_slow_tokens_successions()
         if save_converted_samples:
             for sample, path in zip(samples, samples_paths):
                 self.save_tokens(
-                    sample["tokens"],
+                    sample["ids"],
                     Path(out_dir, path).with_suffix(".json"),
                     sample["programs"],
                 )
@@ -882,80 +1000,119 @@ class MIDITokenizer(ABC):
 
         return bpe_comb_means, bpe_comb_max, avg_seq_len
 
-    def __tokens_to_bytes(self, tokens: List[Union[int, List[int]]]) -> Union[str, List[str]]:
-        r"""Converts a list of tokens into a string of unique bytes.
-
-        :param tokens: to convert.
-        :return: the tokens converted into a string of unique bytes.
-        """
-        if isinstance(tokens[0], list):
-            return [self.__tokens_to_bytes(item) for item in tokens]
-        events = self.tokens_to_events(tokens)  # convert token int to str events
-        tokens_bytes = "".join([chr(self.vocab[e]) for e in events])  # convert str event to unique byte
-        return tokens_bytes
-
     def learn_bpe(
             self,
-            tokens_path: Union[Path, str],
             vocab_size: int,
+            tokens_paths: List[Union[Path, str]] = None,
+            iterator: Iterable = None,
             files_lim: int = None,
+            load_all_token_files_once: bool = False,
+            start_from_empty_voc: bool = False,
             **kwargs
     ):
         """Method to construct the vocabulary from BPE, backed by the 🤗tokenizers library.
+        The data used for training can either be given through the ``iterator`` argument as
+        as iterable object yielding strings, or by ``tokens_paths`` as a list of paths to
+        token json files that will be loaded.
 
-        MIDI -> tokens (int) -> events (str) -> bytes
-        bytes -> lists of events (str)
-
-
-        :param tokens_path: # TODO handle MIDIS
-        :param vocab_size:
-        :param files_lim:
-        :param kwargs:
-        :return:
+        :param vocab_size: size of the vocabulary to learn / build.
+        :param tokens_paths: paths of the token json files to load and use (default: False)
+        :param iterator: (default: False)
+        :param files_lim: (default: False)
+        :param load_all_token_files_once: if using ``tokens_paths``, all the tokens files will
+                be loaded once at the beginning and kept in memory, else they will be loaded
+                on the fly during training. (default: False)
+        :param start_from_empty_voc: (default: False)
+        :param kwargs: any additional argument to pass to the trainer.
         """
+        assert iterator is not None or tokens_paths is not None, \
+            "You must give at an iterator or a path to to token "
+
+        # Create new tokenizer model
         tokenizer_json = json.loads(self._bpe_model.to_str())
-
-        # Remove vocab
-        tokenizer_json["model"]["vocab"] = {}
+        nb_bytes = len(self.special_tokens) if start_from_empty_voc else len(self._vocab_base)
+        voc_start = {chr(i + CHR_ID_START): i for i in range(nb_bytes)}
+        tokenizer_json["model"]["vocab"] = voc_start  # byte (str) -> id (int)
         tokenizer_json["model"]["merges"] = []
-
         tokenizer = TokenizerFast.from_str(json.dumps(tokenizer_json))
 
         # Get files paths
-        files_paths = list(Path(tokens_path).glob("**/*.json"))
-        if files_lim is not None and files_lim < len(files_paths):
-            files_paths = choices(files_paths, k=files_lim)
+        if files_lim is not None and files_lim < len(tokens_paths):
+            tokens_paths = choices(tokens_paths, k=files_lim)
 
-        samples = []
-        original_lengths = []
+        # If no iterator, loads tokens / samples to analyze
+        if iterator is None:
+            if load_all_token_files_once:
+                iterator = []
+                for file_path in tqdm(tokens_paths, desc="Loading token files"):
+                    sample = self.load_tokens(file_path)
+                    iterator.append(self.__ids_to_bytes(sample["ids"]))
+            else:
+                def iterator():
+                    for file_path_ in tqdm(tokens_paths, desc="Loading token files"):
+                        sample_ = self.load_tokens(file_path_)
+                        yield self.__ids_to_bytes(sample_["ids"])
+                iterator = iterator()
 
-        # Loads tokens / samples to analyze
-        for file_path in tqdm(files_paths, desc="Loading token files"):
-            sample = self.load_tokens(file_path)
-            samples.append(self.__tokens_to_bytes(sample["tokens"]))
-            original_lengths += (
-                [len(sample["tokens"])]
-                if self.unique_track
-                else [len(track) for track in sample["tokens"]]
-            )
+        # Trains the tokenizer
+        special_tokens_bytes = self.__tokens_to_bytes(self.special_tokens)
+        trainer = BpeTrainer(vocab_size=vocab_size, special_tokens=special_tokens_bytes, show_progress=True, **kwargs)
+        tokenizer.train_from_iterator(iterator, length=sum(1 for _ in iterator), trainer=trainer)
 
-        def sample_iterator():
-            return (s for s in samples)
+        # Update other vocabs accordingly
+        if start_from_empty_voc:
+            # If we do not give an existing vocabulary to the tokenizer, 🤗tokenizers first fill its
+            # vocabulary with all bytes present in the training samples, sorted by byte / char index.
+            # Some bytes / tokens might be missing from tokenizer.get_vocab(), as simply not
+            # present in training samples. We must get rid of them from the base vocabulary
+            new_vocab = tokenizer.get_vocab()  # byte -> id
+            bytes_list = [chr(i + CHR_ID_START) for i in range(len(self._vocab_base))]  # bytes before training
+            byte_to_token_old = {chr(i + CHR_ID_START): self.__vocab_base_inv[i] for i in range(len(self._vocab_base))}
 
-        trainer = BpeTrainer(vocab_size=vocab_size, **kwargs)  # TODO use length ?
-        tokenizer.train_from_iterator(sample_iterator(), length=None, trainer=trainer)
-        vocab_new = tokenizer.get_vocab()
-        byte_to_event = {chr(i): ev for ev, i in self.vocab.items()}  # byte -> real event Type_Val
-        self.vocab_bpe_bytes_to_tokens = {k: [self.vocab[byte_to_event[b]] for b in k] for k in vocab_new}
-        self.vocab_bpe_bytes_to_events = {k: [byte_to_event[b] for b in k] for k in vocab_new}  # for decoding
+            # Rebuild _base_vocab
+            self._vocab_base = {}  # token -> id
+            self.__vocab_base_inv = {}  # id -> token
+            self.__vocab_base_byte_to_token = {}  # for all basic tokens
+            for byte_ in bytes_list:
+                if byte_ in new_vocab:  # dict is ordered so id val is incremented each time, from 0
+                    token = byte_to_token_old[byte_]  # get the token associated to the byte
+                    self.add_to_vocab(token)  # adds it to _vocab_base
+                    self.__vocab_base_byte_to_token[byte_] = token
+        else:
+            self.__vocab_base_byte_to_token = {chr(i + CHR_ID_START): ev for ev, i in self._vocab_base.items()}
+
+        # Update __vocab_bpe_bytes_to_tokens for faster decoding
+        self.__vocab_bpe_bytes_to_tokens = {k: [self.__vocab_base_byte_to_token[b] for b in k]
+                                            for k in tokenizer.get_vocab()}
+
         self._bpe_model = tokenizer
-        # TODO vocab property linking to bpe_model.get_vocab(), distinct base_vocab attribute
+
+    def apply_bpe(self, seq: Union[Sequence, List[Sequence]]) -> Union[Sequence, List[Sequence]]:
+        # TODO handle slow BPE
+        # TODO batch
+        # Make sure all sequences have bytes attributes
+        if isinstance(seq, list):
+            for seq_ in seq:
+                self.complete_sequence(seq_)
+        else:
+            self.complete_sequence(seq)
+            seq = [seq]
+
+        # Convert bytes to BPE ids and replace those of seqs
+        encoded_tokens = self._bpe_model.encode([t.bytes for t in seq], is_pretokenized=True).ids
+        encoded_tokens2 = self._bpe_model.encode_batch([t.bytes for t in seq], is_pretokenized=True).ids
+
+        for seq, bpe_tokens in zip(encoded_tokens, encoded_tokens):
+            seq.ids = bpe_tokens
 
         toto = 0
-        # return self.__class__(tokenizer_object=tokenizer, **kwargs)
+        """for seq, bpe_tokens in zip(tokens, encoded_tokens):
+            seq.ids = bpe_tokens"""
 
-    def __set_bpe_tokens_successions(self):
-        """Creates the bpe_successions attributes, as a dictionary of the form {bpe_token: (tok1, tok2, tok3...)}"""
+    def __set_bpe_slow_tokens_successions(self):
+        r"""For slow BPE.
+        Creates the bpe_successions attributes, as a dictionary of the form {bpe_token: (tok1, tok2, tok3...)}
+        """
         self.__bpe_successions = {
             tok: list(
                 map(
@@ -969,7 +1126,7 @@ class MIDITokenizer(ABC):
             for tok, event in enumerate(self.vocab) if event.split("_")[0] == "BPE"
         }
 
-    def apply_bpe(self, tokens: List[int]) -> List[int]:
+    def __apply_bpe_slow(self, tokens: List[int]) -> List[int]:
         r"""Converts a sequence of tokens into tokens with BPE.
 
         :param tokens: tokens to convert.
@@ -1018,7 +1175,7 @@ class MIDITokenizer(ABC):
             if in_list[i] == pattern[0] and in_list[i:i + len(pattern)] == pattern and i >= next_possible_idx:
                 matches.append(i)
                 next_possible_idx = i + len(pattern)
-        
+
         return matches
 
     def apply_bpe_to_dataset(
@@ -1036,9 +1193,9 @@ class MIDITokenizer(ABC):
         for path in tqdm(files_paths, desc="Applying BPE to dataset"):
             sample = self.load_tokens(path)
             sample_bpe = (
-                self.apply_bpe(sample["tokens"])
+                self.apply_bpe(sample["ids"])
                 if self.unique_track
-                else [self.apply_bpe(track) for track in sample["tokens"]]
+                else [self.apply_bpe(track) for track in sample["ids"]]  # TODO batch it
             )
             self.save_tokens(
                 sample_bpe,
@@ -1048,10 +1205,15 @@ class MIDITokenizer(ABC):
 
     def decompose_bpe(self, tokens: List[int]) -> List[int]:
         r"""Decomposes a sequence of tokens containing BP encoded tokens into "prime" tokens.
-        It is an inplace operation.
+        It is an inplace operation. TODO for fast bpe
 
         :param tokens: token sequence to decompose.
         :return: decomposed token sequence.
+        """
+
+        """
+        decoded_events = [tokenizer.vocab_bpe_bytes_to_events[tok] for tok in encoded_tokens.tokens]
+        decoded_events = [item for sublist in decoded_events for item in sublist]
         """
         tokens = deepcopy(tokens)
         i = 0
@@ -1127,7 +1289,7 @@ class MIDITokenizer(ABC):
                     continue
 
             # Converting the MIDI to tokens and saving them as json
-            tokens = self.midi_to_tokens(midi)
+            tokens = self(midi)
             self.save_tokens(
                 tokens,
                 Path(out_dir, f"{Path(midi_path).stem}.json").with_suffix(".json"),
@@ -1138,8 +1300,8 @@ class MIDITokenizer(ABC):
         if data_augment_offsets is not None:
             data_augmentation_dataset(out_dir, self, *data_augment_offsets)
 
-    @convert_tokens_tensors_to_list
-    def token_types_errors(self, tokens: List[int]) -> float:
+    @_in_as_complete_seq
+    def token_types_errors(self, tokens: Union[Sequence, List[Union[int, List[int]]]]) -> float:
         r"""Checks if a sequence of tokens is made of good token types
         successions and returns the error ratio (lower is better).
         The common implementation in MIDITokenizer class will check token types,
@@ -1155,11 +1317,12 @@ class MIDITokenizer(ABC):
         tokens = self.decompose_bpe(tokens) if self.has_bpe else tokens
 
         # Override from here
+        events = tokens.events
 
         err_type = 0  # i.e. incompatible next type predicted
         err_time = 0  # i.e. goes back or stay in time (does not go forward)
         err_note = 0  # i.e. duplicated
-        previous_type = self.token_type(tokens[0])
+        previous_type = events[0].type
         current_pos = -1
         current_pitches = []
         note_tokens_types = ['Pitch', 'NoteOn']
@@ -1167,46 +1330,45 @@ class MIDITokenizer(ABC):
         # Init first note and current pitches if needed
         if previous_type in note_tokens_types:
             if previous_type in ['Pitch', 'NoteOn']:
-                pitch_val = int(self[tokens[0]].split('_')[1])
+                pitch_val = int(events[0].value)
             else:  # PitchVel or PitchVelDur
-                pitch_val = int(self[tokens[0]].split('_')[1].split('-')[0])
+                pitch_val = int(events[0].value.split('-')[0])
             current_pitches.append(pitch_val)
         elif previous_type == 'Position':
-            current_pos = int(self[tokens[0]].split('_')[1])
+            current_pos = int(events[0].value)
 
-        for token in tokens[1:]:
-            token_type, token_value = self[token].split('_')
+        for event in events[1:]:
+            event_type, event_value = event.type, event.value
 
             # Good token type
-            if token_type in self.tokens_types_graph[previous_type]:
-                if token_type == 'Bar':  # reset
+            if event_type in self.tokens_types_graph[previous_type]:
+                if event_type == 'Bar':  # reset
                     current_pos = -1
                     current_pitches = []
-                elif token_type in ['TimeShift', 'Time-Shift', 'Rest']:
+                elif event_type in ['TimeShift', 'Time-Shift', 'Rest']:
                     current_pitches = []
-                elif token_type in note_tokens_types:
-                    pitch_val = int(token_value)
+                elif event_type in note_tokens_types:
+                    pitch_val = int(event_value)
                     if pitch_val in current_pitches:
                         err_note += 1  # pitch already played at current position
                     else:
                         current_pitches.append(pitch_val)
-                elif token_type == 'Position':
-                    if int(token_value) <= current_pos and previous_type != 'Rest':
+                elif event_type == 'Position':
+                    if int(event_value) <= current_pos and previous_type != 'Rest':
                         err_time += 1  # token position value <= to the current position
                     else:
-                        current_pos = int(token_value)
+                        current_pos = int(event_value)
                         current_pitches = []
             # Bad token type
             else:
                 err_type += 1
-            previous_type = token_type
+            previous_type = event_type
 
         return (err_type + err_time + err_note) / nb_tok_predicted
 
     @staticmethod
-    @convert_tokens_tensors_to_list
     def save_tokens(
-        tokens: Union[List, np.ndarray, Any],
+        ids: Union[List, np.ndarray, Any],
         path: Union[str, Path],
         programs: List[Tuple[int, bool]] = None,
         **kwargs,
@@ -1214,16 +1376,17 @@ class MIDITokenizer(ABC):
         r"""Saves tokens as a JSON file.
         Use kwargs to save any additional information within the JSON file.
 
-        :param tokens: tokens, as list, numpy array, torch or tensorflow Tensor.
+        :param ids: tokens, as list, numpy array, torch or tensorflow Tensor.
         :param path: path of the file to save.
         :param programs: (optional), programs of the associated tokens, should be
                         given as a tuples (int, bool) for (program, is_drum).
         :param kwargs: any additional information to save within the JSON file.
         """
+        ids = convert_ids_tensors_to_list(ids)
         with open(path, "w") as outfile:
             json.dump(
                 {
-                    "tokens": tokens,
+                    "ids": ids,
                     "programs": programs if programs is not None else [],
                     **kwargs,
                 },
@@ -1297,7 +1460,7 @@ class MIDITokenizer(ABC):
             elif key == "additional_tokens":
                 value["TimeSignature"] = value.get("TimeSignature", False)
             elif key == "vocab":
-                self.vocab = OrderedDict(value)
+                self._vocab_base = value  # TODO to inv, byte, __vocab_base_byte_to_token etc
                 for event in self.vocab.keys():
                     if event.split("_")[0] == "BPE":
                         self.has_bpe = True
@@ -1312,7 +1475,7 @@ class MIDITokenizer(ABC):
 
         :return: True is the tokenizer uses embedding pooling else False
         """
-        return isinstance(self.vocab, list)
+        return isinstance(self._vocab_base, list)
 
     def __call__(self, obj: Any, *args, **kwargs):
         r"""Automatically tokenize a MIDI file, or detokenize a sequence of tokens.
@@ -1378,7 +1541,7 @@ class MIDITokenizer(ABC):
         if isinstance(item, str):
             voc = self.vocab[vocab_id] if self.is_multi_voc else self.vocab
         else:
-            voc = self.__vocab_inv[vocab_id] if self.is_multi_voc else self.__vocab_inv
+            voc = self.__vocab_base_inv[vocab_id] if self.is_multi_voc else self.__vocab_base_inv
         return voc[item]
 
     def __eq__(self, other) -> bool:
@@ -1389,5 +1552,6 @@ class MIDITokenizer(ABC):
         :return: True if the vocabulary(ies) are identical, False otherwise.
         """
         if isinstance(other, MIDITokenizer):
-            return self.vocab == other.vocab
+            return self._vocab_base == other._vocab_base and \
+                self._bpe_model.get_vocab() == other._bpe_model.get_vocab()
         return False
