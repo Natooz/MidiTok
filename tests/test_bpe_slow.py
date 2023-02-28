@@ -89,12 +89,12 @@ def test_bpe_conversion(
             with open(
                 Path("tests", "test_results", tokenization, f"{file_path.stem}.json")
             ) as json_file:
-                tokens_no_bpe = json.load(json_file)["tokens"][0]  # no BPE
+                tokens_no_bpe = json.load(json_file)["ids"][0]  # no BPE
             tokens_no_bpe2 = tokenizer.decompose_bpe(deepcopy(tokens))  # BPE decomposed
             with open(
                 Path("tests", "test_results", f"{tokenization}_bpe", f"{file_path.stem}.json")
             ) as json_file:
-                saved_tokens = json.load(json_file)["tokens"][
+                saved_tokens = json.load(json_file)["ids"][
                     0
                 ]  # with BPE, saved after creating vocab
             saved_tokens_decomposed = tokenizer.decompose_bpe(deepcopy(saved_tokens))

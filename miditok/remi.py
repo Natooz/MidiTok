@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 from miditoolkit import Instrument, Note, TempoChange
 
-from .midi_tokenizer_base import MIDITokenizer, _in_as_complete_seq, _out_as_complete_seq
+from .midi_tokenizer_base import MIDITokenizer, _in_as_seq, _out_as_complete_seq
 from .classes import TokSequence, Event
 from .utils import detect_chords
 from .constants import (
@@ -238,7 +238,7 @@ class REMI(MIDITokenizer):
 
         return TokSequence(events=events)
 
-    @_in_as_complete_seq
+    @_in_as_seq
     def tokens_to_track(
         self,
         tokens: Union[TokSequence, List, np.ndarray, Any],

@@ -80,8 +80,8 @@ Contributions are gratefully welcomed, feel free to open an issue or send a PR i
 
 * Time Signature
 * Control Change messages
+* Option to represent pitch values as pitch intervals, as [it seems to improve performances](https://ismir2022program.ismir.net/lbd_369.html).
 * Speeding up MIDI read / load (Rust / C++ binding)
-* Speeding up BPE (Rust / C++ binding)
 * Data augmentation on duration values at the MIDI level
 
 ## Citation

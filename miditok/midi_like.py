@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 from miditoolkit import Instrument, Note, TempoChange
 
-from .midi_tokenizer_base import MIDITokenizer, _in_as_complete_seq, _out_as_complete_seq
+from .midi_tokenizer_base import MIDITokenizer, _in_as_seq, _out_as_complete_seq
 from .classes import TokSequence, Event
 from .utils import detect_chords
 from .constants import (
@@ -213,7 +213,7 @@ class MIDILike(MIDITokenizer):
 
         return TokSequence(events=events)
 
-    @_in_as_complete_seq
+    @_in_as_seq
     def tokens_to_track(
         self,
         tokens: Union[TokSequence, List, np.ndarray, Any],
@@ -380,7 +380,7 @@ class MIDILike(MIDITokenizer):
 
         return dic
 
-    @_in_as_complete_seq
+    @_in_as_seq(complete=False, decode_bpe=False)
     def token_types_errors(self, tokens: Union[TokSequence, List, np.ndarray, Any]) -> float:
         r"""Checks if a sequence of tokens is made of good token types
         successions and returns the error ratio (lower is better).
@@ -392,6 +392,9 @@ class MIDILike(MIDITokenizer):
         :return: the error ratio (lower is better)
         """
         nb_tok_predicted = len(tokens)  # used to norm the score
+        if self.has_bpe:
+            self.decompose_bpe(tokens)
+        self.complete_sequence(tokens)
 
         # Override from here
 

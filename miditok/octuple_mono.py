@@ -6,7 +6,7 @@ from typing import List, Tuple, Dict, Optional, Union, Any
 import numpy as np
 from miditoolkit import Instrument, Note, TempoChange
 
-from .midi_tokenizer_base import MIDITokenizer, _in_as_complete_seq, _out_as_complete_seq
+from .midi_tokenizer_base import MIDITokenizer, _in_as_seq, _out_as_complete_seq
 from .classes import TokSequence
 from .constants import (
     PITCH_RANGE,
@@ -181,7 +181,7 @@ class OctupleMono(MIDITokenizer):
 
         return TokSequence(tokens=tokens)
 
-    @_in_as_complete_seq
+    @_in_as_seq
     def tokens_to_track(
         self,
         tokens: Union[TokSequence, List, np.ndarray, Any],
@@ -298,7 +298,7 @@ class OctupleMono(MIDITokenizer):
         """
         return {}  # not relevant for this encoding
 
-    @_in_as_complete_seq
+    @_in_as_seq
     def token_types_errors(self, tokens: Union[TokSequence, List, np.ndarray, Any]) -> float:
         r"""Checks if a sequence of tokens is made of good token values and
         returns the error ratio (lower is better).

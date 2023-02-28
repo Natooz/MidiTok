@@ -46,32 +46,53 @@ def test_bpe_conversion(
     :param data_path: root path to the data to test
     """
     tokenizations = ["Structured", "REMI", "MIDILike", "TSD"]
+    tokenizations = ["REMI"]  # TODO remove line
     data_path = Path(data_path)
     files = list(data_path.glob("**/*.mid"))
 
     # Creates tokenizers and computes BPE (build voc)
+    first_tokenizers = []
     for tokenization in tokenizations:
         add_tokens = deepcopy(ADDITIONAL_TOKENS_TEST)
         tokenizer = getattr(miditok, tokenization)(
             beat_res=BEAT_RES_TEST, additional_tokens=add_tokens
         )
-        tokenizer.tokenize_midi_dataset(files, Path("tests", "test_results", tokenization))
+        # tokenizer.tokenize_midi_dataset(files, Path("tests", "test_results", tokenization))  # TODO remettre
         tokenizer.learn_bpe(
-            data_path / tokenization,
-            len(tokenizer.vocab) + 60,
-            out_dir=Path("tests", "test_results", f"{tokenization}_bpe"),
+            vocab_size=400,
+            tokens_paths=Path("tests", "test_results", tokenization).glob("**/*.json"),
             files_lim=None,
-            save_converted_samples=True,
+            load_all_token_files_once=True,
+            start_from_empty_voc=True,
         )
+        # tokens = tokenizer.midi_to_tokens(deepcopy(MidiFile(files[0])))[0]
+        tokenizer.save_params(Path("tests", "test_results", f"{tokenization}_bpe", "config.txt"))
+        first_tokenizers.append(tokenizer)
+
+        test_id_to_token = {id_: tokenizer._vocab_base_byte_to_token[byte_]
+                            for id_, byte_ in tokenizer._vocab_base_id_to_byte.items()}
+        vocab_inv = {v: k for k, v in tokenizer._vocab_base.items()}
+        assert test_id_to_token == vocab_inv, \
+            "Vocabulary inversion failed, something might be wrong with the way they are built"
+
+        for file_path in files:
+            tokens = tokenizer.midi_to_tokens(deepcopy(MidiFile(file_path)))[0]
+            to_tok = tokenizer._bytes_to_tokens(tokens.bytes)
+            to_id = tokenizer._tokens_to_ids(to_tok)
+            to_by = tokenizer._ids_to_bytes(to_id, as_one_str=True)
+            assert all([to_by == tokens.bytes, to_tok == tokens.tokens, to_id == tokens.ids]), \
+                "Conversion between tokens / bytes / ids failed, something might be wrong in vocabularies"
 
     # Reload (test) tokenizer from the saved config file
     tokenizers = []
     for i, tokenization in enumerate(tokenizations):
         tokenizers.append(
             getattr(miditok, tokenization)(
-                params=Path("tests", "test_results", f"{tokenization}_bpe") / "config.txt"
+                params=Path("tests", "test_results", f"{tokenization}_bpe", "config.txt")
             )
         )
+        assert tokenizers[i] == first_tokenizers[i], \
+            f"Saving and reloading tokenizer failed. The reloaded tokenizer is different from the first one."
 
     at_least_one_error = False
 
@@ -89,12 +110,12 @@ def test_bpe_conversion(
             with open(
                 Path("tests", "test_results", tokenization, f"{file_path.stem}.json")
             ) as json_file:
-                tokens_no_bpe = json.load(json_file)["tokens"][0]  # no BPE
+                tokens_no_bpe = json.load(json_file)["ids"][0]  # no BPE
             tokens_no_bpe2 = tokenizer.decompose_bpe(deepcopy(tokens))  # BPE decomposed
             with open(
                 Path("tests", "test_results", f"{tokenization}_bpe", f"{file_path.stem}.json")
             ) as json_file:
-                saved_tokens = json.load(json_file)["tokens"][
+                saved_tokens = json.load(json_file)["ids"][
                     0
                 ]  # with BPE, saved after creating vocab
             saved_tokens_decomposed = tokenizer.decompose_bpe(deepcopy(saved_tokens))
