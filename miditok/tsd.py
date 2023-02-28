@@ -6,7 +6,7 @@ import numpy as np
 from miditoolkit import Instrument, Note, TempoChange
 
 from .midi_tokenizer_base import MIDITokenizer, _in_as_complete_seq, _out_as_complete_seq
-from .classes import Sequence, Event
+from .classes import TokSequence, Event
 from .utils import detect_chords
 from .constants import (
     PITCH_RANGE,
@@ -64,7 +64,7 @@ class TSD(MIDITokenizer):
         )
 
     @_out_as_complete_seq
-    def track_to_tokens(self, track: Instrument) -> Sequence:
+    def track_to_tokens(self, track: Instrument) -> TokSequence:
         r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
         (can probably be achieved faster with Mido objects)
 
@@ -214,24 +214,25 @@ class TSD(MIDITokenizer):
 
         events.sort(key=lambda x: (x.time, self._order(x)))
 
-        return Sequence(events=events)
+        return TokSequence(events=events)
 
     @_in_as_complete_seq
     def tokens_to_track(
         self,
-        tokens: List[int],
+        tokens: Union[TokSequence, List, np.ndarray, Any],
         time_division: Optional[int] = TIME_DIVISION,
         program: Optional[Tuple[int, bool]] = (0, False),
     ) -> Tuple[Instrument, List[TempoChange]]:
         r"""Converts a sequence of tokens into a track object
 
-        :param tokens: sequence of tokens to convert
+        :param tokens: sequence of tokens to convert. Can be either a Tensor (PyTorch and Tensorflow are supported),
+                a numpy array, a Python list or a TokSequence.
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create)
         :param program: the MIDI program of the produced track and if it drum, (default (0, False), piano)
         :return: the miditoolkit instrument object and tempo changes
         """
         ticks_per_sample = time_division // max(self._beat_res.values())
-        events = tokens.events
+        tokens = tokens.tokens
 
         name = "Drums" if program[1] else MIDI_INSTRUMENTS[program[0]]["name"]
         instrument = Instrument(program[0], is_drum=program[1], name=name)
@@ -241,17 +242,17 @@ class TSD(MIDITokenizer):
 
         current_tick = 0
         ei = 0
-        while ei < len(events):
-            if events[ei].type == "Pitch":
+        while ei < len(tokens):
+            if tokens[ei].split("_")[0] == "Pitch":
                 try:
                     if (
-                        events[ei + 1].type == "Velocity"
-                        and events[ei + 2].type == "Duration"
+                        tokens[ei + 1].split("_")[0] == "Velocity"
+                        and tokens[ei + 2].split("_")[0] == "Duration"
                     ):
-                        pitch = int(events[ei].value)
-                        vel = int(events[ei + 1].value)
+                        pitch = int(tokens[ei].split("_")[1])
+                        vel = int(tokens[ei + 1].split("_")[1])
                         duration = self._token_duration_to_ticks(
-                            events[ei + 2].value, time_division
+                            tokens[ei + 2].split("_")[1], time_division
                         )
                         instrument.notes.append(
                             Note(vel, pitch, current_tick, current_tick + duration)
@@ -259,15 +260,15 @@ class TSD(MIDITokenizer):
                         ei += 1
                 except IndexError:
                     pass
-            elif events[ei].type == "TimeShift":
+            elif tokens[ei].split("_")[0] == "TimeShift":
                 current_tick += self._token_duration_to_ticks(
-                    events[ei].value, time_division
+                    tokens[ei].split("_")[1], time_division
                 )
-            elif events[ei].type == "Rest":
-                beat, pos = map(int, events[ei].value.split("."))
+            elif tokens[ei].split("_")[0] == "Rest":
+                beat, pos = map(int, tokens[ei].split("_")[1].split("."))
                 current_tick += beat * time_division + pos * ticks_per_sample
-            elif events[ei].type == "Tempo":
-                tempo = int(events[ei].value)
+            elif tokens[ei].split("_")[0] == "Tempo":
+                tempo = int(tokens[ei].split("_")[1])
                 if tempo != tempo_changes[-1].tempo:
                     tempo_changes.append(TempoChange(tempo, current_tick))
             ei += 1
@@ -276,7 +277,7 @@ class TSD(MIDITokenizer):
         tempo_changes[0].time = 0
         return instrument, tempo_changes
 
-    def _create_vocabulary(self, sos_eos_tokens: bool = False) -> List[str]:
+    def _create_base_vocabulary(self, sos_eos_tokens: bool = False) -> List[str]:
         r"""Creates the vocabulary, as a list of string events.
         Each event will be given as the form of "Type_Value", separated with an underscore.
         Example: Pitch_58

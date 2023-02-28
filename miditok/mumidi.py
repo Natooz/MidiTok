@@ -1,13 +1,13 @@
 
 from math import ceil
 from pathlib import Path, PurePath
-from typing import List, Tuple, Dict, Optional, Union
+from typing import List, Tuple, Dict, Optional, Union, Any
 
 import numpy as np
 from miditoolkit import MidiFile, Instrument, Note, TempoChange
 
 from .midi_tokenizer_base import MIDITokenizer, _in_as_complete_seq, _out_as_complete_seq
-from .classes import Sequence, Event
+from .classes import TokSequence, Event
 from .utils import detect_chords
 from .constants import (
     PITCH_RANGE,
@@ -142,7 +142,7 @@ class MuMIDI(MIDITokenizer):
         self.drum_pitch_range = range(*self.drum_pitch_range)
 
     @_out_as_complete_seq
-    def _midi_to_tokens(self, midi: MidiFile, *args, **kwargs) -> Sequence:
+    def _midi_to_tokens(self, midi: MidiFile, *args, **kwargs) -> TokSequence:
         r"""Tokenize a MIDI file.
         Each pooled token will be a list of the form (index: Token type):
         * 0: Pitch / DrumPitch / Position / Bar / Program / (Chord) / (Rest)
@@ -241,63 +241,46 @@ class MuMIDI(MIDITokenizer):
                     nb_new_bars = current_tick // ticks_per_bar - current_bar
                     for i in range(nb_new_bars):
                         bar_token = [
-                            self.vocab[0]["Bar_None"],
-                            self.vocab[1][f"BarPosEnc_{current_bar + i + 1}"],
-                            self.vocab[2]["PositionPosEnc_None"],
+                            "Bar_None",
+                            f"BarPosEnc_{current_bar + i + 1}",
+                            "PositionPosEnc_None",
                         ]
                         if self.additional_tokens["Tempo"]:
-                            bar_token.append(
-                                self.vocab[self.vocab_types_idx["Tempo"]][
-                                    f"Tempo_{current_tempo}"
-                                ]
-                            )
+                            bar_token.append(f"Tempo_{current_tempo}")
                         tokens.append(bar_token)
                     current_bar += nb_new_bars
                 # Position
                 pos_token = [
-                    self.vocab[0][f"Position_{current_pos}"],
-                    self.vocab[1][f"BarPosEnc_{current_bar}"],
-                    self.vocab[2][f"PositionPosEnc_{current_pos}"],
+                    f"Position_{current_pos}",
+                    f"BarPosEnc_{current_bar}",
+                    f"PositionPosEnc_{current_pos}",
                 ]
                 if self.additional_tokens["Tempo"]:
-                    pos_token.append(
-                        self.vocab[self.vocab_types_idx["Tempo"]][f"Tempo_{current_tempo}"]
-                    )
+                    pos_token.append(f"Tempo_{current_tempo}")
                 tokens.append(pos_token)
             # Program (track)
             if note_token[0].desc != current_track:
                 current_track = note_token[0].desc
                 track_token = [
-                    self.vocab[0][f"Program_{current_track}"],
-                    self.vocab[1][f"BarPosEnc_{current_bar}"],
-                    self.vocab[2][f"PositionPosEnc_{current_pos}"],
+                    f"Program_{current_track}",
+                    f"BarPosEnc_{current_bar}",
+                    f"PositionPosEnc_{current_pos}",
                 ]
                 if self.additional_tokens["Tempo"]:
-                    track_token.append(
-                        self.vocab[self.vocab_types_idx["Tempo"]][f"Tempo_{current_tempo}"]
-                    )
+                    track_token.append(f"Tempo_{current_tempo}")
                 tokens.append(track_token)
 
             # Adding bar and position tokens to notes for positional encoding
-            note_token[0] = self.vocab[0][
-                f"{note_token[0].type}_{note_token[0].value}"
-            ]
-            note_token.insert(
-                1, self.vocab[1][f"BarPosEnc_{current_bar}"]
-            )
-            note_token.insert(
-                2, self.vocab[2][f"PositionPosEnc_{current_pos}"]
-            )
+            note_token[0] = str(note_token[0])
+            note_token.insert(1, f"BarPosEnc_{current_bar}")
+            note_token.insert(2, f"PositionPosEnc_{current_pos}")
             if self.additional_tokens["Tempo"]:
-                note_token.insert(
-                    3,
-                    self.vocab[self.vocab_types_idx["Tempo"]][f"Tempo_{current_tempo}"],
-                )
+                note_token.insert(3, f"Tempo_{current_tempo}")
             tokens.append(note_token)
 
-        return Sequence(ids=tokens)
+        return TokSequence(tokens=tokens)
 
-    def track_to_tokens(self, track: Instrument) -> List[List[Union[Event, int]]]:
+    def track_to_tokens(self, track: Instrument) -> List[List[Union[Event, str]]]:
         r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
         For each note, it creates a time step as a list of tokens where (list index: token type):
         * 0: Pitch (as an Event object for sorting purpose afterwards)
@@ -325,10 +308,8 @@ class MuMIDI(MIDITokenizer):
                             time=note.start,
                             desc=track.program,
                         ),
-                        self.vocab[-2][f"Velocity_{note.velocity}"],
-                        self.vocab[-1][
-                            f'Duration_{".".join(map(str, self._durations[dur_idx]))}'
-                        ],
+                        f"Velocity_{note.velocity}",
+                        f'Duration_{".".join(map(str, self._durations[dur_idx]))}',
                     ]
                 )
             else:
@@ -340,10 +321,8 @@ class MuMIDI(MIDITokenizer):
                             time=note.start,
                             desc=-1,
                         ),
-                        self.vocab[-2][f"Velocity_{note.velocity}"],
-                        self.vocab[-1][
-                            f'Duration_{".".join(map(str, self._durations[dur_idx]))}'
-                        ],
+                        f"Velocity_{note.velocity}",
+                        f'Duration_{".".join(map(str, self._durations[dur_idx]))}',
                     ]
                 )
 
@@ -367,7 +346,7 @@ class MuMIDI(MIDITokenizer):
     @_in_as_complete_seq
     def tokens_to_midi(
         self,
-        tokens: List[List[int]],
+        tokens: Union[TokSequence, List, np.ndarray, Any],
         _=None,
         output_path: Optional[str] = None,
         time_division: Optional[int] = TIME_DIVISION,
@@ -383,6 +362,8 @@ class MuMIDI(MIDITokenizer):
         * -2: Velocity
         * -1: Duration
 
+        :param tokens: tokens to convert. Can be either a Tensor (PyTorch and Tensorflow are supported),
+                a numpy array, a Python list or a TokSequence.
         :param tokens: list of lists of tokens to convert, each list inside the
                        first list corresponds to a track
         :param _: unused, to match parent method signature
@@ -456,23 +437,21 @@ class MuMIDI(MIDITokenizer):
 
     def tokens_to_track(
         self,
-        tokens: List[List[int]],
+        tokens: Union[TokSequence, List, np.ndarray, Any],
         time_division: Optional[int] = TIME_DIVISION,
         program: Optional[Tuple[int, bool]] = (0, False),
     ):
-        r"""NOT RELEVANT / IMPLEMENTED FOR MUMIDI
-        Use tokens_to_midi instead
+        r"""Not relevant / implemented for MuMIDI. Use :py:meth:`miditok.MuMIDI.tokens_to_midi` instead.
 
-        :param tokens: sequence of tokens to convert
+        :param tokens: sequence of tokens to convert. Can be either a Tensor (PyTorch and Tensorflow are supported),
+                a numpy array, a Python list or a TokSequence.
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create)
         :param program: the MIDI program of the produced track and if it drum, (default (0, False), piano)
         :return: the miditoolkit instrument object and tempo changes
         """
-        raise NotImplementedError(
-            "tokens_to_track not implemented for Octuple, use tokens_to_midi instead"
-        )
+        pass
 
-    def _create_vocabulary(self, sos_eos_tokens: bool = None) -> List[List[str]]:
+    def _create_base_vocabulary(self, sos_eos_tokens: bool = None) -> List[List[str]]:
         r"""Creates the vocabulary, as a list of string events.
         Each event will be given as the form of "Type_Value", separated with an underscore.
         Example: Pitch_58
@@ -561,7 +540,7 @@ class MuMIDI(MIDITokenizer):
         return dic
 
     @_in_as_complete_seq
-    def token_types_errors(self, tokens: Union[Sequence, List[List[int]]]) -> float:
+    def token_types_errors(self, tokens: Union[TokSequence, List, np.ndarray, Any]) -> float:
         r"""Checks if a sequence of tokens is made of good token types
         successions and returns the error ratio (lower is better).
         The Pitch and Position values are also analyzed:
@@ -572,23 +551,23 @@ class MuMIDI(MIDITokenizer):
         :param tokens: sequence of tokens to check
         :return: the error ratio (lower is better)
         """
-        tokens = tokens.ids
+        tokens = tokens.tokens
         err = 0
-        previous_type = self.token_type(tokens[0][0], 0)
+        previous_type = tokens[0][0].split("_")[0]
         current_pitches = []
-        current_bar = int(self[1, tokens[0][1]].split("_")[1])
-        current_pos = self[2, tokens[0][2]].split("_")[1]
+        current_bar = int(tokens[0][1].split("_")[1])
+        current_pos = tokens[0][2].split("_")[1]
         current_pos = int(current_pos) if current_pos != "None" else -1
 
         for token in tokens[1:]:
             # debug = {j: self.tokens_to_events([tokens[1:][j]])[0] for j in range(i - 4, min(i + 4, len(tokens[1:])))}
-            bar_value = int(self[1, token[1]].split("_")[1])
-            pos_value = self[2, token[2]].split("_")[1]
+            bar_value = int(token[1].split("_")[1])
+            pos_value = token[2].split("_")[1]
             pos_value = int(pos_value) if pos_value != "None" else -1
-            token_type, token_value = self[0, token[0]].split("_")
+            token_type, token_value = token[0].split("_")
 
             if any(
-                self[i, tok].split("_")[0] in ["PAD", "MASK"]
+                tok.split("_")[0] in ["PAD", "MASK"]
                 for i, tok in enumerate(token)
             ):
                 err += 1

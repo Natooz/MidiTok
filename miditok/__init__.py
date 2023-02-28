@@ -7,7 +7,7 @@ from .mumidi import MuMIDI
 from .octuple import Octuple
 from .octuple_mono import OctupleMono
 from .midi_tokenizer_base import MIDITokenizer
-from .classes import Event, Sequence
+from .classes import Event, TokSequence
 
 from .utils import utils
 from .data_augmentation import data_augmentation

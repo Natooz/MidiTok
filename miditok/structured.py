@@ -1,12 +1,12 @@
 
-from typing import List, Tuple, Dict, Optional, Union
+from typing import List, Tuple, Dict, Optional, Union, Any
 from pathlib import Path
 
 import numpy as np
 from miditoolkit import Instrument, Note, TempoChange
 
 from .midi_tokenizer_base import MIDITokenizer, _in_as_complete_seq, _out_as_complete_seq
-from .classes import Sequence, Event
+from .classes import TokSequence, Event
 from .constants import (
     PITCH_RANGE,
     NB_VELOCITIES,
@@ -69,7 +69,7 @@ class Structured(MIDITokenizer):
         )
 
     @_out_as_complete_seq
-    def track_to_tokens(self, track: Instrument) -> Sequence:
+    def track_to_tokens(self, track: Instrument) -> TokSequence:
         r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
 
         :param track: MIDI track to convert
@@ -172,40 +172,41 @@ class Structured(MIDITokenizer):
 
         events.sort(key=lambda x: x.time)
 
-        return Sequence(events=events)
+        return TokSequence(events=events)
 
     @_in_as_complete_seq
     def tokens_to_track(
         self,
-        tokens: List[int],
+        tokens: Union[TokSequence, List, np.ndarray, Any],
         time_division: Optional[int] = TIME_DIVISION,
         program: Optional[Tuple[int, bool]] = (0, False),
     ) -> Tuple[Instrument, List[TempoChange]]:
-        r"""Converts a sequence of tokens into a track object
+        r"""Converts a sequence of tokens into a track object.
 
-        :param tokens: sequence of tokens to convert
+        :param tokens: sequence of tokens to convert. Can be either a Tensor (PyTorch and Tensorflow are supported),
+                a numpy array, a Python list or a TokSequence.
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create)
         :param program: the MIDI program of the produced track and if it drum, (default (0, False), piano)
         :return: the miditoolkit instrument object and a "Dummy" tempo change
         """
-        events = tokens.events
+        tokens = tokens.tokens
 
         name = "Drums" if program[1] else MIDI_INSTRUMENTS[program[0]]["name"]
         instrument = Instrument(program[0], is_drum=program[1], name=name)
         current_tick = 0
         count = 0
 
-        while count < len(events):
-            if events[count].type == "Pitch":
+        while count < len(tokens):
+            if tokens[count].split("_")[0] == "Pitch":
                 if (
-                    count + 2 < len(events)
-                    and events[count + 1].type == "Velocity"
-                    and events[count + 2].type == "Duration"
+                    count + 2 < len(tokens)
+                    and tokens[count + 1].split("_")[0] == "Velocity"
+                    and tokens[count + 2].split("_")[0] == "Duration"
                 ):
-                    pitch = int(events[count].value)
-                    vel = int(events[count + 1].value)
+                    pitch = int(tokens[count].split("_")[1])
+                    vel = int(tokens[count + 1].split("_")[1])
                     duration = self._token_duration_to_ticks(
-                        events[count + 2].value, time_division
+                        tokens[count + 2].split("_")[1], time_division
                     )
                     instrument.notes.append(
                         Note(vel, pitch, current_tick, current_tick + duration)
@@ -213,8 +214,8 @@ class Structured(MIDITokenizer):
                     count += 3
                 else:
                     count += 1
-            elif events[count].type == "TimeShift":
-                beat, pos, res = map(int, events[count].value.split("."))
+            elif tokens[count].split("_")[0] == "TimeShift":
+                beat, pos, res = map(int, tokens[count].split("_")[1].split("."))
                 current_tick += (beat * res + pos) * time_division // res  # time shift
                 count += 1
             else:
@@ -222,7 +223,7 @@ class Structured(MIDITokenizer):
 
         return instrument, [TempoChange(TEMPO, 0)]
 
-    def _create_vocabulary(self, sos_eos_tokens: bool = None) -> List[str]:
+    def _create_base_vocabulary(self, sos_eos_tokens: bool = None) -> List[str]:
         r"""Creates the vocabulary, as a list of string events.
         Each event will be given as the form of "Type_Value", separated with an underscore.
         Example: Pitch_58

@@ -1,12 +1,12 @@
 
-from typing import List, Tuple, Dict, Optional, Union
+from typing import List, Tuple, Dict, Optional, Union, Any
 from pathlib import Path
 
 import numpy as np
 from miditoolkit import Instrument, Note, TempoChange
 
 from .midi_tokenizer_base import MIDITokenizer, _in_as_complete_seq, _out_as_complete_seq
-from .classes import Sequence, Event
+from .classes import TokSequence, Event
 from .utils import detect_chords
 from .constants import (
     PITCH_RANGE,
@@ -70,7 +70,7 @@ class REMI(MIDITokenizer):
         )
 
     @_out_as_complete_seq
-    def track_to_tokens(self, track: Instrument) -> Sequence:
+    def track_to_tokens(self, track: Instrument) -> TokSequence:
         r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
 
         :param track: MIDI track to convert
@@ -236,18 +236,19 @@ class REMI(MIDITokenizer):
 
         events.sort(key=lambda x: (x.time, self._order(x)))
 
-        return Sequence(events=events)
+        return TokSequence(events=events)
 
     @_in_as_complete_seq
     def tokens_to_track(
         self,
-        tokens: List[int],
+        tokens: Union[TokSequence, List, np.ndarray, Any],
         time_division: Optional[int] = TIME_DIVISION,
         program: Optional[Tuple[int, bool]] = (0, False),
     ) -> Tuple[Instrument, List[TempoChange]]:
         r"""Converts a sequence of tokens into a track object
 
-        :param tokens: sequence of tokens to convert
+        :param tokens: sequence of tokens to convert. Can be either a Tensor (PyTorch and Tensorflow are supported),
+                a numpy array, a Python list or a TokSequence.
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create)
         :param program: the MIDI program of the produced track and if it drum, (default (0, False), piano)
         :return: the miditoolkit instrument object and tempo changes
@@ -255,7 +256,7 @@ class REMI(MIDITokenizer):
         assert (
                 time_division % max(self._beat_res.values()) == 0
         ), f"Invalid time division, please give one divisible by {max(self._beat_res.values())}"
-        events = tokens.events
+        tokens = tokens.tokens
 
         ticks_per_sample = time_division // max(self._beat_res.values())
         ticks_per_bar = time_division * 4
@@ -268,42 +269,42 @@ class REMI(MIDITokenizer):
         current_tick = 0
         current_bar = -1
         previous_note_end = 0
-        for ei, event in enumerate(events):
-            if event.type == "Bar":
+        for ti, token in enumerate(tokens):
+            if token.split("_")[0] == "Bar":
                 current_bar += 1
                 current_tick = current_bar * ticks_per_bar
-            elif event.type == "Rest":
-                beat, pos = map(int, events[ei].value.split("."))
+            elif token.split("_")[0] == "Rest":
+                beat, pos = map(int, tokens[ti].split("_")[1].split("."))
                 if (
                     current_tick < previous_note_end
                 ):  # if in case successive rest happen
                     current_tick = previous_note_end
                 current_tick += beat * time_division + pos * ticks_per_sample
                 current_bar = current_tick // ticks_per_bar
-            elif event.type == "Position":
+            elif token.split("_")[0] == "Position":
                 if current_bar == -1:
                     current_bar = (
                         0  # as this Position token occurs before any Bar token
                     )
                 current_tick = (
-                    current_bar * ticks_per_bar + int(event.value) * ticks_per_sample
+                    current_bar * ticks_per_bar + int(token.split("_")[1]) * ticks_per_sample
                 )
-            elif event.type == "Tempo":
+            elif token.split("_")[0] == "Tempo":
                 # If your encoding include tempo tokens, each Position token should be followed by
                 # a tempo token, but if it is not the case this method will skip this step
-                tempo = int(event.value)
+                tempo = int(token.split("_")[1])
                 if tempo != tempo_changes[-1].tempo:
                     tempo_changes.append(TempoChange(tempo, current_tick))
-            elif event.type == "Pitch":
+            elif token.split("_")[0] == "Pitch":
                 try:
                     if (
-                        events[ei + 1].type == "Velocity"
-                        and events[ei + 2].type == "Duration"
+                        tokens[ti + 1].split("_")[0] == "Velocity"
+                        and tokens[ti + 2].split("_")[0] == "Duration"
                     ):
-                        pitch = int(events[ei].value)
-                        vel = int(events[ei + 1].value)
+                        pitch = int(tokens[ti].split("_")[1])
+                        vel = int(tokens[ti + 1].split("_")[1])
                         duration = self._token_duration_to_ticks(
-                            events[ei + 2].value, time_division
+                            tokens[ti + 2].split("_")[1], time_division
                         )
                         instrument.notes.append(
                             Note(vel, pitch, current_tick, current_tick + duration)
@@ -321,7 +322,7 @@ class REMI(MIDITokenizer):
         tempo_changes[0].time = 0
         return instrument, tempo_changes
 
-    def _create_vocabulary(self, sos_eos_tokens: bool = None) -> List[str]:
+    def _create_base_vocabulary(self, sos_eos_tokens: bool = None) -> List[str]:
         r"""Creates the vocabulary, as a list of string events.
         Each event will be given as the form of "Type_Value", separated with an underscore.
         Example: Pitch_58

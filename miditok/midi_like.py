@@ -1,12 +1,12 @@
 
-from typing import List, Tuple, Dict, Optional, Union
+from typing import List, Tuple, Dict, Optional, Union, Any
 from pathlib import Path
 
 import numpy as np
 from miditoolkit import Instrument, Note, TempoChange
 
 from .midi_tokenizer_base import MIDITokenizer, _in_as_complete_seq, _out_as_complete_seq
-from .classes import Sequence, Event
+from .classes import TokSequence, Event
 from .utils import detect_chords
 from .constants import (
     PITCH_RANGE,
@@ -66,7 +66,7 @@ class MIDILike(MIDITokenizer):
         )
 
     @_out_as_complete_seq
-    def track_to_tokens(self, track: Instrument) -> Sequence:
+    def track_to_tokens(self, track: Instrument) -> TokSequence:
         r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
         (can probably be achieved faster with Mido objects)
 
@@ -211,19 +211,20 @@ class MIDILike(MIDITokenizer):
 
         events.sort(key=lambda x: (x.time, self._order(x)))
 
-        return Sequence(events=events)
+        return TokSequence(events=events)
 
     @_in_as_complete_seq
     def tokens_to_track(
         self,
-        tokens: List[int],
+        tokens: Union[TokSequence, List, np.ndarray, Any],
         time_division: Optional[int] = TIME_DIVISION,
         program: Optional[Tuple[int, bool]] = (0, False),
         default_duration: int = None,
     ) -> Tuple[Instrument, List[TempoChange]]:
         r"""Converts a sequence of tokens into a track object
 
-        :param tokens: sequence of tokens to convert
+        :param tokens: sequence of tokens to convert. Can be either a Tensor (PyTorch and Tensorflow are supported),
+                a numpy array, a Python list or a TokSequence.
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create)
         :param program: the MIDI program of the produced track and if it drum, (default (0, False), piano)
         :param default_duration: default duration (in ticks) in case a Note On event occurs without its associated
@@ -231,7 +232,7 @@ class MIDILike(MIDITokenizer):
         :return: the miditoolkit instrument object and tempo changes
         """
         ticks_per_sample = time_division // max(self._beat_res.values())
-        events = tokens.events
+        events = tokens.events if tokens.events is not None else [Event(*tok.split("_")) for tok in tokens.tokens]
 
         max_duration = self._durations[-1][0] * time_division + self._durations[-1][1] * (
             time_division // self._durations[-1][2]
@@ -301,7 +302,7 @@ class MIDILike(MIDITokenizer):
         tempo_changes[0].time = 0
         return instrument, tempo_changes
 
-    def _create_vocabulary(self) -> List[str]:
+    def _create_base_vocabulary(self) -> List[str]:
         r"""Creates the vocabulary, as a list of string events.
         Each event will be given as the form of "Type_Value", separated with an underscore.
         Example: Pitch_58
@@ -380,7 +381,7 @@ class MIDILike(MIDITokenizer):
         return dic
 
     @_in_as_complete_seq
-    def token_types_errors(self, tokens: Union[Sequence, List[int]]) -> float:
+    def token_types_errors(self, tokens: Union[TokSequence, List, np.ndarray, Any]) -> float:
         r"""Checks if a sequence of tokens is made of good token types
         successions and returns the error ratio (lower is better).
         The Pitch and Position values are also analyzed:
@@ -391,7 +392,6 @@ class MIDILike(MIDITokenizer):
         :return: the error ratio (lower is better)
         """
         nb_tok_predicted = len(tokens)  # used to norm the score
-        tokens = self.decompose_bpe(tokens) if self.has_bpe else tokens
 
         # Override from here
 
@@ -402,7 +402,7 @@ class MIDILike(MIDITokenizer):
                 max(self._beat_res.values()) // self._durations[-1][2]
         )
 
-        events = tokens.events
+        events = tokens.events if tokens.events is not None else [Event(*tok.split("_")) for tok in tokens.tokens]
 
         for i in range(1, len(events)):
             # Good token type
