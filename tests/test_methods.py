@@ -23,19 +23,14 @@ def test_convert_tensors():
     original = [[2, 6, 87, 89, 25, 15]]
     types = [ptTensor, ptIntTensor, ptFloatTensor, tfTensor]
 
-    def nothing(tokens):
-        return tokens
-
     tokenizer = miditok.TSD()
     for type_ in types:
         if type_ == tfTensor:
             tensor = convert_to_tensor(original)
         else:
             tensor = type_(original)
-        tokenizer(tensor)  # to make sure it passes
-        as_list = miditok.midi_tokenizer_base.convert_tokens_tensors_to_list(nothing)(
-            tensor
-        )
+        tokenizer(tensor)  # to make sure it passes as decorator
+        as_list = miditok.midi_tokenizer.convert_ids_tensors_to_list(tensor)
         assert as_list == original
 
 
@@ -173,23 +168,23 @@ def test_data_augmentation():
             vel_voc_idx = tokenizer.vocab_types_idx["Velocity"]
             dur_voc_idx = tokenizer.vocab_types_idx["Duration"]
             pitch_tokens = np.array(
-                tokenizer.vocab[pitch_voc_idx].tokens_of_type("Pitch")
+                tokenizer.tokens_of_type("Pitch", pitch_voc_idx)
             )
             vel_tokens = np.array(
-                tokenizer.vocab[vel_voc_idx].tokens_of_type("Velocity")
+                tokenizer.tokens_of_type("Velocity", vel_voc_idx)
             )
             dur_tokens = np.array(
-                tokenizer.vocab[dur_voc_idx].tokens_of_type("Duration")
+                tokenizer.tokens_of_type("Duration", dur_voc_idx)
             )
         else:
             pitch_tokens = np.array(
-                tokenizer.vocab.tokens_of_type("Pitch")
-                + tokenizer.vocab.tokens_of_type("NoteOn")
+                tokenizer.tokens_of_type("Pitch")
+                + tokenizer.tokens_of_type("NoteOn")
             )
-            vel_tokens = np.array(tokenizer.vocab.tokens_of_type("Velocity"))
-            dur_tokens = np.array(tokenizer.vocab.tokens_of_type("Duration"))
+            vel_tokens = np.array(tokenizer.tokens_of_type("Velocity"))
+            dur_tokens = np.array(tokenizer.tokens_of_type("Duration"))
             note_off_tokens = np.array(
-                tokenizer.vocab.tokens_of_type("NoteOff")
+                tokenizer.tokens_of_type("NoteOff")
             )  # for MidiLike
         tok_vel_min, tok_vel_max = vel_tokens[0], vel_tokens[-1]
         tok_dur_min, tok_dur_max = None, None
@@ -209,10 +204,10 @@ def test_data_augmentation():
             # Loads tokens to compare
             with open(aug_token_path) as json_file:
                 file = json.load(json_file)
-                aug_tokens, aug_programs = file["tokens"], file["programs"]
+                aug_tokens, aug_programs = file["ids"], file["programs"]
             with open(tokens_path / f"{original_stem}.json") as json_file:
                 file = json.load(json_file)
-                original_tokens, original_programs = file["tokens"], file["programs"]
+                original_tokens, original_programs = file["ids"], file["programs"]
 
             # Compare them
             if tokenizer.unique_track:

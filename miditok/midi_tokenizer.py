@@ -25,7 +25,7 @@ from .constants import TIME_DIVISION, CURRENT_VERSION_PACKAGE, PITCH_RANGE, BEAT
 
 def _in_as_seq(complete: bool = True, decode_bpe: bool = True):
     """Decorator creating if necessary and completing a Sequence object before that the function is called.
-    ``track_to_tokens``
+    This decorator is used by the :py:meth:`miditok.MIDITokenizer.track_to_tokens` method.
     :param complete: will complete the sequence.
     :param decode_bpe: will decode BPE, if applicable. This step is performed before completing the sequence.
     """
@@ -35,17 +35,18 @@ def _in_as_seq(complete: bool = True, decode_bpe: bool = True):
             seq = args[1]
             if not isinstance(seq, TokSequence):
                 ids = tokens = events = None
-                if isinstance(seq[0], int) or (isinstance(seq[0], list) and isinstance(seq[0][0], int)):
+                try:
                     ids = convert_ids_tensors_to_list(seq)
-                elif isinstance(seq[0], str) or (isinstance(seq[0], str) and isinstance(seq[0][0], str)):
-                    tokens = seq
-                else:  # list of Event, very unlikely
-                    events = seq
+                except:
+                    if isinstance(seq[0], str) or (isinstance(seq[0], str) and isinstance(seq[0][0], str)):
+                        tokens = seq
+                    else:  # list of Event, very unlikely
+                        events = seq
 
                 seq = TokSequence(ids=ids, tokens=tokens, events=events)
 
             if self.has_bpe and decode_bpe:
-                self.decompose_bpe(seq)
+                self.decode_bpe(seq)
             if complete:
                 self.complete_sequence(seq)
 
@@ -120,7 +121,7 @@ class MIDITokenizer(ABC):
         self._vocab_base_byte_to_token = {}  # byte (str) -> token (str), for basic tokens
         self._vocab_bpe_bytes_to_tokens = {}  # byte(s) -> token(s)
         self.has_bpe = False
-        self.__bpe_slow = False  # to route to slow BPE methods
+        self._bpe_slow = False  # to route to slow BPE methods
         if special_tokens is not None:
             special_tokens = [f"{tok}_None" for tok in special_tokens]
         else:
@@ -190,17 +191,20 @@ class MIDITokenizer(ABC):
             self._time_signatures = self.__create_time_signatures()
 
         # Vocabulary and token types graph
-        if len(self.vocab) == 0:  # in case it was already loaded by an overridden load_params method, such as with BPE
+        if len(self.vocab) == 0:  # in case it was not already loaded by load_params, such as with BPE
             self.__create_vocabulary()
-            self._vocab_base_id_to_byte = {i: chr(i + CHR_ID_START) for i in range(len(self._vocab_base))}
-            self._vocab_base_byte_to_token = {chr(i + CHR_ID_START): ev for ev, i in self._vocab_base.items()}
+            if not self.is_multi_voc:
+                self._vocab_base_id_to_byte = {i: chr(i + CHR_ID_START) for i in range(len(self._vocab_base))}
+                self._vocab_base_byte_to_token = {chr(i + CHR_ID_START): ev for ev, i in self._vocab_base.items()}
         self.tokens_types_graph = self._create_token_types_graph()
         if "BOS" in special_tokens or "EOS" in special_tokens:
             self._add_bos_eos_to_types_graph()
+        self._token_types_indexes = {}
+        self._update_token_types_indexes()
 
         # Slow BPE attributes
         self.__bpe_successions = {}
-        if self.__bpe_slow:  # loaded from config file TODO retrieve slow_bpe attribute from loading params, or property ?
+        if self._bpe_slow:  # loaded from config file
             self.__set_bpe_slow_tokens_successions()
 
         # Keep in memory durations in ticks for seen time divisions so these values
@@ -465,7 +469,7 @@ class MIDITokenizer(ABC):
         if seq.ids is None:
             seq.ids = self._tokens_to_ids(seq.tokens)
 
-        if self.has_bpe:  # TODO handle the case where ids are bpe encoded with vocab
+        if self.has_bpe and not self._bpe_slow:
             if seq.bytes is None:
                 seq.bytes = self._ids_to_bytes(seq.ids, as_one_str=True)
 
@@ -488,7 +492,8 @@ class MIDITokenizer(ABC):
         self, ids: List[Union[int, List[int]]], as_str: bool = True
     ) -> List[Union[Union[str, Event], List[Union[str, Event]]]]:
         r"""Convert a sequence of tokens in their respective event objects.
-        BPE tokens will be decoded.
+        **This method will not work with ids encoded with BPE. You will need to decode them
+        first (:py:meth:`miditok.MIDITokenizer.decode_bpe`).**
 
         :param ids: sequence of tokens to convert.
         :param as_str: return the tokens as string objects, otherwise Event objects (default: True)
@@ -504,8 +509,7 @@ class MIDITokenizer(ABC):
                 tokens.append(multi_event)
             return tokens
 
-        ids_ = self.decompose_bpe(ids) if self.has_bpe else ids
-        for id_ in ids_:
+        for id_ in ids:
             event_str = self[id_]
             tokens.append(event_str if as_str else Event(*event_str.split("_")))
         return tokens
@@ -640,6 +644,38 @@ class MIDITokenizer(ABC):
             vocab = self.special_tokens + vocab
             for tok in vocab:
                 self.add_to_vocab(tok)
+
+    def _update_token_types_indexes(self):
+        r"""Updates the _token_types_indexes attribute according to _event_to_token."""
+
+        def create_for_dict(voc: Dict[str, int]):
+            types_ = {}
+            for event, token in voc.items():
+                token_type = event.split("_")[0]
+                if token_type in types_:
+                    types_[token_type].append(token)
+                else:
+                    types_[token_type] = [token]
+            return types_
+
+        if self.is_multi_voc:
+            self._token_types_indexes = []
+            for voc_i in self._vocab_base:
+                self._token_types_indexes.append(create_for_dict(voc_i))
+        else:
+            self._token_types_indexes = create_for_dict(self._vocab_base)
+
+    def tokens_of_type(self, token_type: str, vocab_id: int = None) -> List[int]:
+        r"""Returns the list of tokens of the given type.
+        :param token_type: token type to get the associated tokens
+        :param vocab_id: index of the vocabulary associated to the token, if applicable. (default: None)
+        :return: list of tokens
+        """
+        try:
+            return self._token_types_indexes[token_type] if vocab_id is None \
+                else self._token_types_indexes[vocab_id][token_type]
+        except KeyError:  # no tokens of this type, returns an empty list
+            return []
 
     def add_to_vocab(self, event: Union[str, Event], vocab_idx: int = None):
         r"""Adds an event to the vocabulary. Its index (int) will be the length of the vocab.
@@ -912,9 +948,13 @@ class MIDITokenizer(ABC):
         self._bpe_model = tokenizer
         self.has_bpe = True
 
-    def apply_bpe(self, seq: Union[TokSequence, List[TokSequence]]) -> Union[TokSequence, List[TokSequence]]:
+    def apply_bpe(self, seq: Union[TokSequence, List[TokSequence]]):
+        """Applies Byte Pair Encoding (BPE) to a TokSequence, or list of TokSequences.
+        If a list is given, BPE will be applied by batch on all sequences at the time.
 
-        if self.__bpe_slow:  # will call slow encoding method, one seq at a time
+        :param seq: Sequence(s) to apply BPE.
+        """
+        if self._bpe_slow:  # will call slow encoding method, one seq at a time
             if isinstance(seq, list):
                 for seq_ in seq:
                     seq_.ids = self.__apply_bpe_slow(seq_.ids)
@@ -923,12 +963,13 @@ class MIDITokenizer(ABC):
                 seq.ids = self.__apply_bpe_slow(seq.ids)
                 seq.ids_bpe_encoded = True
 
-        elif isinstance(seq, list):  # TODO batch it
+        elif isinstance(seq, list):
             for seq_ in seq:
                 self.complete_sequence(seq_)
-            '''encoded_tokens2 = self._bpe_model.encode_batch([t.bytes for t in seq], is_pretokenized=True).ids
-            for seq, bpe_tokens in zip(encoded_tokens, encoded_tokens):
-                seq.ids = bpe_tokens'''
+            encoded_tokens = self._bpe_model.encode_batch([[t.bytes] for t in seq], is_pretokenized=True)
+            for seq_, bpe_tokens in zip(seq, encoded_tokens):
+                seq_.ids = bpe_tokens.ids
+                seq_.ids_bpe_encoded = False
 
         else:
             self.complete_sequence(seq)
@@ -1090,7 +1131,7 @@ class MIDITokenizer(ABC):
         # Saves dictionary and prints the difference in sequence length
         pbar.close()
         self.has_bpe = True
-        self.__bpe_slow = True
+        self._bpe_slow = True
         self.__set_bpe_slow_tokens_successions()
         if save_converted_samples:
             for sample, path in zip(samples, samples_paths):
@@ -1206,31 +1247,50 @@ class MIDITokenizer(ABC):
                 sample["programs"],
             )
 
-    def decompose_bpe(self, tokens: List[int]) -> List[int]:
-        r"""Decomposes a sequence of tokens containing BP encoded tokens into "prime" tokens.
-        It is an inplace operation. TODO for fast bpe
-        # TODO adapt calls
+    def decode_bpe(self, seq: Union[TokSequence, List[TokSequence]]):
+        r"""Decomposes (inplace) a sequence of tokens containing BPE encoded ids into "prime" tokens.
+        This method only modify the ``.ids`` attribute of the input sequence(s).
 
-        :param tokens: token sequence to decompose.
+        :param seq: token sequence to decompose.
+        """
+
+        if self._bpe_slow:  # will call slow encoding method, one seq at a time
+            if isinstance(seq, list):
+                [self.decode_bpe(seq_) for seq_ in seq]
+            else:
+                seq.ids = self.__decode_bpe_slow(seq.ids)
+                seq.ids_bpe_encoded = False
+
+        elif isinstance(seq, list):
+            [self.decode_bpe(seq_) for seq_ in seq]
+
+        else:
+            encoded_bytes = [self._bpe_model.id_to_token(id_) for id_ in seq.ids]
+            decoded_tokens = [self._vocab_bpe_bytes_to_tokens[byte_] for byte_ in encoded_bytes]
+            decoded_tokens = [item for sublist in decoded_tokens for item in sublist]  # flatten
+            seq.tokens = decoded_tokens
+            seq.ids = self._tokens_to_ids(decoded_tokens)
+            seq.ids_bpe_encoded = False
+
+    def __decode_bpe_slow(self, ids: List[int]) -> List[int]:
+        r"""Decomposes a sequence of tokens containing BP encoded tokens into "base" tokens.
+        It is an inplace operation.
+
+        :param ids: token sequence to decompose.
         :return: decomposed token sequence.
         """
-
-        """
-        decoded_events = [tokenizer.vocab_bpe_bytes_to_events[tok] for tok in encoded_tokens.tokens]
-        decoded_events = [item for sublist in decoded_events for item in sublist]
-        """
-        tokens = deepcopy(tokens)
+        ids = deepcopy(ids)
         i = 0
-        while i < len(tokens):
-            token_type, token_val = self[tokens[i]].split("_")
+        while i < len(ids):
+            token_type, token_val = self[ids[i]].split("_")
             if token_type == "BPE":
-                del tokens[i]
+                del ids[i]
                 for j, to_insert in enumerate(
                     map(int, token_val.split(".")[1].split("-"))
                 ):
-                    tokens.insert(i + j, to_insert)
+                    ids.insert(i + j, to_insert)
             i += 1
-        return tokens
+        return ids
 
     def tokenize_midi_dataset(
         self,
@@ -1319,7 +1379,7 @@ class MIDITokenizer(ABC):
         """
         nb_tok_predicted = len(tokens)  # used to norm the score
         if self.has_bpe:
-            self.decompose_bpe(tokens)
+            self.decode_bpe(tokens)
         self.complete_sequence(tokens)
 
         # Override from here
@@ -1398,7 +1458,7 @@ class MIDITokenizer(ABC):
                 self.complete_sequence(seq)
                 ids.append(seq.ids)
         else:
-            ids = convert_ids_tensors_to_list(ids)
+            ids = convert_ids_tensors_to_list(tokens)
 
         with open(path, "w") as outfile:
             json.dump(
@@ -1437,9 +1497,11 @@ class MIDITokenizer(ABC):
         if (
             self.has_bpe and "_vocab_base" not in additional_attributes
         ):  # saves whole vocab if BPE
+            additional_attributes["_bpe_slow"] = self._bpe_slow
             additional_attributes["_vocab_base"] = self._vocab_base
-            additional_attributes["_vocab_base_byte_to_token"] = self._vocab_base_byte_to_token
-            additional_attributes["vocab_bpe"] = self._bpe_model.get_vocab()
+            if not self._bpe_slow:
+                additional_attributes["_bpe_model"] = self._bpe_model.to_str()
+                additional_attributes["_vocab_base_byte_to_token"] = self._vocab_base_byte_to_token
 
         params = {
             "_pitch_range": (self._pitch_range.start, self._pitch_range.stop),
@@ -1483,21 +1545,16 @@ class MIDITokenizer(ABC):
                 self._vocab_base = value
                 self.__vocab_base_inv = {v: k for k, v in value.items()}
                 continue
-            elif key == "vocab_bpe":
-                self._bpe_model = TokenizerFast(
-                    BPE(
-                        vocab=value,
-                        merges=[],
-                        dropout=None,
-                        continuing_subword_prefix="",
-                        end_of_word_suffix="",
-                        fuse_unk=False,
-                    )
-                )
+            elif key == "_bpe_model":
+                self._bpe_model = TokenizerFast.from_str(value)  # using 🤗tokenizers builtin method
                 continue
             elif key == "_vocab_base_byte_to_token":
+                self._vocab_base_byte_to_token = value
                 token_to_byte = {v: k for k, v in value.items()}
                 self._vocab_base_id_to_byte = {i: token_to_byte[tok] for tok, i in self._vocab_base.items()}
+                self._vocab_bpe_bytes_to_tokens = {k: [self._vocab_base_byte_to_token[b] for b in k]
+                                                   for k in self._bpe_model.get_vocab()}
+                continue
 
             setattr(self, key, value)
 

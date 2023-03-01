@@ -57,8 +57,8 @@ def test_bpe_conversion(
         )
         tokenizer.tokenize_midi_dataset(files, Path("tests", "test_results", tokenization))
         tokenizer.learn_bpe_slow(
-            data_path / tokenization,
-            len(tokenizer.vocab) + 60,
+            Path("tests", "test_results", tokenization),
+            len(tokenizer.vocab) + 30,
             out_dir=Path("tests", "test_results", f"{tokenization}_bpe"),
             files_lim=None,
             save_converted_samples=True,
@@ -90,16 +90,20 @@ def test_bpe_conversion(
                 Path("tests", "test_results", tokenization, f"{file_path.stem}.json")
             ) as json_file:
                 tokens_no_bpe = json.load(json_file)["ids"][0]  # no BPE
-            tokens_no_bpe2 = tokenizer.decompose_bpe(deepcopy(tokens))  # BPE decomposed
+            tokens_no_bpe = miditok.TokSequence(ids=tokens_no_bpe, ids_bpe_encoded=True)
+            tokens_bpe_decomposed = deepcopy(tokens)  # BPE decomposed
+            tokenizer.decode_bpe(tokens_bpe_decomposed)  # BPE decomposed
             with open(
                 Path("tests", "test_results", f"{tokenization}_bpe", f"{file_path.stem}.json")
             ) as json_file:
                 saved_tokens = json.load(json_file)["ids"][
                     0
                 ]  # with BPE, saved after creating vocab
-            saved_tokens_decomposed = tokenizer.decompose_bpe(deepcopy(saved_tokens))
+            saved_tokens = miditok.TokSequence(ids=saved_tokens, ids_bpe_encoded=True)
+            saved_tokens_decomposed = deepcopy(saved_tokens)
+            tokenizer.decode_bpe(saved_tokens_decomposed)
             no_error_bpe = tokens == saved_tokens
-            no_error = tokens_no_bpe == tokens_no_bpe2 == saved_tokens_decomposed
+            no_error = tokens_no_bpe == tokens_bpe_decomposed == saved_tokens_decomposed
             if not no_error or not no_error_bpe:
                 at_least_one_error = True
                 print(f"error for {tokenization} and {file_path.name}")

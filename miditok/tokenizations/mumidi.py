@@ -6,10 +6,10 @@ from typing import List, Tuple, Dict, Optional, Union, Any
 import numpy as np
 from miditoolkit import MidiFile, Instrument, Note, TempoChange
 
-from .midi_tokenizer_base import MIDITokenizer, _in_as_seq, _out_as_complete_seq
-from .classes import TokSequence, Event
-from .utils import detect_chords
-from .constants import (
+from ..midi_tokenizer import MIDITokenizer, _in_as_seq, _out_as_complete_seq
+from ..classes import TokSequence, Event
+from ..utils import detect_chords
+from ..constants import (
     PITCH_RANGE,
     NB_VELOCITIES,
     BEAT_RES,
@@ -343,7 +343,7 @@ class MuMIDI(MIDITokenizer):
 
         return tokens
 
-    @_in_as_seq
+    @_in_as_seq()
     def tokens_to_midi(
         self,
         tokens: Union[TokSequence, List, np.ndarray, Any],
@@ -539,7 +539,7 @@ class MuMIDI(MIDITokenizer):
 
         return dic
 
-    @_in_as_seq
+    @_in_as_seq()
     def token_types_errors(self, tokens: Union[TokSequence, List, np.ndarray, Any]) -> float:
         r"""Checks if a sequence of tokens is made of good token types
         successions and returns the error ratio (lower is better).

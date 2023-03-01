@@ -1,12 +1,5 @@
-from .remi import REMI
-from .structured import Structured
-from .midi_like import MIDILike
-from .tsd import TSD
-from .cp_word import CPWord
-from .mumidi import MuMIDI
-from .octuple import Octuple
-from .octuple_mono import OctupleMono
-from .midi_tokenizer_base import MIDITokenizer
+from .tokenizations import MIDILike, REMI, TSD, Structured, Octuple, OctupleMono, CPWord, MuMIDI
+from .midi_tokenizer import MIDITokenizer
 from .classes import Event, TokSequence
 
 from .utils import utils

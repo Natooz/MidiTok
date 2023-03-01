@@ -6,9 +6,9 @@ from typing import List, Tuple, Dict, Optional, Union, Any
 import numpy as np
 from miditoolkit import MidiFile, Instrument, Note, TempoChange, TimeSignature
 
-from .midi_tokenizer_base import MIDITokenizer, _in_as_seq, _out_as_complete_seq
-from .classes import TokSequence, Event
-from .constants import (
+from ..midi_tokenizer import MIDITokenizer, _in_as_seq, _out_as_complete_seq
+from ..classes import TokSequence, Event
+from ..constants import (
     PITCH_RANGE,
     NB_VELOCITIES,
     BEAT_RES,
@@ -299,7 +299,7 @@ class Octuple(MIDITokenizer):
 
         return tokens
 
-    @_in_as_seq
+    @_in_as_seq()
     def tokens_to_midi(
         self,
         tokens: Union[TokSequence, List, np.ndarray, Any],
@@ -502,7 +502,7 @@ class Octuple(MIDITokenizer):
         """
         return {}  # not relevant for this encoding
 
-    @_in_as_seq
+    @_in_as_seq()
     def token_types_errors(self, tokens: Union[TokSequence, List, np.ndarray, Any]) -> float:
         r"""Checks if a sequence of tokens is made of good token values and
         returns the error ratio (lower is better).

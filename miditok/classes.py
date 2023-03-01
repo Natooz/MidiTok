@@ -44,5 +44,25 @@ class TokSequence:
     ids_bpe_encoded: bool = False
     _ids_no_bpe: List[Union[int, List[int]]] = None
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.ids)
+
+    def __eq__(self, other) -> bool:
+        """Checks if too sequences are equal.
+        This is performed by comparing their attributes (ids, tokens...).
+        **Both sequences must have at least one common attribute initialized (not None) for this method to work,
+        otherwise it will return False.**
+
+        :param other: other sequence to compare.
+        :return: True if the sequences have equal attributes.
+        """
+        # Start from True assumption as some attributes might be unfilled (None)
+        attributes = ["tokens", "ids", "bytes", "events"]
+        eq = [True for _ in attributes]
+        common_attr = False
+        for i, attr in enumerate(attributes):
+            if getattr(self, attr) is not None and getattr(other, attr) is not None:
+                eq[i] = getattr(self, attr) == getattr(other, attr)
+                common_attr = True
+
+        return all(eq) if common_attr else False

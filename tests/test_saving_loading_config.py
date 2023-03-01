@@ -27,7 +27,7 @@ def test_saving_loading_tokenizer():
     r"""Tests to create tokenizers, save their config, and load it back.
     If all went well the tokenizer should be identical.
     """
-    encodings = [
+    tokenizations = [
         "MIDILike",
         "TSD",
         "Structured",
@@ -38,19 +38,19 @@ def test_saving_loading_tokenizer():
         "MuMIDI",
     ]
 
-    for encoding in encodings:
+    for tokenization in tokenizations:
         add_tokens = deepcopy(ADDITIONAL_TOKENS_TEST)
-        tokenizer: miditok.MIDITokenizer = getattr(miditok, encoding)(
+        tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
             additional_tokens=add_tokens
         )
-        tokenizer.save_params(f"./tests/configs/{encoding}.txt")
+        tokenizer.save_params(f"./tests/configs/{tokenization}.txt")
 
-        tokenizer2: miditok.MIDITokenizer = getattr(miditok, encoding)(
-            params=f"./tests/configs/{encoding}.txt"
+        tokenizer2: miditok.MIDITokenizer = getattr(miditok, tokenization)(
+            params=f"./tests/configs/{tokenization}.txt"
         )
         assert tokenizer == tokenizer2
-        if encoding == "Octuple":
-            tokenizer.vocab[0].event_to_token["PAD_None"] = 8
+        if tokenization == "Octuple":
+            tokenizer.vocab[0]["PAD_None"] = 8
             assert tokenizer != tokenizer2
 
 
