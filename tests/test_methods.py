@@ -168,23 +168,23 @@ def test_data_augmentation():
             vel_voc_idx = tokenizer.vocab_types_idx["Velocity"]
             dur_voc_idx = tokenizer.vocab_types_idx["Duration"]
             pitch_tokens = np.array(
-                tokenizer.tokens_of_type("Pitch", pitch_voc_idx)
+                tokenizer.token_ids_of_type("Pitch", pitch_voc_idx)
             )
             vel_tokens = np.array(
-                tokenizer.tokens_of_type("Velocity", vel_voc_idx)
+                tokenizer.token_ids_of_type("Velocity", vel_voc_idx)
             )
             dur_tokens = np.array(
-                tokenizer.tokens_of_type("Duration", dur_voc_idx)
+                tokenizer.token_ids_of_type("Duration", dur_voc_idx)
             )
         else:
             pitch_tokens = np.array(
-                tokenizer.tokens_of_type("Pitch")
-                + tokenizer.tokens_of_type("NoteOn")
+                tokenizer.token_ids_of_type("Pitch")
+                + tokenizer.token_ids_of_type("NoteOn")
             )
-            vel_tokens = np.array(tokenizer.tokens_of_type("Velocity"))
-            dur_tokens = np.array(tokenizer.tokens_of_type("Duration"))
+            vel_tokens = np.array(tokenizer.token_ids_of_type("Velocity"))
+            dur_tokens = np.array(tokenizer.token_ids_of_type("Duration"))
             note_off_tokens = np.array(
-                tokenizer.tokens_of_type("NoteOff")
+                tokenizer.token_ids_of_type("NoteOff")
             )  # for MidiLike
         tok_vel_min, tok_vel_max = vel_tokens[0], vel_tokens[-1]
         tok_dur_min, tok_dur_max = None, None

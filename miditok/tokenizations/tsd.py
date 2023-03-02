@@ -65,11 +65,11 @@ class TSD(MIDITokenizer):
 
     @_out_as_complete_seq
     def track_to_tokens(self, track: Instrument) -> TokSequence:
-        r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
+        r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens (:class:`miditok.TokSequence`).
         (can probably be achieved faster with Mido objects)
 
         :param track: MIDI track to convert
-        :return: sequence of corresponding tokens
+        :return: :class:`miditok.TokSequence` of corresponding tokens.
         """
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
@@ -278,8 +278,8 @@ class TSD(MIDITokenizer):
         return instrument, tempo_changes
 
     def _create_base_vocabulary(self, sos_eos_tokens: bool = False) -> List[str]:
-        r"""Creates the vocabulary, as a list of string events.
-        Each event will be given as the form of "Type_Value", separated with an underscore.
+        r"""Creates the vocabulary, as a list of string tokens.
+        Each token as to be given as the form of "Type_Value", separated with an underscore.
         Example: Pitch_58
         The :class:`miditok.MIDITokenizer` main class will then create the "real" vocabulary as
         a dictionary.

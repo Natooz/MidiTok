@@ -1,6 +1,6 @@
 #!/usr/bin/python3 python
 
-"""Tests Fast BPE encoding - decoding, as well as saving and loading tokenizers with BPE.
+"""Benchmark comparing slow VS fast BPE.
 """
 
 from copy import deepcopy
@@ -29,8 +29,8 @@ ADDITIONAL_TOKENS_TEST = {
 }
 
 
-def test_bpe_conversion(
-    data_path: Union[str, Path, PurePath] = "./tests/Maestro_MIDIs"
+def bpe_benchmark(
+    data_path: Union[str, Path, PurePath] = "./tests/Maestro"
 ):
     r"""Reads a few MIDI files, convert them into token sequences, convert them back to MIDI files.
     The converted back MIDI files should identical to original one, expect with note starting and ending
@@ -40,20 +40,27 @@ def test_bpe_conversion(
     """
     random.seed(777)
     tokenizations = ["Structured", "REMI", "MIDILike", "TSD"]
+    batch_sizes = [1, 16, 64, 128]
     data_path = Path(data_path)
     files = list(data_path.glob("**/*.mid"))
 
-    # Creates tokenizers and computes BPE (build voc)
-    first_tokenizers = []
-    first_samples_bpe = {tok: [] for tok in tokenizations}
+    # Tokenize data
     for tokenization in tokenizations:
         add_tokens = deepcopy(ADDITIONAL_TOKENS_TEST)
         tokenizer = getattr(miditok, tokenization)(
             beat_res=BEAT_RES_TEST, additional_tokens=add_tokens
         )
-        tokenizer.tokenize_midi_dataset(files, Path("tests", "test_results", tokenization))
+        tokenizer.tokenize_midi_dataset(files, Path("tests", "test_results", f"{tokenization}_maestro"))
+
+    # Creates tokenizers and computes BPE (build voc)
+    for tokenization in tokenizations:
+        add_tokens = deepcopy(ADDITIONAL_TOKENS_TEST)
+        tokenizer = getattr(miditok, tokenization)(
+            beat_res=BEAT_RES_TEST, additional_tokens=add_tokens
+        )
+        # tokenizer.tokenize_midi_dataset(files, Path("tests", "test_results", tokenization))
         tokenizer.learn_bpe(
-            vocab_size=400,
+            vocab_size=1000,
             tokens_paths=Path("tests", "test_results", tokenization).glob("**/*.json"),
             files_lim=None,
             load_all_token_files_once=True,
@@ -129,7 +136,7 @@ def test_bpe_conversion(
         t0 = time()
         samples_bpe = deepcopy(samples_no_bpe)
         tokenizer.apply_bpe(samples_bpe)
-        tok_times.append((time() - t0) / len(files))
+        tok_times.append(time() - t0 / len(files))
 
         samples_bpe_decoded = deepcopy(samples_bpe)
         tokenizer.decode_bpe(samples_bpe_decoded)  # BPE decomposed
@@ -146,4 +153,4 @@ def test_bpe_conversion(
 
 
 if __name__ == "__main__":
-    test_bpe_conversion()
+    bpe_benchmark()

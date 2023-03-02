@@ -122,7 +122,7 @@ def test_multitrack_midi_to_tokens_to_midi(
             new_midi.instruments.sort(key=lambda x: (x.program, x.is_drum))
 
             # Checks types and values conformity following the rules
-            tokens_types = tokenizer.token_types_errors(
+            tokens_types = tokenizer.tokens_errors(
                 tokens[0] if not tokenizer.unique_track else tokens
             )
             if tokens_types != 0.0:

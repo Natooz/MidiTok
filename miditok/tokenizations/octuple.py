@@ -179,7 +179,7 @@ class Octuple(MIDITokenizer):
         return TokSequence(tokens=tokens)
 
     def track_to_tokens(self, track: Instrument) -> List[List[Union[Event, str]]]:
-        r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
+        r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens (:class:`miditok.TokSequence`).
         A time step is a list of tokens where:
             (list index: token type)
             0: Pitch (as an Event object for sorting purpose afterwards)
@@ -448,8 +448,8 @@ class Octuple(MIDITokenizer):
         pass
 
     def _create_base_vocabulary(self) -> List[List[str]]:
-        r"""Creates the vocabulary, as a list of string events.
-        Each event will be given as the form of "Type_Value", separated with an underscore.
+        r"""Creates the vocabulary, as a list of string tokens.
+        Each token as to be given as the form of "Type_Value", separated with an underscore.
         Example: Pitch_58
         The :class:`miditok.MIDITokenizer` main class will then create the "real" vocabulary as
         a dictionary.
@@ -503,7 +503,7 @@ class Octuple(MIDITokenizer):
         return {}  # not relevant for this encoding
 
     @_in_as_seq()
-    def token_types_errors(self, tokens: Union[TokSequence, List, np.ndarray, Any]) -> float:
+    def tokens_errors(self, tokens: Union[TokSequence, List, np.ndarray, Any]) -> float:
         r"""Checks if a sequence of tokens is made of good token values and
         returns the error ratio (lower is better).
         The token types are always the same in Octuple so this methods only checks

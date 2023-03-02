@@ -239,8 +239,8 @@ def get_offsets(
             ids_pitch = []
             if not tokenizer.is_multi_voc:
                 pitch_ids_vocab = np.array(
-                    tokenizer.tokens_of_type("Pitch")
-                    + tokenizer.tokens_of_type("NoteOn")
+                    tokenizer.token_ids_of_type("Pitch")
+                    + tokenizer.token_ids_of_type("NoteOn")
                 )
                 for track_ids in ids:
                     tt_arr = np.array(track_ids)
@@ -253,7 +253,7 @@ def get_offsets(
                 )[1]
             else:
                 pitch_ids_vocab = np.array(
-                    tokenizer.tokens_of_type("Pitch", pitch_voc_idx)
+                    tokenizer.token_ids_of_type("Pitch", pitch_voc_idx)
                 )
                 for track_ids in ids:
                     tt_arr = np.array(track_ids)[:, pitch_voc_idx]
@@ -433,14 +433,14 @@ def data_augmentation_tokens(
         note_off_tokens = []
         if not tokenizer.is_multi_voc:
             pitch_tokens = np.array(
-                tokenizer.tokens_of_type("Pitch")
-                + tokenizer.tokens_of_type("NoteOn")
+                tokenizer.token_ids_of_type("Pitch")
+                + tokenizer.token_ids_of_type("NoteOn")
             )
-            note_off_tokens = np.array(tokenizer.tokens_of_type("NoteOff"))
+            note_off_tokens = np.array(tokenizer.token_ids_of_type("NoteOff"))
             mask_pitch = np.isin(tokens, pitch_tokens)
         else:
             pitch_tokens = np.array(
-                tokenizer.tokens_of_type("Pitch", pitch_voc_idx)
+                tokenizer.token_ids_of_type("Pitch", pitch_voc_idx)
             )
             mask_pitch = np.full_like(tokens, 0, dtype=np.bool_)
             mask_pitch[:, pitch_voc_idx] = np.isin(
@@ -461,10 +461,10 @@ def data_augmentation_tokens(
             tokenizer.vocab_types_idx["Velocity"] if tokenizer.is_multi_voc else None
         )
         if not tokenizer.is_multi_voc:
-            vel_tokens = np.array(tokenizer.tokens_of_type("Velocity"))
+            vel_tokens = np.array(tokenizer.token_ids_of_type("Velocity"))
         else:
             vel_tokens = np.array(
-                tokenizer.tokens_of_type("Velocity", vel_voc_idx)
+                tokenizer.token_ids_of_type("Velocity", vel_voc_idx)
             )
 
         def augment_vel(
@@ -502,10 +502,10 @@ def data_augmentation_tokens(
             tokenizer.vocab_types_idx["Duration"] if tokenizer.is_multi_voc else None
         )
         if not tokenizer.is_multi_voc:
-            dur_tokens = np.array(tokenizer.tokens_of_type("Duration"))
+            dur_tokens = np.array(tokenizer.token_ids_of_type("Duration"))
         else:
             dur_tokens = np.array(
-                tokenizer.tokens_of_type("Duration", dur_voc_idx)
+                tokenizer.token_ids_of_type("Duration", dur_voc_idx)
             )
 
         def augment_dur(

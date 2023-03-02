@@ -281,7 +281,7 @@ class MuMIDI(MIDITokenizer):
         return TokSequence(tokens=tokens)
 
     def track_to_tokens(self, track: Instrument) -> List[List[Union[Event, str]]]:
-        r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
+        r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens (:class:`miditok.TokSequence`).
         For each note, it creates a time step as a list of tokens where (list index: token type):
         * 0: Pitch (as an Event object for sorting purpose afterwards)
         * 1: Velocity
@@ -452,8 +452,8 @@ class MuMIDI(MIDITokenizer):
         pass
 
     def _create_base_vocabulary(self, sos_eos_tokens: bool = None) -> List[List[str]]:
-        r"""Creates the vocabulary, as a list of string events.
-        Each event will be given as the form of "Type_Value", separated with an underscore.
+        r"""Creates the vocabulary, as a list of string tokens.
+        Each token as to be given as the form of "Type_Value", separated with an underscore.
         Example: Pitch_58
         The :class:`miditok.MIDITokenizer` main class will then create the "real" vocabulary as
         a dictionary.
@@ -540,7 +540,7 @@ class MuMIDI(MIDITokenizer):
         return dic
 
     @_in_as_seq()
-    def token_types_errors(self, tokens: Union[TokSequence, List, np.ndarray, Any]) -> float:
+    def tokens_errors(self, tokens: Union[TokSequence, List, np.ndarray, Any]) -> float:
         r"""Checks if a sequence of tokens is made of good token types
         successions and returns the error ratio (lower is better).
         The Pitch and Position values are also analyzed:
