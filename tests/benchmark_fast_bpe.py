@@ -10,8 +10,8 @@ from time import time
 import random
 
 import miditok
-from miditoolkit import MidiFile
 from tqdm import tqdm
+from prettytable import PrettyTable
 
 # Special beat res for test, up to 64 beats so the duration and time-shift values are
 # long enough for MIDI-Like and Structured encodings, and with a single beat resolution
@@ -41,115 +41,94 @@ def bpe_benchmark(
     random.seed(777)
     tokenizations = ["Structured", "REMI", "MIDILike", "TSD"]
     batch_sizes = [1, 16, 64, 128]
+    vocab_size = 1000
     data_path = Path(data_path)
-    files = list(data_path.glob("**/*.mid"))
+    files = list(data_path.glob("**/*.midi"))
+
+    def create_tokenizer(tokenization_: str) -> miditok.MIDITokenizer:
+        add_tokens_ = deepcopy(ADDITIONAL_TOKENS_TEST)
+        return getattr(miditok, tokenization_)(beat_res=BEAT_RES_TEST, additional_tokens=add_tokens_)
 
     # Tokenize data
     for tokenization in tokenizations:
-        add_tokens = deepcopy(ADDITIONAL_TOKENS_TEST)
-        tokenizer = getattr(miditok, tokenization)(
-            beat_res=BEAT_RES_TEST, additional_tokens=add_tokens
-        )
+        tokenizer = create_tokenizer(tokenization)
         tokenizer.tokenize_midi_dataset(files, Path("tests", "test_results", f"{tokenization}_maestro"))
 
-    # Creates tokenizers and computes BPE (build voc)
+    # Loading tokens
+    data = {tokenization: [] for tokenization in tokenizations}
     for tokenization in tokenizations:
-        add_tokens = deepcopy(ADDITIONAL_TOKENS_TEST)
-        tokenizer = getattr(miditok, tokenization)(
-            beat_res=BEAT_RES_TEST, additional_tokens=add_tokens
-        )
-        # tokenizer.tokenize_midi_dataset(files, Path("tests", "test_results", tokenization))
+        tokenizer = create_tokenizer(tokenization)
+        token_files = list(Path("tests", "test_results", f"{tokenization}_maestro").glob("**/*.json"))
+        for file in tqdm(token_files, desc=f"Loading tokens for {tokenization}"):
+            tokens = tokenizer.load_tokens(file)["ids"][0]
+            data[tokenization].append(miditok.TokSequence(ids=tokens))
+
+    # Record times
+    t = PrettyTable(["Tokenization", "Slow train", "Fast train", "Slow Encoding"] +
+                    [f"Fast encoding (bsz {b}" for b in batch_sizes])
+    for tokenization in tokenizations:
+        tokenizer = create_tokenizer(tokenization)
+        row = [tokenization, None, None, None]
+        row += [None for _ in batch_sizes]
+
+        # Loading tokens
+        data = []
+        token_files = list(Path("tests", "test_results", f"{tokenization}_maestro").glob("**/*.json"))
+        for file in tqdm(token_files, desc=f"Loading tokens for {tokenization}"):
+            tokens = tokenizer.load_tokens(file)["ids"][0]
+            data.append(miditok.TokSequence(ids=tokens))
+
+        # Fast BPE learning
+        t0 = time()
         tokenizer.learn_bpe(
-            vocab_size=1000,
-            tokens_paths=Path("tests", "test_results", tokenization).glob("**/*.json"),
+            vocab_size=vocab_size,
+            tokens_paths=list(Path("tests", "test_results", f"{tokenization}_maestro").glob("**/*.json")),
             files_lim=None,
             load_all_token_files_once=True,
-            start_from_empty_voc=True,
+            start_from_empty_voc=False,
         )
-        tokenizer.save_params(Path("tests", "test_results", f"{tokenization}_bpe", "config.txt"))
-        first_tokenizers.append(tokenizer)
+        t1 = time() - t0
+        row[2] = t1
+        print(f"Fast BPE learning for {tokenization} took {t1:.2f} sec")
 
-        test_id_to_token = {id_: tokenizer._vocab_base_byte_to_token[byte_]
-                            for id_, byte_ in tokenizer._vocab_base_id_to_byte.items()}
-        vocab_inv = {v: k for k, v in tokenizer._vocab_base.items()}
-        assert test_id_to_token == vocab_inv, \
-            "Vocabulary inversion failed, something might be wrong with the way they are built"
+        # Fast BPE tokenization
+        for b, batch_size in enumerate(batch_sizes):
+            tok_times = []
+            for i in tqdm(range(0, len(data), batch_size),
+                          desc=f"Encoding fast BPE, batch size={batch_size}"):
+                tokens_bpe = deepcopy(data[i: i + batch_size])
+                t0 = time()
+                tokenizer.apply_bpe(tokens_bpe)
+                tok_times.append((time() - t0) / len(tokens_bpe))  # mean per batch
+            mean_time = sum(tok_times) / len(tok_times)
+            row[4 + b] = mean_time
+            print(f"Fast BPE encoding for {tokenization} and batch size of {batch_size} took {mean_time:.2f} sec")
 
-        for file_path in files:
-            tokens = tokenizer.midi_to_tokens(deepcopy(MidiFile(file_path)), apply_bpe_if_possible=False)[0]
-            to_tok = tokenizer._bytes_to_tokens(tokens.bytes)
-            to_id = tokenizer._tokens_to_ids(to_tok)
-            to_by = tokenizer._ids_to_bytes(to_id, as_one_str=True)
-            assert all([to_by == tokens.bytes, to_tok == tokens.tokens, to_id == tokens.ids]), \
-                "Conversion between tokens / bytes / ids failed, something might be wrong in vocabularies"
-
-            tokenizer.apply_bpe(tokens)
-            first_samples_bpe[tokenization].append(tokens)
-
-    # Reload (test) tokenizer from the saved config file
-    tokenizers = []
-    for i, tokenization in enumerate(tokenizations):
-        tokenizers.append(
-            getattr(miditok, tokenization)(
-                params=Path("tests", "test_results", f"{tokenization}_bpe", "config.txt")
-            )
+        # Slow BPE learning
+        tokenizer = create_tokenizer(tokenization)
+        t0 = time()
+        tokenizer.learn_bpe_slow(
+            Path("tests", "test_results", f"{tokenization}_maestro"),
+            vocab_size=vocab_size
         )
-        assert tokenizers[i] == first_tokenizers[i], \
-            f"Saving and reloading tokenizer failed. The reloaded tokenizer is different from the first one."
+        t1 = time() - t0
+        row[1] = t1
+        print(f"Slow BPE learning for {tokenization} took {t1:.2f} sec")
 
-    # Unbatched BPE
-    at_least_one_error = False
-    tok_times = []
-    for i, file_path in enumerate(tqdm(files, desc="Testing BPE unbatched")):
-        midi = MidiFile(file_path)
-
-        for tokenization, tokenizer in zip(tokenizations, tokenizers):
-            tokens_no_bpe = tokenizer(deepcopy(midi), apply_bpe_if_possible=False)[0]
-            tokens_bpe = deepcopy(tokens_no_bpe)  # with BPE
-
+        # Slow BPE encoding
+        tok_time = 0
+        for tokens in tqdm(data, desc="Encoding slow BPE"):
+            tokens_bpe = deepcopy(tokens)
             t0 = time()
             tokenizer.apply_bpe(tokens_bpe)
-            tok_times.append(time() - t0)
+            tok_time += time() - t0
+        mean_time = tok_time / len(data)
+        row[3] = mean_time
+        print(f"Slow BPE encoding for {tokenization} took {mean_time:.2f} sec")
 
-            tokens_bpe_decoded = deepcopy(tokens_bpe)
-            tokenizer.decode_bpe(tokens_bpe_decoded)  # BPE decomposed
-            if tokens_bpe != first_samples_bpe[tokenization][i]:
-                at_least_one_error = True
-                print(f"Error with BPE for {tokenization} and {file_path.name}: "
-                      f"BPE encoding failed after tokenizer reload")
-            if tokens_no_bpe != tokens_bpe_decoded:
-                at_least_one_error = True
-                print(f"Error with BPE for {tokenization} and {file_path.name}: encoding - decoding test failed")
-    print(f"Mean BPE encoding time unbatched: {sum(tok_times) / len(tok_times):.2f}")
-    assert not at_least_one_error
+        t.add_row(row)
 
-    # Batched BPE
-    at_least_one_error = False
-    tok_times = []
-    for tokenization, tokenizer in zip(tokenizations, tokenizers):
-        samples_no_bpe = []
-        for i, file_path in enumerate(tqdm(files, desc="Testing BPE batched")):
-            # Reads the midi
-            midi = MidiFile(file_path)
-            samples_no_bpe.append(tokenizer(midi, apply_bpe_if_possible=False)[0])  # no BPE
-
-        t0 = time()
-        samples_bpe = deepcopy(samples_no_bpe)
-        tokenizer.apply_bpe(samples_bpe)
-        tok_times.append(time() - t0 / len(files))
-
-        samples_bpe_decoded = deepcopy(samples_bpe)
-        tokenizer.decode_bpe(samples_bpe_decoded)  # BPE decomposed
-        for sample_bpe, sample_bpe_first in zip(samples_bpe, first_samples_bpe[tokenization]):
-            if sample_bpe != sample_bpe_first:
-                at_least_one_error = True
-                print(f"Error with BPE for {tokenization}: BPE encoding failed after tokenizer reload")
-        for sample_no_bpe, sample_bpe_decoded in zip(samples_no_bpe, samples_bpe_decoded):
-            if sample_no_bpe != sample_bpe_decoded:
-                at_least_one_error = True
-                print(f"Error with BPE for {tokenization}: encoding - decoding test failed")
-    print(f"Mean BPE encoding time batched: {sum(tok_times) / len(tok_times):.2f}")
-    assert not at_least_one_error
+    print(t)
 
 
 if __name__ == "__main__":

@@ -928,7 +928,7 @@ class MIDITokenizer(ABC):
 
                 iterator = iterator()
 
-        # Trains the tokenizer TODO progress bar
+        # Trains the tokenizer
         special_tokens_bytes = self._ids_to_bytes(self._tokens_to_ids(self.special_tokens))
         trainer = BpeTrainer(vocab_size=vocab_size, special_tokens=special_tokens_bytes, show_progress=True, **kwargs)
         self._bpe_model.train_from_iterator(iterator, length=sum(1 for _ in iterator), trainer=trainer)
@@ -991,7 +991,7 @@ class MIDITokenizer(ABC):
         self,
         tokens_path: Union[Path, str],
         vocab_size: int,
-        out_dir: Union[Path, str],
+        out_dir: Union[Path, str] = None,
         files_lim: int = None,
         save_converted_samples: bool = False,
         print_seq_len_variation: bool = True,
@@ -1025,9 +1025,6 @@ class MIDITokenizer(ABC):
             f"vocab_size ({vocab_size}) need to be higher than the size"
             f"of the current vocabulary ({len(self.vocab)})"
         )
-        if isinstance(out_dir, str):
-            out_dir = Path(out_dir)
-        out_dir.mkdir(parents=True, exist_ok=True)
         files_paths = list(Path(tokens_path).glob("**/*.json"))
         assert (
             len(files_paths) > 0
@@ -1139,17 +1136,27 @@ class MIDITokenizer(ABC):
             )
             pbar.update(1)
 
-        # Saves dictionary and prints the difference in sequence length
         pbar.close()
         self.has_bpe = True
         self.__set_bpe_slow_tokens_successions()
-        if save_converted_samples:
-            for sample, path in zip(samples, samples_paths):
-                self.save_tokens(
-                    sample["ids"],
-                    Path(out_dir, path).with_suffix(".json"),
-                    sample["programs"],
-                )
+
+        # Saves dictionary and prints the difference in sequence length
+        if out_dir is not None:
+            if isinstance(out_dir, str):
+                out_dir = Path(out_dir)
+            out_dir.mkdir(parents=True, exist_ok=True)
+
+            if save_converted_samples:
+                for sample, path in zip(samples, samples_paths):
+                    self.save_tokens(
+                        sample["ids"],
+                        Path(out_dir, path).with_suffix(".json"),
+                        sample["programs"],
+                    )
+            self.save_params(
+                out_dir / "config.txt"
+            )  # Saves the parameters with which the MIDIs are converted
+
         if print_seq_len_variation:
             print(
                 f"Mean of original lengths: {avg_seq_len[0]}\nMean length after BPE: {avg_seq_len[-1]}"
@@ -1157,9 +1164,6 @@ class MIDITokenizer(ABC):
             print(
                 f"Variation from original: {(avg_seq_len[-1] - avg_seq_len[0]) / avg_seq_len[0] * 100:.2f} %"
             )
-        self.save_params(
-            out_dir / "config.txt"
-        )  # Saves the parameters with which the MIDIs are converted
 
         return bpe_comb_means, bpe_comb_max, avg_seq_len
 
