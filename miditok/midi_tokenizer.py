@@ -1237,12 +1237,13 @@ class MIDITokenizer(ABC):
         return matches
 
     def apply_bpe_to_dataset(
-        self, dataset_path: Union[Path, str], out_path: Union[Path, str]
+        self, dataset_path: Union[Path, str], out_path: Union[Path, str] = None
     ):
         r"""Applies BPE to an already tokenized dataset (with no BPE).
 
         :param dataset_path: path to token files to load.
-        :param out_path: output directory to save.
+        :param out_path: output directory to save. If none is given, this method will overwrite original files.
+                (default: None)
         """
         if not self.has_bpe:
             return
@@ -1250,16 +1251,12 @@ class MIDITokenizer(ABC):
         files_paths = list(Path(dataset_path).glob("**/*.json"))
         for path in tqdm(files_paths, desc="Applying BPE to dataset"):
             sample = self.load_tokens(path)
-            sample_bpe = (
-                self.apply_bpe(sample["ids"])
-                if self.unique_track
-                else [self.apply_bpe(track) for track in sample["ids"]]  # TODO batch it
-            )
-            self.save_tokens(
-                sample_bpe,
-                Path(out_path) / path.relative_to(dataset_path),
-                sample["programs"],
-            )
+            seq = TokSequence(ids=sample["ids"]) if self.unique_track else \
+                [TokSequence(ids=track) for track in sample["ids"]]
+            self.apply_bpe(seq)
+
+            out_ = Path(out_path) / path.relative_to(dataset_path) if out_path is not None else path
+            self.save_tokens(seq, out_, sample["programs"])
 
     def decode_bpe(self, seq: Union[TokSequence, List[TokSequence]]):
         r"""Decodes (inplace) a sequence of tokens (:class:`miditok.TokSequence`) with ids encoded with BPE.
@@ -1313,6 +1310,7 @@ class MIDITokenizer(ABC):
         out_dir: Union[str, Path],
         validation_fn: Callable[[MidiFile], bool] = None,
         data_augment_offsets=None,
+        apply_bpe: bool = True,
         save_programs: bool = True,
         logging: bool = True,
     ):
@@ -1330,8 +1328,9 @@ class MIDITokenizer(ABC):
         :param data_augment_offsets: data augmentation arguments, to be passed to the
             miditok.data_augmentation.data_augmentation_dataset method. Has to be given as a list / tuple
             of offsets pitch octaves, velocities, durations, and finally their directions (up/down). (default: None)
+        :param apply_bpe: will apply BPE on the dataset to save, if the vocabulary was learned with.
         :param save_programs: will also save the programs of the tracks of the MIDI. (default: True)
-        :param logging: logs progress bar. TODO batch BPE
+        :param logging: logs progress bar.
         """
         out_dir = Path(out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -1369,7 +1368,7 @@ class MIDITokenizer(ABC):
                     continue
 
             # Converting the MIDI to tokens and saving them as json
-            tokens = self(midi)
+            tokens = self(midi, apply_bpe_if_possible=False)  # BPE will be applied after if ordered
             self.save_tokens(
                 tokens,
                 Path(out_dir, f"{Path(midi_path).stem}.json").with_suffix(".json"),
@@ -1379,6 +1378,9 @@ class MIDITokenizer(ABC):
         # Perform data augmentation
         if data_augment_offsets is not None:
             data_augmentation_dataset(out_dir, self, *data_augment_offsets)
+
+        if apply_bpe and self.has_bpe:
+            self.apply_bpe_to_dataset(out_dir)
 
     @_in_as_seq(complete=False, decode_bpe=False)
     def tokens_errors(self, tokens: Union[TokSequence, List[Union[int, List[int]]]]) -> float:
@@ -1466,16 +1468,23 @@ class MIDITokenizer(ABC):
         :param kwargs: any additional information to save within the JSON file.
         """
         ids = []
+        ids_bpe_encoded = None
 
         if isinstance(tokens, TokSequence):
             self.complete_sequence(tokens)
+            ids_bpe_encoded = tokens.ids_bpe_encoded
             ids = tokens.ids
         elif isinstance(tokens[0], TokSequence):
+            ids_bpe_encoded = []
             for seq in tokens:
                 self.complete_sequence(seq)
+                ids_bpe_encoded.append(seq.ids_bpe_encoded)
                 ids.append(seq.ids)
         else:
             ids = convert_ids_tensors_to_list(tokens)
+
+        if "ids_bpe_encoded" not in kwargs and ids_bpe_encoded is not None:
+            kwargs["ids_bpe_encoded"] = ids_bpe_encoded
 
         with open(path, "w") as outfile:
             json.dump(

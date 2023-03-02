@@ -70,10 +70,10 @@ def data_augmentation_dataset(
         if as_tokens:
             with open(file_path) as json_file:
                 file = json.load(json_file)
-                tokens, programs = file["ids"], file["programs"]
+                ids, programs = file["ids"], file["programs"]
 
             if tokenizer.unique_track:
-                tokens = [tokens]
+                ids = [ids]
 
             # Perform data augmentation for each track
             offsets = get_offsets(
@@ -84,12 +84,12 @@ def data_augmentation_dataset(
                 octave_directions,
                 vel_directions,
                 dur_directions,
-                ids=tokens,
+                ids=ids,
             )
             augmented_tokens: Dict[
                 Tuple[int, int, int], List[Union[int, List[int]]]
             ] = {}
-            for track, (_, is_drum) in zip(tokens, programs):
+            for track, (_, is_drum) in zip(ids, programs):
                 if is_drum:  # we dont augment drums
                     continue
                 aug = data_augmentation_tokens(
@@ -109,7 +109,7 @@ def data_augmentation_dataset(
                     except KeyError:
                         augmented_tokens[aug_offsets] = [seq]
             for i, (track, (_, is_drum)) in enumerate(
-                zip(tokens, programs)
+                zip(ids, programs)
             ):  # adding drums to all already augmented
                 if is_drum:
                     for aug_offsets in augmented_tokens:
@@ -134,7 +134,7 @@ def data_augmentation_dataset(
                 nb_tracks_augmented += len(tracks_seq)
             if copy_original_in_new_location and out_path is not None:
                 tokenizer.save_tokens(
-                    tokens, out_path / f"{file_path.stem}.json", programs
+                    ids, out_path / f"{file_path.stem}.json", programs
                 )
 
         else:  # as midi
@@ -205,7 +205,7 @@ def get_offsets(
     midi: MidiFile = None,
     ids: List[Union[int, List[int]]] = None,
 ) -> List[List[int]]:
-    r"""Build the offsets in absolute value for data augmentation. TODO handle TokSequence
+    r"""Build the offsets in absolute value for data augmentation.
     TODO some sort of limit for velocity and duration values (min / max as for octaves)
 
     :param tokenizer: tokenizer, needs to have 'Pitch' tokens.

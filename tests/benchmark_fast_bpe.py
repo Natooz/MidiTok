@@ -41,7 +41,7 @@ def bpe_benchmark(
     random.seed(777)
     tokenizations = ["Structured", "REMI", "MIDILike", "TSD"]
     batch_sizes = [1, 16, 64, 128]
-    vocab_size = 1000
+    vocab_size = 600
     data_path = Path(data_path)
     files = list(data_path.glob("**/*.midi"))
 
@@ -88,8 +88,8 @@ def bpe_benchmark(
             start_from_empty_voc=False,
         )
         t1 = time() - t0
-        row[2] = t1
-        print(f"Fast BPE learning for {tokenization} took {t1:.2f} sec")
+        row[2] = f"{t1:.3f}"
+        print(f"Fast BPE learning for {tokenization} took {t1:.3f} sec")
 
         # Fast BPE tokenization
         for b, batch_size in enumerate(batch_sizes):
@@ -101,8 +101,8 @@ def bpe_benchmark(
                 tokenizer.apply_bpe(tokens_bpe)
                 tok_times.append((time() - t0) / len(tokens_bpe))  # mean per batch
             mean_time = sum(tok_times) / len(tok_times)
-            row[4 + b] = mean_time
-            print(f"Fast BPE encoding for {tokenization} and batch size of {batch_size} took {mean_time:.2f} sec")
+            row[4 + b] = f"{mean_time:.3f}"
+            print(f"Fast BPE encoding for {tokenization} and batch size of {batch_size} took {mean_time:.3f} sec")
 
         # Slow BPE learning
         tokenizer = create_tokenizer(tokenization)
@@ -112,8 +112,8 @@ def bpe_benchmark(
             vocab_size=vocab_size
         )
         t1 = time() - t0
-        row[1] = t1
-        print(f"Slow BPE learning for {tokenization} took {t1:.2f} sec")
+        row[1] = f"{t1:.3f}"
+        print(f"Slow BPE learning for {tokenization} took {t1:.3f} sec")
 
         # Slow BPE encoding
         tok_time = 0
@@ -123,7 +123,7 @@ def bpe_benchmark(
             tokenizer.apply_bpe(tokens_bpe)
             tok_time += time() - t0
         mean_time = tok_time / len(data)
-        row[3] = mean_time
+        row[3] = f"{mean_time:.3f}"
         print(f"Slow BPE encoding for {tokenization} took {mean_time:.2f} sec")
 
         t.add_row(row)
