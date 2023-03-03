@@ -258,8 +258,12 @@ def get_offsets(
                 for track_ids in ids:
                     tt_arr = np.array(track_ids)[:, pitch_voc_idx]
                     ids_pitch.append(tt_arr[np.isin(tt_arr, pitch_ids_vocab)])
-                max_pitch = tokenizer[pitch_voc_idx, int(np.max(np.concatenate(ids_pitch)))].split("_")[1]
-                min_pitch = tokenizer[pitch_voc_idx, int(np.min(np.concatenate(ids_pitch)))].split("_")[1]
+                max_pitch = tokenizer[
+                    pitch_voc_idx, int(np.max(np.concatenate(ids_pitch)))
+                ].split("_")[1]
+                min_pitch = tokenizer[
+                    pitch_voc_idx, int(np.min(np.concatenate(ids_pitch)))
+                ].split("_")[1]
         offset_up = min(
             nb_octave_offset, (tokenizer._pitch_range.stop - 1 - int(max_pitch)) // 12
         )
@@ -439,9 +443,7 @@ def data_augmentation_tokens(
             note_off_tokens = np.array(tokenizer.token_ids_of_type("NoteOff"))
             mask_pitch = np.isin(tokens, pitch_tokens)
         else:
-            pitch_tokens = np.array(
-                tokenizer.token_ids_of_type("Pitch", pitch_voc_idx)
-            )
+            pitch_tokens = np.array(tokenizer.token_ids_of_type("Pitch", pitch_voc_idx))
             mask_pitch = np.full_like(tokens, 0, dtype=np.bool_)
             mask_pitch[:, pitch_voc_idx] = np.isin(
                 tokens[:, pitch_voc_idx], pitch_tokens
@@ -463,9 +465,7 @@ def data_augmentation_tokens(
         if not tokenizer.is_multi_voc:
             vel_tokens = np.array(tokenizer.token_ids_of_type("Velocity"))
         else:
-            vel_tokens = np.array(
-                tokenizer.token_ids_of_type("Velocity", vel_voc_idx)
-            )
+            vel_tokens = np.array(tokenizer.token_ids_of_type("Velocity", vel_voc_idx))
 
         def augment_vel(
             seq_: np.ndarray, offsets_: Tuple[int, int, int]
@@ -504,9 +504,7 @@ def data_augmentation_tokens(
         if not tokenizer.is_multi_voc:
             dur_tokens = np.array(tokenizer.token_ids_of_type("Duration"))
         else:
-            dur_tokens = np.array(
-                tokenizer.token_ids_of_type("Duration", dur_voc_idx)
-            )
+            dur_tokens = np.array(tokenizer.token_ids_of_type("Duration", dur_voc_idx))
 
         def augment_dur(
             seq_: np.ndarray, offsets_: Tuple[int, int, int]

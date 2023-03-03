@@ -1,4 +1,3 @@
-
 from typing import List, Tuple, Dict, Optional, Union, Any
 from pathlib import Path
 
@@ -170,9 +169,9 @@ class CPWord(MIDITokenizer):
                         self._current_midi_metadata["tempo_changes"]
                     ):
                         # Will loop over incoming tempo changes
-                        for tempo_change in self._current_midi_metadata["tempo_changes"][
-                            current_tempo_idx + 1:
-                        ]:
+                        for tempo_change in self._current_midi_metadata[
+                            "tempo_changes"
+                        ][current_tempo_idx + 1 :]:
                             # If this tempo change happened before the current moment
                             if tempo_change.time <= note.start:
                                 current_tempo = tempo_change.tempo
@@ -300,9 +299,7 @@ class CPWord(MIDITokenizer):
         ]
         for add_tok in ["Program", "Chord", "Rest", "Tempo"]:
             if self.additional_tokens[add_tok]:
-                cp_token_template.append(
-                    "Ignore_None"
-                )
+                cp_token_template.append("Ignore_None")
 
         if bar:
             cp_token_template[1] = "Bar_None"
@@ -320,7 +317,9 @@ class CPWord(MIDITokenizer):
             cp_token_template[3] = f"Velocity_{vel}"
             cp_token_template[4] = f"Duration_{dur}"
             if program is not None:
-                cp_token_template[self.vocab_types_idx["Program"]] = f"Program_{program}"
+                cp_token_template[
+                    self.vocab_types_idx["Program"]
+                ] = f"Program_{program}"
 
         return cp_token_template
 
@@ -340,7 +339,7 @@ class CPWord(MIDITokenizer):
         :return: the miditoolkit instrument object and tempo changes
         """
         assert (
-                time_division % max(self._beat_res.values()) == 0
+            time_division % max(self._beat_res.values()) == 0
         ), f"Invalid time division, please give one divisible by {max(self._beat_res.values())}"
 
         ticks_per_sample = time_division // max(self._beat_res.values())
@@ -372,7 +371,9 @@ class CPWord(MIDITokenizer):
                 if compound_token[1].split("_")[0] == "Bar":
                     current_bar += 1
                     current_tick = current_bar * ticks_per_bar
-                elif compound_token[1].split("_")[0] == "Position":  # i.e. its a position
+                elif (
+                    compound_token[1].split("_")[0] == "Position"
+                ):  # i.e. its a position
                     if current_bar == -1:
                         current_bar = (
                             0  # as this Position token occurs before any Bar token
@@ -387,7 +388,8 @@ class CPWord(MIDITokenizer):
                             tempo_changes.append(TempoChange(tempo, current_tick))
                 elif (
                     self.additional_tokens["Rest"]
-                    and compound_token[self.vocab_types_idx["Rest"]].split("_")[1] != "None"
+                    and compound_token[self.vocab_types_idx["Rest"]].split("_")[1]
+                    != "None"
                 ):
                     if (
                         current_tick < previous_note_end
@@ -395,7 +397,9 @@ class CPWord(MIDITokenizer):
                         current_tick = previous_note_end
                     beat, pos = map(
                         int,
-                        compound_token[self.vocab_types_idx["Rest"]].split("_")[1].split("."),
+                        compound_token[self.vocab_types_idx["Rest"]]
+                        .split("_")[1]
+                        .split("."),
                     )
                     current_tick += beat * time_division + pos * ticks_per_sample
                     current_bar = current_tick // ticks_per_bar
@@ -416,7 +420,7 @@ class CPWord(MIDITokenizer):
         :return: the vocabulary as a list of string.
         """
 
-        vocab = [[]for _ in range(5)]
+        vocab = [[] for _ in range(5)]
 
         vocab[0].append("Family_Metric")
         vocab[0].append("Family_Note")
@@ -443,18 +447,21 @@ class CPWord(MIDITokenizer):
 
         # PROGRAM
         if self.additional_tokens["Program"]:
-            vocab += [["Ignore_None"] + [f"Program_{program}" for program in range(-1, 128)]]
+            vocab += [
+                ["Ignore_None"] + [f"Program_{program}" for program in range(-1, 128)]
+            ]
 
         # CHORD
         if self.additional_tokens["Chord"]:
             vocab += [["Ignore_None"] + [f"Chord_{i}" for i in range(3, 6)]]
-            vocab[-1] += [
-                f"Chord_{chord_quality}" for chord_quality in CHORD_MAPS
-            ]
+            vocab[-1] += [f"Chord_{chord_quality}" for chord_quality in CHORD_MAPS]
 
         # REST
         if self.additional_tokens["Rest"]:
-            vocab += [["Ignore_None"] + [f'Rest_{".".join(map(str, rest))}' for rest in self._rests]]
+            vocab += [
+                ["Ignore_None"]
+                + [f'Rest_{".".join(map(str, rest))}' for rest in self._rests]
+            ]
 
         # TEMPO
         if self.additional_tokens["Tempo"]:
@@ -513,9 +520,7 @@ class CPWord(MIDITokenizer):
                     return bar_pos
                 else:  # additional token
                     for i in range(1, 5):
-                        decoded_token = (
-                            self[-i, tok[-i]].split("_")
-                        )
+                        decoded_token = self[-i, tok[-i]].split("_")
                         if decoded_token[0] != "Ignore":
                             return decoded_token
                 raise RuntimeError("No token type found, unknown error")

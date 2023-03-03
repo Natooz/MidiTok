@@ -1,4 +1,3 @@
-
 from typing import List, Tuple, Dict, Optional, Union, Any
 from pathlib import Path
 
@@ -232,11 +231,15 @@ class MIDILike(MIDITokenizer):
         :return: the miditoolkit instrument object and tempo changes
         """
         ticks_per_sample = time_division // max(self._beat_res.values())
-        events = tokens.events if tokens.events is not None else [Event(*tok.split("_")) for tok in tokens.tokens]
-
-        max_duration = self._durations[-1][0] * time_division + self._durations[-1][1] * (
-            time_division // self._durations[-1][2]
+        events = (
+            tokens.events
+            if tokens.events is not None
+            else [Event(*tok.split("_")) for tok in tokens.tokens]
         )
+
+        max_duration = self._durations[-1][0] * time_division + self._durations[-1][
+            1
+        ] * (time_division // self._durations[-1][2])
         name = "Drums" if program[1] else MIDI_INSTRUMENTS[program[0]]["name"]
         instrument = Instrument(program[0], is_drum=program[1], name=name)
         tempo_changes = [
@@ -325,11 +328,15 @@ class MIDILike(MIDITokenizer):
         vocab += [f"Velocity_{i}" for i in self._velocities]
 
         # TIME SHIFTS
-        vocab += [f'TimeShift_{".".join(map(str, duration))}' for duration in self._durations]
+        vocab += [
+            f'TimeShift_{".".join(map(str, duration))}' for duration in self._durations
+        ]
 
         # CHORD
         if self.additional_tokens["Chord"]:
-            vocab += [f"Chord_{i}" for i in range(3, 6)]  # non recognized chords (between 3 and 5 notes only)
+            vocab += [
+                f"Chord_{i}" for i in range(3, 6)
+            ]  # non recognized chords (between 3 and 5 notes only)
             vocab += [f"Chord_{chord_quality}" for chord_quality in CHORD_MAPS]
 
         # REST
@@ -402,10 +409,14 @@ class MIDILike(MIDITokenizer):
         current_pitches = []
         max_duration = self._durations[-1][0] * max(self._beat_res.values())
         max_duration += self._durations[-1][1] * (
-                max(self._beat_res.values()) // self._durations[-1][2]
+            max(self._beat_res.values()) // self._durations[-1][2]
         )
 
-        events = tokens.events if tokens.events is not None else [Event(*tok.split("_")) for tok in tokens.tokens]
+        events = (
+            tokens.events
+            if tokens.events is not None
+            else [Event(*tok.split("_")) for tok in tokens.tokens]
+        )
 
         for i in range(1, len(events)):
             # Good token type

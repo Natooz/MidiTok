@@ -1,4 +1,3 @@
-
 from typing import List, Tuple, Dict, Optional, Union, Any
 from pathlib import Path
 
@@ -179,9 +178,9 @@ class REMI(MIDITokenizer):
                         self._current_midi_metadata["tempo_changes"]
                     ):
                         # Will loop over incoming tempo changes
-                        for tempo_change in self._current_midi_metadata["tempo_changes"][
-                            current_tempo_idx + 1:
-                        ]:
+                        for tempo_change in self._current_midi_metadata[
+                            "tempo_changes"
+                        ][current_tempo_idx + 1 :]:
                             # If this tempo change happened before the current moment
                             if tempo_change.time <= note.start:
                                 current_tempo = tempo_change.tempo
@@ -254,7 +253,7 @@ class REMI(MIDITokenizer):
         :return: the miditoolkit instrument object and tempo changes
         """
         assert (
-                time_division % max(self._beat_res.values()) == 0
+            time_division % max(self._beat_res.values()) == 0
         ), f"Invalid time division, please give one divisible by {max(self._beat_res.values())}"
         tokens = tokens.tokens
 
@@ -287,7 +286,8 @@ class REMI(MIDITokenizer):
                         0  # as this Position token occurs before any Bar token
                     )
                 current_tick = (
-                    current_bar * ticks_per_bar + int(token.split("_")[1]) * ticks_per_sample
+                    current_bar * ticks_per_bar
+                    + int(token.split("_")[1]) * ticks_per_sample
                 )
             elif token.split("_")[0] == "Tempo":
                 # If your encoding include tempo tokens, each Position token should be followed by

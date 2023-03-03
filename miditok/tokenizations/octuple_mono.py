@@ -1,4 +1,3 @@
-
 from math import ceil
 from pathlib import Path, PurePath
 from typing import List, Tuple, Dict, Optional, Union, Any
@@ -165,7 +164,7 @@ class OctupleMono(MIDITokenizer):
                 ):
                     # Will loop over incoming tempo changes
                     for tempo_change in self._current_midi_metadata["tempo_changes"][
-                        current_tempo_idx + 1:
+                        current_tempo_idx + 1 :
                     ]:
                         # If this tempo change happened before the current moment
                         if tempo_change.time <= note.start:
@@ -206,7 +205,7 @@ class OctupleMono(MIDITokenizer):
         :return: the miditoolkit instrument object and tempo changes
         """
         assert (
-                time_division % max(self._beat_res.values()) == 0
+            time_division % max(self._beat_res.values()) == 0
         ), f"Invalid time division, please give one divisible by {max(self._beat_res.values())}"
         tokens = tokens.tokens
 
@@ -228,7 +227,9 @@ class OctupleMono(MIDITokenizer):
             # Note attributes
             pitch = int(time_step[0].split("_")[1])
             vel = int(time_step[1].split("_")[1])
-            duration = self._token_duration_to_ticks(time_step[2].split("_")[1], time_division)
+            duration = self._token_duration_to_ticks(
+                time_step[2].split("_")[1], time_division
+            )
 
             # Time and track values
             current_pos = int(time_step[3].split("_")[1])
@@ -243,7 +244,10 @@ class OctupleMono(MIDITokenizer):
             )
 
             # Tempo, adds a TempoChange if necessary
-            if self.additional_tokens["Tempo"] and time_step[-1].split("_")[1] != "None":
+            if (
+                self.additional_tokens["Tempo"]
+                and time_step[-1].split("_")[1] != "None"
+            ):
                 tempo = int(time_step[-1].split("_")[1])
                 if tempo != tempo_changes[-1].tempo:
                     tempo_changes.append(TempoChange(tempo, current_tick))
@@ -316,10 +320,7 @@ class OctupleMono(MIDITokenizer):
         current_pitches = []
 
         for token in tokens.tokens:
-            if any(
-                tok.split("_")[1] == "None"
-                for tok in token
-            ):
+            if any(tok.split("_")[1] == "None" for tok in token):
                 err += 1
                 continue
             has_error = False

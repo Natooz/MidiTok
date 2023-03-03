@@ -1,4 +1,3 @@
-
 from math import ceil
 from pathlib import Path, PurePath
 from typing import List, Tuple, Dict, Optional, Union, Any
@@ -220,7 +219,7 @@ class MuMIDI(MIDITokenizer):
                 ):
                     # Will loop over incoming tempo changes
                     for tempo_change in self.current_midi_metadata["tempo_changes"][
-                        current_tempo_idx + 1:
+                        current_tempo_idx + 1 :
                     ]:
                         # If this tempo change happened before the current moment
                         if tempo_change.time <= note_token[0].time:
@@ -373,7 +372,7 @@ class MuMIDI(MIDITokenizer):
         :return: the midi object (miditoolkit.MidiFile)
         """
         assert (
-                time_division % max(self._beat_res.values()) == 0
+            time_division % max(self._beat_res.values()) == 0
         ), f"Invalid time division, please give one divisible by {max(self._beat_res.values())}"
         midi = MidiFile(ticks_per_beat=time_division)
         midi.tempo_changes.append(TempoChange(TEMPO, 0))
@@ -403,10 +402,7 @@ class MuMIDI(MIDITokenizer):
                 except KeyError:
                     tracks[current_track] = []
             elif tok_type == "Pitch" or tok_type == "DrumPitch":
-                vel, duration = (
-                    time_step[i].split("_")[1]
-                    for i in (-2, -1)
-                )
+                vel, duration = (time_step[i].split("_")[1] for i in (-2, -1))
                 if any(val == "None" for val in (vel, duration)):
                     continue
                 pitch = int(tok_val)
@@ -487,9 +483,7 @@ class MuMIDI(MIDITokenizer):
         vocab[2] += [
             "PositionPosEnc_None"
         ]  # special embedding used with 'Bar_None' tokens
-        vocab[2] += [
-            f"PositionPosEnc_{i}" for i in range(nb_positions)
-        ]  # pos enc
+        vocab[2] += [f"PositionPosEnc_{i}" for i in range(nb_positions)]  # pos enc
 
         # CHORD
         if self.additional_tokens["Chord"]:
@@ -500,9 +494,7 @@ class MuMIDI(MIDITokenizer):
 
         # REST
         if self.additional_tokens["Rest"]:
-            vocab[0] += [
-                f'Rest_{".".join(map(str, rest))}' for rest in self._rests
-            ]
+            vocab[0] += [f'Rest_{".".join(map(str, rest))}' for rest in self._rests]
 
         # TEMPO
         if self.additional_tokens["Tempo"]:
@@ -513,7 +505,9 @@ class MuMIDI(MIDITokenizer):
         vocab.append([f"Velocity_{i}" for i in self._velocities])
 
         # DURATION
-        vocab.append([f'Duration_{".".join(map(str, duration))}' for duration in self._durations])
+        vocab.append(
+            [f'Duration_{".".join(map(str, duration))}' for duration in self._durations]
+        )
 
         return vocab
 
@@ -566,10 +560,7 @@ class MuMIDI(MIDITokenizer):
             pos_value = int(pos_value) if pos_value != "None" else -1
             token_type, token_value = token[0].split("_")
 
-            if any(
-                tok.split("_")[0] in ["PAD", "MASK"]
-                for i, tok in enumerate(token)
-            ):
+            if any(tok.split("_")[0] in ["PAD", "MASK"] for i, tok in enumerate(token)):
                 err += 1
                 continue
 

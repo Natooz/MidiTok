@@ -1,4 +1,13 @@
-from .tokenizations import MIDILike, REMI, TSD, Structured, Octuple, OctupleMono, CPWord, MuMIDI
+from .tokenizations import (
+    MIDILike,
+    REMI,
+    TSD,
+    Structured,
+    Octuple,
+    OctupleMono,
+    CPWord,
+    MuMIDI,
+)
 from .midi_tokenizer import MIDITokenizer
 from .classes import Event, TokSequence
 

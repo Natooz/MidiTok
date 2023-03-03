@@ -65,7 +65,6 @@ def test_one_track_midi_to_tokens_to_midi(
     at_least_one_error = False
 
     for i, file_path in enumerate(tqdm(files, desc="Testing One Track")):
-
         # Reads the midi
         midi = MidiFile(file_path)
         tracks = [deepcopy(midi.instruments[0])]

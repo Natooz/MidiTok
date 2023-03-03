@@ -106,7 +106,7 @@ def detect_chords(
             continue
 
         # Gathers the notes around the same time step
-        onset_notes = notes[count: count + simul_notes_limit]  # reduces the scope
+        onset_notes = notes[count : count + simul_notes_limit]  # reduces the scope
         onset_notes = onset_notes[
             np.where(onset_notes[:, 1] <= onset_notes[0, 1] + onset_offset)
         ]
@@ -142,9 +142,7 @@ def detect_chords(
 
     events = []
     for chord in chords:
-        events.append(
-            Event(type="Chord", value=chord[0], time=chord[1], desc=chord[2])
-        )
+        events.append(Event(type="Chord", value=chord[0], time=chord[1], desc=chord[2]))
     return events
 
 
@@ -326,7 +324,9 @@ def merge_same_program_tracks(tracks: List[Instrument]):
             del tracks[i]
 
 
-def nb_bar_pos(seq: List[int], bar_token: int, position_tokens: List[int]) -> Tuple[int, int]:
+def nb_bar_pos(
+    seq: List[int], bar_token: int, position_tokens: List[int]
+) -> Tuple[int, int]:
     r"""Returns the number of bars and the last position of a sequence of tokens. This method
     is compatible with tokenizations representing time with *Bar* and *Position* tokens, such as
     :py:class:`miditok.REMI`.
@@ -342,7 +342,7 @@ def nb_bar_pos(seq: List[int], bar_token: int, position_tokens: List[int]) -> Tu
     current_bar = len(bar_idx)
     # Current position value within the bar
     pos_idx = [
-        i for i, token in enumerate(seq[bar_idx[-1]:]) if token in position_tokens
+        i for i, token in enumerate(seq[bar_idx[-1] :]) if token in position_tokens
     ]
     current_pos = (
         len(pos_idx) - 1

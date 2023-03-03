@@ -55,7 +55,9 @@ def test_bpe_conversion(
         tokenizer = getattr(miditok, tokenization)(
             beat_res=BEAT_RES_TEST, additional_tokens=add_tokens
         )
-        tokenizer.tokenize_midi_dataset(files, Path("tests", "test_results", tokenization))
+        tokenizer.tokenize_midi_dataset(
+            files, Path("tests", "test_results", tokenization)
+        )
         tokenizer.learn_bpe_slow(
             Path("tests", "test_results", tokenization),
             len(tokenizer.vocab) + 30,
@@ -69,7 +71,8 @@ def test_bpe_conversion(
     for i, tokenization in enumerate(tokenizations):
         tokenizers.append(
             getattr(miditok, tokenization)(
-                params=Path("tests", "test_results", f"{tokenization}_bpe") / "config.txt"
+                params=Path("tests", "test_results", f"{tokenization}_bpe")
+                / "config.txt"
             )
         )
 
@@ -94,7 +97,12 @@ def test_bpe_conversion(
             tokens_bpe_decomposed = deepcopy(tokens)  # BPE decomposed
             tokenizer.decode_bpe(tokens_bpe_decomposed)  # BPE decomposed
             with open(
-                Path("tests", "test_results", f"{tokenization}_bpe", f"{file_path.stem}.json")
+                Path(
+                    "tests",
+                    "test_results",
+                    f"{tokenization}_bpe",
+                    f"{file_path.stem}.json",
+                )
             ) as json_file:
                 saved_tokens = json.load(json_file)["ids"][
                     0

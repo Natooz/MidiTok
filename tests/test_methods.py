@@ -124,7 +124,9 @@ def test_data_augmentation():
             try:
                 aug_midi = MidiFile(aug_midi_path)
                 original_midi = MidiFile(data_path / f"{original_stem}.mid")
-            except Exception:  # ValueError, OSError, FileNotFoundError, IOError, EOFError, mido.KeySignatureError
+            except (
+                Exception
+            ):  # ValueError, OSError, FileNotFoundError, IOError, EOFError, mido.KeySignatureError
                 continue
 
             # Compare them
@@ -167,15 +169,9 @@ def test_data_augmentation():
             pitch_voc_idx = tokenizer.vocab_types_idx["Pitch"]
             vel_voc_idx = tokenizer.vocab_types_idx["Velocity"]
             dur_voc_idx = tokenizer.vocab_types_idx["Duration"]
-            pitch_tokens = np.array(
-                tokenizer.token_ids_of_type("Pitch", pitch_voc_idx)
-            )
-            vel_tokens = np.array(
-                tokenizer.token_ids_of_type("Velocity", vel_voc_idx)
-            )
-            dur_tokens = np.array(
-                tokenizer.token_ids_of_type("Duration", dur_voc_idx)
-            )
+            pitch_tokens = np.array(tokenizer.token_ids_of_type("Pitch", pitch_voc_idx))
+            vel_tokens = np.array(tokenizer.token_ids_of_type("Velocity", vel_voc_idx))
+            dur_tokens = np.array(tokenizer.token_ids_of_type("Duration", dur_voc_idx))
         else:
             pitch_tokens = np.array(
                 tokenizer.token_ids_of_type("Pitch")

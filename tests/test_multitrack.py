@@ -64,11 +64,12 @@ def test_multitrack_midi_to_tokens_to_midi(
     at_least_one_error = False
 
     for i, file_path in enumerate(tqdm(files, desc="Testing multitrack")):
-
         # Reads the MIDI
         try:
             midi = MidiFile(Path(file_path))
-        except Exception:  # ValueError, OSError, FileNotFoundError, IOError, EOFError, mido.KeySignatureError
+        except (
+            Exception
+        ):  # ValueError, OSError, FileNotFoundError, IOError, EOFError, mido.KeySignatureError
             continue
         if midi.ticks_per_beat % max(BEAT_RES_TEST.values()) != 0:
             continue

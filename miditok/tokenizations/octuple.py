@@ -1,4 +1,3 @@
-
 from math import ceil
 from pathlib import Path, PurePath
 from typing import List, Tuple, Dict, Optional, Union, Any
@@ -258,7 +257,7 @@ class Octuple(MIDITokenizer):
                 ):
                     # Will loop over incoming tempo changes
                     for tempo_change in self.current_midi_metadata["tempo_changes"][
-                        current_tempo_idx + 1:
+                        current_tempo_idx + 1 :
                     ]:
                         # If this tempo change happened before the current moment
                         if tempo_change.time <= note.start:
@@ -279,7 +278,7 @@ class Octuple(MIDITokenizer):
                     # Will loop over incoming time signature changes
                     for time_sig_change in self.current_midi_metadata[
                         "time_sig_changes"
-                    ][current_time_sig_idx + 1:]:
+                    ][current_time_sig_idx + 1 :]:
                         # If this time signature change happened before the current moment
                         if time_sig_change.time <= note.start:
                             current_time_sig = self._reduce_time_signature(
@@ -328,7 +327,7 @@ class Octuple(MIDITokenizer):
         :return: the midi object (miditoolkit.MidiFile)
         """
         assert (
-                time_division % max(self._beat_res.values()) == 0
+            time_division % max(self._beat_res.values()) == 0
         ), f"Invalid time division, please give one divisible by {max(self._beat_res.values())}"
         midi = MidiFile(ticks_per_beat=time_division)
         ticks_per_sample = time_division // max(self._beat_res.values())
@@ -345,7 +344,9 @@ class Octuple(MIDITokenizer):
         if self.additional_tokens["TimeSignature"]:
             for i in range(len(tokens)):
                 if tokens[i][-1].split("_")[1] != "None":
-                    time_sig = self._parse_token_time_signature(tokens[i][-1].split("_")[1])
+                    time_sig = self._parse_token_time_signature(
+                        tokens[i][-1].split("_")[1]
+                    )
                     break
 
         ticks_per_bar = time_division * time_sig[0]
@@ -362,7 +363,9 @@ class Octuple(MIDITokenizer):
             # Note attributes
             pitch = int(time_step[0].split("_")[1])
             vel = int(time_step[1].split("_")[1])
-            duration = self._token_duration_to_ticks(time_step[2].split("_")[1], time_division)
+            duration = self._token_duration_to_ticks(
+                time_step[2].split("_")[1], time_division
+            )
 
             # Time and track values
             program = int(time_step[3].split("_")[1])
@@ -520,10 +523,7 @@ class Octuple(MIDITokenizer):
         current_pitches = {p: [] for p in self.programs}
 
         for token in tokens.tokens:
-            if any(
-                tok.split("_")[1] == "None"
-                for tok in token
-            ):
+            if any(tok.split("_")[1] == "None" for tok in token):
                 err += 1
                 continue
             has_error = False

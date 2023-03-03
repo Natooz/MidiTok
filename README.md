@@ -24,7 +24,7 @@ MidiTok features most known [MIDI tokenizations](https://miditok.readthedocs.io/
 ```shell
 pip install miditok
 ```
-MidiTok uses [MIDIToolkit](https://github.com/YatingMusic/miditoolkit), which itself uses [Mido](https://github.com/mido/mido) to read and write MIDI files.
+MidiTok uses [MIDIToolkit](https://github.com/YatingMusic/miditoolkit), which itself uses [Mido](https://github.com/mido/mido) to read and write MIDI files, and BPE is backed by [Hugging Face 🤗tokenizers](https://github.com/huggingface/tokenizers) for super fast encoding.
 
 ## Usage example
 
@@ -50,9 +50,12 @@ data_augmentation_offsets = [2, 2, 1]  # data augmentation on 2 pitch octaves, 2
 tokenizer.tokenize_midi_dataset(midi_paths, Path('path', 'to', 'tokens_noBPE'),
                                 data_augment_offsets=data_augmentation_offsets)
 
-# Constructs the vocabulary with BPE
-tokenizer.learn_bpe(tokens_path=Path('path', 'to', 'tokens_noBPE'), vocab_size=500,
-                    out_dir=Path('path', 'to', 'tokens_BPE'), files_lim=300)
+# Constructs the vocabulary with BPE, from the tokenized files
+tokenizer.learn_bpe(
+    vocab_size=500,
+    tokens_paths=list(Path('path', 'to', 'tokens_noBPE').glob("**/*.json")),
+    start_from_empty_voc=False,
+)
 
 # Converts the tokenized musics into tokens with BPE
 tokenizer.apply_bpe_to_dataset(Path('path', 'to', 'tokens_noBPE'), Path('path', 'to', 'tokens_BPE'))

@@ -26,13 +26,14 @@ class Event:
 @dataclass
 class TokSequence:
     r"""Represents a sequence of token.
-    The TokSequence class can represent tokens by their several forms:
+    A ``TokSequence`` can represent tokens by their several forms:
+
     * tokens (list of str): tokens as sequence of strings.
     * ids (list of int), these are the one to be fed to models.
     * events (list of Event): Event objects that can carry time or other information useful for debugging.
-    * bytes (str): ids are converted into unique bytes, all joined together in a single string. This
-        form can be used internally for Byte Pair Encoding.
+    * bytes (str): ids are converted into unique bytes, all joined together in a single string.
 
+    Bytes are used internally by MidiTok for Byte Pair Encoding.
     The ``ids_are_bpe_encoded`` attribute tells if ``ids`` is encoded with BPE.
 
     :py:meth:`miditok.MIDITokenizer.complete_sequence`
