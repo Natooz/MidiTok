@@ -70,10 +70,10 @@ def data_augmentation_dataset(
         if as_tokens:
             with open(file_path) as json_file:
                 file = json.load(json_file)
-                tokens, programs = file["tokens"], file["programs"]
+                ids, programs = file["ids"], file["programs"]
 
             if tokenizer.unique_track:
-                tokens = [tokens]
+                ids = [ids]
 
             # Perform data augmentation for each track
             offsets = get_offsets(
@@ -84,12 +84,12 @@ def data_augmentation_dataset(
                 octave_directions,
                 vel_directions,
                 dur_directions,
-                tokens=tokens,
+                ids=ids,
             )
             augmented_tokens: Dict[
                 Tuple[int, int, int], List[Union[int, List[int]]]
             ] = {}
-            for track, (_, is_drum) in zip(tokens, programs):
+            for track, (_, is_drum) in zip(ids, programs):
                 if is_drum:  # we dont augment drums
                     continue
                 aug = data_augmentation_tokens(
@@ -109,7 +109,7 @@ def data_augmentation_dataset(
                     except KeyError:
                         augmented_tokens[aug_offsets] = [seq]
             for i, (track, (_, is_drum)) in enumerate(
-                zip(tokens, programs)
+                zip(ids, programs)
             ):  # adding drums to all already augmented
                 if is_drum:
                     for aug_offsets in augmented_tokens:
@@ -134,7 +134,7 @@ def data_augmentation_dataset(
                 nb_tracks_augmented += len(tracks_seq)
             if copy_original_in_new_location and out_path is not None:
                 tokenizer.save_tokens(
-                    tokens, out_path / f"{file_path.stem}.json", programs
+                    ids, out_path / f"{file_path.stem}.json", programs
                 )
 
         else:  # as midi
@@ -203,7 +203,7 @@ def get_offsets(
     vel_directions: Tuple[bool, bool] = (True, True),
     dur_directions: Tuple[bool, bool] = (True, True),
     midi: MidiFile = None,
-    tokens: List[Union[int, List[int]]] = None,
+    ids: List[Union[int, List[int]]] = None,
 ) -> List[List[int]]:
     r"""Build the offsets in absolute value for data augmentation.
     TODO some sort of limit for velocity and duration values (min / max as for octaves)
@@ -219,7 +219,7 @@ def get_offsets(
     :param dur_directions: directions to shift the duration augmentation, for up / down
             as a tuple of two booleans. (default: (True, True))
     :param midi: midi object to augment (default: None)
-    :param tokens: tokens as a list of tracks (default: None)
+    :param ids: token ids as a list of tracks (default: None)
     :return: augmented MIDI objects.
     """
     offsets = []
@@ -236,42 +236,39 @@ def get_offsets(
             pitch_voc_idx = (
                 tokenizer.vocab_types_idx["Pitch"] if tokenizer.is_multi_voc else None
             )
-            tokens_pitch = []
+            ids_pitch = []
             if not tokenizer.is_multi_voc:
-                pitch_tokens = np.array(
-                    tokenizer.vocab.tokens_of_type("Pitch")
-                    + tokenizer.vocab.tokens_of_type("NoteOn")
+                pitch_ids_vocab = np.array(
+                    tokenizer.token_ids_of_type("Pitch")
+                    + tokenizer.token_ids_of_type("NoteOn")
                 )
-                for track_tokens in tokens:
-                    tt_arr = np.array(track_tokens)
-                    tokens_pitch.append(tt_arr[np.isin(tt_arr, pitch_tokens)])
-                max_pitch = tokenizer[int(np.max(np.concatenate(tokens_pitch)))].split(
+                for track_ids in ids:
+                    tt_arr = np.array(track_ids)
+                    ids_pitch.append(tt_arr[np.isin(tt_arr, pitch_ids_vocab)])
+                max_pitch = tokenizer[int(np.max(np.concatenate(ids_pitch)))].split(
                     "_"
                 )[1]
-                min_pitch = tokenizer[int(np.min(np.concatenate(tokens_pitch)))].split(
+                min_pitch = tokenizer[int(np.min(np.concatenate(ids_pitch)))].split(
                     "_"
                 )[1]
             else:
-                pitch_tokens = np.array(
-                    tokenizer.vocab[pitch_voc_idx].tokens_of_type("Pitch")
+                pitch_ids_vocab = np.array(
+                    tokenizer.token_ids_of_type("Pitch", pitch_voc_idx)
                 )
-                for track_tokens in tokens:
-                    tt_arr = np.array(track_tokens[pitch_voc_idx])
-                    tokens_pitch.append(tt_arr[np.isin(tt_arr, pitch_tokens)])
-                for i, tok in enumerate(tokens):
-                    if tok[pitch_voc_idx] in pitch_tokens:
-                        tokens_pitch.append(tok[pitch_voc_idx])
-                max_pitch = tokenizer.vocab[pitch_voc_idx][
-                    int(np.max(np.concatenate(tokens_pitch)))
+                for track_ids in ids:
+                    tt_arr = np.array(track_ids)[:, pitch_voc_idx]
+                    ids_pitch.append(tt_arr[np.isin(tt_arr, pitch_ids_vocab)])
+                max_pitch = tokenizer[
+                    pitch_voc_idx, int(np.max(np.concatenate(ids_pitch)))
                 ].split("_")[1]
-                min_pitch = tokenizer.vocab[pitch_voc_idx][
-                    int(np.min(np.concatenate(tokens_pitch)))
+                min_pitch = tokenizer[
+                    pitch_voc_idx, int(np.min(np.concatenate(ids_pitch)))
                 ].split("_")[1]
         offset_up = min(
-            nb_octave_offset, (tokenizer.pitch_range.stop - 1 - int(max_pitch)) // 12
+            nb_octave_offset, (tokenizer._pitch_range.stop - 1 - int(max_pitch)) // 12
         )
         offset_down = min(
-            nb_octave_offset, (int(min_pitch) - tokenizer.pitch_range.start) // 12
+            nb_octave_offset, (int(min_pitch) - tokenizer._pitch_range.start) // 12
         )
 
         off = []
@@ -282,7 +279,7 @@ def get_offsets(
         offsets.append(off)
 
     if nb_vel_offset is not None:
-        vel_dim = int(128 / len(tokenizer.velocities))
+        vel_dim = int(128 / len(tokenizer._velocities))
         off = []
         if vel_directions[0]:
             off += list(range(vel_dim, nb_vel_offset * vel_dim + 1, vel_dim))
@@ -347,11 +344,11 @@ def data_augmentation_midi(
                     for note_ in track_.notes:
                         if offset_ < 0:
                             note_.velocity = max(
-                                min(tokenizer.velocities), note_.velocity + offset_
+                                min(tokenizer._velocities), note_.velocity + offset_
                             )
                         else:
                             note_.velocity = min(
-                                max(tokenizer.velocities), note_.velocity + offset_
+                                max(tokenizer._velocities), note_.velocity + offset_
                             )
                 aug_.append(((offsets_[0], offset_, offsets_[2]), midi_aug_))
             return aug_
@@ -423,7 +420,7 @@ def data_augmentation_tokens(
     # Decode BPE
     bpe_decoded = False
     if tokenizer.has_bpe:
-        tokens = tokenizer.decompose_bpe(
+        tokens = tokenizer.decode_bpe(
             tokens.tolist() if isinstance(tokens, np.ndarray) else tokens
         )
         bpe_decoded = True
@@ -440,15 +437,13 @@ def data_augmentation_tokens(
         note_off_tokens = []
         if not tokenizer.is_multi_voc:
             pitch_tokens = np.array(
-                tokenizer.vocab.tokens_of_type("Pitch")
-                + tokenizer.vocab.tokens_of_type("NoteOn")
+                tokenizer.token_ids_of_type("Pitch")
+                + tokenizer.token_ids_of_type("NoteOn")
             )
-            note_off_tokens = np.array(tokenizer.vocab.tokens_of_type("NoteOff"))
+            note_off_tokens = np.array(tokenizer.token_ids_of_type("NoteOff"))
             mask_pitch = np.isin(tokens, pitch_tokens)
         else:
-            pitch_tokens = np.array(
-                tokenizer.vocab[pitch_voc_idx].tokens_of_type("Pitch")
-            )
+            pitch_tokens = np.array(tokenizer.token_ids_of_type("Pitch", pitch_voc_idx))
             mask_pitch = np.full_like(tokens, 0, dtype=np.bool_)
             mask_pitch[:, pitch_voc_idx] = np.isin(
                 tokens[:, pitch_voc_idx], pitch_tokens
@@ -468,11 +463,9 @@ def data_augmentation_tokens(
             tokenizer.vocab_types_idx["Velocity"] if tokenizer.is_multi_voc else None
         )
         if not tokenizer.is_multi_voc:
-            vel_tokens = np.array(tokenizer.vocab.tokens_of_type("Velocity"))
+            vel_tokens = np.array(tokenizer.token_ids_of_type("Velocity"))
         else:
-            vel_tokens = np.array(
-                tokenizer.vocab[vel_voc_idx].tokens_of_type("Velocity")
-            )
+            vel_tokens = np.array(tokenizer.token_ids_of_type("Velocity", vel_voc_idx))
 
         def augment_vel(
             seq_: np.ndarray, offsets_: Tuple[int, int, int]
@@ -509,11 +502,9 @@ def data_augmentation_tokens(
             tokenizer.vocab_types_idx["Duration"] if tokenizer.is_multi_voc else None
         )
         if not tokenizer.is_multi_voc:
-            dur_tokens = np.array(tokenizer.vocab.tokens_of_type("Duration"))
+            dur_tokens = np.array(tokenizer.token_ids_of_type("Duration"))
         else:
-            dur_tokens = np.array(
-                tokenizer.vocab[dur_voc_idx].tokens_of_type("Duration")
-            )
+            dur_tokens = np.array(tokenizer.token_ids_of_type("Duration", dur_voc_idx))
 
         def augment_dur(
             seq_: np.ndarray, offsets_: Tuple[int, int, int]

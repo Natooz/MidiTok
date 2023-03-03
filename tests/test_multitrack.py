@@ -64,11 +64,12 @@ def test_multitrack_midi_to_tokens_to_midi(
     at_least_one_error = False
 
     for i, file_path in enumerate(tqdm(files, desc="Testing multitrack")):
-
         # Reads the MIDI
         try:
             midi = MidiFile(Path(file_path))
-        except Exception:  # ValueError, OSError, FileNotFoundError, IOError, EOFError, mido.KeySignatureError
+        except (
+            Exception
+        ):  # ValueError, OSError, FileNotFoundError, IOError, EOFError, mido.KeySignatureError
             continue
         if midi.ticks_per_beat % max(BEAT_RES_TEST.values()) != 0:
             continue
@@ -78,10 +79,6 @@ def test_multitrack_midi_to_tokens_to_midi(
             tokenizer = getattr(miditok, tokenization)(
                 beat_res=BEAT_RES_TEST,
                 additional_tokens=deepcopy(ADDITIONAL_TOKENS_TEST),
-                pad=True,
-                sos_eos=True,
-                mask=True,
-                sep=True,
             )
 
             # Process the MIDI
@@ -126,7 +123,7 @@ def test_multitrack_midi_to_tokens_to_midi(
             new_midi.instruments.sort(key=lambda x: (x.program, x.is_drum))
 
             # Checks types and values conformity following the rules
-            tokens_types = tokenizer.token_types_errors(
+            tokens_types = tokenizer.tokens_errors(
                 tokens[0] if not tokenizer.unique_track else tokens
             )
             if tokens_types != 0.0:

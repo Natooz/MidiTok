@@ -65,7 +65,6 @@ def test_one_track_midi_to_tokens_to_midi(
     at_least_one_error = False
 
     for i, file_path in enumerate(tqdm(files, desc="Testing One Track")):
-
         # Reads the midi
         midi = MidiFile(file_path)
         tracks = [deepcopy(midi.instruments[0])]
@@ -81,18 +80,14 @@ def test_one_track_midi_to_tokens_to_midi(
             tokenizer = getattr(miditok, tokenization)(
                 beat_res=BEAT_RES_TEST,
                 additional_tokens=add_tokens,
-                pad=True,
-                sos_eos=True,
-                mask=True,
-                sep=True,
             )
 
             # Convert the track in tokens
-            tokens = tokenizer.midi_to_tokens(midi)
+            tokens = tokenizer(midi)
 
             # Checks types and values conformity following the rules
-            tokens_types = tokenizer.token_types_errors(
-                tokens[0] if tokenization not in ["Octuple", "MuMIDI"] else tokens
+            tokens_types = tokenizer.tokens_errors(
+                tokens[0] if not tokenizer.unique_track else tokens
             )
             if tokens_types != 0.0:
                 print(

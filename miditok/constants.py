@@ -2,7 +2,11 @@
 
 """
 
-CURRENT_VERSION_PACKAGE = "1.4.3"  # used when saving the config of a tokenizer
+CURRENT_VERSION_PACKAGE = "2.0.0"  # used when saving the config of a tokenizer
+
+CHR_ID_START = (
+    5  # starting id of chr() method for BPE, as the firsts are ignored by 🤗tokenizers
+)
 
 # MIDI encodings default parameters, used when tokenizing a dataset and using tokens
 # These are the parameters from which a MIDI file will be tokenized
@@ -30,6 +34,7 @@ ADDITIONAL_TOKENS = {
     # time signature params
     "time_signature_range": (8, 2),
 }  # (max_beat_res, max_bar_length_in_NOTE)
+SPECIAL_TOKENS = ["PAD", "BOS", "EOS", "MASK"]  # default special tokens
 
 # For MuMIDI, recommended range from the GM2 specs
 # note: we ignore the "Applause" at pitch 88 of the orchestra drum set, increase to 89 if you need it

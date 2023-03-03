@@ -1,9 +1,46 @@
 =================
-MIDI Tokenizer
+Basics
 =================
 
-MidiTok features several MIDI tokenizations, all inheriting from a ``MIDITokenizer`` class.
-Read the documentation of the arguments of :class:`miditok.MIDITokenizer` to learn how to
+This page features the bases of MidiTok, of how tokenizers work.
+
+Tokens and vocabulary
+------------------------
+
+A token can take three forms, which we name by convention:
+
+* Token (``string``): the form describing it, e.g. *Pitch_50*.
+* Id (``int``): an unique associated integer, used as an index.
+* Byte (``string``): an unique associated byte, used internally for :ref:`Byte Pair Encoding (BPE)`.
+
+MidiTok works with :ref:`TokSequence` objects to output token sequences of represented by these three forms.
+
+TokSequence
+------------------------
+
+The methods of MidiTok use :class:`miditok.TokSequence` objects as input and outputs. A ``TokSequence`` holds tokens as the three forms described in :ref:`Byte Pair Encoding (BPE)`.
+
+You can use the :py:func:`miditok.MIDITokenizer.complete_sequence` method to automatically fill the non-initialized attributes of a ``TokSequence``.
+
+.. autoclass:: miditok.TokSequence
+    :noindex:
+    :members:
+
+Vocabulary
+------------------------
+
+The vocabulary of a tokenizer acts as a lookup table, linking tokens (string) to their ids (integer). The vocabulary is an attribute of the tokenizer and can be accessed with ``tokenizer.vocab``. The vocabulary is a Python dictionary binding tokens (keys) to their ids (values).
+For tokenizations with embedding embedding pooling (e.g. :ref:`CPWord` or :ref:`Octuple`), ``tokenizer.vocab`` will be a list of ``Vocabulary`` objects, and the ``tokenizer.is_multi_vocab`` property will be ``True``.
+
+**With Byte Pair Encoding:**
+``tokenizer.vocab`` holds all the basic tokens describing the note and time attributes of music. By analogy with text, these tokens can be seen as unique characters.
+After training a tokenizer with :ref:`Byte Pair Encoding (BPE)`, a new vocabulary is built with newly created tokens from pairs of basic tokens. This vocabulary can be accessed with ``tokenizer.vocab_bpe``, and binds tokens as bytes (string) to their associated ids (int). This is the vocabulary of the 🤗tokenizers BPE model.
+
+MIDI Tokenizer
+------------------------
+
+MidiTok features several MIDI tokenizations, all inheriting from the :class:`miditok.MIDITokenizer` class.
+The documentation of the arguments teaches you how to create a custom tokenizer.
 
 .. autoclass:: miditok.MIDITokenizer
     :members:
@@ -82,16 +119,6 @@ MidiTok offers to include some special tokens to the vocabulary. To use them, yo
 * **sep** (default: ``False``) --> ``SEP_None``: a token to use as a separation between sequences.
 
 **Note:** you can use the ``tokenizer.special_tokens`` property to get the list of the special tokens of a tokenizer.
-
-Vocabulary
-------------------------
-
-The ``Vocabulary`` class acts as a lookup table, linking tokens (*Pitch*...) to their index (integer). The vocabulary is an attribute of the tokenizer and can be accessed with ``tokenizer.vocab``.
-For tokenizations with embedding embedding pooling (e.g. :ref:`CPWord` or :ref:`Octuple`), ``tokenizer.vocab`` will be a list of ``Vocabulary`` objects, and the ``tokenizer.is_multi_vocab`` property will be ``True``.
-
-.. autoclass:: miditok.Vocabulary
-    :noindex:
-    :members:
 
 Magic methods
 ------------------------

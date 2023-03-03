@@ -1,18 +1,18 @@
-
-from typing import List, Tuple, Dict, Optional, Union
+from typing import List, Tuple, Dict, Optional, Union, Any
 from pathlib import Path
 
 import numpy as np
 from miditoolkit import Instrument, Note, TempoChange
 
-from .midi_tokenizer_base import MIDITokenizer, convert_tokens_tensors_to_list
-from .vocabulary import Vocabulary, Event
-from .utils import detect_chords
-from .constants import (
+from ..midi_tokenizer import MIDITokenizer, _in_as_seq, _out_as_complete_seq
+from ..classes import TokSequence, Event
+from ..utils import detect_chords
+from ..constants import (
     PITCH_RANGE,
     NB_VELOCITIES,
     BEAT_RES,
     ADDITIONAL_TOKENS,
+    SPECIAL_TOKENS,
     TIME_DIVISION,
     TEMPO,
     MIDI_INSTRUMENTS,
@@ -38,12 +38,8 @@ class MIDILike(MIDITokenizer):
     :param nb_velocities: number of velocity bins
     :param additional_tokens: additional tokens (chords, time signature, rests, tempo...) to use,
             to be given as a dictionary. (default: None is used)
-    :param pad: will add a special *PAD* token to the vocabulary, to use to pad sequences when
-            training a model with batches of different sequence lengths. (default: True)
-    :param sos_eos: adds special Start Of Sequence (*SOS*) and End Of Sequence (*EOS*) tokens
-            to the vocabulary. (default: False)
-    :param mask: will add a special *MASK* token to the vocabulary (default: False)
-    :param sep: will add a special *SEP* token to the vocabulary (default: False)
+    :param special_tokens: list of special tokens. This must be given as a list of strings given
+            only the names of the tokens. (default: ``["PAD", "BOS", "EOS", "MASK"]``)
     :param params: path to a tokenizer config file. This will override other arguments and
             load the tokenizer based on the config file. This is particularly useful if the
             tokenizer learned Byte Pair Encoding. (default: None)
@@ -55,10 +51,7 @@ class MIDILike(MIDITokenizer):
         beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
         nb_velocities: int = NB_VELOCITIES,
         additional_tokens: Dict[str, bool] = ADDITIONAL_TOKENS,
-        pad: bool = True,
-        sos_eos: bool = False,
-        mask: bool = False,
-        sep: bool = False,
+        special_tokens: List[str] = SPECIAL_TOKENS,
         params: Union[str, Path] = None,
     ):
         additional_tokens["TimeSignature"] = False  # not compatible
@@ -67,29 +60,27 @@ class MIDILike(MIDITokenizer):
             beat_res,
             nb_velocities,
             additional_tokens,
-            pad,
-            sos_eos,
-            mask,
-            sep,
+            special_tokens,
             params=params,
         )
 
-    def track_to_tokens(self, track: Instrument) -> List[int]:
-        r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
+    @_out_as_complete_seq
+    def track_to_tokens(self, track: Instrument) -> TokSequence:
+        r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens (:class:`miditok.TokSequence`).
         (can probably be achieved faster with Mido objects)
 
         :param track: MIDI track to convert
-        :return: sequence of corresponding tokens
+        :return: :class:`miditok.TokSequence` of corresponding tokens.
         """
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
-        ticks_per_sample = self.current_midi_metadata["time_division"] / max(
-            self.beat_res.values()
+        ticks_per_sample = self._current_midi_metadata["time_division"] / max(
+            self._beat_res.values()
         )
-        dur_bins = self.durations_ticks[self.current_midi_metadata["time_division"]]
+        dur_bins = self._durations_ticks[self._current_midi_metadata["time_division"]]
         min_rest = (
-            self.current_midi_metadata["time_division"] * self.rests[0][0]
-            + ticks_per_sample * self.rests[0][1]
+            self._current_midi_metadata["time_division"] * self._rests[0][0]
+            + ticks_per_sample * self._rests[0][1]
             if self.additional_tokens["Rest"]
             else 0
         )
@@ -116,7 +107,7 @@ class MIDILike(MIDITokenizer):
             )
         # Adds tempo events if specified
         if self.additional_tokens["Tempo"]:
-            for tempo_change in self.current_midi_metadata["tempo_changes"]:
+            for tempo_change in self._current_midi_metadata["tempo_changes"]:
                 events.append(
                     Event(
                         type="Tempo",
@@ -145,9 +136,9 @@ class MIDILike(MIDITokenizer):
             ):
                 rest_beat, rest_pos = divmod(
                     event.time - previous_tick,
-                    self.current_midi_metadata["time_division"],
+                    self._current_midi_metadata["time_division"],
                 )
-                rest_beat = min(rest_beat, max([r[0] for r in self.rests]))
+                rest_beat = min(rest_beat, max([r[0] for r in self._rests]))
                 rest_pos = round(rest_pos / ticks_per_sample)
                 rest_tick = previous_tick  # untouched tick value to the order is not messed after sorting
 
@@ -161,12 +152,12 @@ class MIDILike(MIDITokenizer):
                         )
                     )
                     previous_tick += (
-                        rest_beat * self.current_midi_metadata["time_division"]
+                        rest_beat * self._current_midi_metadata["time_division"]
                     )
 
-                while rest_pos >= self.rests[0][1]:
+                while rest_pos >= self._rests[0][1]:
                     rest_pos_temp = min(
-                        [r[1] for r in self.rests], key=lambda x: abs(x - rest_pos)
+                        [r[1] for r in self._rests], key=lambda x: abs(x - rest_pos)
                     )
                     events.append(
                         Event(
@@ -186,7 +177,7 @@ class MIDILike(MIDITokenizer):
                     events.append(
                         Event(
                             type="TimeShift",
-                            value=".".join(map(str, self.durations[index])),
+                            value=".".join(map(str, self._durations[index])),
                             time=previous_tick,
                             desc=f"{time_shift} ticks",
                         )
@@ -199,7 +190,7 @@ class MIDILike(MIDITokenizer):
                 events.append(
                     Event(
                         type="TimeShift",
-                        value=".".join(map(str, self.durations[index])),
+                        value=".".join(map(str, self._durations[index])),
                         time=previous_tick,
                         desc=f"{time_shift} ticks",
                     )
@@ -213,36 +204,42 @@ class MIDILike(MIDITokenizer):
         if self.additional_tokens["Chord"] and not track.is_drum:
             events += detect_chords(
                 track.notes,
-                self.current_midi_metadata["time_division"],
+                self._current_midi_metadata["time_division"],
                 self._first_beat_res,
             )
 
         events.sort(key=lambda x: (x.time, self._order(x)))
 
-        return self.events_to_tokens(events)
+        return TokSequence(events=events)
 
+    @_in_as_seq()
     def tokens_to_track(
         self,
-        tokens: List[int],
+        tokens: Union[TokSequence, List, np.ndarray, Any],
         time_division: Optional[int] = TIME_DIVISION,
         program: Optional[Tuple[int, bool]] = (0, False),
         default_duration: int = None,
     ) -> Tuple[Instrument, List[TempoChange]]:
         r"""Converts a sequence of tokens into a track object
 
-        :param tokens: sequence of tokens to convert
+        :param tokens: sequence of tokens to convert. Can be either a Tensor (PyTorch and Tensorflow are supported),
+                a numpy array, a Python list or a TokSequence.
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create)
         :param program: the MIDI program of the produced track and if it drum, (default (0, False), piano)
         :param default_duration: default duration (in ticks) in case a Note On event occurs without its associated
                                 note off event. Leave None to discard Note On with no Note Off event.
         :return: the miditoolkit instrument object and tempo changes
         """
-        ticks_per_sample = time_division // max(self.beat_res.values())
-        events = self.tokens_to_events(tokens)
-
-        max_duration = self.durations[-1][0] * time_division + self.durations[-1][1] * (
-            time_division // self.durations[-1][2]
+        ticks_per_sample = time_division // max(self._beat_res.values())
+        events = (
+            tokens.events
+            if tokens.events is not None
+            else [Event(*tok.split("_")) for tok in tokens.tokens]
         )
+
+        max_duration = self._durations[-1][0] * time_division + self._durations[-1][
+            1
+        ] * (time_division // self._durations[-1][2])
         name = "Drums" if program[1] else MIDI_INSTRUMENTS[program[0]]["name"]
         instrument = Instrument(program[0], is_drum=program[1], name=name)
         tempo_changes = [
@@ -308,55 +305,51 @@ class MIDILike(MIDITokenizer):
         tempo_changes[0].time = 0
         return instrument, tempo_changes
 
-    def _create_vocabulary(self, sos_eos_tokens: bool = None) -> Vocabulary:
-        r"""Creates the Vocabulary object of the tokenizer.
-        See the docstring of the Vocabulary class for more details about how to use it.
-        NOTE: token index 0 is used as a padding index for training.
+    def _create_base_vocabulary(self) -> List[str]:
+        r"""Creates the vocabulary, as a list of string tokens.
+        Each token as to be given as the form of "Type_Value", separated with an underscore.
+        Example: Pitch_58
+        The :class:`miditok.MIDITokenizer` main class will then create the "real" vocabulary as
+        a dictionary.
+        Special tokens have to be given when creating the tokenizer, and
+        will be added to the vocabulary by :class:`miditok.MIDITokenizer`.
 
-        :param sos_eos_tokens: DEPRECIATED, will include Start Of Sequence (SOS) and End Of Sequence (tokens)
-        :return: the vocabulary object
+        :return: the vocabulary as a list of string.
         """
-        if sos_eos_tokens is not None:
-            print(
-                "\033[93msos_eos_tokens argument is depreciated and will be removed in a future update, "
-                "_create_vocabulary now uses self._sos_eos attribute set a class init \033[0m"
-            )
-        vocab = Vocabulary(
-            pad=self._pad, sos_eos=self._sos_eos, mask=self._mask, sep=self._sep
-        )
+        vocab = []
 
         # NOTE ON
-        vocab.add_event(f"NoteOn_{i}" for i in self.pitch_range)
+        vocab += [f"NoteOn_{i}" for i in self._pitch_range]
 
         # NOTE OFF
-        vocab.add_event(f"NoteOff_{i}" for i in self.pitch_range)
+        vocab += [f"NoteOff_{i}" for i in self._pitch_range]
 
         # VELOCITY
-        vocab.add_event(f"Velocity_{i}" for i in self.velocities)
+        vocab += [f"Velocity_{i}" for i in self._velocities]
 
         # TIME SHIFTS
-        vocab.add_event(
-            f'TimeShift_{".".join(map(str, duration))}' for duration in self.durations
-        )
+        vocab += [
+            f'TimeShift_{".".join(map(str, duration))}' for duration in self._durations
+        ]
 
         # CHORD
         if self.additional_tokens["Chord"]:
-            vocab.add_event(
+            vocab += [
                 f"Chord_{i}" for i in range(3, 6)
-            )  # non recognized chords (between 3 and 5 notes only)
-            vocab.add_event(f"Chord_{chord_quality}" for chord_quality in CHORD_MAPS)
+            ]  # non recognized chords (between 3 and 5 notes only)
+            vocab += [f"Chord_{chord_quality}" for chord_quality in CHORD_MAPS]
 
         # REST
         if self.additional_tokens["Rest"]:
-            vocab.add_event(f'Rest_{".".join(map(str, rest))}' for rest in self.rests)
+            vocab += [f'Rest_{".".join(map(str, rest))}' for rest in self._rests]
 
         # TEMPO
         if self.additional_tokens["Tempo"]:
-            vocab.add_event(f"Tempo_{i}" for i in self.tempos)
+            vocab += [f"Tempo_{i}" for i in self._tempos]
 
         # PROGRAM
         if self.additional_tokens["Program"]:
-            vocab.add_event(f"Program_{program}" for program in range(-1, 128))
+            vocab += [f"Program_{program}" for program in range(-1, 128)]
 
         return vocab
 
@@ -392,11 +385,10 @@ class MIDILike(MIDITokenizer):
                 dic["Rest"] += ["Chord"]
             dic["NoteOff"] += ["Rest"]
 
-        self._add_special_tokens_to_types_graph(dic)
         return dic
 
-    @convert_tokens_tensors_to_list
-    def token_types_errors(self, tokens: List[int]) -> float:
+    @_in_as_seq(complete=False, decode_bpe=False)
+    def tokens_errors(self, tokens: Union[TokSequence, List, np.ndarray, Any]) -> float:
         r"""Checks if a sequence of tokens is made of good token types
         successions and returns the error ratio (lower is better).
         The Pitch and Position values are also analyzed:
@@ -407,18 +399,24 @@ class MIDILike(MIDITokenizer):
         :return: the error ratio (lower is better)
         """
         nb_tok_predicted = len(tokens)  # used to norm the score
-        tokens = self.decompose_bpe(tokens) if self.has_bpe else tokens
+        if self.has_bpe:
+            self.decode_bpe(tokens)
+        self.complete_sequence(tokens)
 
         # Override from here
 
         err = 0
         current_pitches = []
-        max_duration = self.durations[-1][0] * max(self.beat_res.values())
-        max_duration += self.durations[-1][1] * (
-            max(self.beat_res.values()) // self.durations[-1][2]
+        max_duration = self._durations[-1][0] * max(self._beat_res.values())
+        max_duration += self._durations[-1][1] * (
+            max(self._beat_res.values()) // self._durations[-1][2]
         )
 
-        events = self.tokens_to_events(tokens)
+        events = (
+            tokens.events
+            if tokens.events is not None
+            else [Event(*tok.split("_")) for tok in tokens.tokens]
+        )
 
         for i in range(1, len(events)):
             # Good token type
@@ -438,7 +436,7 @@ class MIDILike(MIDITokenizer):
                             break  # all good
                         elif events[j].type == "TimeShift":
                             offset_sample += self._token_duration_to_ticks(
-                                events[j].value, max(self.beat_res.values())
+                                events[j].value, max(self._beat_res.values())
                             )
 
                         if (
