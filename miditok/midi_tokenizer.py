@@ -1648,8 +1648,8 @@ class MIDITokenizer(ABC):
                 ] = self._vocab_base_byte_to_token
 
         params = {
-            "_pitch_range": (self.pitch_range.start, self.pitch_range.stop),
-            "_beat_res": {f"{k1}_{k2}": v for (k1, k2), v in self.beat_res.items()},
+            "pitch_range": (self.pitch_range.start, self.pitch_range.stop),
+            "beat_res": {f"{k1}_{k2}": v for (k1, k2), v in self.beat_res.items()},
             "_nb_velocities": len(self.velocities),
             "additional_tokens": self.additional_tokens,
             "special_tokens": self.special_tokens,
