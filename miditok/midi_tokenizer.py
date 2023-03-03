@@ -167,45 +167,45 @@ class MIDITokenizer(ABC):
             assert (
                 0 < nb_velocities < 128
             ), "You must specify a nb_velocities between 0 and 127 (included)"
-            self._pitch_range = pitch_range
-            self._beat_res = beat_res
+            self.pitch_range = pitch_range
+            self.beat_res = beat_res
             self._nb_velocities = nb_velocities
             self.additional_tokens = additional_tokens
             self.special_tokens = special_tokens
             self.unique_track = unique_track
 
         # Init duration and velocity values
-        self._durations = self.__create_durations_tuples()
-        self._velocities = np.linspace(0, 127, self._nb_velocities + 1, dtype=np.intc)[
+        self.durations = self.__create_durations_tuples()
+        self.velocities = np.linspace(0, 127, self._nb_velocities + 1, dtype=np.intc)[
             1:
         ]  # remove velocity 0
-        self._first_beat_res = list(self._beat_res.values())[0]
-        for beat_range, res in self._beat_res.items():
+        self._first_beat_res = list(self.beat_res.values())[0]
+        for beat_range, res in self.beat_res.items():
             if 0 in beat_range:
                 self._first_beat_res = res
                 break
 
         # Tempos
-        self._tempos = np.zeros(1)
+        self.tempos = np.zeros(1)
         if self.additional_tokens["Tempo"]:
-            self._tempos = np.linspace(
+            self.tempos = np.linspace(
                 *self.additional_tokens["tempo_range"],
                 self.additional_tokens["nb_tempos"],
                 dtype=np.intc,
             )
 
         # Rests
-        self._rests = []
+        self.rests = []
         if self.additional_tokens["Rest"]:
             assert (
                 self.additional_tokens["rest_range"][0] // 4 <= self._first_beat_res
             ), "The minimum rest value must be equal or superior to the initial beat resolution"
-            self._rests = self.__create_rests()
+            self.rests = self.__create_rests()
 
         # Time Signatures
-        self._time_signatures = []
+        self.time_signatures = []
         if self.additional_tokens["TimeSignature"]:
-            self._time_signatures = self.__create_time_signatures()
+            self.time_signatures = self.__create_time_signatures()
 
         # Vocabulary and token types graph
         if (
@@ -323,10 +323,10 @@ class MIDITokenizer(ABC):
         :param notes: notes to quantize.
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed).
         """
-        ticks_per_sample = int(time_division / max(self._beat_res.values()))
+        ticks_per_sample = int(time_division / max(self.beat_res.values()))
         i = 0
         while i < len(notes):
-            if notes[i].pitch not in self._pitch_range:
+            if notes[i].pitch not in self.pitch_range:
                 del notes[i]
                 continue
             start_offset = notes[i].start % ticks_per_sample
@@ -352,8 +352,8 @@ class MIDITokenizer(ABC):
                 )
 
             notes[i].velocity = int(
-                self._velocities[
-                    int(np.argmin(np.abs(self._velocities - notes[i].velocity)))
+                self.velocities[
+                    int(np.argmin(np.abs(self.velocities - notes[i].velocity)))
                 ]
             )
             i += 1
@@ -365,13 +365,13 @@ class MIDITokenizer(ABC):
         :param tempos: tempo changes to quantize.
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed).
         """
-        ticks_per_sample = int(time_division / max(self._beat_res.values()))
+        ticks_per_sample = int(time_division / max(self.beat_res.values()))
         prev_tempo = -1
         i = 0
         while i < len(tempos):
             # Quantize tempo value
-            tempos[i].tempo = self._tempos[
-                np.argmin(np.abs(self._tempos - tempos[i].tempo))
+            tempos[i].tempo = self.tempos[
+                np.argmin(np.abs(self.tempos - tempos[i].tempo))
             ]
             if tempos[i].tempo == prev_tempo:
                 del tempos[i]
@@ -455,7 +455,7 @@ class MIDITokenizer(ABC):
             self._durations_ticks[midi.ticks_per_beat] = np.array(
                 [
                     (beat * res + pos) * midi.ticks_per_beat // res
-                    for beat, pos, res in self._durations
+                    for beat, pos, res in self.durations
                 ]
             )
 
@@ -807,14 +807,14 @@ class MIDITokenizer(ABC):
         :return: the duration bins.
         """
         durations = []
-        for beat_range, beat_res in self._beat_res.items():
+        for beat_range, beat_res in self.beat_res.items():
             durations += [
                 (beat, pos, beat_res)
                 for beat in range(*beat_range)
                 for pos in range(beat_res)
             ]
         durations += [
-            (max(max(self._beat_res)), 0, self._beat_res[max(self._beat_res)])
+            (max(max(self.beat_res)), 0, self.beat_res[max(self.beat_res)])
         ]  # the last one
         del durations[0]  # removes duration of 0
         return durations
@@ -1473,7 +1473,7 @@ class MIDITokenizer(ABC):
                 continue
 
             # Checks the time division is valid
-            if midi.ticks_per_beat < max(self._beat_res.values()) * 4:
+            if midi.ticks_per_beat < max(self.beat_res.values()) * 4:
                 continue
             # Passing the MIDI to validation tests if given
             if validation_fn is not None:
@@ -1648,9 +1648,9 @@ class MIDITokenizer(ABC):
                 ] = self._vocab_base_byte_to_token
 
         params = {
-            "_pitch_range": (self._pitch_range.start, self._pitch_range.stop),
-            "_beat_res": {f"{k1}_{k2}": v for (k1, k2), v in self._beat_res.items()},
-            "_nb_velocities": len(self._velocities),
+            "_pitch_range": (self.pitch_range.start, self.pitch_range.stop),
+            "_beat_res": {f"{k1}_{k2}": v for (k1, k2), v in self.beat_res.items()},
+            "_nb_velocities": len(self.velocities),
             "additional_tokens": self.additional_tokens,
             "special_tokens": self.special_tokens,
             "unique_track": self.unique_track,

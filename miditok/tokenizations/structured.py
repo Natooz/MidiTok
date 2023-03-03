@@ -92,7 +92,7 @@ class Structured(MIDITokenizer):
             events.append(
                 Event(
                     type="TimeShift",
-                    value=".".join(map(str, self._durations[index])),
+                    value=".".join(map(str, self.durations[index])),
                     time=0,
                     desc=f"{time_shift} ticks",
                 )
@@ -119,7 +119,7 @@ class Structured(MIDITokenizer):
             events.append(
                 Event(
                     type="Duration",
-                    value=".".join(map(str, self._durations[index])),
+                    value=".".join(map(str, self.durations[index])),
                     time=note.start,
                     desc=f"{duration} ticks",
                 )
@@ -132,13 +132,13 @@ class Structured(MIDITokenizer):
                     type="TimeShift",
                     time=note.start,
                     desc=f"{time_shift} ticks",
-                    value=".".join(map(str, self._durations[index]))
+                    value=".".join(map(str, self.durations[index]))
                     if time_shift != 0
                     else "0.0.1",
                 )
             )
         # Adds the last note
-        if track.notes[-1].pitch not in self._pitch_range:
+        if track.notes[-1].pitch not in self.pitch_range:
             if len(events) > 0:
                 del events[-1]
         else:
@@ -163,7 +163,7 @@ class Structured(MIDITokenizer):
             events.append(
                 Event(
                     type="Duration",
-                    value=".".join(map(str, self._durations[index])),
+                    value=".".join(map(str, self.durations[index])),
                     time=track.notes[-1].start,
                     desc=f"{duration} ticks",
                 )
@@ -241,20 +241,20 @@ class Structured(MIDITokenizer):
         vocab = []
 
         # PITCH
-        vocab += [f"Pitch_{i}" for i in self._pitch_range]
+        vocab += [f"Pitch_{i}" for i in self.pitch_range]
 
         # VELOCITY
-        vocab += [f"Velocity_{i}" for i in self._velocities]
+        vocab += [f"Velocity_{i}" for i in self.velocities]
 
         # DURATION
         vocab += [
-            f'Duration_{".".join(map(str, duration))}' for duration in self._durations
+            f'Duration_{".".join(map(str, duration))}' for duration in self.durations
         ]
 
         # TIME SHIFT (same as durations)
         vocab.append("TimeShift_0.0.1")  # for a time shift of 0
         vocab += [
-            f'TimeShift_{".".join(map(str, duration))}' for duration in self._durations
+            f'TimeShift_{".".join(map(str, duration))}' for duration in self.durations
         ]
 
         # PROGRAM

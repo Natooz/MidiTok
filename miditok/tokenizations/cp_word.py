@@ -97,13 +97,13 @@ class CPWord(MIDITokenizer):
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
         ticks_per_sample = self._current_midi_metadata["time_division"] / max(
-            self._beat_res.values()
+            self.beat_res.values()
         )
         ticks_per_bar = self._current_midi_metadata["time_division"] * 4
         dur_bins = self._durations_ticks[self._current_midi_metadata["time_division"]]
         min_rest = (
-            self._current_midi_metadata["time_division"] * self._rests[0][0]
-            + ticks_per_sample * self._rests[0][1]
+            self._current_midi_metadata["time_division"] * self.rests[0][0]
+            + ticks_per_sample * self.rests[0][1]
             if self.additional_tokens["Rest"]
             else 0
         )
@@ -133,7 +133,7 @@ class CPWord(MIDITokenizer):
                         note.start - previous_tick,
                         self._current_midi_metadata["time_division"],
                     )
-                    rest_beat = min(rest_beat, max([r[0] for r in self._rests]))
+                    rest_beat = min(rest_beat, max([r[0] for r in self.rests]))
                     rest_pos = round(rest_pos / ticks_per_sample)
 
                     if rest_beat > 0:
@@ -146,9 +146,9 @@ class CPWord(MIDITokenizer):
                             rest_beat * self._current_midi_metadata["time_division"]
                         )
 
-                    while rest_pos >= self._rests[0][1]:
+                    while rest_pos >= self.rests[0][1]:
                         rest_pos_temp = min(
-                            [r[1] for r in self._rests], key=lambda x: abs(x - rest_pos)
+                            [r[1] for r in self.rests], key=lambda x: abs(x - rest_pos)
                         )
                         tokens.append(
                             self.__create_cp_token(
@@ -208,7 +208,7 @@ class CPWord(MIDITokenizer):
             # Note
             duration = note.end - note.start
             dur_index = np.argmin(np.abs(dur_bins - duration))
-            dur_value = ".".join(map(str, self._durations[dur_index]))
+            dur_value = ".".join(map(str, self.durations[dur_index]))
             tokens.append(
                 self.__create_cp_token(
                     int(note.start),
@@ -339,10 +339,10 @@ class CPWord(MIDITokenizer):
         :return: the miditoolkit instrument object and tempo changes
         """
         assert (
-            time_division % max(self._beat_res.values()) == 0
-        ), f"Invalid time division, please give one divisible by {max(self._beat_res.values())}"
+            time_division % max(self.beat_res.values()) == 0
+        ), f"Invalid time division, please give one divisible by {max(self.beat_res.values())}"
 
-        ticks_per_sample = time_division // max(self._beat_res.values())
+        ticks_per_sample = time_division // max(self.beat_res.values())
         ticks_per_bar = time_division * 4
         name = "Drums" if program[1] else MIDI_INSTRUMENTS[program[0]]["name"]
         instrument = Instrument(program[0], is_drum=program[1], name=name)
@@ -426,23 +426,23 @@ class CPWord(MIDITokenizer):
         vocab[0].append("Family_Note")
 
         # POSITION
-        nb_positions = max(self._beat_res.values()) * 4  # 4/* time signature
+        nb_positions = max(self.beat_res.values()) * 4  # 4/* time signature
         vocab[1].append("Ignore_None")
         vocab[1].append("Bar_None")
         vocab[1] += [f"Position_{i}" for i in range(nb_positions)]
 
         # PITCH
         vocab[2].append("Ignore_None")
-        vocab[2] += [f"Pitch_{i}" for i in self._pitch_range]
+        vocab[2] += [f"Pitch_{i}" for i in self.pitch_range]
 
         # VELOCITY
         vocab[3].append("Ignore_None")
-        vocab[3] += [f"Velocity_{i}" for i in self._velocities]
+        vocab[3] += [f"Velocity_{i}" for i in self.velocities]
 
         # DURATION
         vocab[4].append("Ignore_None")
         vocab[4] += [
-            f'Duration_{".".join(map(str, duration))}' for duration in self._durations
+            f'Duration_{".".join(map(str, duration))}' for duration in self.durations
         ]
 
         # PROGRAM
@@ -460,12 +460,12 @@ class CPWord(MIDITokenizer):
         if self.additional_tokens["Rest"]:
             vocab += [
                 ["Ignore_None"]
-                + [f'Rest_{".".join(map(str, rest))}' for rest in self._rests]
+                + [f'Rest_{".".join(map(str, rest))}' for rest in self.rests]
             ]
 
         # TEMPO
         if self.additional_tokens["Tempo"]:
-            vocab += [["Ignore_None"] + [f"Tempo_{i}" for i in self._tempos]]
+            vocab += [["Ignore_None"] + [f"Tempo_{i}" for i in self.tempos]]
 
         return vocab
 

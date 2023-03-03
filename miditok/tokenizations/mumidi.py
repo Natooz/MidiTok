@@ -159,7 +159,7 @@ class MuMIDI(MIDITokenizer):
             self._durations_ticks[midi.ticks_per_beat] = np.array(
                 [
                     (beat * res + pos) * midi.ticks_per_beat // res
-                    for beat, pos, res in self._durations
+                    for beat, pos, res in self.durations
                 ]
             )
         # Preprocess the MIDI file
@@ -198,7 +198,7 @@ class MuMIDI(MIDITokenizer):
             for j in range(1, len(toto[i])):
                 toto[i][j] = self[j, toto[i][j]]"""
 
-        ticks_per_sample = midi.ticks_per_beat / max(self._beat_res.values())
+        ticks_per_sample = midi.ticks_per_beat / max(self.beat_res.values())
         ticks_per_bar = midi.ticks_per_beat * 4
         tokens = []
 
@@ -308,7 +308,7 @@ class MuMIDI(MIDITokenizer):
                             desc=track.program,
                         ),
                         f"Velocity_{note.velocity}",
-                        f'Duration_{".".join(map(str, self._durations[dur_idx]))}',
+                        f'Duration_{".".join(map(str, self.durations[dur_idx]))}',
                     ]
                 )
             else:
@@ -321,7 +321,7 @@ class MuMIDI(MIDITokenizer):
                             desc=-1,
                         ),
                         f"Velocity_{note.velocity}",
-                        f'Duration_{".".join(map(str, self._durations[dur_idx]))}',
+                        f'Duration_{".".join(map(str, self.durations[dur_idx]))}',
                     ]
                 )
 
@@ -372,11 +372,11 @@ class MuMIDI(MIDITokenizer):
         :return: the midi object (miditoolkit.MidiFile)
         """
         assert (
-            time_division % max(self._beat_res.values()) == 0
-        ), f"Invalid time division, please give one divisible by {max(self._beat_res.values())}"
+            time_division % max(self.beat_res.values()) == 0
+        ), f"Invalid time division, please give one divisible by {max(self.beat_res.values())}"
         midi = MidiFile(ticks_per_beat=time_division)
         midi.tempo_changes.append(TempoChange(TEMPO, 0))
-        ticks_per_sample = time_division // max(self._beat_res.values())
+        ticks_per_sample = time_division // max(self.beat_res.values())
 
         tracks = {}
         current_tick = 0
@@ -469,10 +469,10 @@ class MuMIDI(MIDITokenizer):
         vocab = [[] for _ in range(3)]
 
         # PITCH & DRUM PITCHES & BAR & POSITIONS & PROGRAM
-        vocab[0] += [f"Pitch_{i}" for i in self._pitch_range]
+        vocab[0] += [f"Pitch_{i}" for i in self.pitch_range]
         vocab[0] += [f"DrumPitch_{i}" for i in self.drum_pitch_range]
         vocab[0] += ["Bar_None"]  # new bar token
-        nb_positions = max(self._beat_res.values()) * 4  # 4/* time signature
+        nb_positions = max(self.beat_res.values()) * 4  # 4/* time signature
         vocab[0] += [f"Position_{i}" for i in range(nb_positions)]
         vocab[0] += [f"Program_{program}" for program in self.programs]
 
@@ -494,19 +494,19 @@ class MuMIDI(MIDITokenizer):
 
         # REST
         if self.additional_tokens["Rest"]:
-            vocab[0] += [f'Rest_{".".join(map(str, rest))}' for rest in self._rests]
+            vocab[0] += [f'Rest_{".".join(map(str, rest))}' for rest in self.rests]
 
         # TEMPO
         if self.additional_tokens["Tempo"]:
-            vocab.append([f"Tempo_{i}" for i in self._tempos])
+            vocab.append([f"Tempo_{i}" for i in self.tempos])
 
         # Velocity and Duration in last position
         # VELOCITY
-        vocab.append([f"Velocity_{i}" for i in self._velocities])
+        vocab.append([f"Velocity_{i}" for i in self.velocities])
 
         # DURATION
         vocab.append(
-            [f'Duration_{".".join(map(str, duration))}' for duration in self._durations]
+            [f'Duration_{".".join(map(str, duration))}' for duration in self.durations]
         )
 
         return vocab
