@@ -57,8 +57,6 @@ def test_bpe_conversion(
         tokenizer.learn_bpe(
             vocab_size=400,
             tokens_paths=Path("tests", "test_results", tokenization).glob("**/*.json"),
-            files_lim=None,
-            load_all_token_files_once=True,
             start_from_empty_voc=True,
         )
         tokenizer.save_params(
