@@ -77,7 +77,7 @@ Tokenizations using Bar tokens (REMI, Compound Word and MuMIDI) **only considers
 
 ## Contributions
 
-Contributions are gratefully welcomed, feel free to open an issue or send a PR if you want to add a tokenization or speed up the code. Just make sure to pass the [tests](tests).
+Contributions are gratefully welcomed, feel free to open an issue or send a PR if you want to add a tokenization or speed up the code. Just make sure your modifications pass the [tests](tests), and format your code with [black](https://github.com/psf/black).
 
 ### Todo
 

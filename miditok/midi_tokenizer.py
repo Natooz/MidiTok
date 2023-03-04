@@ -1673,12 +1673,12 @@ class MIDITokenizer(ABC):
         with open(config_file_path) as param_file:
             params = json.load(param_file)
 
-        params["_pitch_range"] = range(*params["_pitch_range"])
+        params["pitch_range"] = range(*params["pitch_range"])
 
         for key, value in params.items():
             if key in ["tokenization", "miditok_version"]:
                 continue
-            elif key == "_beat_res":
+            elif key == "beat_res":
                 value = {
                     tuple(map(int, beat_range.split("_"))): res
                     for beat_range, res in value.items()
