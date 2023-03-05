@@ -1,6 +1,6 @@
 miditoolkit>=0.1.16
-tqdm~=4.64.0
+tqdm>=4.64.0
 numpy>=1.19,<1.24
+tokenizers>=0.13.2
 scipy  # needed for miditoolkit
 matplotlib  # needed for miditoolkit
-tokenizers~=0.13.2
