@@ -7,7 +7,8 @@ CURRENT_VERSION_PACKAGE = "2.0.1"  # used when saving the config of a tokenizer
 # Starting id of chr() method for BPE, as the 5 (0 to 4 included) firsts are ignored by 🤗tokenize
 # We also skip the 20th (space) as it causes issues when loading a BPE model with spaces in merged
 # Issue for reference: https://github.com/huggingface/tokenizers/issues/566
-CHR_ID_START = 21
+# List of unicode characters: https://www.fileformat.info/info/charset/UTF-8/list.htm
+CHR_ID_START = 33
 
 # MIDI encodings default parameters, used when tokenizing a dataset and using tokens
 # These are the parameters from which a MIDI file will be tokenized
