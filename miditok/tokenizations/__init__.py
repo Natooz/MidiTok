@@ -1,4 +1,5 @@
 from .remi import REMI
+from .remi_plus import REMIPlus
 from .structured import Structured
 from .midi_like import MIDILike
 from .tsd import TSD
