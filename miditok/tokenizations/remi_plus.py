@@ -2,7 +2,7 @@ from typing import List, Literal, Tuple, Dict, Optional, Union, Any
 from pathlib import Path
 
 import numpy as np
-from miditoolkit import Instrument, MidiFile, Note, TempoChange
+from miditoolkit import Instrument, MidiFile, Note, TempoChange, TimeSignature
 
 from ..midi_tokenizer import MIDITokenizer, _in_as_seq, _out_as_complete_seq
 from ..classes import TokSequence, Event
@@ -69,7 +69,7 @@ class REMIPlus(MIDITokenizer):
             params=params,
         )
 
-    def _notes_to_events(
+    def __notes_to_events(
         self, 
         notes_with_program: List[Tuple[Note, Tuple[int, bool]]]
     ) -> List[Event]:
@@ -273,10 +273,20 @@ class REMIPlus(MIDITokenizer):
             )
             # Pitch / Velocity / Duration
             events.append(
-                Event(type="Program", value=program_num, time=note.start, desc=note.pitch)
+                Event(
+                    type="Program", 
+                    value=-1 if is_drum else program_num, 
+                    time=note.start,
+                    desc=note.pitch
+                )
             )
             events.append(
-                Event(type="Pitch", value=note.pitch, time=note.start, desc=note.pitch)
+                Event(
+                    type="Pitch",
+                    value=note.pitch,
+                    time=note.start,
+                    desc=note.pitch
+                )
             )
             events.append(
                 Event(
@@ -308,19 +318,18 @@ class REMIPlus(MIDITokenizer):
         :param track: MIDI track to convert
         :return: :class:`miditok.TokSequence` of corresponding tokens.
         """
-        events = self._notes_to_events([
+        events = self.__notes_to_events([
             (n, (track.program, track.is_drum)) for n in track.notes
         ])
-        return TokSequence(events=events)
+        return TokSequence(events=events)  # type: ignore
 
     @_in_as_seq()
     def tokens_to_track(
         self,
-        tokens: Union[TokSequence, List, np.ndarray, Any],
+        token_sequence: TokSequence,
         time_division: int = TIME_DIVISION,
-        program: Tuple[int, bool] = (0, False),
-    ) -> Tuple[Instrument, List[TempoChange]]:
-        r"""Converts a sequence of tokens into a track object
+    ) -> Tuple[List[Instrument], List[TempoChange], List[TimeSignature]]:
+        r"""Converts a sequence of tokens into track objects
 
         :param tokens: sequence of tokens to convert. Can be either a Tensor (PyTorch and Tensorflow are supported),
                 a numpy array, a Python list or a TokSequence.
@@ -331,15 +340,18 @@ class REMIPlus(MIDITokenizer):
         assert (
             time_division % max(self.beat_res.values()) == 0
         ), f"Invalid time division, please give one divisible by {max(self.beat_res.values())}"
-        tokens = tokens.tokens
-
+        tokens = token_sequence.tokens
         ticks_per_sample = time_division // max(self.beat_res.values())
         ticks_per_bar = time_division * 4
-        name = "Drums" if program[1] else MIDI_INSTRUMENTS[program[0]]["name"]
-        instrument = Instrument(program[0], is_drum=program[1], name=name)
+        # name = "Drums" if program[1] else MIDI_INSTRUMENTS[program[0]]["name"]
+        instruments: Dict[int, Instrument] = {} 
+        # Instrument(program[0], is_drum=program[1], name=name)
         tempo_changes = [
             TempoChange(TEMPO, -1)
         ]  # mock the first tempo change to optimize below
+        time_signature_changes = [
+            TimeSignature(4, 4, -1)
+        ]  # mock the first time signature change to optimize below
 
         current_tick = 0
         current_bar = -1
@@ -371,18 +383,35 @@ class REMIPlus(MIDITokenizer):
                 tempo = int(token.split("_")[1])
                 if tempo != tempo_changes[-1].tempo:
                     tempo_changes.append(TempoChange(tempo, current_tick))
+            elif token.split("_")[0] == "TimeSig":
+                # If your encoding include tempo tokens, each Position token should be followed by
+                # a tempo token, but if it is not the case this method will skip this step
+                num, den = map(int, token.split("_")[1].split("/"))
+                current_time_signature = time_signature_changes[-1]
+                if num != current_time_signature.numerator and \
+                        den != current_time_signature.denominator:
+                    time_signature_changes.append(
+                        TimeSignature(num, den, current_tick))
             elif token.split("_")[0] == "Pitch":
                 try:
                     if (
                         tokens[ti + 1].split("_")[0] == "Velocity"
                         and tokens[ti + 2].split("_")[0] == "Duration"
+                        and tokens[ti - 1].split("_")[0] == "Program"
                     ):
+                        program = int(tokens[ti - 1].split("_")[1]) 
                         pitch = int(tokens[ti].split("_")[1])
                         vel = int(tokens[ti + 1].split("_")[1])
                         duration = self._token_duration_to_ticks(
                             tokens[ti + 2].split("_")[1], time_division
                         )
-                        instrument.notes.append(
+                        if program not in instruments.keys():
+                            instruments[program] = Instrument(
+                                program=0 if program == -1 else program,
+                                is_drum=program == -1,
+                                name="Drums" if program == -1 else MIDI_INSTRUMENTS[program]["name"]
+                            )
+                        instruments[program].notes.append(
                             Note(vel, pitch, current_tick, current_tick + duration)
                         )
                         previous_note_end = max(
@@ -392,12 +421,11 @@ class REMIPlus(MIDITokenizer):
                     IndexError
                 ):  # A well constituted sequence should not raise an exception
                     pass  # However with generated sequences this can happen, or if the sequence isn't finished
-
         if len(tempo_changes) > 1:
             del tempo_changes[0]  # delete mocked tempo change
         tempo_changes[0].time = 0
-        return instrument, tempo_changes
-    
+        return list(instruments.values()), tempo_changes, time_signature_changes
+
     def _midi_to_tokens(self, midi: MidiFile, *args, **kwargs) -> TokSequence:
         r"""Converts a preprocessed MIDI object to a sequence of tokens.
         Tokenization treating all tracks as a single token sequence might
@@ -412,10 +440,45 @@ class REMIPlus(MIDITokenizer):
             for track in midi.instruments for note in track.notes
         ]
         notes_with_program.sort(key=lambda n: (n[0].start, n[0].pitch))
-        events = self._notes_to_events(notes_with_program)
+        events = self.__notes_to_events(notes_with_program)
         tok_sequence = TokSequence(events=events)
         self.complete_sequence(tok_sequence)
         return tok_sequence
+
+    def tokens_to_midi(
+        self,
+        tokens: TokSequence,
+        output_path: Optional[str] = None,
+        time_division: int = TIME_DIVISION,
+    ) -> MidiFile:
+        r"""Converts multiple sequences of tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
+
+        :param tokens: tokens to convert. Can be either a list of :class:`miditok.TokSequence`,
+                a Tensor (PyTorch and Tensorflow are supported), a numpy array or a Python list of ints.
+                The first dimension represents tracks, unless the tokenizer handle tracks altogether as a
+                single token sequence (e.g. Octuple, MuMIDI): tokenizer.unique_track == True.
+        :param output_path: path to save the file. (default: None)
+        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create).
+        :return: the midi object (miditoolkit.MidiFile).
+        """
+        midi = MidiFile(ticks_per_beat=time_division)
+        tracks, tempo_changes, time_signature_changes = \
+            self.tokens_to_track(tokens, time_division)
+        midi.instruments = tracks
+        midi.tempo_changes = tempo_changes
+        midi.time_signature_changes = time_signature_changes
+        midi.max_tick = max(
+            [
+                max([note.end for note in track.notes]) if len(track.notes) > 0 else 0
+                for track in midi.instruments
+            ]
+        )
+        # Write MIDI file
+        if output_path:
+            Path(output_path).mkdir(parents=True, exist_ok=True)
+            midi.dump(output_path)
+        return midi
+
 
     def _create_base_vocabulary(self, sos_eos_tokens: bool = None) -> List[str]:
         r"""Creates the vocabulary, as a list of string tokens.
