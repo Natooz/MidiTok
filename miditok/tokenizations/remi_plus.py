@@ -350,7 +350,7 @@ class REMIPlus(MIDITokenizer):
             TempoChange(TEMPO, -1)
         ]  # mock the first tempo change to optimize below
         time_signature_changes = [
-            TimeSignature(4, 4, -1)
+            TimeSignature(4, 4, 0)
         ]  # mock the first time signature change to optimize below
 
         current_tick = 0
@@ -424,6 +424,9 @@ class REMIPlus(MIDITokenizer):
         if len(tempo_changes) > 1:
             del tempo_changes[0]  # delete mocked tempo change
         tempo_changes[0].time = 0
+        if len(time_signature_changes) > 1:
+            del time_signature_changes[0]  # delete mocked time signature change
+        time_signature_changes[0].time = 0
         return list(instruments.values()), tempo_changes, time_signature_changes
 
     def _midi_to_tokens(self, midi: MidiFile, *args, **kwargs) -> TokSequence:
