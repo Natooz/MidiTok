@@ -32,6 +32,7 @@ def test_saving_loading_tokenizer():
         "TSD",
         "Structured",
         "REMI",
+        "REMIPlus",
         "CPWord",
         "Octuple",
         "OctupleMono",

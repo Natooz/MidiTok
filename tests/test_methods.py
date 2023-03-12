@@ -85,6 +85,7 @@ def test_data_augmentation():
         "TSD",
         "MIDILike",
         "REMI",
+        "REMIPlus",
         "Structured",
         "CPWord",
         "Octuple",

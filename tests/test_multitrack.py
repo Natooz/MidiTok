@@ -23,7 +23,7 @@ import miditok
 from miditoolkit import MidiFile
 from tqdm import tqdm
 
-from .tests_utils import (
+from tests_utils import (
     midis_equals,
     tempo_changes_equals,
     reduce_note_durations,
@@ -59,7 +59,7 @@ def test_multitrack_midi_to_tokens_to_midi(
     times quantized, and maybe a some duplicated notes removed
 
     """
-    tokenizations = ["REMI", "CPWord", "Octuple", "OctupleMono", "MuMIDI"]
+    tokenizations = ["REMI", "REMIPlus", "CPWord", "Octuple", "OctupleMono", "MuMIDI"]
     files = list(Path(data_path).glob("**/*.mid"))
     at_least_one_error = False
 
@@ -93,7 +93,7 @@ def test_multitrack_midi_to_tokens_to_midi(
 
             # Sort and merge tracks if needed
             # MIDI produced with Octuple contains tracks ordered by program
-            if tokenization in ["Octuple", "MuMIDI"]:
+            if tokenization in ["Octuple", "MuMIDI", "REMIPlus"]:
                 miditok.utils.merge_same_program_tracks(
                     midi_to_compare.instruments
                 )  # merge tracks
@@ -105,7 +105,7 @@ def test_multitrack_midi_to_tokens_to_midi(
                     max(tu[1] for tu in BEAT_RES_TEST) * midi_to_compare.ticks_per_beat,
                 )
                 miditok.utils.remove_duplicated_notes(track.notes)
-            if tokenization == "Octuple":  # needed
+            if tokenization in ["Octuple", "REMIPlus"]:  # needed
                 adapt_tempo_changes_times(
                     midi_to_compare.instruments, midi_to_compare.tempo_changes
                 )
@@ -161,10 +161,10 @@ def test_multitrack_midi_to_tokens_to_midi(
                     )
 
             # Checks time signatures
-            if (
-                tokenizer.additional_tokens["TimeSignature"]
-                and tokenization == "Octuple"
-            ):
+            if tokenizer.additional_tokens["TimeSignature"] and tokenization in [
+                "Octuple",
+                "REMIPlus",
+            ]:
                 time_sig_errors = time_signature_changes_equals(
                     midi_to_compare.time_signature_changes,
                     new_midi.time_signature_changes,
