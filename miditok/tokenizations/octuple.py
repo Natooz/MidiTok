@@ -129,7 +129,7 @@ class Octuple(MIDITokenizer):
             (6: Tempo)
             (7: TimeSignature)
 
-        :param midi: the MIDI objet to convert
+        :param midi: the MIDI object to convert
         :return: sequences of tokens
         """
         # Check if the durations values have been calculated before for this time division
