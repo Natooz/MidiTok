@@ -23,7 +23,7 @@ import miditok
 from miditoolkit import MidiFile
 from tqdm import tqdm
 
-from tests_utils import (
+from .tests_utils import (
     midis_equals,
     tempo_changes_equals,
     reduce_note_durations,
