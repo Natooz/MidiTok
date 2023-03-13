@@ -296,6 +296,7 @@ class REMIPlus(MIDITokenizer):
     ):
         self.encoder = []
         additional_tokens["Program"] = True  # required
+        additional_tokens["Rest"] = False
         self.num_bars = num_bars
         super().__init__(
             pitch_range,
@@ -323,12 +324,6 @@ class REMIPlus(MIDITokenizer):
         ticks_per_sample = time_division / max(self.beat_res.values())
         ticks_per_bar = self._current_midi_metadata["time_division"] * 4
         dur_bins = self._durations_ticks[self._current_midi_metadata["time_division"]]
-        min_rest = (
-            self._current_midi_metadata["time_division"] * self.rests[0][0]
-            + ticks_per_sample * self.rests[0][1]
-            if self.additional_tokens["Rest"]
-            else 0
-        )
         # Creates events
         events: List[Event] = []
         previous_tick = -1
@@ -359,50 +354,6 @@ class REMIPlus(MIDITokenizer):
 
         for note, (program_num, is_drum) in notes_with_program:
             if note.start != previous_tick:
-                # (Rest)
-                if (
-                    self.additional_tokens["Rest"]
-                    and note.start > previous_note_end
-                    and note.start - previous_note_end >= min_rest
-                ):
-                    previous_tick = previous_note_end
-                    rest_beat, rest_pos = divmod(
-                        note.start - previous_tick,
-                        self._current_midi_metadata["time_division"],
-                    )
-                    rest_beat = min(rest_beat, max([r[0] for r in self.rests]))
-                    rest_pos = round(rest_pos / ticks_per_sample)
-
-                    if rest_beat > 0:
-                        events.append(
-                            Event(
-                                type="Rest",
-                                value=f"{rest_beat}.0",
-                                time=previous_note_end,
-                                desc=f"{rest_beat}.0",
-                            )
-                        )
-                        previous_tick += (
-                            rest_beat * self._current_midi_metadata["time_division"]
-                        )
-
-                    while rest_pos >= self.rests[0][1]:
-                        rest_pos_temp = min(
-                            [r[1] for r in self.rests], key=lambda x: abs(x - rest_pos)
-                        )
-                        events.append(
-                            Event(
-                                type="Rest",
-                                value=f"0.{rest_pos_temp}",
-                                time=previous_note_end,
-                                desc=f"0.{rest_pos_temp}",
-                            )
-                        )
-                        previous_tick += round(rest_pos_temp * ticks_per_sample)
-                        rest_pos -= rest_pos_temp
-
-                    current_bar = previous_tick // ticks_per_bar
-
                 # Bar
                 nb_new_bars = note.start // ticks_per_bar - current_bar
                 for i in range(nb_new_bars):
@@ -797,10 +748,6 @@ class REMIPlus(MIDITokenizer):
                             # add fraction chords
                             vocab.append(f"Chord_{root}:{quality}/{base}")
 
-        # REST
-        if self.additional_tokens["Rest"]:
-            vocab += [f'Rest_{".".join(map(str, rest))}' for rest in self.rests]
-
         # TEMPO
         if self.additional_tokens["Tempo"]:
             vocab += [f"Tempo_{i}" for i in self.tempos]
@@ -837,10 +784,6 @@ class REMIPlus(MIDITokenizer):
         if self.additional_tokens["Tempo"]:
             dic["Tempo"] = ["Position"]
             dic["Position"] += ["Tempo"]
-
-        if self.additional_tokens["Rest"]:
-            dic["Rest"] = ["Rest", "Position", "Bar"]
-            dic["Duration"] += ["Rest"]
 
         return dic
 
