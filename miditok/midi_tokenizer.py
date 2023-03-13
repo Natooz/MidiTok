@@ -109,7 +109,7 @@ class MIDITokenizer(ABC):
             The velocities of the MIDIs resolution will be downsampled to ``nb_velocities`` values, equally
             separated between 0 and 127.
     :param additional_tokens: (default: None used) specify which additional tokens to use.
-            Compatibilities between tokenization and additiona tokens may vary.
+            Compatibilities between tokenization and additional tokens may vary.
             See :ref:`Additional tokens` for the details and available tokens.
     :param special_tokens: list of special tokens. This must be given as a list of strings given
             only the names of the tokens. (default: ``["PAD", "BOS", "EOS", "MASK"]``\)
@@ -427,7 +427,7 @@ class MIDITokenizer(ABC):
         Tokenization treating all tracks as a single token sequence might
         override this method, e.g. Octuple or PopMAG.
 
-        :param midi: the MIDI objet to convert.
+        :param midi: the MIDI object to convert.
         :return: sequences of tokens.
         """
         # Convert each track to tokens
@@ -446,7 +446,7 @@ class MIDITokenizer(ABC):
         If you are implementing your own tokenization by subclassing this class, **override the
         ``_midi_to_tokens`` method**. This method implement necessary MIDI preprocessing.
 
-        :param midi: the MIDI objet to convert.
+        :param midi: the MIDI object to convert.
         :param apply_bpe_if_possible: will apply BPE if the tokenizer's vocabulary was learned with.
         :return: sequences of tokens.
         """

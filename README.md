@@ -28,7 +28,7 @@ MidiTok uses [MIDIToolkit](https://github.com/YatingMusic/miditoolkit), which it
 
 ## Usage example
 
-The most basic and useful methods are summurized here.
+The most basic and useful methods are summarized here.
 
 ```python
 from miditok import REMI
