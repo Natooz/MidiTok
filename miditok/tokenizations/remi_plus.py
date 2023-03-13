@@ -1,17 +1,9 @@
 from copy import copy
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional, Tuple, Union, cast
-from itertools import product
+from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
 import numpy as np
-from miditoolkit import (
-    Instrument,
-    MidiFile,
-    Note,
-    TempoChange,
-    TimeSignature,
-    pianoroll,
-)
+from miditoolkit import Instrument, MidiFile, Note, TempoChange, TimeSignature
 from miditoolkit.pianoroll.parser import notes2pianoroll
 from miditoolkit.pianoroll.utils import tochroma
 
@@ -29,7 +21,6 @@ from ..constants import (
 )
 from ..midi_tokenizer import MIDITokenizer, _in_as_seq, _out_as_complete_seq
 from ..utils import detect_chords
-
 
 _PITCH_CLASSES = [
     "C",
@@ -350,7 +341,9 @@ class REMIPlus(MIDITokenizer):
         current_chord_idx = 0
         current_chord = ""  # e.g. C#:min/A
         if self.additional_tokens.get("Chord", False):  # "Chord" in additional tokens
-            chord_results = REMIPlusChord.extract([np[0] for np in notes_with_program])
+            chord_results = REMIPlusChord.extract(
+                [notes_prog[0] for notes_prog in notes_with_program]
+            )
         else:
             chord_results = None
 
@@ -466,8 +459,9 @@ class REMIPlus(MIDITokenizer):
                             )
                         )
                     elif (
-                        note.start > chord_results[current_chord_idx][0]
-                        and note.start < chord_results[current_chord_idx][1]
+                        chord_results[current_chord_idx][0]
+                        < note.start
+                        < chord_results[current_chord_idx][1]
                     ):
                         current_chord = chord_results[current_chord_idx][-1]
                     elif note.start > chord_results[current_chord_idx][1]:
@@ -565,7 +559,7 @@ class REMIPlus(MIDITokenizer):
         """
         # Convert each track to tokens
         notes_with_program = [
-            ((note, (track.program, track.is_drum)))
+            (note, (track.program, track.is_drum))
             for track in midi.instruments
             for note in track.notes
         ]
@@ -586,6 +580,7 @@ class REMIPlus(MIDITokenizer):
         r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
 
         :param tokens: tokens to convert. Can be either a list of :class:`miditok.TokSequence`,
+        :param _: unused, to match parent method signature
         :param output_path: path to save the file. (default: None)
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create).
         :return: the midi object (:class:`miditoolkit.MidiFile`).
