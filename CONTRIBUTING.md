@@ -45,16 +45,17 @@ We use GitHub issues to track public bugs. Report a bug by [opening a new issue]
 
 ### Tests
 
-<!-- TODO  -->
+We use `pytest` for testing and `pytest-cov` for measuring coverage. In the test script, we use `torch` and `tensorflow` to check functionalities related to token-tensor conversion.
 
 ```bash
-cd tests/
-python test_methods.py
+pip install setuptools flake8 pytest coverage torch tensorflow
+coverage run -m pytest
 ```
 
 ### Use a Consistent Coding Style
 
 We use [black](https://github.com/psf/black) code format for Python in this project.
+
 
 ## License
 
