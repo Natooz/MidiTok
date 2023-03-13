@@ -289,7 +289,9 @@ class REMIPlus(MIDITokenizer):
         pitch_range: range = PITCH_RANGE,
         beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
         nb_velocities: int = NB_VELOCITIES,
-        additional_tokens: Dict[str, bool | int | Tuple[int, int]] = ADDITIONAL_TOKENS,
+        additional_tokens: Dict[
+            str, Union[bool, int, Tuple[int, int]]
+        ] = ADDITIONAL_TOKENS,
         special_tokens: List[str] = SPECIAL_TOKENS,
         params: Optional[Union[str, Path]] = None,
         num_bars: Optional[int] = None,
