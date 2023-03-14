@@ -63,13 +63,16 @@ tokenizer.apply_bpe_to_dataset(Path('path', 'to', 'tokens_noBPE'), Path('path', 
 
 ## Tokenizations
 
+MidiTok implements the tokenizations: (links to original papers)
 * [REMI](https://arxiv.org/abs/2002.00212)
 * [MIDI-Like](https://link.springer.com/article/10.1007/s00521-018-3758-9)
 * [TSD](https://arxiv.org/abs/2301.11975)
 * [Structured](https://arxiv.org/abs/2107.05944)
 * [CPWord](https://ojs.aaai.org/index.php/AAAI/article/view/16091)
 * [Octuple](https://aclanthology.org/2021.findings-acl.70)
-* [MuMIDI]()
+* [MuMIDI](https://dl.acm.org/doi/10.1145/3394171.3413721)
+
+You can find short presentations in the [documentation](https://miditok.readthedocs.io/en/latest/tokenizations.html).
 
 ## Limitations
 

@@ -19,6 +19,17 @@ REMI
     :noindex:
     :show-inheritance:
 
+REMIPlus
+------------------------
+
+.. image:: https://github.com/Natooz/MidiTok/blob/assets/assets/remiplus.png?raw=true
+  :width: 800
+  :alt: REMI+ sequence, REMI plus *TimeSignature* and *Program* tokens
+
+.. autoclass:: miditok.REMIPlus
+    :noindex:
+    :show-inheritance:
+
 MIDI-Like
 ------------------------
 
