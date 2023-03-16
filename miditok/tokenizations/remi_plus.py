@@ -110,7 +110,6 @@ class REMIPlus(MIDITokenizer):
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
         time_division = self._current_midi_metadata["time_division"]
         ticks_per_sample = time_division / max(self.beat_res.values())
-        ticks_per_bar = self._current_midi_metadata["time_division"] * 4
         dur_bins = self._durations_ticks[self._current_midi_metadata["time_division"]]
         # Creates events
         events: List[Event] = []
@@ -144,6 +143,7 @@ class REMIPlus(MIDITokenizer):
         current_time_sig = self._reduce_time_signature(
             time_sig_change.numerator, time_sig_change.denominator
         )
+        ticks_per_bar = time_division * current_time_sig[0]
         # Run chord extraction for whole note sequences before tokenization
         if self.additional_tokens.get("Chord", False):  # "Chord" in additional tokens
             chord_results: Optional[List[Event]] = detect_chords(
