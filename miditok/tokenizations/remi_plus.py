@@ -1,5 +1,6 @@
 from copy import copy
-from pathlib import Path
+from math import ceil
+from pathlib import Path, PurePath
 from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
 import numpy as np
@@ -45,8 +46,8 @@ class REMIPlus(MIDITokenizer):
     :param params: path to a tokenizer config file. This will override other arguments and
             load the tokenizer based on the config file. This is particularly useful if the
             tokenizer learned Byte Pair Encoding. (default: None)
-    :param num_bars: Maximum number of bars ("Bar_0", "Bar_1",...,"Bar_{num_bars-1}").
-            If None passed, creates "Bar_None" token only in vocabulary
+    :param max_bar_embedding: Maximum number of bars ("Bar_0", "Bar_1",...,"Bar_{num_bars-1}").
+            If None passed, creates "Bar_None" token only in vocabulary for Bar token.
     """
 
     def __init__(
@@ -59,12 +60,14 @@ class REMIPlus(MIDITokenizer):
         ] = ADDITIONAL_TOKENS,
         special_tokens: List[str] = SPECIAL_TOKENS,
         params: Optional[Union[str, Path]] = None,
-        num_bars: Optional[int] = None,
+        max_bar_embedding: Optional[int] = 60,
     ):
         self.encoder = []
         additional_tokens["Program"] = True  # required
         additional_tokens["Rest"] = False
-        self.num_bars = num_bars
+        self.max_bar_embedding = (
+            max_bar_embedding  # this attribute might increase during encoding
+        )
         super().__init__(
             pitch_range,
             beat_res,
@@ -74,6 +77,24 @@ class REMIPlus(MIDITokenizer):
             unique_track=True,  # handles multi-track sequences in single stream
             params=params,  # type: ignore
         )
+
+    def save_params(
+        self, out_path: Union[str, Path], additional_attributes: Optional[Dict] = None
+    ):
+        r"""Saves the config / parameters of the tokenizer in a json encoded file.
+        This can be useful to keep track of how a dataset has been tokenized.
+
+        :param out_path: output path to save the file.
+        :param additional_attributes: any additional information to store in the config file.
+                It can be used to override the default attributes saved in the parent method. (default: None)
+        """
+        if additional_attributes is None:
+            additional_attributes = {}
+        additional_attributes_tmp = {
+            "max_bar_embedding": self.max_bar_embedding,
+            **additional_attributes,
+        }
+        super().save_params(out_path, additional_attributes_tmp)
 
     def __notes_to_events(
         self, notes_with_program: List[Tuple[Note, Tuple[int, bool]]]
@@ -97,11 +118,23 @@ class REMIPlus(MIDITokenizer):
         previous_note_end = (
             notes_with_program[0][0].start + 1
         )  # so that no rest is created before the first note
+        # Bar
+        if self.max_bar_embedding:  # Check bar embedding limit, update if needed
+            nb_bars = ceil(
+                max(n[0].end for n in notes_with_program)
+                / (self._current_midi_metadata["time_division"] * 4)
+            )
+            if self.max_bar_embedding < nb_bars:
+                for i in range(self.max_bar_embedding, nb_bars):
+                    self.add_to_vocab(f"Bar_{i}")
+                self.max_bar_embedding = nb_bars
         current_bar = -1
+        # Tempo
         current_tempo_idx = 0
         current_tempo = self._current_midi_metadata["tempo_changes"][
             current_tempo_idx
         ].tempo
+        # TimeSignature
         current_time_sig_idx = 0
         current_time_sig_tick = 0
         current_time_sig_bar = 0
@@ -131,7 +164,9 @@ class REMIPlus(MIDITokenizer):
                     events.append(
                         Event(
                             type="Bar",
-                            value=str(current_bar + i + 1) if self.num_bars else "None",
+                            value=str(current_bar + i + 1)
+                            if self.max_bar_embedding is not None
+                            else "None",
                             time=(current_bar + i + 1) * ticks_per_bar,
                             desc=0,
                         )
@@ -254,7 +289,7 @@ class REMIPlus(MIDITokenizer):
             previous_note_end = max(previous_note_end, note.end)
 
         # (Chord)
-        if chord_results is not None:  # append chord and position tokens 
+        if chord_results is not None:  # append chord and position tokens
             positions = [
                 Event(
                     type="Position",
@@ -460,8 +495,8 @@ class REMIPlus(MIDITokenizer):
         vocab = []
 
         # BAR
-        if self.num_bars:
-            vocab += [f"Bar_{i}" for i in range(0, self.num_bars)]
+        if self.max_bar_embedding:
+            vocab += [f"Bar_{i}" for i in range(self.max_bar_embedding)]
         else:
             vocab += ["Bar_None"]
 
@@ -553,3 +588,57 @@ class REMIPlus(MIDITokenizer):
             return 7
         else:  # for other types of events, the order should be handle when inserting the events in the sequence
             return 8
+
+    @_in_as_seq(complete=False, decode_bpe=False)
+    def tokens_errors(
+        self, tokens_to_check: Union[TokSequence, List[Union[int, List[int]]]]
+    ) -> float:
+        tokens_to_check = cast(TokSequence, tokens_to_check)
+        nb_tok_predicted = len(tokens_to_check)  # used to norm the score
+        if self.has_bpe:
+            self.decode_bpe(tokens_to_check)
+        self.complete_sequence(tokens_to_check)
+
+        # Override from here
+        tokens = cast(List[str], tokens_to_check.tokens)
+
+        err_type = 0  # i.e. incompatible next type predicted
+        err_time = 0  # i.e. goes back or stay in time (does not go forward)
+        err_note = 0  # i.e. duplicated
+        previous_type = tokens[0].split("_")[0]
+        current_pos = -1
+        current_pitches = []
+
+        # Init first note and current pitches if needed
+        if previous_type == "Pitch":
+            pitch_val = int(tokens[0].split("_")[1])
+            current_pitches.append(pitch_val)
+        elif previous_type == "Position":
+            current_pos = int(tokens[0].split("_")[1])
+
+        for token in tokens[1:]:
+            event_type, event_value = token.split("_")[0], token.split("_")[1]
+
+            # Good token type
+            if event_type in self.tokens_types_graph[previous_type]:
+                if event_type == "Bar":  # reset
+                    current_pos = -1
+                    current_pitches = []
+                elif previous_type == "Pitch":
+                    pitch_val = int(event_value)
+                    if pitch_val in current_pitches:
+                        err_note += 1  # pitch already played at current position
+                    else:
+                        current_pitches.append(pitch_val)
+                elif event_type == "Position":
+                    if int(event_value) <= current_pos:
+                        err_time += 1  # token position value <= to the current position
+                    else:
+                        current_pos = int(event_value)
+                        current_pitches = []
+            # Bad token type
+            else:
+                err_type += 1
+            previous_type = event_type
+
+        return (err_type + err_time + err_note) / nb_tok_predicted
