@@ -11,7 +11,7 @@ Python package to tokenize MIDI music files, presented at the ISMIR 2021 LBD.
 [![Downloads](https://pepy.tech/badge/MidiTok)](https://pepy.tech/project/MidiTok)
 [![Code style](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-![MidiTok Logo](https://github.com/Natooz/MidiTok/blob/assets/assets/logo.png?raw=true "")
+![MidiTok Logo](docs/assets/logo.png?raw=true "")
 
 
 MidiTok converts MIDI music files into sequences of tokens, ready to be fed to sequential deep learning models like Transformers.

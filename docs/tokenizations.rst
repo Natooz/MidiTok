@@ -4,14 +4,14 @@ Tokenizations
 
 This page details the tokenizations featured by MidiTok. They inherit from :class:`miditok.MIDITokenizer`, see the documentation for learn to use the common methods. For each of them, the token equivalent of the lead sheet below is showed.
 
-.. image:: https://github.com/Natooz/MidiTok/blob/assets/assets/music_sheet.png?raw=true
+.. image:: /assets/music_sheet.png
   :width: 800
   :alt: Music sheet example
 
 REMI
 ------------------------
 
-.. image:: https://github.com/Natooz/MidiTok/blob/assets/assets/remi.png?raw=true
+.. image:: /assets/remi.png
   :width: 800
   :alt: REMI sequence, time is tracked with Bar and position tokens
 
@@ -22,7 +22,7 @@ REMI
 REMIPlus
 ------------------------
 
-.. image:: https://github.com/Natooz/MidiTok/blob/assets/assets/remiplus.png?raw=true
+.. image:: /assets/remiplus.png
   :width: 800
   :alt: REMI+ sequence, REMI plus *TimeSignature* and *Program* tokens
 
@@ -33,7 +33,7 @@ REMIPlus
 MIDI-Like
 ------------------------
 
-.. image:: https://github.com/Natooz/MidiTok/blob/assets/assets/midi_like.png?raw=true
+.. image:: /assets/midi_like.png
   :width: 800
   :alt: MIDI-Like token sequence, with TimeShift and NoteOff tokens
 
@@ -44,7 +44,7 @@ MIDI-Like
 TSD
 ------------------------
 
-.. image:: https://github.com/Natooz/MidiTok/blob/assets/assets/tsd.png?raw=true
+.. image:: /assets/tsd.png
   :width: 800
   :alt: TSD sequence, like MIDI-Like with Duration tokens
 
@@ -55,7 +55,7 @@ TSD
 Structured
 ------------------------
 
-.. image:: https://github.com/Natooz/MidiTok/blob/assets/assets/structured.png?raw=true
+.. image:: /assets/structured.png
   :width: 800
   :alt: Structured tokenization, the token types always follow the same succession pattern
 
@@ -66,7 +66,7 @@ Structured
 CPWord
 ------------------------
 
-.. image:: https://github.com/Natooz/MidiTok/blob/assets/assets/cp_word.png?raw=true
+.. image:: /assets/cp_word.png
   :width: 800
   :alt: CP Word sequence, tokens of the same family are grouped together
 
@@ -77,7 +77,7 @@ CPWord
 Octuple
 ------------------------
 
-.. image:: https://github.com/Natooz/MidiTok/blob/assets/assets/octuple.png?raw=true
+.. image:: /assets/octuple.png
   :width: 800
   :alt: Octuple sequence, with a bar and position embeddings
 
@@ -95,7 +95,7 @@ Octuple Mono
 MuMIDI
 ------------------------
 
-.. image:: https://github.com/Natooz/MidiTok/blob/assets/assets/mumidi.png?raw=true
+.. image:: /assets/mumidi.png
   :width: 800
   :alt: MuMIDI sequence, with a bar and position embeddings
 
