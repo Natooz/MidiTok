@@ -48,7 +48,7 @@ def test_bpe_conversion(
     first_samples_bpe = {tok: [] for tok in tokenizations}
     for tokenization in tokenizations:
         add_tokens = deepcopy(ADDITIONAL_TOKENS_TEST)
-        tokenizer = getattr(miditok, tokenization)(
+        tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
             beat_res=BEAT_RES_TEST, additional_tokens=add_tokens
         )
         tokenizer.tokenize_midi_dataset(
@@ -56,7 +56,7 @@ def test_bpe_conversion(
         )
         tokenizer.learn_bpe(
             vocab_size=400,
-            tokens_paths=Path("tests", "test_results", tokenization).glob("**/*.json"),
+            tokens_paths=list(Path("tests", "test_results", tokenization).glob("**/*.json")),
             start_from_empty_voc=True,
         )
         tokenizer.save_params(
@@ -76,7 +76,9 @@ def test_bpe_conversion(
         for file_path in files:
             tokens = tokenizer.midi_to_tokens(
                 deepcopy(MidiFile(file_path)), apply_bpe_if_possible=False
-            )[0]
+            )
+            if not tokenizer.unique_track:
+                tokens = tokens[0]
             to_tok = tokenizer._bytes_to_tokens(tokens.bytes)
             to_id = tokenizer._tokens_to_ids(to_tok)
             to_by = tokenizer._ids_to_bytes(to_id, as_one_str=True)

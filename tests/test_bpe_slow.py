@@ -52,7 +52,7 @@ def test_bpe_conversion(
     # Creates tokenizers and computes BPE (build voc)
     for tokenization in tokenizations:
         add_tokens = deepcopy(ADDITIONAL_TOKENS_TEST)
-        tokenizer = getattr(miditok, tokenization)(
+        tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
             beat_res=BEAT_RES_TEST, additional_tokens=add_tokens
         )
         tokenizer.tokenize_midi_dataset(
@@ -86,8 +86,10 @@ def test_bpe_conversion(
         for tokenization, tokenizer in zip(tokenizations, tokenizers):
             # Convert the track in tokens
             t0 = time()
-            tokens = tokenizer.midi_to_tokens(deepcopy(midi))[0]  # with BPE
+            tokens = tokenizer.midi_to_tokens(deepcopy(midi))  # with BPE
             t1 = time() - t0
+            if not tokenizer.unique_track:
+                tokens = tokens[0]
             tok_times.append(t1)
             with open(
                 Path("tests", "test_results", tokenization, f"{file_path.stem}.json")
