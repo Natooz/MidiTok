@@ -69,7 +69,8 @@ tokenizer.apply_bpe_to_dataset(Path('path', 'to', 'tokens_noBPE'), Path('path', 
 * [Structured](https://arxiv.org/abs/2107.05944)
 * [CPWord](https://ojs.aaai.org/index.php/AAAI/article/view/16091)
 * [Octuple](https://aclanthology.org/2021.findings-acl.70)
-* [MuMIDI]()
+* [MuMIDI](https://dl.acm.org/doi/10.1145/3394171.3413721)
+* [REMI+](https://arxiv.org/abs/2201.10936)
 
 ## Limitations
 
