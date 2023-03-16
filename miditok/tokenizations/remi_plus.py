@@ -208,6 +208,7 @@ class REMIPlus(MIDITokenizer):
 
                 # (Tempo)
                 if self.additional_tokens["Tempo"]:
+                    is_tempo_changed = False
                     # If the current tempo is not the last one
                     if current_tempo_idx + 1 < len(
                         self._current_midi_metadata["tempo_changes"]
@@ -222,9 +223,10 @@ class REMIPlus(MIDITokenizer):
                                 current_tempo_idx += (
                                     1  # update tempo value (might not change) and index
                                 )
+                                is_tempo_changed = True
                             else:  # <==> elif tempo_change.time > previous_tick:
                                 break  # this tempo change is beyond the current time step, we break the loop
-                    if nb_new_bars > 0:  # after the new Bar token
+                    if is_tempo_changed or nb_new_bars > 0:  # after the new Bar token
                         # Position before the Tempo token
                         pos_index = int((note.start % ticks_per_bar) / ticks_per_sample)
                         events.append(
