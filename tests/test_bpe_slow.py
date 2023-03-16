@@ -94,7 +94,9 @@ def test_bpe_conversion(
             with open(
                 Path("tests", "test_results", tokenization, f"{file_path.stem}.json")
             ) as json_file:
-                tokens_no_bpe = json.load(json_file)["ids"][0]  # no BPE
+                tokens_no_bpe = json.load(json_file)["ids"]  # no BPE
+            if not tokenizer.unique_track:
+                tokens_no_bpe = tokens_no_bpe[0]
             tokens_no_bpe = miditok.TokSequence(ids=tokens_no_bpe, ids_bpe_encoded=True)
             tokens_bpe_decomposed = deepcopy(tokens)  # BPE decomposed
             tokenizer.decode_bpe(tokens_bpe_decomposed)  # BPE decomposed
@@ -106,9 +108,9 @@ def test_bpe_conversion(
                     f"{file_path.stem}.json",
                 )
             ) as json_file:
-                saved_tokens = json.load(json_file)["ids"][
-                    0
-                ]  # with BPE, saved after creating vocab
+                saved_tokens = json.load(json_file)["ids"]  # with BPE, saved after creating vocab
+            if not tokenizer.unique_track:
+                saved_tokens = saved_tokens[0]
             saved_tokens = miditok.TokSequence(ids=saved_tokens, ids_bpe_encoded=True)
             saved_tokens_decomposed = deepcopy(saved_tokens)
             tokenizer.decode_bpe(saved_tokens_decomposed)
