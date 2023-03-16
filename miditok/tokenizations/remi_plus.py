@@ -4,13 +4,12 @@ from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
 import numpy as np
 from miditoolkit import Instrument, MidiFile, Note, TempoChange, TimeSignature
-from miditoolkit.pianoroll.parser import notes2pianoroll
-from miditoolkit.pianoroll.utils import tochroma
 
 from ..classes import Event, TokSequence
 from ..constants import (
     ADDITIONAL_TOKENS,
     BEAT_RES,
+    CHORD_MAPS,
     MIDI_INSTRUMENTS,
     NB_VELOCITIES,
     PITCH_RANGE,
@@ -21,231 +20,6 @@ from ..constants import (
 )
 from ..midi_tokenizer import MIDITokenizer, _in_as_seq, _out_as_complete_seq
 from ..utils import detect_chords
-
-_PITCH_CLASSES = [
-    "C",
-    "C#",
-    "D",
-    "D#",
-    "E",
-    "F",
-    "F#",
-    "G",
-    "G#",
-    "A",
-    "A#",
-    "B",
-]
-# define chord maps (required)
-_CHORD_MAPS = {
-    "maj": [0, 4],
-    "min": [0, 3],
-    "dim": [0, 3, 6],
-    "aug": [0, 4, 8],
-    "dom": [0, 4, 7, 10],
-}
-# define chord insiders (+1)
-_CHORD_INSIDERS = {"maj": [7], "min": [7], "dim": [9], "aug": [], "dom": []}
-# define chord outsiders (-1)
-_CHORD_OUTSIDERS_1 = {
-    "maj": [2, 5, 9],
-    "min": [2, 5, 8],
-    "dim": [2, 5, 10],
-    "aug": [2, 5, 9],
-    "dom": [2, 5, 9],
-}
-# define chord outsiders (-2)
-_CHORD_OUTSIDERS_2 = {
-    "maj": [1, 3, 6, 8, 10],
-    "min": [1, 4, 6, 9, 11],
-    "dim": [1, 4, 7, 8, 11],
-    "aug": [1, 3, 6, 7, 10],
-    "dom": [1, 3, 6, 8, 11],
-}
-
-
-class REMIPlusChord:
-    """
-    Originally implemented in the REMI original repository
-    <https://github.com/YatingMusic/remi/blob/master/chord_recognition.py>
-    """
-
-    @classmethod
-    def __get_candidates(cls, chroma: np.ndarray) -> Dict[int, List[int]]:
-        candidates: Dict[int, List[int]] = {}
-        for index in range(len(chroma)):
-            if chroma[index]:
-                root_note = index
-                _chroma = np.roll(chroma, -root_note)
-                sequence = np.where(_chroma == 1)[0]
-                candidates[root_note] = list(sequence)
-        return candidates
-
-    @classmethod
-    def __get_score(
-        cls, candidates: Dict[int, List[int]]
-    ) -> Tuple[Dict[int, int], Dict[int, str]]:
-        scores: Dict[int, int] = {}
-        qualities: Dict[int, str] = {}
-        for root_note, sequence in candidates.items():
-            if 3 not in sequence and 4 not in sequence:
-                scores[root_note] = -100
-                qualities[root_note] = "None"
-            elif 3 in sequence and 4 in sequence:
-                scores[root_note] = -100
-                qualities[root_note] = "None"
-            else:
-                # decide quality
-                if 3 in sequence:
-                    if 6 in sequence:
-                        quality = "dim"
-                    else:
-                        quality = "min"
-                elif 4 in sequence:
-                    if 8 in sequence:
-                        quality = "aug"
-                    else:
-                        if 7 in sequence and 10 in sequence:
-                            quality = "dom"
-                        else:
-                            quality = "maj"
-                else:
-                    quality = ""
-                # decide score rules
-                maps = _CHORD_MAPS.get(quality, [])
-                score = 0
-                _notes = [n for n in sequence if n not in maps]
-                for n in _notes:
-                    if n in _CHORD_OUTSIDERS_1.get(quality, []):
-                        score -= 1
-                    elif n in _CHORD_OUTSIDERS_2.get(quality, []):
-                        score -= 2
-                    elif n in _CHORD_INSIDERS.get(quality, []):
-                        score += 1
-                scores[root_note] = score
-                qualities[root_note] = quality
-        return scores, qualities
-
-    @classmethod
-    def __find_chord(cls, pianoroll: np.ndarray) -> Tuple[str, str, str, int]:
-        chroma: np.ndarray = tochroma(pianoroll=pianoroll)
-        chroma = np.sum(chroma, axis=0)
-        chroma = np.array([1 if c else 0 for c in chroma])
-        if np.sum(chroma) == 0:
-            return "None", "None", "None", 0
-        else:
-            candidates = cls.__get_candidates(chroma=chroma)
-            scores, qualities = cls.__get_score(candidates=candidates)
-            # bass note
-            sorted_notes = []
-            for i, v in enumerate(np.sum(pianoroll, axis=0)):
-                if v > 0:
-                    sorted_notes.append(int(i % 12))
-            bass_note = sorted_notes[0]
-            # root note
-            __root_note = []
-            _max = max(scores.values())
-            for _root_note, score in scores.items():
-                if score == _max:
-                    __root_note.append(_root_note)
-            if len(__root_note) == 1:
-                root_note = __root_note[0]
-            else:
-                for n in sorted_notes:
-                    if n in __root_note:
-                        root_note = n
-                        break
-                return "None", "None", "None", 0  # no root found
-            # quality
-            quality = qualities.get(root_note, "None")
-            sequence = candidates.get(root_note, [])
-            # score
-            score = scores.get(root_note, 0)
-            return (
-                _PITCH_CLASSES[root_note],
-                quality,
-                _PITCH_CLASSES[bass_note],
-                score,
-            )
-
-    @classmethod
-    def __solve(
-        cls,
-        candidates: Dict[int, Dict[int, Tuple[int, float, int, float]]],
-        max_tick: int,
-    ) -> List[Tuple[int, int, str]]:
-        chords: List[Tuple[int, int, str]] = []
-        start_tick = 0
-        while start_tick < max_tick:
-            _candidates = candidates.get(start_tick, {})
-            _candidates = sorted(_candidates.items(), key=lambda x: (x[1][-1], x[0]))
-            # choose
-            end_tick, (root_note, quality, bass_note, _) = _candidates[-1]
-            if root_note == bass_note:
-                chord = "{}:{}".format(root_note, quality)
-            else:
-                chord = "{}:{}/{}".format(root_note, quality, bass_note)
-            chords.append((start_tick, end_tick, chord))
-            start_tick = end_tick
-        # remove :None
-        __temp = copy(chords)
-        while ":None" in str(__temp[0][-1]):
-            try:
-                _new_head = (__temp[0][0], __temp[1][1], __temp[1][2])
-                del __temp[0]  # delete None
-                __temp = [_new_head] + __temp[1:]
-            except:
-                return []
-        __temp2 = []
-        for chord in __temp:
-            if ":None" not in str(chord[-1]):
-                __temp2.append(chord)
-            else:
-                # __temp2[-1][1] = chord[1]
-                __temp2 = __temp2[:-1] + [(__temp2[-1][0], chord[1], __temp2[-1][2])]
-        return __temp2
-
-    @classmethod
-    def extract(cls, notes: List[Note]) -> List[Tuple[int, int, str]]:
-        # read
-        max_tick = max([n.end for n in notes])
-        ticks_per_beat = 480
-        pianoroll = notes2pianoroll(
-            note_stream_ori=notes, max_tick=max_tick, ticks_per_beat=ticks_per_beat
-        )
-        pianoroll = cast(np.ndarray, pianoroll)
-        # get lots of candidates
-        candidates = {}
-        # the shortest: 2 beat (1/2 bar in 4/4), longest: 4 beat (1bar in 4/4)
-        for interval in [4, 2]:
-            for start_tick in range(0, max_tick, ticks_per_beat):
-                end_tick = int(ticks_per_beat * interval + start_tick)
-                if end_tick > max_tick:
-                    end_tick = max_tick
-                part_pianoroll = pianoroll[start_tick:end_tick, :]
-                # find chord
-                root_note, quality, bass_note, score = cls.__find_chord(
-                    pianoroll=part_pianoroll
-                )
-                # save
-                if start_tick not in candidates:
-                    candidates[start_tick] = {}
-                    candidates[start_tick][end_tick] = (
-                        root_note,
-                        quality,
-                        bass_note,
-                        score,
-                    )
-                else:
-                    if end_tick not in candidates[start_tick]:
-                        candidates[start_tick][end_tick] = (
-                            root_note,
-                            quality,
-                            bass_note,
-                            score,
-                        )
-        chords = cls.__solve(candidates=candidates, max_tick=max_tick)
-        return chords
 
 
 class REMIPlus(MIDITokenizer):
@@ -338,11 +112,13 @@ class REMIPlus(MIDITokenizer):
             time_sig_change.numerator, time_sig_change.denominator
         )
         # Run chord extraction for whole note sequences before tokenization
-        current_chord_idx = 0
-        current_chord = ""  # e.g. C#:min/A
         if self.additional_tokens.get("Chord", False):  # "Chord" in additional tokens
-            chord_results = REMIPlusChord.extract(
-                [notes_prog[0] for notes_prog in notes_with_program]
+            chord_results: Optional[List[Event]] = detect_chords(
+                [
+                    n[0] for n in notes_with_program if not n[1][1]
+                ],  # put notes except for drums
+                self._current_midi_metadata["time_division"],
+                self._first_beat_res,
             )
         else:
             chord_results = None
@@ -433,45 +209,6 @@ class REMIPlus(MIDITokenizer):
                             )
                         )
 
-                # (Chord)
-                if chord_results is not None:
-                    """
-                    chord_results: list of chord with ticks range
-                    [(start_tick, end_tick, chord_string)...]
-                    """
-                    pos_index = int((note.start % ticks_per_bar) / ticks_per_sample)
-                    if nb_new_bars > 0 and current_chord != "":
-                        # put chord token in every bar start
-                        events.append(
-                            Event(
-                                type="Position",
-                                value=pos_index,
-                                time=note.start,
-                                desc="ChordPosition",
-                            )
-                        )
-                        events.append(
-                            Event(
-                                type="Chord",
-                                value=current_chord,
-                                time=note.start,
-                                desc=note.start,
-                            )
-                        )
-                    elif (
-                        chord_results[current_chord_idx][0]
-                        < note.start
-                        < chord_results[current_chord_idx][1]
-                    ):
-                        current_chord = chord_results[current_chord_idx][-1]
-                    elif note.start > chord_results[current_chord_idx][1]:
-                        # chord changed within a bar
-                        current_chord_idx = min(
-                            current_chord_idx + 1, len(chord_results) - 1
-                        )
-                        if current_chord_idx <= len(chord_results):
-                            current_chord = ""
-
                 previous_tick = note.start
 
             # Position
@@ -515,6 +252,19 @@ class REMIPlus(MIDITokenizer):
                 )
             )
             previous_note_end = max(previous_note_end, note.end)
+
+        # (Chord)
+        if chord_results is not None:  # append chord and position tokens 
+            positions = [
+                Event(
+                    type="Position",
+                    value=int((c.time % ticks_per_bar) / ticks_per_sample),
+                    time=c.time,
+                    desc="ChordPosition",
+                )
+                for c in chord_results
+            ]
+            events += positions + chord_results
 
         events.sort(key=lambda x: (x.time, self._order(x)))
         return events
@@ -736,14 +486,10 @@ class REMIPlus(MIDITokenizer):
 
         # CHORD
         if self.additional_tokens["Chord"]:
-            # extract combination mapping in root and chords
-            for root in _PITCH_CLASSES:
-                for quality in _CHORD_MAPS.keys():
-                    vocab.append(f"Chord_{root}:{quality}")
-                    for base in _PITCH_CLASSES:
-                        if base != root:
-                            # add fraction chords
-                            vocab.append(f"Chord_{root}:{quality}/{base}")
+            vocab += [
+                f"Chord_{i}" for i in range(3, 6)
+            ]  # non recognized chords (between 3 and 5 notes only)
+            vocab += [f"Chord_{chord_quality}" for chord_quality in CHORD_MAPS]
 
         # TEMPO
         if self.additional_tokens["Tempo"]:
