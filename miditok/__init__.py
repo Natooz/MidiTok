@@ -1,6 +1,7 @@
 from .tokenizations import (
     MIDILike,
     REMI,
+    REMIPlus,
     TSD,
     Structured,
     Octuple,

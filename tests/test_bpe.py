@@ -39,7 +39,7 @@ def test_bpe_conversion(
     :param data_path: root path to the data to test
     """
     random.seed(777)
-    tokenizations = ["Structured", "REMI", "MIDILike", "TSD"]
+    tokenizations = ["Structured", "REMI", "REMIPlus", "MIDILike", "TSD"]
     data_path = Path(data_path)
     files = list(data_path.glob("**/*.mid"))
 
