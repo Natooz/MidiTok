@@ -11,7 +11,7 @@ Python package to tokenize MIDI music files, presented at the ISMIR 2021 LBD.
 [![Downloads](https://pepy.tech/badge/MidiTok)](https://pepy.tech/project/MidiTok)
 [![Code style](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-![MidiTok Logo](https://github.com/Natooz/MidiTok/blob/assets/assets/logo.png?raw=true "")
+![MidiTok Logo](docs/assets/logo.png?raw=true "")
 
 
 MidiTok converts MIDI music files into sequences of tokens, ready to be fed to sequential deep learning models like Transformers.
@@ -28,7 +28,7 @@ MidiTok uses [MIDIToolkit](https://github.com/YatingMusic/miditoolkit), which it
 
 ## Usage example
 
-The most basic and useful methods are summurized here.
+The most basic and useful methods are summarized here.
 
 ```python
 from miditok import REMI
@@ -63,14 +63,17 @@ tokenizer.apply_bpe_to_dataset(Path('path', 'to', 'tokens_noBPE'), Path('path', 
 
 ## Tokenizations
 
-* [REMI](https://arxiv.org/abs/2002.00212)
+MidiTok implements the tokenizations: (links to original papers)
+* [REMI](https://dl.acm.org/doi/10.1145/3394171.3413671)
+* [REMI+](https://openreview.net/forum?id=NyR8OZFHw6i) (WIP)
 * [MIDI-Like](https://link.springer.com/article/10.1007/s00521-018-3758-9)
 * [TSD](https://arxiv.org/abs/2301.11975)
 * [Structured](https://arxiv.org/abs/2107.05944)
 * [CPWord](https://ojs.aaai.org/index.php/AAAI/article/view/16091)
 * [Octuple](https://aclanthology.org/2021.findings-acl.70)
 * [MuMIDI](https://dl.acm.org/doi/10.1145/3394171.3413721)
-* [REMI+](https://arxiv.org/abs/2201.10936)
+
+You can find short presentations in the [documentation](https://miditok.readthedocs.io/en/latest/tokenizations.html).
 
 ## Limitations
 

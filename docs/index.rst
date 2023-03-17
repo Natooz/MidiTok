@@ -6,7 +6,7 @@
 Welcome to MidiTok's documentation!
 =========================================
 
-.. image:: https://github.com/Natooz/MidiTok/blob/assets/assets/logo.png?raw=true
+.. image:: /assets/logo.png
   :width: 600
   :alt:
 
