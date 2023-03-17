@@ -40,6 +40,9 @@ ADDITIONAL_TOKENS_TEST = {
     "Tempo": True,
     "TimeSignature": True,
     "Program": True,
+    "chord_maps": miditok.constants.CHORD_MAPS,
+    "chord_tokens_with_root_note": True,  # Tokens will look as "Chord_C:maj"
+    "chord_unknown": (3, 6),
     "rest_range": (
         4,
         1024,

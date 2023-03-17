@@ -163,9 +163,10 @@ class REMIPlus(MIDITokenizer):
                 )
                 for chord in chords:
                     pos_index = int((chord.time % ticks_per_bar) / ticks_per_sample)
-                    events.append(Event("Position", pos_index, chord.time, "ChordPosition"))
+                    events.append(Event("Position", pos_index, chord.time, "PositionChord"))
                     events.append(Event("Program", track.program, chord.time, "ProgramChord"))
                     events.append(chord)
+        events.sort(key=lambda x: x.time)
 
         for note, (program_num, is_drum) in notes_with_program:
             if note.start != previous_tick:
@@ -245,7 +246,7 @@ class REMIPlus(MIDITokenizer):
                                 type="Position",
                                 value=pos_index,
                                 time=note.start,
-                                desc="TempoPosition",
+                                desc="PositionTempo",
                             )
                         )
                         events.append(
@@ -565,16 +566,10 @@ class REMIPlus(MIDITokenizer):
             return 0
         elif x.type == "TimeSig":
             return 1
-        elif x.type == "Position" and x.desc == "TempoPosition":
+        elif x.type == "Position" and x.desc == "PositionTempo":
             return 2
         elif x.type == "Tempo":
             return 3
-        elif x.type == "Position" and x.desc == "ChordPosition":
-            return 4
-        elif x.type == "Program" and x.desc == "ProgramChord":
-            return 5
-        elif x.type == "Chord":
-            return 6
         elif x.type == "Rest":
             return 7
         else:  # for other types of events, the order should be handle when inserting the events in the sequence

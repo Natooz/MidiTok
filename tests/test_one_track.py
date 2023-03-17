@@ -28,14 +28,11 @@ from .tests_utils import (
 # long enough for MIDI-Like and Structured encodings, and with a single beat resolution
 BEAT_RES_TEST = {(0, 64): 8}
 ADDITIONAL_TOKENS_TEST = {
-    "Chord": True,  # set to false to speed up tests as it takes some time on maestro MIDIs
+    "Chord": False,  # set to false to speed up tests as it takes some time on maestro MIDIs
     "Rest": True,
     "Tempo": True,
     "TimeSignature": True,
     "Program": False,
-    "chord_maps": miditok.constants.CHORD_MAPS,
-    "chord_tokens_with_root_note": True,  # Tokens will look as "Chord_C:maj"
-    "chord_unknown": (3, 6),
     "rest_range": (4, 16),
     "nb_tempos": 32,
     "tempo_range": (40, 250),

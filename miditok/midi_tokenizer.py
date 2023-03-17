@@ -65,7 +65,7 @@ def _in_as_seq(complete: bool = True, decode_bpe: bool = True):
                     ids=ids,
                     tokens=tokens,
                     events=events,
-                    ids_bpe_encoded=self.__ids_are_bpe_encoded(ids)
+                    ids_bpe_encoded=self._ids_are_bpe_encoded(ids)
                 )
 
             if self.has_bpe and decode_bpe:
@@ -782,7 +782,7 @@ class MIDITokenizer(ABC):
         :return: chord tokens, created from the tokenizer's params
         """
         tokens = []
-        if self.additional_tokens["chord_tokens_with_root_note"]:
+        if self.additional_tokens.get("chord_tokens_with_root_note", False):
             tokens += [
                 f"Chord_{root_note}:{chord_quality}"
                 for chord_quality in self.additional_tokens["chord_maps"]
@@ -1405,7 +1405,7 @@ class MIDITokenizer(ABC):
             )
             self.save_tokens(seq, out_, sample["programs"])
 
-    def __ids_are_bpe_encoded(self, ids: Union[List[int], np.ndarray]) -> bool:
+    def _ids_are_bpe_encoded(self, ids: Union[List[int], np.ndarray]) -> bool:
         r"""A small check telling if a sequence of ids are encoded with BPE.
         This is performed by checking if any id has a value superior or equal to the length
         of the base vocabulary.
