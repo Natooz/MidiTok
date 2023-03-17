@@ -59,7 +59,12 @@ def _in_as_seq(complete: bool = True, decode_bpe: bool = True):
                     else:  # list of Event, very unlikely
                         events = seq
 
-                seq = TokSequence(ids=ids, tokens=tokens, events=events)
+                seq = TokSequence(
+                    ids=ids,
+                    tokens=tokens,
+                    events=events,
+                    ids_bpe_encoded=self.__ids_are_bpe_encoded(ids)
+                )
 
             if self.has_bpe and decode_bpe:
                 self.decode_bpe(seq)
@@ -1366,6 +1371,16 @@ class MIDITokenizer(ABC):
                 else path
             )
             self.save_tokens(seq, out_, sample["programs"])
+
+    def __ids_are_bpe_encoded(self, ids: Union[list[int], np.ndarray]) -> bool:
+        r"""A small check telling if a sequence of ids are encoded with BPE.
+        This is performed by checking if any id has a value superior or equal to the length
+        of the base vocabulary.
+
+        :param ids: ids to check
+        :return: boolean, True if ids are encoded with BPE, False otherwise.
+        """
+        return np.any(np.ndarray(ids) >= len(self._vocab_base))
 
     def decode_bpe(self, seq: Union[TokSequence, List[TokSequence]]):
         r"""Decodes (inplace) a sequence of tokens (:class:`miditok.TokSequence`) with ids encoded with BPE.
