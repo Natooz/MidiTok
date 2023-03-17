@@ -66,14 +66,13 @@ class Octuple(MIDITokenizer):
         beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
         nb_velocities: int = NB_VELOCITIES,
         additional_tokens: Dict[str, bool] = ADDITIONAL_TOKENS,
-        programs: List[int] = None,
         special_tokens: List[str] = SPECIAL_TOKENS,
         params: Union[str, Path] = None,
     ):
         additional_tokens["Chord"] = False  # Incompatible additional token
         additional_tokens["Rest"] = False
         # used in place of positional encoding
-        self.programs = list(range(-1, 128)) if programs is None else programs
+        self.programs = additional_tokens.get("programs", list(range(-1, 128)))
         self.max_bar_embedding = 60  # this attribute might increase during encoding
         token_types = ["Pitch", "Velocity", "Duration", "Program", "Position", "Bar"]
         if additional_tokens["Tempo"]:

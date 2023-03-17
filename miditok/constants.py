@@ -27,6 +27,7 @@ CHORD_MAPS = {
     "9maj": (0, 4, 7, 10, 14),
     "9min": (0, 4, 7, 10, 13),
 }
+UNKNOWN_CHORD_PREFIX = "ukn"
 
 # MIDI encodings default parameters, used when tokenizing a dataset and using tokens
 # These are the parameters from which a MIDI file will be tokenized
@@ -59,6 +60,8 @@ ADDITIONAL_TOKENS = {
     "tempo_range": (40, 250),  # (min_tempo, max_tempo)
     # Time signature params
     "time_signature_range": (8, 2),
+    # Programs
+    "programs": list(range(-1, 128)),
 }  # (max_beat_res, max_bar_length_in_NOTE)
 SPECIAL_TOKENS = ["PAD", "BOS", "EOS", "MASK"]  # default special tokens
 

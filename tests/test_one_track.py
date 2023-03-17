@@ -18,7 +18,7 @@ import miditok
 from miditoolkit import MidiFile, Marker
 from tqdm import tqdm
 
-from tests_utils import (
+from .tests_utils import (
     track_equals,
     tempo_changes_equals,
     time_signature_changes_equals,
@@ -59,6 +59,7 @@ def test_one_track_midi_to_tokens_to_midi(
         "TSD",
         "Structured",
         "REMI",
+        "REMIPlus",
         "CPWord",
         "Octuple",
         "OctupleMono",

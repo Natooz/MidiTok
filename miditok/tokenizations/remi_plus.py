@@ -60,9 +60,9 @@ class REMIPlus(MIDITokenizer):
         params: Optional[Union[str, Path]] = None,
         max_bar_embedding: Optional[int] = 60,
     ):
-        self.encoder = []
         additional_tokens["Program"] = True  # required
         additional_tokens["Rest"] = False
+        self.programs = additional_tokens.get("programs", list(range(-1, 128)))
         self.max_bar_embedding = (
             max_bar_embedding  # this attribute might increase during encoding
         )
@@ -95,15 +95,21 @@ class REMIPlus(MIDITokenizer):
         super().save_params(out_path, additional_attributes_tmp)
 
     def __notes_to_events(
-        self, notes_with_program: List[Tuple[Note, Tuple[int, bool]]]
+        self, tracks: List[Instrument]
     ) -> List[Event]:
-        """Convert multi track notes into one Token sequence.
+        """Convert multi-track notes into one Token sequence.
 
-        :param notes_with_program: List[Tuple[Note, program]]
-                Note is a instance of `miditoolkit.Note`, and the program
-                is a tuple of (program_number: int, is_drum: bool).
+        :param tracks: list of tracks (`miditoolkit.Instrument`) to convert.
         :return: sequences of Event.
         """
+        # Flatten all notes
+        notes_with_program = [
+            (note, (track.program, track.is_drum))
+            for track in tracks
+            for note in track.notes
+        ]
+        notes_with_program.sort(key=lambda n: (n[0].start, n[0].pitch))
+
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
         time_division = self._current_midi_metadata["time_division"]
@@ -142,26 +148,24 @@ class REMIPlus(MIDITokenizer):
             time_sig_change.numerator, time_sig_change.denominator
         )
         ticks_per_bar = time_division * current_time_sig[0]
-        # Run chord extraction for whole note sequences before tokenization
+        # (Chord)
         if self.additional_tokens.get("Chord", False):  # "Chord" in additional tokens
-            chord_results: Optional[List[Event]] = detect_chords(
-                [
-                    n[0] for n in notes_with_program if not n[1][1]
-                ],  # put notes except for drums
-                self._current_midi_metadata["time_division"],
-                self._first_beat_res,
-            )  # TODO set chords by program
-            """
-            detect_chords(
-                track.notes,
-                self._current_midi_metadata["time_division"],
-                chord_maps=self.additional_tokens["chord_maps"],
-                specify_root_note=self.additional_tokens["chord_tokens_with_root_note"],
-                beat_res=self._first_beat_res,
-                unknown_chords_nb_notes_range=self.additional_tokens["chord_unknown"],
-            )"""
-        else:
-            chord_results = None
+            for track in tracks:  # find chords per track
+                if track.is_drum:
+                    continue
+                chords = detect_chords(
+                    track.notes,
+                    self._current_midi_metadata["time_division"],
+                    chord_maps=self.additional_tokens["chord_maps"],
+                    specify_root_note=self.additional_tokens["chord_tokens_with_root_note"],
+                    beat_res=self._first_beat_res,
+                    unknown_chords_nb_notes_range=self.additional_tokens["chord_unknown"],
+                )
+                for chord in chords:
+                    pos_index = int((chord.time % ticks_per_bar) / ticks_per_sample)
+                    events.append(Event("Position", pos_index, chord.time, "ChordPosition"))
+                    events.append(Event("Program", track.program, chord.time, "ProgramChord"))
+                    events.append(chord)
 
         for note, (program_num, is_drum) in notes_with_program:
             if note.start != previous_tick:
@@ -297,19 +301,6 @@ class REMIPlus(MIDITokenizer):
             )
             previous_note_end = max(previous_note_end, note.end)
 
-        # (Chord)
-        if chord_results is not None:  # append chord and position tokens
-            positions = [
-                Event(
-                    type="Position",
-                    value=int((c.time % ticks_per_bar) / ticks_per_sample),
-                    time=c.time,
-                    desc="ChordPosition",
-                )
-                for c in chord_results
-            ]
-            events += positions + chord_results
-
         events.sort(key=lambda x: (x.time, self._order(x)))
         return events
 
@@ -323,9 +314,7 @@ class REMIPlus(MIDITokenizer):
         :param track: MIDI track to convert
         :return: :class:`miditok.TokSequence` of corresponding tokens.
         """
-        events = self.__notes_to_events(
-            [(n, (track.program, track.is_drum)) for n in track.notes]
-        )
+        events = self.__notes_to_events([track])
         return TokSequence(events=events)  # type: ignore
 
     def tokens_to_track(
@@ -352,13 +341,7 @@ class REMIPlus(MIDITokenizer):
         :return: sequences of tokens.
         """
         # Convert each track to tokens
-        notes_with_program = [
-            (note, (track.program, track.is_drum))
-            for track in midi.instruments
-            for note in track.notes
-        ]
-        notes_with_program.sort(key=lambda n: (n[0].start, n[0].pitch))
-        events = self.__notes_to_events(notes_with_program)
+        events = self.__notes_to_events(midi.instruments)
         tok_sequence = TokSequence(events=cast(List[Union[Event, List[Event]]], events))
         self.complete_sequence(tok_sequence)
         return tok_sequence
@@ -538,7 +521,7 @@ class REMIPlus(MIDITokenizer):
 
         # PROGRAM
         if self.additional_tokens["Program"]:
-            vocab += [f"Program_{program}" for program in range(-1, 128)]
+            vocab += [f"Program_{program}" for program in self.programs]
 
         return vocab
 
@@ -552,7 +535,7 @@ class REMIPlus(MIDITokenizer):
 
         dic["Bar"] = ["Position", "Bar"]
         dic["Position"] = ["Program"]
-        dic["Program"] = ["Pitch"]
+        dic["Program"] = ["Pitch", "Chord"]
         dic["Pitch"] = ["Velocity"]
         dic["Velocity"] = ["Duration"]
         dic["Duration"] = ["Program", "Position", "Bar"]
@@ -588,8 +571,10 @@ class REMIPlus(MIDITokenizer):
             return 3
         elif x.type == "Position" and x.desc == "ChordPosition":
             return 4
-        elif x.type == "Chord":
+        elif x.type == "Program" and x.desc == "ProgramChord":
             return 5
+        elif x.type == "Chord":
+            return 6
         elif x.type == "Rest":
             return 7
         else:  # for other types of events, the order should be handle when inserting the events in the sequence
@@ -613,12 +598,13 @@ class REMIPlus(MIDITokenizer):
         err_note = 0  # i.e. duplicated
         previous_type = tokens[0].split("_")[0]
         current_pos = -1
-        current_pitches = []
+        current_program = 0
+        current_pitches = {p: [] for p in self.programs}
 
         # Init first note and current pitches if needed
         if previous_type == "Pitch":
             pitch_val = int(tokens[0].split("_")[1])
-            current_pitches.append(pitch_val)
+            current_pitches[current_program].append(pitch_val)
         elif previous_type == "Position":
             current_pos = int(tokens[0].split("_")[1])
 
@@ -629,19 +615,21 @@ class REMIPlus(MIDITokenizer):
             if event_type in self.tokens_types_graph[previous_type]:
                 if event_type == "Bar":  # reset
                     current_pos = -1
-                    current_pitches = []
+                    current_pitches = {p: [] for p in self.programs}
                 elif previous_type == "Pitch":
                     pitch_val = int(event_value)
-                    if pitch_val in current_pitches:
+                    if pitch_val in current_pitches[current_program]:
                         err_note += 1  # pitch already played at current position
                     else:
-                        current_pitches.append(pitch_val)
+                        current_pitches[current_program].append(pitch_val)
                 elif event_type == "Position":
-                    if int(event_value) <= current_pos:
+                    if int(event_value) < current_pos:
                         err_time += 1  # token position value <= to the current position
                     else:
                         current_pos = int(event_value)
-                        current_pitches = []
+                        current_pitches = {p: [] for p in self.programs}
+                elif event_type == "Program":  # reset
+                    current_program = int(event_value)
             # Bad token type
             else:
                 err_type += 1

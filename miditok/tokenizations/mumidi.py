@@ -68,7 +68,6 @@ class MuMIDI(MIDITokenizer):
         beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
         nb_velocities: int = NB_VELOCITIES,
         additional_tokens: Dict[str, bool] = ADDITIONAL_TOKENS,
-        programs: List[int] = None,
         special_tokens: List[str] = SPECIAL_TOKENS,
         params: Union[str, Path] = None,
         drum_pitch_range: range = DRUM_PITCH_RANGE,
@@ -76,7 +75,7 @@ class MuMIDI(MIDITokenizer):
         additional_tokens["Rest"] = False
         additional_tokens["TimeSignature"] = False  # not compatible
         self.drum_pitch_range = drum_pitch_range
-        self.programs = list(range(-1, 128)) if programs is None else programs
+        self.programs = additional_tokens.get("programs", list(range(-1, 128)))
         # used in place of positional encoding
         self.max_bar_embedding = 60  # this attribute might increase during encoding
         self.vocab_types_idx = {
@@ -489,7 +488,7 @@ class MuMIDI(MIDITokenizer):
 
         # CHORD
         if self.additional_tokens["Chord"]:
-            vocab[0] += [self._create_chords_tokens()]
+            vocab[0] += self._create_chords_tokens()
 
         # REST
         if self.additional_tokens["Rest"]:

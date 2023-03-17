@@ -33,6 +33,7 @@ from .constants import (
     SPECIAL_TOKENS,
     CHR_ID_START,
     PITCH_CLASSES,
+    UNKNOWN_CHORD_PREFIX,
 )
 
 
@@ -794,7 +795,7 @@ class MIDITokenizer(ABC):
         if self.additional_tokens["chord_unknown"] is not False:
             if self.additional_tokens["chord_tokens_with_root_note"]:
                 tokens += [
-                    f"Chord_{root_note}:un{i}"
+                    f"Chord_{root_note}:{UNKNOWN_CHORD_PREFIX}{i}"
                     for i in range(*self.additional_tokens["chord_unknown"])
                     for root_note in PITCH_CLASSES
                 ]
