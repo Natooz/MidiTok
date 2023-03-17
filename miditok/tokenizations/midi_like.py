@@ -16,7 +16,6 @@ from ..constants import (
     TIME_DIVISION,
     TEMPO,
     MIDI_INSTRUMENTS,
-    CHORD_MAPS,
 )
 
 
@@ -205,7 +204,10 @@ class MIDILike(MIDITokenizer):
             events += detect_chords(
                 track.notes,
                 self._current_midi_metadata["time_division"],
-                self._first_beat_res,
+                chord_maps=self.additional_tokens["chord_maps"],
+                specify_root_note=self.additional_tokens["chord_tokens_with_root_note"],
+                beat_res=self._first_beat_res,
+                unknown_chords_nb_notes_range=self.additional_tokens["chord_unknown"],
             )
 
         events.sort(key=lambda x: (x.time, self._order(x)))
@@ -334,10 +336,7 @@ class MIDILike(MIDITokenizer):
 
         # CHORD
         if self.additional_tokens["Chord"]:
-            vocab += [
-                f"Chord_{i}" for i in range(3, 6)
-            ]  # non recognized chords (between 3 and 5 notes only)
-            vocab += [f"Chord_{chord_quality}" for chord_quality in CHORD_MAPS]
+            vocab += self._create_chords_tokens()
 
         # REST
         if self.additional_tokens["Rest"]:

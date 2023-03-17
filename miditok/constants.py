@@ -10,6 +10,24 @@ CURRENT_VERSION_PACKAGE = "2.0.1"  # used when saving the config of a tokenizer
 # List of unicode characters: https://www.fileformat.info/info/charset/UTF-8/list.htm
 CHR_ID_START = 33
 
+# Known chord maps, with 0 as root note
+CHORD_MAPS = {
+    "min": (0, 3, 7),
+    "maj": (0, 4, 7),
+    "dim": (0, 3, 6),
+    "aug": (0, 4, 8),
+    "sus2": (0, 2, 7),
+    "sus4": (0, 5, 7),
+    "7dom": (0, 4, 7, 10),
+    "7min": (0, 3, 7, 10),
+    "7maj": (0, 4, 7, 11),
+    "7halfdim": (0, 3, 6, 10),
+    "7dim": (0, 3, 6, 9),
+    "7aug": (0, 4, 8, 11),
+    "9maj": (0, 4, 7, 10, 14),
+    "9min": (0, 4, 7, 10, 13),
+}
+
 # MIDI encodings default parameters, used when tokenizing a dataset and using tokens
 # These are the parameters from which a MIDI file will be tokenized
 PITCH_RANGE = range(
@@ -30,10 +48,16 @@ ADDITIONAL_TOKENS = {
         2,
         8,
     ),  # (/min_rest, max_rest_in_BEAT), first divides a whole note/rest
-    # tempo params
+    # Chord params
+    # "chord_unknown" specifies the range of number of notes that can form "unknown" chords (that do not fit
+    # in "chord_maps") to add in tokens
+    "chord_maps": CHORD_MAPS,
+    "chord_tokens_with_root_note": True,  # Tokens will look as "Chord_C:maj"
+    "chord_unknown": False,  # (3, 6) for chords between 3 and 5 notes
+    # Tempo params
     "nb_tempos": 32,  # nb of tempo bins for additional tempo tokens, quantized like velocities
     "tempo_range": (40, 250),  # (min_tempo, max_tempo)
-    # time signature params
+    # Time signature params
     "time_signature_range": (8, 2),
 }  # (max_beat_res, max_bar_length_in_NOTE)
 SPECIAL_TOKENS = ["PAD", "BOS", "EOS", "MASK"]  # default special tokens
@@ -47,22 +71,21 @@ TIME_DIVISION = 384  # 384 and 480 are convenient as divisible by 4, 8, 12, 16, 
 TEMPO = 120
 TIME_SIGNATURE = (4, 4)
 
-CHORD_MAPS = {
-    "min": (0, 3, 7),
-    "maj": (0, 4, 7),
-    "dim": (0, 3, 6),
-    "aug": (0, 4, 8),
-    "sus2": (0, 2, 7),
-    "sus4": (0, 5, 7),
-    "7dom": (0, 4, 7, 10),
-    "7min": (0, 3, 7, 10),
-    "7maj": (0, 4, 7, 11),
-    "7halfdim": (0, 3, 6, 10),
-    "7dim": (0, 3, 6, 9),
-    "7aug": (0, 4, 8, 11),
-    "9maj": (0, 4, 7, 10, 14),
-    "9min": (0, 4, 7, 10, 13),
-}
+# Used with chords
+PITCH_CLASSES = [
+    "C",
+    "C#",
+    "D",
+    "D#",
+    "E",
+    "F",
+    "F#",
+    "G",
+    "G#",
+    "A",
+    "A#",
+    "B",
+]
 
 # http://newt.phys.unsw.edu.au/jw/notes.html
 # https://www.midi.org/specifications

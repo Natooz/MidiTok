@@ -18,7 +18,7 @@ import miditok
 from miditoolkit import MidiFile, Marker
 from tqdm import tqdm
 
-from .tests_utils import (
+from tests_utils import (
     track_equals,
     tempo_changes_equals,
     time_signature_changes_equals,
@@ -28,11 +28,14 @@ from .tests_utils import (
 # long enough for MIDI-Like and Structured encodings, and with a single beat resolution
 BEAT_RES_TEST = {(0, 64): 8}
 ADDITIONAL_TOKENS_TEST = {
-    "Chord": False,  # set to false to speed up tests as it takes some time on maestro MIDIs
+    "Chord": True,  # set to false to speed up tests as it takes some time on maestro MIDIs
     "Rest": True,
     "Tempo": True,
     "TimeSignature": True,
     "Program": False,
+    "chord_maps": miditok.constants.CHORD_MAPS,
+    "chord_tokens_with_root_note": True,  # Tokens will look as "Chord_C:maj"
+    "chord_unknown": (3, 6),
     "rest_range": (4, 16),
     "nb_tempos": 32,
     "tempo_range": (40, 250),
@@ -72,6 +75,7 @@ def test_one_track_midi_to_tokens_to_midi(
 
         for tokenization in tokenizations:
             add_tokens = deepcopy(ADDITIONAL_TOKENS_TEST)
+            # Increase the number of rest just to cover very long pauses / rests in test examples
             if tokenization in ["MIDILike", "TSD"]:
                 add_tokens["rest_range"] = (
                     add_tokens["rest_range"][0],
@@ -84,11 +88,11 @@ def test_one_track_midi_to_tokens_to_midi(
 
             # Convert the track in tokens
             tokens = tokenizer(midi)
+            if not tokenizer.unique_track:  # or isinstance list
+                tokens = tokens[0]
 
             # Checks types and values conformity following the rules
-            tokens_types = tokenizer.tokens_errors(
-                tokens[0] if not tokenizer.unique_track else tokens
-            )
+            tokens_types = tokenizer.tokens_errors(tokens)
             if tokens_types != 0.0:
                 print(
                     f"Validation of tokens types / values successions failed with {tokenization}: {tokens_types:.2f}"
@@ -97,7 +101,7 @@ def test_one_track_midi_to_tokens_to_midi(
             # Convert back tokens into a track object
             tempo_changes = None
             time_sig_changes = None
-            if tokenization == "Octuple" or tokenization == "MuMIDI":
+            if tokenizer.unique_track:
                 new_midi = tokenizer.tokens_to_midi(
                     tokens, time_division=midi.ticks_per_beat
                 )
@@ -107,7 +111,7 @@ def test_one_track_midi_to_tokens_to_midi(
                     time_sig_changes = new_midi.time_signature_changes
             else:
                 track, tempo_changes = tokenizer.tokens_to_track(
-                    tokens[0], midi.ticks_per_beat
+                    tokens, midi.ticks_per_beat
                 )
 
             # Checks its good

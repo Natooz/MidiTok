@@ -16,7 +16,6 @@ from ..constants import (
     TIME_DIVISION,
     TEMPO,
     MIDI_INSTRUMENTS,
-    CHORD_MAPS,
 )
 
 
@@ -308,10 +307,7 @@ class TSD(MIDITokenizer):
 
         # CHORD
         if self.additional_tokens["Chord"]:
-            vocab += [
-                f"Chord_{i}" for i in range(3, 6)
-            ]  # non recognized chords (between 3 and 5 notes only)
-            vocab += [f"Chord_{chord_quality}" for chord_quality in CHORD_MAPS]
+            vocab += self._create_chords_tokens()
 
         # REST
         if self.additional_tokens["Rest"]:

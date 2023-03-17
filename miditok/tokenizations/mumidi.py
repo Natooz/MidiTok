@@ -17,7 +17,6 @@ from ..constants import (
     TIME_DIVISION,
     TEMPO,
     MIDI_INSTRUMENTS,
-    CHORD_MAPS,
     DRUM_PITCH_RANGE,
 )
 
@@ -329,8 +328,11 @@ class MuMIDI(MIDITokenizer):
         if self.additional_tokens["Chord"] and not track.is_drum:
             chords = detect_chords(
                 track.notes,
-                self.current_midi_metadata["time_division"],
-                self._first_beat_res,
+                self._current_midi_metadata["time_division"],
+                chord_maps=self.additional_tokens["chord_maps"],
+                specify_root_note=self.additional_tokens["chord_tokens_with_root_note"],
+                beat_res=self._first_beat_res,
+                unknown_chords_nb_notes_range=self.additional_tokens["chord_unknown"],
             )
             unsqueezed = []
             for c in range(len(chords)):
@@ -487,10 +489,7 @@ class MuMIDI(MIDITokenizer):
 
         # CHORD
         if self.additional_tokens["Chord"]:
-            vocab[0] += [
-                f"Chord_{i}" for i in range(3, 6)
-            ]  # non recognized chords (between 3 and 5 notes only)
-            vocab[0] += [f"Chord_{chord_quality}" for chord_quality in CHORD_MAPS]
+            vocab[0] += [self._create_chords_tokens()]
 
         # REST
         if self.additional_tokens["Rest"]:

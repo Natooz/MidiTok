@@ -16,7 +16,6 @@ from ..constants import (
     TIME_DIVISION,
     TEMPO,
     MIDI_INSTRUMENTS,
-    CHORD_MAPS,
 )
 
 
@@ -227,7 +226,10 @@ class CPWord(MIDITokenizer):
             chord_events = detect_chords(
                 track.notes,
                 self._current_midi_metadata["time_division"],
-                self._first_beat_res,
+                chord_maps=self.additional_tokens["chord_maps"],
+                specify_root_note=self.additional_tokens["chord_tokens_with_root_note"],
+                beat_res=self._first_beat_res,
+                unknown_chords_nb_notes_range=self.additional_tokens["chord_unknown"],
             )
             count = 0
             for chord_event in chord_events:
@@ -453,8 +455,7 @@ class CPWord(MIDITokenizer):
 
         # CHORD
         if self.additional_tokens["Chord"]:
-            vocab += [["Ignore_None"] + [f"Chord_{i}" for i in range(3, 6)]]
-            vocab[-1] += [f"Chord_{chord_quality}" for chord_quality in CHORD_MAPS]
+            vocab += [["Ignore_None"] + self._create_chords_tokens()]
 
         # REST
         if self.additional_tokens["Rest"]:

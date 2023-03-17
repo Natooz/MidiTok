@@ -1,6 +1,5 @@
-from copy import copy
 from math import ceil
-from pathlib import Path, PurePath
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
 import numpy as np
@@ -10,7 +9,6 @@ from ..classes import Event, TokSequence
 from ..constants import (
     ADDITIONAL_TOKENS,
     BEAT_RES,
-    CHORD_MAPS,
     MIDI_INSTRUMENTS,
     NB_VELOCITIES,
     PITCH_RANGE,
@@ -152,7 +150,16 @@ class REMIPlus(MIDITokenizer):
                 ],  # put notes except for drums
                 self._current_midi_metadata["time_division"],
                 self._first_beat_res,
-            )
+            )  # TODO set chords by program
+            """
+            detect_chords(
+                track.notes,
+                self._current_midi_metadata["time_division"],
+                chord_maps=self.additional_tokens["chord_maps"],
+                specify_root_note=self.additional_tokens["chord_tokens_with_root_note"],
+                beat_res=self._first_beat_res,
+                unknown_chords_nb_notes_range=self.additional_tokens["chord_unknown"],
+            )"""
         else:
             chord_results = None
 
@@ -523,10 +530,7 @@ class REMIPlus(MIDITokenizer):
 
         # CHORD
         if self.additional_tokens["Chord"]:
-            vocab += [
-                f"Chord_{i}" for i in range(3, 6)
-            ]  # non recognized chords (between 3 and 5 notes only)
-            vocab += [f"Chord_{chord_quality}" for chord_quality in CHORD_MAPS]
+            vocab += self._create_chords_tokens()
 
         # TEMPO
         if self.additional_tokens["Tempo"]:

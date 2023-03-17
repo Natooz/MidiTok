@@ -2,14 +2,14 @@
 
 """
 
-from typing import List, Tuple, Dict, Union, Any
+from typing import List, Tuple, Sequence, Dict, Union, Any
 from collections import Counter
 
 from miditoolkit import MidiFile, Note, Instrument
 import numpy as np
 
 from miditok.classes import Event
-from miditok.constants import CHORD_MAPS, INSTRUMENT_CLASSES, MIDI_INSTRUMENTS
+from miditok.constants import INSTRUMENT_CLASSES, MIDI_INSTRUMENTS
 
 
 def convert_ids_tensors_to_list(ids: Any):
@@ -59,31 +59,37 @@ def remove_duplicated_notes(notes: List[Note]):
 
 
 def detect_chords(
-    notes: List[Note],
+    notes: Sequence[Note],
     time_division: int,
+    chord_maps: Dict[str, Sequence[int]],
+    specify_root_note: bool = True,
     beat_res: int = 4,
     onset_offset: int = 1,
-    only_known_chord: bool = False,
-    simul_notes_limit: int = 20,
+    unknown_chords_nb_notes_range: Union[bool, Tuple[int]] = False,
+    simul_notes_limit: int = 10,
 ) -> List[Event]:
     r"""Chord detection method. Make sure to sort notes by start time then pitch before:
     ``notes.sort(key=lambda x: (x.start, x.pitch))``.
-    **On very large tracks with high note density this method can be very slow.**
+    **On very large tracks with high note density this method can slow down processes.**
     If you plan to use it with the Maestro or GiantMIDI datasets, it can take up to
     hundreds of seconds per MIDI depending on your cpu.
-    One time step at a time, it will analyse the notes played together
-    and detect possible chords.
+    This method works by iterating over each note, find if it played with other notes, and if it
+    forms a chord from the chord maps. **It does not consider chord inversion.**
 
     :param notes: notes to analyse (sorted by starting time, them pitch)
     :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
-    :param beat_res: beat resolution, i.e. nb of samples per beat (default 4)
+    :param chord_maps: list of chord maps, to be given as a dictionary where keys are chord qualities
+                    (e.g. "maj") and values pitch maps as tuples of integers (e.g. (0, 4, 7)).
+                    You can use or take as an example ``miditok.constants.CHORD_MAPS``.
+    :param specify_root_note: the root note of each chord will be specified in Events / tokens (default: True).
+    :param beat_res: beat resolution, i.e. nb of samples per beat (default 4).
     :param onset_offset: maximum offset (in samples) ∈ N separating notes starts to consider them
-                            starting at the same time / onset (default is 1)
-    :param only_known_chord: will select only known chords. If set to False, non recognized chords of
-                            n notes will give a chord_n event (default False)
+                    starting at the same time / onset (default is 1).
+    :param unknown_chords_nb_notes_range: will detect only chords recognized in the chord maps. If set to False,
+                    non recognized chords of *n* notes will give a *Chord_n* token (default False).
     :param simul_notes_limit: nb of simultaneous notes being processed when looking for a chord
-            this parameter allows to speed up the chord detection (default 20)
-    :return: the detected chords as Event objects
+            this parameter allows to speed up the chord detection, and must be >= 5 (default 10).
+    :return: the detected chords as Event objects.
     """
     assert (
         simul_notes_limit >= 5
@@ -91,7 +97,7 @@ def detect_chords(
     tuples = []
     for note in notes:
         tuples.append((note.pitch, int(note.start), int(note.end)))
-    notes = np.asarray(tuples)
+    notes = np.asarray(tuples)  # (N,3)
 
     time_div_half = time_division // 2
     onset_offset = time_division * onset_offset / beat_res
@@ -129,21 +135,21 @@ def detect_chords(
             3 <= len(chord_map) <= 5 and chord_map[-1] <= 24
         ):  # max interval between the root and highest degree
             chord_quality = len(chord)
-            for quality, known_chord in CHORD_MAPS.items():
+            for quality, known_chord in chord_maps.items():
                 if known_chord == chord_map:
                     chord_quality = quality
                     break
-            if only_known_chord and isinstance(chord_quality, int):
-                count += len(onset_notes)  # Move to the next notes
-                continue  # this chords was not recognize and we don't want it
-            chords.append((chord_quality, min(chord[:, 1]), chord_map))
+
+            # We found a chord quality, or we specify unknown chords
+            if not (unknown_chords_nb_notes_range is False and isinstance(chord_quality, int)):
+                if specify_root_note:
+                    chord_quality = f"{notes[count, 0] % 12}:{chord_quality}"
+                chords.append(Event(type="Chord", value=chord_quality, time=min(chord[:, 1]), desc=chord_map))
+
         previous_tick = max(onset_notes[:, 1])
         count += len(onset_notes)  # Move to the next notes
 
-    events = []
-    for chord in chords:
-        events.append(Event(type="Chord", value=chord[0], time=chord[1], desc=chord[2]))
-    return events
+    return chords
 
 
 def merge_tracks_per_class(
@@ -325,7 +331,7 @@ def merge_same_program_tracks(tracks: List[Instrument]):
 
 
 def nb_bar_pos(
-    seq: List[int], bar_token: int, position_tokens: List[int]
+    seq: Sequence[int], bar_token: int, position_tokens: Sequence[int]
 ) -> Tuple[int, int]:
     r"""Returns the number of bars and the last position of a sequence of tokens. This method
     is compatible with tokenizations representing time with *Bar* and *Position* tokens, such as
