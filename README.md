@@ -65,7 +65,7 @@ tokenizer.apply_bpe_to_dataset(Path('path', 'to', 'tokens_noBPE'), Path('path', 
 
 MidiTok implements the tokenizations: (links to original papers)
 * [REMI](https://dl.acm.org/doi/10.1145/3394171.3413671)
-* [REMI+](https://openreview.net/forum?id=NyR8OZFHw6i) (WIP)
+* [REMI+](https://openreview.net/forum?id=NyR8OZFHw6i)
 * [MIDI-Like](https://link.springer.com/article/10.1007/s00521-018-3758-9)
 * [TSD](https://arxiv.org/abs/2301.11975)
 * [Structured](https://arxiv.org/abs/2107.05944)
