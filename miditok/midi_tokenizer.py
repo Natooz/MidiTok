@@ -1413,7 +1413,7 @@ class MIDITokenizer(ABC):
         :param ids: ids to check
         :return: boolean, True if ids are encoded with BPE, False otherwise.
         """
-        return np.any(np.ndarray(ids) >= len(self._vocab_base))
+        return np.any(np.array(ids) >= len(self._vocab_base))
 
     def decode_bpe(self, seq: Union[TokSequence, List[TokSequence]]):
         r"""Decodes (inplace) a sequence of tokens (:class:`miditok.TokSequence`) with ids encoded with BPE.
