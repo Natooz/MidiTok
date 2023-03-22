@@ -2,7 +2,7 @@
 
 """
 
-CURRENT_VERSION_PACKAGE = "2.0.2"  # used when saving the config of a tokenizer
+CURRENT_VERSION_PACKAGE = "2.0.3"  # used when saving the config of a tokenizer
 
 # Starting id of chr() method for BPE, as the 5 (0 to 4 included) firsts are ignored by 🤗tokenize
 # We also skip the 32nd (0x20) (space) as it causes issues when loading a BPE model with spaces in merged

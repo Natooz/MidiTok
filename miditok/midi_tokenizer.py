@@ -1774,11 +1774,14 @@ class MIDITokenizer(ABC):
         This will call the :py:func:`miditok.MIDITokenizer.midi_to_tokens` if you provide
         a MIDI object, or the :py:func:`miditok.MIDITokenizer.tokens_to_midi` method otherwise.
 
-        :param obj: a MIDI object or sequence of tokens.
+        :param obj: a `miditoolkit.MidiFile` object, a path to a MIDI file or a sequence of tokens.
         :return: the converted object.
         """
         if isinstance(obj, MidiFile):
             return self.midi_to_tokens(obj, *args, **kwargs)
+        elif isinstance(obj, str) or isinstance(obj, Path):
+            midi = MidiFile(obj)
+            return self.midi_to_tokens(midi, *args, **kwargs)
         else:
             return self.tokens_to_midi(obj, *args, **kwargs)
 

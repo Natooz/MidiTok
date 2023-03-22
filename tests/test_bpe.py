@@ -74,9 +74,7 @@ def test_bpe_conversion(
         ), "Vocabulary inversion failed, something might be wrong with the way they are built"
 
         for file_path in files:
-            tokens = tokenizer.midi_to_tokens(
-                deepcopy(MidiFile(file_path)), apply_bpe_if_possible=False
-            )
+            tokens = tokenizer(file_path, apply_bpe_if_possible=False)
             if not tokenizer.unique_track:
                 tokens = tokens[0]
             to_tok = tokenizer._bytes_to_tokens(tokens.bytes)
