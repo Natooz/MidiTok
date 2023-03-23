@@ -35,14 +35,13 @@ Here we convert a MIDI to tokens, and the other way around.
     from miditok.utils import get_midi_programs
     from miditoolkit import MidiFile
 
-    # Opens the MIDI
-    midi = MidiFile('path/to/your_midi.mid')
-
-    # Converts MIDI to tokens, and back to a MIDI
-    tokens = tokenizer(midi)  # automatically detects MIDIs and tokens before converting
-    programs = get_midi_programs(midi)
+    # Tokenize a MIDI file
+    midi_path = "path/to/your_midi.mid"
+    midi = MidiFile(midi_path)
+    tokens = tokenizer(midi_path)  # automatically detects MidiFile, paths or tokens before converting them
 
     # Convert to MIDI and save it
+    programs = get_midi_programs(midi)
     generated_midi = tokenizer(tokens, programs=programs)  # MidiTok can handle PyTorch / Tensorflow Tensors
     generated_midi.dump('path/to/save/file.mid')  # could have been done above by giving the path argument
 

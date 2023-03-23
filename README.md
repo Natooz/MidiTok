@@ -14,7 +14,7 @@ Python package to tokenize MIDI music files, presented at the ISMIR 2021 LBD.
 ![MidiTok Logo](docs/assets/logo.png?raw=true "")
 
 
-MidiTok converts MIDI music files into sequences of tokens, ready to be fed to sequential deep learning models like Transformers.
+Using Deep Learning with symbolic music ? Then MidiTok can take care of converting your MIDI files into tokens, ready to be fed to models such as Transformer, for any generation, transcription or MIR task.
 MidiTok features most known [MIDI tokenizations](https://miditok.readthedocs.io/en/latest/tokenizations.html) (e.g. [REMI](https://arxiv.org/abs/2002.00212), [Compound Word](https://arxiv.org/abs/2101.02402)...), and is built around the idea that they all share common parameters and methods. It contains methods allowing to properly pre-process any MIDI file, and also supports Byte Pair Encoding (BPE).
 
 **Documentation:** [miditok.readthedocs.com](https://miditok.readthedocs.io/en/latest/index.html)
@@ -28,7 +28,7 @@ MidiTok uses [MIDIToolkit](https://github.com/YatingMusic/miditoolkit), which it
 
 ## Usage example
 
-The most basic and useful methods are summarized here.
+The most basic and useful methods are summarized here. And [here](colab-notebooks/Full_Example_HuggingFace_GPT2_Transformer.ipynb) is a simple notebook example showing how to use Hugging Face models to generate music, with MidiTok taking care of tokenizing MIDIs.
 
 ```python
 from miditok import REMI
@@ -41,21 +41,24 @@ tokenizer = REMI()  # using the default parameters, read the documentation to cu
 midi = MidiFile('path/to/your_midi.mid')
 
 # Converts MIDI to tokens, and back to a MIDI
-tokens = tokenizer(midi)  # automatically detects MIDIs and tokens before converting
+tokens = tokenizer(midi)  # automatically detects MIDIs, paths and tokens before conversion
 converted_back_midi = tokenizer(tokens, get_midi_programs(midi))  # PyTorch / Tensorflow / Numpy tensors supported
 
 # Converts MIDI files to tokens saved as JSON files
-midi_paths = list(Path('path', 'to', 'dataset').glob('**/*.mid'))
-data_augmentation_offsets = [2, 2, 1]  # data augmentation on 2 pitch octaves, 2 velocity and 1 duration values
-tokenizer.tokenize_midi_dataset(midi_paths, Path('path', 'to', 'tokens_noBPE'),
+midi_paths = list(Path("path", "to", "dataset").glob("**/*.mid"))
+data_augmentation_offsets = [2, 1, 1]  # data augmentation on 2 pitch octaves, 1 velocity and 1 duration values
+tokenizer.tokenize_midi_dataset(midi_paths, Path("path", "to", "tokens_noBPE"),
                                 data_augment_offsets=data_augmentation_offsets)
 
 # Constructs the vocabulary with BPE, from the tokenized files
 tokenizer.learn_bpe(
     vocab_size=500,
-    tokens_paths=list(Path('path', 'to', 'tokens_noBPE').glob("**/*.json")),
+    tokens_paths=list(Path("path", "to", "tokens_noBPE").glob("**/*.json")),
     start_from_empty_voc=False,
 )
+
+# Saving our tokenizer, to retrieve it back later with the load_params method
+tokenizer.save_params(Path("path", "to", "save", "tokenizer"))
 
 # Converts the tokenized musics into tokens with BPE
 tokenizer.apply_bpe_to_dataset(Path('path', 'to', 'tokens_noBPE'), Path('path', 'to', 'tokens_BPE'))
