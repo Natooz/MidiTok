@@ -48,6 +48,20 @@ class TokSequence:
     def __len__(self) -> int:
         return len(self.ids)
 
+    def __getitem__(self, item):
+        if self.ids is not None:
+            return self.ids[item]
+        elif self.tokens is not None:
+            return self.tokens[item]
+        elif self.events is not None:
+            return self.events[item]
+        elif self.bytes is not None:
+            return self.bytes[item]
+        elif self._ids_no_bpe is not None:
+            return self._ids_no_bpe[item]
+        else:
+            return ValueError("This TokSequence seems to not be initialized, all its attributes are None.")
+
     def __eq__(self, other) -> bool:
         """Checks if too sequences are equal.
         This is performed by comparing their attributes (ids, tokens...).
