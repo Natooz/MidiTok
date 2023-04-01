@@ -1782,25 +1782,28 @@ class MIDITokenizer(ABC):
         return self.has_bpe and self._bpe_model is None
 
     def __call__(self, obj: Any, *args, **kwargs):
-        r"""Automatically tokenizes a MIDI file, or detokenizes a sequence of tokens.
-        This will call the :py:func:`miditok.MIDITokenizer.midi_to_tokens` if you provide
-        a MIDI object, or the :py:func:`miditok.MIDITokenizer.tokens_to_midi` method otherwise.
+        r"""Calling a tokenizer allows to directly convert a MIDI to tokens or the other way around.
+        The method automatically detects MIDI and token objects, as well as paths and can directly load
+        MIDI or token json files before converting them.
+        This will call the :py:func:`miditok.MIDITokenizer.midi_to_tokens` if you provide a MIDI object
+        or path to a MIDI file, or the :py:func:`miditok.MIDITokenizer.tokens_to_midi` method otherwise.
 
-        :param obj: a `miditoolkit.MidiFile` object, a path to a MIDI file or a sequence of tokens.
+        :param obj: a `miditoolkit.MidiFile` object, a sequence of tokens, or a path to a MIDI or tokens json file.
         :return: the converted object.
         """
         # Tokenize MIDI
         if isinstance(obj, MidiFile):
             return self.midi_to_tokens(obj, *args, **kwargs)
 
-        # Loads a file (mid or json)
-        elif isinstance(obj, str) or isinstance(obj, Path):
+        # Loads a file (.mid or .json)
+        elif isinstance(obj, (str, Path)):
             path = Path(obj)
             if path.suffix in MIDI_FILES_EXTENSIONS:
                 midi = MidiFile(obj)
                 return self.midi_to_tokens(midi, *args, **kwargs)
             else:
-                return self.load_tokens(path)
+                tokens = self.load_tokens(path)
+                return self.tokens_to_midi(tokens, *args, **kwargs)
 
         # Consider it tokens --> converts to MIDI
         else:

@@ -61,6 +61,7 @@ MidiTok offers to include additional tokens on music information. You can specif
 
    * - Token type
      - :ref:`REMI`
+     - :ref:`REMIPlus`
      - :ref:`MIDI-Like`
      - :ref:`TSD`
      - :ref:`Structured`
@@ -68,6 +69,7 @@ MidiTok offers to include additional tokens on music information. You can specif
      - :ref:`Octuple`
      - :ref:`MuMIDI`
    * - Chord
+     - ✅
      - ✅
      - ✅
      - ✅
@@ -80,10 +82,12 @@ MidiTok offers to include additional tokens on music information. You can specif
      - ✅
      - ✅
      - ✅
+     - ✅
      - ❌
      - ❌
      - ❌
    * - Tempo
+     - ✅
      - ✅
      - ✅
      - ✅
@@ -99,8 +103,10 @@ MidiTok offers to include additional tokens on music information. You can specif
      - ✅
      - ✅
      - ✅
+     - ✅
    * - Time signature
      - ❌
+     - ✅
      - ❌
      - ❌
      - ❌
@@ -165,5 +171,5 @@ You can save and load a tokenizer's parameters and vocabulary. This is especiall
 Limitations
 ------------------------
 
-Tokenizations using Bar tokens (:ref:`REMI`, :ref:`CPWord` and :ref:`MuMIDI`) only considers a 4/x time signature for now. This means that each bar is considered covering 4 beats.
-:ref:`Octuple` supports it.
+Some tokenizations using Bar tokens (:ref:`REMI`, :ref:`CPWord` and :ref:`MuMIDI`) only considers a 4/x time signature for now. This means that each bar is considered covering 4 beats.
+:ref:`REMIPlus` and :ref:`Octuple` supports it.
