@@ -5,7 +5,7 @@ Python package to tokenize MIDI music files, presented at the ISMIR 2021 LBD.
 [![PyPI version fury.io](https://badge.fury.io/py/miditok.svg)](https://pypi.python.org/pypi/miditok/)
 [![Python 3.7](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/release/)
 [![Documentation Status](https://readthedocs.org/projects/miditok/badge/?version=latest)](https://miditok.readthedocs.io/en/latest/?badge=latest)
-![GitHub CI](https://github.com/Natooz/MidiTok/actions/workflows/pytest.yml/badge.svg)
+[![GitHub CI](https://github.com/Natooz/MidiTok/actions/workflows/pytest.yml/badge.svg)](https://github.com/Natooz/MidiTok/actions/workflows/pytest.yml)
 [![Codecov](https://img.shields.io/codecov/c/github/Natooz/MidiTok)](https://codecov.io/gh/Natooz/MidiTok)
 [![GitHub license](https://img.shields.io/github/license/Natooz/MidiTok.svg)](https://github.com/Natooz/MidiTok/blob/main/LICENSE)
 [![Downloads](https://pepy.tech/badge/MidiTok)](https://pepy.tech/project/MidiTok)
@@ -41,7 +41,7 @@ tokenizer = REMI()  # using the default parameters, read the documentation to cu
 midi = MidiFile('path/to/your_midi.mid')
 
 # Converts MIDI to tokens, and back to a MIDI
-tokens = tokenizer(midi)  # automatically detects MIDIs, paths and tokens before conversion
+tokens = tokenizer(midi)  # calling it will automatically detect MIDIs, paths and tokens before the conversion
 converted_back_midi = tokenizer(tokens, get_midi_programs(midi))  # PyTorch / Tensorflow / Numpy tensors supported
 
 # Converts MIDI files to tokens saved as JSON files
@@ -81,14 +81,15 @@ You can find short presentations in the [documentation](https://miditok.readthed
 ## Limitations
 
 Tokenizations using Bar tokens (REMI, Compound Word and MuMIDI) **only considers a 4/x time signature** for now. This means that each bar is considered covering 4 beats.
+REMI+ and Octuple support it.
 
 ## Contributions
 
-Contributions are gratefully welcomed, feel free to open an issue or send a PR if you want to add a tokenization or speed up the code. Just make sure your modifications pass the [tests](tests), and format your code with [black](https://github.com/psf/black).
+Contributions are gratefully welcomed, feel free to open an issue or send a PR if you want to add a tokenization or speed up the code. You can read the [contribution guide](CONTRIBUTING.md) for details.
 
 ### Todo
 
-* Time Signature
+* Extend Time Signature to all tokenizations
 * Control Change messages
 * Option to represent pitch values as pitch intervals, as [it seems to improve performances](https://ismir2022program.ismir.net/lbd_369.html).
 * Speeding up MIDI read / load (Rust / C++ binding)
@@ -114,5 +115,5 @@ The BibTeX citations of all tokenizations can be found [in the documentation](ht
 
 ## Acknowledgments
 
-We acknowledge [Aubay](https://blog.aubay.com/index.php/language/en/home/?lang=en), the [LIP6](https://www.lip6.fr/?LANG=en), [LERIA](http://blog.univ-angers.fr/leria/n) and [ESEO](https://eseo.fr/en) for the financing and support of this project.
 Special thanks to all the contributors.
+We acknowledge [Aubay](https://blog.aubay.com/index.php/language/en/home/?lang=en), the [LIP6](https://www.lip6.fr/?LANG=en), [LERIA](http://blog.univ-angers.fr/leria/n) and [ESEO](https://eseo.fr/en) for the initial financing and support.
