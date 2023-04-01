@@ -156,9 +156,7 @@ class MIDITokenizer(ABC):
             {}
         )  # byte(s) -> token(s), for faster BPE decoding
         self.has_bpe = False
-        if special_tokens is not None:
-            special_tokens = [f"{tok}_None" for tok in special_tokens]
-        else:
+        if special_tokens is None:
             special_tokens = []
 
         # Fast BPE tokenizer backed with 🤗tokenizers
@@ -220,8 +218,7 @@ class MIDITokenizer(ABC):
         ):  # in case it was not already loaded by load_params, such as with BPE
             self.__create_vocabulary()
         self.tokens_types_graph = self._create_token_types_graph()
-        if "BOS" in special_tokens or "EOS" in special_tokens:
-            self._add_bos_eos_to_types_graph()
+        self._add_special_tokens_to_types_graph()
         self._token_types_indexes = {}
         self._update_token_types_indexes()
 
@@ -685,16 +682,17 @@ class MIDITokenizer(ABC):
         This method is called at ``__init__``\.
         """
         vocab = self._create_base_vocabulary()
+        special_tokens = [f"{tok}_None" for tok in self.special_tokens]
 
         if isinstance(vocab[0], list):  # multi-voc
             self._vocab_base = [{} for _ in range(len(vocab))]
             self.__vocab_base_inv = [{} for _ in range(len(vocab))]
             for vid in range(len(vocab)):
-                vocab[vid] = self.special_tokens + vocab[vid]
+                vocab[vid] = special_tokens + vocab[vid]
                 for tok in vocab[vid]:
                     self.add_to_vocab(tok, vid)
         else:
-            vocab = self.special_tokens + vocab
+            vocab = special_tokens + vocab
             for tok in vocab:
                 self.add_to_vocab(tok)
 
@@ -824,14 +822,21 @@ class MIDITokenizer(ABC):
         for examples of how to implement it."""
         raise NotImplementedError
 
-    def _add_bos_eos_to_types_graph(self):
-        r"""Adds (inplace) special tokens (*EOS* and *EOS* only) types
-        to the token types graph dictionary.
+    def _add_special_tokens_to_types_graph(self):
+        r"""Adds (inplace) special tokens types to the token types graph dictionary.
+        Two exceptions are made for the special BOS (Beginning of Sequence) and EOS (End of Sequence) tokens:
+        No token type can precede a BOS token, and EOS token cannot precede any other token.
         """
-        self.tokens_types_graph["SOS"] = list(self.tokens_types_graph.keys())
-        self.tokens_types_graph["EOS"] = []
-        for value in self.tokens_types_graph.values():
-            value.append("EOS")
+        original_token_types = list(self.tokens_types_graph.keys())
+        for special_token in self.special_tokens:
+            if special_token == "EOS":
+                self.tokens_types_graph["EOS"] = []
+            else:
+                self.tokens_types_graph[special_token] = original_token_types + self.special_tokens
+
+            if special_token != "BOS":
+                for token_type in original_token_types:
+                    self.tokens_types_graph[token_type].append(special_token)
 
     def __create_durations_tuples(self) -> List[Tuple]:
         r"""Creates the possible durations in beat / position units, as tuple of the form:
