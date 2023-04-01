@@ -18,7 +18,7 @@ MidiTok works with :ref:`TokSequence` objects to output token sequences of repre
 TokSequence
 ------------------------
 
-The methods of MidiTok use :class:`miditok.TokSequence` objects as input and outputs. A ``TokSequence`` holds tokens as the three forms described in :ref:`Byte Pair Encoding (BPE)`.
+The methods of MidiTok use :class:`miditok.TokSequence` objects as input and outputs. A ``TokSequence`` holds tokens as the three forms described in :ref:`Byte Pair Encoding (BPE)`. TokSequences are subscriptable and implement ``__len__`` (you can run ``tok_seq[id]`` and ``len(tok_seq)``).
 
 You can use the :py:func:`miditok.MIDITokenizer.complete_sequence` method to automatically fill the non-initialized attributes of a ``TokSequence``.
 
@@ -54,7 +54,7 @@ MidiTok offers to include additional tokens on music information. You can specif
 * **Rests:** includes *Rest* tokens whenever a portion of time is silent, i.e. no note is being played. This token type is decoded as a *TimeShift* event. You can choose the minimum and maximum rests values to represent with the ``rest_range`` key in the ``additional_tokens`` dictionary (default is 1/2 beat to 8 beats). Note that rests shorter than one beat are only divisible by the first beat resolution, e.g. a rest of 5/8th of a beat will be a succession of ``Rest_0.4`` and ``Rest_0.1``, where the first number indicate the rest duration in beats and the second in samples / positions.
 * **Tempos:** specifies the current tempo. This allows to train a model to predict tempo changes. Tempo values are quantized accordingly to the ``nb_tempos`` and ``tempo_range`` entries in the ``additional_tokens`` dictionary (default is 32 tempos from 40 to 250).
 * **Programs:** used to specify an instrument / MIDI program. MidiTok only offers the possibility to include these tokens in the vocabulary for you, but won't use them. If you need model multitrack symbolic music with other methods than Octuple / MuMIDI, MidiTok leaves you the choice / task to represent the track information the way you want. You can do it as in `LakhNES <https://github.com/chrisdonahue/LakhNES>`_ or `MMM <https://metacreation.net/mmm-multi-track-music-machine/>`_.
-* **Time Signature:** specifies the current time signature. Only implemented with :ref:`Octuple` in MidiTok a.t.w.
+* **Time Signature:** specifies the current time signature. Only implemented with :ref:`REMIPlus`, :ref:`Octuple` and :ref:`OctupleMono` atow.
 
 .. list-table:: Compatibility table of tokenizations and additional tokens.
    :header-rows: 1
@@ -117,14 +117,15 @@ MidiTok offers to include additional tokens on music information. You can specif
 Special tokens
 ------------------------
 
-MidiTok offers to include some special tokens to the vocabulary. To use them, you must specify them when creating a tokenizer (constructor argument). These are:
+MidiTok offers to include some special tokens to the vocabulary. These tokens with no "musical" information can be used for training purposes.
+To use special tokens, you must specify them with the ``special_tokens`` argument when creating a tokenizer. By default, this argument is set to ``["PAD", "BOS", "EOS", "MASK"]``. Their signification are:
 
-* **pad** (default ``True``) --> ``PAD_None``: a padding token to use when training a model with batches of sequences of unequal lengths. The padding token will be at index 0 of the vocabulary.
-* **sos_eos** (default ``False``) --> ``SOS_None`` and ``EOS_None``: "Start Of Sequence" and "End Of Sequence" tokens, designed to be placed respectively at the beginning and end of a token sequence during training. At inference, the EOS token tells when to end the generation.
-* **mask** (default ``False``) --> ``MASK_None``: a masking token, to use when pre-training a (bidirectional) model with a self-supervised objective like `BERT <https://arxiv.org/abs/1810.04805>`_.
-* **sep** (default: ``False``) --> ``SEP_None``: a token to use as a separation between sequences.
+* **PAD** (``PAD_None``): a padding token to use when training a model with batches of sequences of unequal lengths. The padding token id is often set to 0. If you use Hugging Face models, be sure to pad inputs with this tokens, and pad labels with *-100*.
+* **BOS** (``SOS_None``): "Start Of Sequence" token, indicating that a token sequence is beginning.
+* **EOS** (``EOS_None``): "End Of Sequence" tokens, indicating that a token sequence is ending. For autoregressive generation, this token can be used to stop it.
+* **MASK** (``MASK_None``): a masking token, to use when pre-training a (bidirectional) model with a self-supervised objective like `BERT <https://arxiv.org/abs/1810.04805>`_.
 
-**Note:** you can use the ``tokenizer.special_tokens`` property to get the list of the special tokens of a tokenizer.
+**Note:** you can use the ``tokenizer.special_tokens`` argument to get the list of the special tokens of a tokenizer.
 
 Magic methods
 ------------------------
