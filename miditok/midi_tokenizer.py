@@ -34,6 +34,7 @@ from .constants import (
     CHR_ID_START,
     PITCH_CLASSES,
     UNKNOWN_CHORD_PREFIX,
+    MIDI_FILES_EXTENSIONS,
 )
 
 
@@ -65,7 +66,7 @@ def _in_as_seq(complete: bool = True, decode_bpe: bool = True):
                     ids=ids,
                     tokens=tokens,
                     events=events,
-                    ids_bpe_encoded=self._ids_are_bpe_encoded(ids)
+                    ids_bpe_encoded=self._ids_are_bpe_encoded(ids),
                 )
 
             if self.has_bpe and decode_bpe:
@@ -156,13 +157,11 @@ class MIDITokenizer(ABC):
             {}
         )  # byte(s) -> token(s), for faster BPE decoding
         self.has_bpe = False
-        if special_tokens is None:
-            special_tokens = []
 
         # Fast BPE tokenizer backed with 🤗tokenizers
         self._bpe_model = None
 
-        # Loading params, or
+        # Loading params, or initializing them from args
         if params is not None:
             self.load_params(params)
         else:
@@ -171,12 +170,12 @@ class MIDITokenizer(ABC):
             ), "You must specify a pitch_range between 0 and 127 (included, i.e. range.stop at 128)"
             assert (
                 0 < nb_velocities < 128
-            ), "You must specify a nb_velocities between 0 and 127 (included)"
+            ), "You must specify a nb_velocities between 1 and 127 (included)"
             self.pitch_range = pitch_range
             self.beat_res = beat_res
             self._nb_velocities = nb_velocities
             self.additional_tokens = additional_tokens
-            self.special_tokens = special_tokens
+            self.special_tokens = special_tokens if special_tokens is not None else []
             self.unique_track = unique_track
 
         # Init duration and velocity values
@@ -618,6 +617,8 @@ class MIDITokenizer(ABC):
         :return: the midi object (miditoolkit.MidiFile).
         """
         midi = MidiFile(ticks_per_beat=time_division)
+        # if self.unique_track:
+        #    tokens = [tokens]
         for i, track_tokens in enumerate(tokens):
             if programs is not None:
                 track, tempo_changes = self.tokens_to_track(
@@ -787,7 +788,10 @@ class MIDITokenizer(ABC):
                 for root_note in PITCH_CLASSES
             ]
         else:
-            tokens += [f"Chord_{chord_quality}" for chord_quality in self.additional_tokens["chord_maps"]]
+            tokens += [
+                f"Chord_{chord_quality}"
+                for chord_quality in self.additional_tokens["chord_maps"]
+            ]
 
         # Unknown chords
         if self.additional_tokens["chord_unknown"] is not False:
@@ -799,7 +803,8 @@ class MIDITokenizer(ABC):
                 ]
             else:
                 tokens += [
-                    f"Chord_{i}" for i in range(*self.additional_tokens["chord_unknown"])
+                    f"Chord_{i}"
+                    for i in range(*self.additional_tokens["chord_unknown"])
                 ]
 
         return tokens
@@ -832,7 +837,9 @@ class MIDITokenizer(ABC):
             if special_token == "EOS":
                 self.tokens_types_graph["EOS"] = []
             else:
-                self.tokens_types_graph[special_token] = original_token_types + self.special_tokens
+                self.tokens_types_graph[special_token] = (
+                    original_token_types + self.special_tokens
+                )
 
             if special_token != "BOS":
                 for token_type in original_token_types:
@@ -1049,7 +1056,7 @@ class MIDITokenizer(ABC):
 
         # Trains the tokenizer
         special_tokens_bytes = self._ids_to_bytes(
-            self._tokens_to_ids(self.special_tokens)
+            self._tokens_to_ids([f"{tok}_None" for tok in self.special_tokens])
         )
         trainer = BpeTrainer(
             vocab_size=vocab_size,
@@ -1782,11 +1789,20 @@ class MIDITokenizer(ABC):
         :param obj: a `miditoolkit.MidiFile` object, a path to a MIDI file or a sequence of tokens.
         :return: the converted object.
         """
+        # Tokenize MIDI
         if isinstance(obj, MidiFile):
             return self.midi_to_tokens(obj, *args, **kwargs)
+
+        # Loads a file (mid or json)
         elif isinstance(obj, str) or isinstance(obj, Path):
-            midi = MidiFile(obj)
-            return self.midi_to_tokens(midi, *args, **kwargs)
+            path = Path(obj)
+            if path.suffix in MIDI_FILES_EXTENSIONS:
+                midi = MidiFile(obj)
+                return self.midi_to_tokens(midi, *args, **kwargs)
+            else:
+                return self.load_tokens(path)
+
+        # Consider it tokens --> converts to MIDI
         else:
             return self.tokens_to_midi(obj, *args, **kwargs)
 

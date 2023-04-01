@@ -60,7 +60,9 @@ class TokSequence:
         elif self._ids_no_bpe is not None:
             return self._ids_no_bpe[item]
         else:
-            return ValueError("This TokSequence seems to not be initialized, all its attributes are None.")
+            return ValueError(
+                "This TokSequence seems to not be initialized, all its attributes are None."
+            )
 
     def __eq__(self, other) -> bool:
         """Checks if too sequences are equal.

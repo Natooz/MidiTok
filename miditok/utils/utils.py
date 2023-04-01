@@ -9,7 +9,12 @@ from miditoolkit import MidiFile, Note, Instrument
 import numpy as np
 
 from miditok.classes import Event
-from miditok.constants import INSTRUMENT_CLASSES, MIDI_INSTRUMENTS, PITCH_CLASSES, UNKNOWN_CHORD_PREFIX
+from miditok.constants import (
+    INSTRUMENT_CLASSES,
+    MIDI_INSTRUMENTS,
+    PITCH_CLASSES,
+    UNKNOWN_CHORD_PREFIX,
+)
 
 
 def convert_ids_tensors_to_list(ids: Any):
@@ -145,8 +150,17 @@ def detect_chords(
             # We found a chord quality, or we specify unknown chords
             if not (unknown_chords_nb_notes_range is False and is_unknown_chord):
                 if specify_root_note:
-                    chord_quality = f"{PITCH_CLASSES[notes[count, 0] % 12]}:{chord_quality}"
-                chords.append(Event(type="Chord", value=chord_quality, time=min(chord[:, 1]), desc=chord_map))
+                    chord_quality = (
+                        f"{PITCH_CLASSES[notes[count, 0] % 12]}:{chord_quality}"
+                    )
+                chords.append(
+                    Event(
+                        type="Chord",
+                        value=chord_quality,
+                        time=min(chord[:, 1]),
+                        desc=chord_map,
+                    )
+                )
 
         previous_tick = max(onset_notes[:, 1])
         count += len(onset_notes)  # Move to the next notes

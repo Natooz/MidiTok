@@ -94,9 +94,7 @@ class REMIPlus(MIDITokenizer):
         }
         super().save_params(out_path, additional_attributes_tmp)
 
-    def __notes_to_events(
-        self, tracks: List[Instrument]
-    ) -> List[Event]:
+    def __notes_to_events(self, tracks: List[Instrument]) -> List[Event]:
         """Convert multi-track notes into one Token sequence.
 
         :param tracks: list of tracks (`miditoolkit.Instrument`) to convert.
@@ -157,14 +155,22 @@ class REMIPlus(MIDITokenizer):
                     track.notes,
                     self._current_midi_metadata["time_division"],
                     chord_maps=self.additional_tokens["chord_maps"],
-                    specify_root_note=self.additional_tokens["chord_tokens_with_root_note"],
+                    specify_root_note=self.additional_tokens[
+                        "chord_tokens_with_root_note"
+                    ],
                     beat_res=self._first_beat_res,
-                    unknown_chords_nb_notes_range=self.additional_tokens["chord_unknown"],
+                    unknown_chords_nb_notes_range=self.additional_tokens[
+                        "chord_unknown"
+                    ],
                 )
                 for chord in chords:
                     pos_index = int((chord.time % ticks_per_bar) / ticks_per_sample)
-                    events.append(Event("Position", pos_index, chord.time, "PositionChord"))
-                    events.append(Event("Program", track.program, chord.time, "ProgramChord"))
+                    events.append(
+                        Event("Position", pos_index, chord.time, "PositionChord")
+                    )
+                    events.append(
+                        Event("Program", track.program, chord.time, "ProgramChord")
+                    )
                     events.append(chord)
         events.sort(key=lambda x: x.time)
 
