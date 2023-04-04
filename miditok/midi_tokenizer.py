@@ -1617,9 +1617,8 @@ class MIDITokenizer(ABC):
                 elif event_type == "Position":
                     if int(event_value) <= current_pos and previous_type != "Rest":
                         err_time += 1  # token position value <= to the current position
-                    else:
-                        current_pos = int(event_value)
-                        current_pitches = []
+                    current_pos = int(event_value)
+                    current_pitches = []
             # Bad token type
             else:
                 err_type += 1

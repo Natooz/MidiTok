@@ -15,7 +15,7 @@ Python package to tokenize MIDI music files, presented at the ISMIR 2021 LBD.
 
 
 Using Deep Learning with symbolic music ? Then MidiTok can take care of converting your MIDI files into tokens, ready to be fed to models such as Transformer, for any generation, transcription or MIR task.
-MidiTok features most known [MIDI tokenizations](https://miditok.readthedocs.io/en/latest/tokenizations.html) (e.g. [REMI](https://arxiv.org/abs/2002.00212), [Compound Word](https://arxiv.org/abs/2101.02402)...), and is built around the idea that they all share common parameters and methods. It contains methods allowing to properly pre-process any MIDI file, and also supports Byte Pair Encoding (BPE).
+MidiTok features most known [MIDI tokenizations](https://miditok.readthedocs.io/en/latest/tokenizations.html) (e.g. [REMI](https://arxiv.org/abs/2002.00212), [Compound Word](https://arxiv.org/abs/2101.02402)...), and is built around the idea that they all share common parameters and methods. It supports Byte Pair Encoding (BPE) and data augmentation.
 
 **Documentation:** [miditok.readthedocs.com](https://miditok.readthedocs.io/en/latest/index.html)
 
