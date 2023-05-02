@@ -92,10 +92,13 @@ def data_augmentation_dataset(
             for track, (_, is_drum) in zip(ids, programs):
                 if is_drum:  # we dont augment drums
                     continue
+                corrected_offsets = deepcopy(offsets)
+                vel_dim = int(128 / len(tokenizer.velocities))
+                corrected_offsets[1] = [int(off / vel_dim) for off in corrected_offsets[1]]
                 aug = data_augmentation_tokens(
                     np.array(track),
                     tokenizer,
-                    *offsets,
+                    *corrected_offsets,
                     all_offset_combinations=all_offset_combinations,
                 )
                 if len(aug) == 0:
@@ -220,7 +223,7 @@ def get_offsets(
             as a tuple of two booleans. (default: (True, True))
     :param midi: midi object to augment (default: None)
     :param ids: token ids as a list of tracks (default: None)
-    :return: augmented MIDI objects.
+    :return: the offsets of pitch, velocity and duration features, in "absolute" value
     """
     offsets = []
 
