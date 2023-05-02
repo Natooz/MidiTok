@@ -1009,6 +1009,10 @@ class MIDITokenizer(ABC):
             missing from the vocabulary. (default: False)
         :param kwargs: any additional argument to pass to the trainer.
         """
+        if self.is_multi_voc:
+            print("This tokenizer is based on multiple vocabularies / embedding pooling. It is therefore not compatible"
+                  "with Byte Pair Encoding (BPE). Skipping this function call (learn_bpe).")
+            return
         assert (
             not self.bpe_slow
         ), "This tokenizer has already been trained with slow BPE. You can't retrain it with fast BPE"
