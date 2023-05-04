@@ -1004,14 +1004,19 @@ class MIDITokenizer(ABC):
         :param tokens_paths: paths of the token json files to load and use. (default: False)
         :param start_from_empty_voc: the training will start from an empty base vocabulary.
             The tokenizer will then have a base vocabulary only based on the unique bytes present
-            in the training data. If you set this argument to True, you should probably then use the
-            tokenizer only with the training data, as new data might contain "unknown" tokens
-            missing from the vocabulary. (default: False)
+            in the training data. If you set this argument to True, you should use the tokenizer only
+            with the training data, as new data might contain "unknown" tokens missing from the vocabulary.
+            Comparing this to text, setting this argument to True would create a tokenizer that will only know
+            the characters present in the training data, and would not be compatible / know other characters.
+            This argument can allow to optimize the vocabulary size.
+            If you are unsure about this, leave it to False. (default: False)
         :param kwargs: any additional argument to pass to the trainer.
         """
         if self.is_multi_voc:
-            print("This tokenizer is based on multiple vocabularies / embedding pooling. It is therefore not compatible"
-                  "with Byte Pair Encoding (BPE). Skipping this function call (learn_bpe).")
+            print(
+                "This tokenizer is based on multiple vocabularies / embedding pooling. It is therefore not compatible"
+                "with Byte Pair Encoding (BPE). Skipping this function call (learn_bpe)."
+            )
             return
         assert (
             not self.bpe_slow
@@ -1019,6 +1024,48 @@ class MIDITokenizer(ABC):
         assert (
             iterator is not None or tokens_paths is not None
         ), "You must give at an iterator or a path to to token "
+
+        if vocab_size <= len(self.vocab):
+            print(
+                f"vocab_size ({vocab_size}) need to be higher than the size of the current vocabulary "
+                f"({len(self.vocab)}). Skipping BPE training."
+            )
+            return
+
+        # If no iterator, loads tokens / samples to analyze
+        if iterator is None:
+            iterator = []  # list of lists of one string (bytes)
+            for file_path in tqdm(tokens_paths, desc="Loading token files"):
+                sample = self.load_tokens(file_path)
+                bytes_ = self._ids_to_bytes(
+                    sample["ids"], as_one_str=True
+                )  # list of str (bytes)
+                iterator += (
+                    [[byte_] for byte_ in bytes_]
+                    if not self.unique_track
+                    else [[bytes_]]
+                )
+
+            # This doesn't seem to work, the trainer pre-processes the sequences, but then no word remains
+            """def it_gen():
+                for file_path_ in tqdm(tokens_paths, desc="Loading token files"):
+                    sample_ = self.load_tokens(file_path_)
+                    yield self._ids_to_bytes(sample_["ids"], as_one_str=True)
+
+            iterator = it_gen()"""
+
+            # Make sure the target vocab size > nb of unique chars across all samples
+            unique_chars = set()
+            for seq in iterator:
+                unique_chars.update(*seq)
+
+            if len(unique_chars) >= vocab_size:
+                print(
+                    f"BPE TRAINING: the provided data comprises {len(unique_chars)} base tokens (character level), "
+                    f"whereas the target BPE vocaulary size is inferior ({vocab_size}). No new token can be learned, "
+                    f"skipping BPE training."
+                )
+                return
 
         # Create new tokenizer model
         if self._bpe_model is None or start_from_empty_voc:
@@ -1038,25 +1085,6 @@ class MIDITokenizer(ABC):
                     fuse_unk=False,
                 )
             )
-
-        # If no iterator, loads tokens / samples to analyze
-        if iterator is None:
-            samples = []  # list of lists of one string (bytes)
-            for file_path in tqdm(tokens_paths, desc="Loading token files"):
-                sample = self.load_tokens(file_path)
-                bytes_ = self._ids_to_bytes(
-                    sample["ids"], as_one_str=True
-                )  # list of str (bytes)
-                samples += [[byte_] for byte_ in bytes_]
-            iterator = samples  # List of Lists of just one str
-
-            # This doesn't seem to work, the trainer pre-processes the sequences, but then no word remains
-            """def it_gen():
-                for file_path_ in tqdm(tokens_paths, desc="Loading token files"):
-                    sample_ = self.load_tokens(file_path_)
-                    yield self._ids_to_bytes(sample_["ids"], as_one_str=True)
-
-            iterator = it_gen()"""
 
         # Trains the tokenizer
         special_tokens_bytes = self._ids_to_bytes(
@@ -1153,7 +1181,8 @@ class MIDITokenizer(ABC):
         save_converted_samples: bool = False,
         print_seq_len_variation: bool = True,
     ) -> Tuple[List[float], List[int], List[float]]:
-        r"""Method to construct the vocabulary from BPE, 100% in Python and slower than
+        r"""**DEPRECIATED - WILL BE REMOVED IN FUTURE UPDATES**
+        Method to construct the vocabulary from BPE, 100% in Python and slower than
         :py:func:`miditok.MIDITokenizer.learn_bpe`.
         This method will build (modify) the vocabulary by analyzing an already tokenized dataset to find
         the most recurrent token successions.
@@ -1175,6 +1204,10 @@ class MIDITokenizer(ABC):
                 - the average sequence length
                 Each index in the list correspond to a learning step.
         """
+        print(
+            "You are using the slow BPE method, which is depreciated and will be removed in future updates."
+            "We recommend to use the learn_bpe method for much faster (x30-50) learning, encoding and decoding."
+        )
         assert not self.is_multi_voc, (
             "You are using a multi-vocabulary tokenizer, "
             "it is not compatible with byte pair encoding"

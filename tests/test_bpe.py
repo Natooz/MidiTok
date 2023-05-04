@@ -55,8 +55,10 @@ def test_bpe_conversion(
             files, Path("tests", "test_results", tokenization)
         )
         tokenizer.learn_bpe(
-            vocab_size=400,
-            tokens_paths=list(Path("tests", "test_results", tokenization).glob("**/*.json")),
+            vocab_size=len(tokenizer) + 400,
+            tokens_paths=list(
+                Path("tests", "test_results", tokenization).glob("**/*.json")
+            ),
             start_from_empty_voc=True,
         )
         tokenizer.save_params(
@@ -142,13 +144,9 @@ def test_bpe_conversion(
             # Reads the midi
             midi = MidiFile(file_path)
             if not tokenizer.unique_track:
-                samples_no_bpe.append(
-                    tokenizer(midi, apply_bpe_if_possible=False)[0]
-                )
+                samples_no_bpe.append(tokenizer(midi, apply_bpe_if_possible=False)[0])
             else:
-                samples_no_bpe.append(
-                    tokenizer(midi, apply_bpe_if_possible=False)
-                )
+                samples_no_bpe.append(tokenizer(midi, apply_bpe_if_possible=False))
 
         t0 = time()
         samples_bpe = deepcopy(samples_no_bpe)

@@ -94,7 +94,9 @@ def data_augmentation_dataset(
                     continue
                 corrected_offsets = deepcopy(offsets)
                 vel_dim = int(128 / len(tokenizer.velocities))
-                corrected_offsets[1] = [int(off / vel_dim) for off in corrected_offsets[1]]
+                corrected_offsets[1] = [
+                    int(off / vel_dim) for off in corrected_offsets[1]
+                ]
                 aug = data_augmentation_tokens(
                     np.array(track),
                     tokenizer,

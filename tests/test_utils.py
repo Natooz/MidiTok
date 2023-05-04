@@ -10,7 +10,12 @@ from copy import deepcopy
 from miditoolkit import MidiFile
 
 from miditok import REMI
-from miditok.utils import merge_tracks, merge_tracks_per_class, merge_same_program_tracks, nb_bar_pos
+from miditok.utils import (
+    merge_tracks,
+    merge_tracks_per_class,
+    merge_same_program_tracks,
+    nb_bar_pos,
+)
 from miditok.constants import CLASS_OF_INST
 
 
@@ -55,7 +60,7 @@ def test_nb_pos():
     _ = nb_bar_pos(
         tokenizer(Path("tests", "Maestro_MIDIs", "Maestro_1.mid"))[0].ids,
         tokenizer["Bar_None"],
-        tokenizer.token_ids_of_type("Position")
+        tokenizer.token_ids_of_type("Position"),
     )
 
 

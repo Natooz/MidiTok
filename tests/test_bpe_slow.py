@@ -108,7 +108,9 @@ def test_bpe_conversion(
                     f"{file_path.stem}.json",
                 )
             ) as json_file:
-                saved_tokens = json.load(json_file)["ids"]  # with BPE, saved after creating vocab
+                saved_tokens = json.load(json_file)[
+                    "ids"
+                ]  # with BPE, saved after creating vocab
             if not tokenizer.unique_track:
                 saved_tokens = saved_tokens[0]
             saved_tokens = miditok.TokSequence(ids=saved_tokens, ids_bpe_encoded=True)
