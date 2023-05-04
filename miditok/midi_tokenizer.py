@@ -1534,7 +1534,7 @@ class MIDITokenizer(ABC):
         :param midi_paths: paths of the MIDI files.
         :param out_dir: output directory to save the converted files.
         :param validation_fn: a function checking if the MIDI is valid on your requirements
-                            (e.g. time signature, minimum/maximum length, instruments ...).
+            (e.g. time signature, minimum/maximum length, instruments ...).
         :param data_augment_offsets: data augmentation arguments, to be passed to the
             miditok.data_augmentation.data_augmentation_dataset method. Has to be given as a list / tuple
             of offsets pitch octaves, velocities, durations, and finally their directions (up/down). (default: None)
@@ -1883,9 +1883,9 @@ class MIDITokenizer(ABC):
         r"""Convert a token (int) to an event (str), or vice-versa.
 
         :param item: a token (int) or an event (str). For tokenizers with embedding pooling / multiple vocabularies
-        (`tokenizer.is_multi_voc`), you must either provide a string (token) that is within all vocabularies (e.g.
-        special tokens), or a tuple where the first element in the index of the vocabulary and the second the element to
-        index.
+            ( `tokenizer.is_multi_voc` ), you must either provide a string (token) that is within all vocabularies (e.g.
+            special tokens), or a tuple where the first element in the index of the vocabulary and the second the
+            element to index.
         :return: the converted object.
         """
         if isinstance(item, tuple) and self.is_multi_voc:
