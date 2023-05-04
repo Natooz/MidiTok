@@ -1879,15 +1879,26 @@ class MIDITokenizer(ABC):
 
     def __getitem__(
         self, item: Union[int, str, Tuple[int, Union[int, str]]]
-    ) -> Union[str, int]:
+    ) -> Union[str, int, List[int]]:
         r"""Convert a token (int) to an event (str), or vice-versa.
 
-        :param item: a token (int) or an event (str). For embedding pooling, you must
-                provide a tuple where the first element in the index of the vocabulary.
+        :param item: a token (int) or an event (str). For tokenizers with embedding pooling / multiple vocabularies
+        (`tokenizer.is_multi_voc`), you must either provide a string (token) that is within all vocabularies (e.g.
+        special tokens), or a tuple where the first element in the index of the vocabulary and the second the element to
+        index.
         :return: the converted object.
         """
         if isinstance(item, tuple) and self.is_multi_voc:
             return self.__get_from_voc(item[1], item[0])
+        elif self.is_multi_voc and isinstance(item, str):
+            if all(item in voc for voc in self.vocab):
+                return [voc[item] for voc in self.vocab]
+            else:
+                raise ValueError(
+                    "This tokenizer uses multiple vocabularies / embedding pooling. To index it you must"
+                    "either provide a token (string) that is within all vocabularies (e.g. special tokens), or a tuple"
+                    "where the first element in the index of the vocabulary and the second the element to index."
+                )
         else:
             return self.__get_from_voc(item)
 
