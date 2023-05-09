@@ -14,7 +14,7 @@ Python package to tokenize MIDI music files, presented at the ISMIR 2021 LBD.
 ![MidiTok Logo](docs/assets/logo.png?raw=true "")
 
 
-Using Deep Learning with symbolic music ? Then MidiTok can take care of converting your MIDI files into tokens, ready to be fed to models such as Transformer, for any generation, transcription or MIR task.
+Using Deep Learning with symbolic music ? MidiTok can take care of converting your MIDI files into tokens, ready to be fed to models such as Transformer, for any generation, transcription or MIR task.
 MidiTok features most known [MIDI tokenizations](https://miditok.readthedocs.io/en/latest/tokenizations.html) (e.g. [REMI](https://arxiv.org/abs/2002.00212), [Compound Word](https://arxiv.org/abs/2101.02402)...), and is built around the idea that they all share common parameters and methods. It supports Byte Pair Encoding (BPE) and data augmentation.
 
 **Documentation:** [miditok.readthedocs.com](https://miditok.readthedocs.io/en/latest/index.html)
@@ -24,7 +24,7 @@ MidiTok features most known [MIDI tokenizations](https://miditok.readthedocs.io/
 ```shell
 pip install miditok
 ```
-MidiTok uses [MIDIToolkit](https://github.com/YatingMusic/miditoolkit), which itself uses [Mido](https://github.com/mido/mido) to read and write MIDI files, and BPE is backed by [Hugging Face 🤗tokenizers](https://github.com/huggingface/tokenizers) for super fast encoding.
+MidiTok uses [MIDIToolkit](https://github.com/YatingMusic/miditoolkit), which itself uses [Mido](https://github.com/mido/mido) to read and write MIDI files, and BPE is backed by [Hugging Face 🤗tokenizers](https://github.com/huggingface/tokenizers) for super-fast encoding.
 
 ## Usage example
 
