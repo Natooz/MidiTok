@@ -142,3 +142,17 @@ MuMIDI (PopMAG)
         keywords = {accompaniment generation, music representation, music generation, sequence-to-sequence model, pop music},
         location = {Seattle, WA, USA}
     }
+
+MMM (Multi-Track Music Machine)
+--------------------------------
+
+..  code-block:: bib
+
+    @misc{ens2020mmm,
+          title={MMM : Exploring Conditional Multi-Track Music Generation with the Transformer},
+          author={Jeff Ens and Philippe Pasquier},
+          year={2020},
+          eprint={2008.06048},
+          archivePrefix={arXiv},
+          primaryClass={cs.SD}
+    }

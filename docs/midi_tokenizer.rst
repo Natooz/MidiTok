@@ -68,6 +68,7 @@ MidiTok offers to include additional tokens on music information. You can specif
      - :ref:`CPWord`
      - :ref:`Octuple`
      - :ref:`MuMIDI`
+     - :ref:`MMM`
    * - Chord
      - ✅
      - ✅
@@ -77,12 +78,14 @@ MidiTok offers to include additional tokens on music information. You can specif
      - ❌
      - ❌
      - ✅
+     - ✅
    * - Rest
      - ✅
      - ✅
      - ✅
      - ✅
      - ✅
+     - ❌
      - ❌
      - ❌
      - ❌
@@ -95,7 +98,9 @@ MidiTok offers to include additional tokens on music information. You can specif
      - ❌
      - ✅
      - ✅
+     - ✅
    * - Program
+     - ✅
      - ✅
      - ✅
      - ✅
@@ -113,6 +118,7 @@ MidiTok offers to include additional tokens on music information. You can specif
      - ❌
      - ✅
      - ❌
+     - ✅
 
 Special tokens
 ------------------------

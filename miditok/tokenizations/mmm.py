@@ -22,15 +22,14 @@ from ..utils import detect_chords
 
 
 class MMM(MIDITokenizer):
-    r"""TODO doc
-    REMI+ is extended REMI representation (Huang and Yang) for general
-    multi-track, multi-signature symbolic music sequences, introduced in
-    `FIGARO (Rütte et al.) <https://arxiv.org/abs/2201.10936>`, which
-    represents notes as successions of *Program* (originally *Instrument* in the paper),
-    *Pitch*, *Velocity* and *Duration* tokens, and time with *Bar* and *Position* tokens.
-    A *Bar* token indicate that a new bar is beginning, and *Position* the current
-    position within the current bar. The number of positions is determined by
-    the ``beat_res`` argument, the maximum value will be used as resolution.
+    r"""MMM, standing for [Multi-Track Music Machine](https://arxiv.org/abs/2008.06048), is a multitrack tokenization
+    primarily designed for music inpainting and infilling.
+    Tracks are tokenized independently and concatenated into a single token sequence.
+    ``Bar_Fill`` tokens are used to specify the bars to fill (or inpaint, or rewrite), the new tokens are then
+    autoregressively generated.
+    Note that *this implementation represents note durations with ``Duration`` tokens* instead of the ``NoteOff``
+    strategy of the [original paper](https://arxiv.org/abs/2008.06048). The reason being that ``NoteOff`` tokens perform
+    poorer for generation with causal models.
 
     :param pitch_range: range of MIDI pitches to use
     :param beat_res: beat resolutions, as a dictionary:
@@ -95,10 +94,7 @@ class MMM(MIDITokenizer):
         super().save_params(out_path, additional_attributes_tmp)
 
     def track_to_tokens(self, track: Instrument) -> List[Event]:
-        r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens (:class:`miditok.TokSequence`).
-
-        NOTE: REMI+ is REMI-based extended representation for multi-track encodings in single sequence. Then if you'd
-        like to get only single-track tokens, use REMI.
+        r"""Converts a track (miditoolkit.Instrument object) into a sequence of Event (:class:`miditok.Event`).
 
         :param track: MIDI track to convert
         :return: :class:`miditok.TokSequence` of corresponding tokens.
@@ -249,13 +245,12 @@ class MMM(MIDITokenizer):
             time_division: Optional[int] = TIME_DIVISION,
             program: Optional[Tuple[int, bool]] = (0, False),
     ) -> None:
-        r"""NOT RELEVANT / IMPLEMENTED FOR MMM
-        Use tokens_to_midi instead
+        r"""NOT RELEVANT / IMPLEMENTED FOR MMM, use tokens_to_midi instead
 
         :param tokens: sequence of tokens to convert. Can be either a Tensor (PyTorch and Tensorflow are supported),
                 a numpy array, a Python list or a TokSequence.
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create)
-        :param program: the MIDI program of the produced track and if it drum, (default (0, False), piano)
+        :param program: the MIDI program of the produced track and if it drums, (default (0, False), piano)
         :return: None
         """
         pass
@@ -421,9 +416,9 @@ class MMM(MIDITokenizer):
         vocab = []
 
         # TRACK / BAR / FILL
-        vocab += ["Track_Start", "Track_End", "Bar_Fill"]
+        vocab += ["Track_Start", "Track_End"]
         vocab += ["Bar_Start", "Bar_End", "Bar_Fill"]
-        vocab += ["Fill_Start", "Fill_End", "Bar_Fill"]
+        vocab += ["Fill_Start", "Fill_End"]
 
         # PITCH
         vocab += [f"Pitch_{i}" for i in self.pitch_range]
