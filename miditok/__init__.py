@@ -8,6 +8,7 @@ from .tokenizations import (
     OctupleMono,
     CPWord,
     MuMIDI,
+    MMM,
 )
 from .midi_tokenizer import MIDITokenizer
 from .classes import Event, TokSequence

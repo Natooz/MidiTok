@@ -28,7 +28,7 @@ from .tests_utils import (
 # long enough for MIDI-Like and Structured encodings, and with a single beat resolution
 BEAT_RES_TEST = {(0, 64): 8}
 ADDITIONAL_TOKENS_TEST = {
-    "Chord": False,  # set to false to speed up tests as it takes some time on maestro MIDIs
+    "Chord": False,  # set false to speed up tests as it takes some time on maestro MIDIs
     "Rest": True,
     "Tempo": True,
     "TimeSignature": True,
@@ -37,6 +37,9 @@ ADDITIONAL_TOKENS_TEST = {
     "nb_tempos": 32,
     "tempo_range": (40, 250),
     "time_signature_range": (16, 2),
+    "chord_maps": miditok.constants.CHORD_MAPS,
+    "chord_tokens_with_root_note": True,  # Tokens will look as "Chord_C:maj"
+    "chord_unknown": False,
 }
 
 
@@ -61,6 +64,7 @@ def test_one_track_midi_to_tokens_to_midi(
         "Octuple",
         "OctupleMono",
         "MuMIDI",
+        "MMM",
     ]
     files = list(Path(data_path).glob("**/*.mid"))
     at_least_one_error = False
