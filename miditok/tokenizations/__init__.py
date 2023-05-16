@@ -7,3 +7,4 @@ from .cp_word import CPWord
 from .mumidi import MuMIDI
 from .octuple import Octuple
 from .octuple_mono import OctupleMono
+from .mmm import MMM

@@ -468,6 +468,7 @@ class MIDITokenizer(ABC):
         # Register MIDI metadata
         self._current_midi_metadata = {
             "time_division": midi.ticks_per_beat,
+            "max_tick": midi.max_tick,
             "tempo_changes": midi.tempo_changes,
             "time_sig_changes": midi.time_signature_changes,
             "key_sig_changes": midi.key_signature_changes,

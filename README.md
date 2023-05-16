@@ -2,6 +2,8 @@
 
 Python package to tokenize MIDI music files, presented at the ISMIR 2021 LBD.
 
+![MidiTok Logo](docs/assets/logo.png?raw=true "")
+
 [![PyPI version fury.io](https://badge.fury.io/py/miditok.svg)](https://pypi.python.org/pypi/miditok/)
 [![Python 3.7](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/release/)
 [![Documentation Status](https://readthedocs.org/projects/miditok/badge/?version=latest)](https://miditok.readthedocs.io/en/latest/?badge=latest)
@@ -11,11 +13,8 @@ Python package to tokenize MIDI music files, presented at the ISMIR 2021 LBD.
 [![Downloads](https://pepy.tech/badge/MidiTok)](https://pepy.tech/project/MidiTok)
 [![Code style](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-![MidiTok Logo](docs/assets/logo.png?raw=true "")
-
-
-Using Deep Learning with symbolic music ? MidiTok can take care of converting your MIDI files into tokens, ready to be fed to models such as Transformer, for any generation, transcription or MIR task.
-MidiTok features most known [MIDI tokenizations](https://miditok.readthedocs.io/en/latest/tokenizations.html) (e.g. [REMI](https://arxiv.org/abs/2002.00212), [Compound Word](https://arxiv.org/abs/2101.02402)...), and is built around the idea that they all share common parameters and methods. It supports Byte Pair Encoding (BPE) and data augmentation.
+Using Deep Learning with symbolic music ? MidiTok can take care of converting (tokenizing) your MIDI files into tokens, ready to be fed to models such as Transformer, for any generation, transcription or MIR task.
+MidiTok features most known [MIDI tokenizations](https://miditok.readthedocs.io/en/latest/tokenizations.html) (e.g. [REMI](https://arxiv.org/abs/2002.00212), [Compound Word](https://arxiv.org/abs/2101.02402)...), and is built around the idea that they all share common parameters and methods. It supports [Byte Pair Encoding (BPE)](https://arxiv.org/abs/2301.11975) and data augmentation.
 
 **Documentation:** [miditok.readthedocs.com](https://miditok.readthedocs.io/en/latest/index.html)
 
@@ -75,6 +74,7 @@ MidiTok implements the tokenizations: (links to original papers)
 * [CPWord](https://ojs.aaai.org/index.php/AAAI/article/view/16091)
 * [Octuple](https://aclanthology.org/2021.findings-acl.70)
 * [MuMIDI](https://dl.acm.org/doi/10.1145/3394171.3413721)
+* [MMM](https://arxiv.org/abs/2008.06048)
 
 You can find short presentations in the [documentation](https://miditok.readthedocs.io/en/latest/tokenizations.html).
 
@@ -87,7 +87,7 @@ REMI+ and Octuple support it.
 
 Contributions are gratefully welcomed, feel free to open an issue or send a PR if you want to add a tokenization or speed up the code. You can read the [contribution guide](CONTRIBUTING.md) for details.
 
-### Todo
+### Todos
 
 * Extend Time Signature to all tokenizations
 * Control Change messages

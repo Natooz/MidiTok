@@ -67,9 +67,11 @@ ADDITIONAL_TOKENS = {
 }  # (max_beat_res, max_bar_length_in_NOTE)
 SPECIAL_TOKENS = ["PAD", "BOS", "EOS", "MASK"]  # default special tokens
 
+# Tokenizers specific parameters
 # For MuMIDI, recommended range from the GM2 specs
 # note: we ignore the "Applause" at pitch 88 of the orchestra drum set, increase to 89 if you need it
 DRUM_PITCH_RANGE = range(27, 88)
+MMM_DENSITY_BINS_MAX = (10, 20)
 
 # Defaults values when writing new MIDI files
 TIME_DIVISION = 384  # 384 and 480 are convenient as divisible by 4, 8, 12, 16, 24, 32

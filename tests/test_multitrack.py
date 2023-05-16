@@ -62,7 +62,15 @@ def test_multitrack_midi_to_tokens_to_midi(
     times quantized, and maybe a some duplicated notes removed
 
     """
-    tokenizations = ["REMI", "REMIPlus", "CPWord", "Octuple", "OctupleMono", "MuMIDI"]
+    tokenizations = [
+        "REMI",
+        "REMIPlus",
+        "CPWord",
+        "Octuple",
+        "OctupleMono",
+        "MuMIDI",
+        "MMM",
+    ]
     files = list(Path(data_path).glob("**/*.mid"))
     at_least_one_error = False
 

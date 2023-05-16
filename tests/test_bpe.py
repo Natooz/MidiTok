@@ -39,7 +39,7 @@ def test_bpe_conversion(
     :param data_path: root path to the data to test
     """
     random.seed(777)
-    tokenizations = ["Structured", "REMI", "REMIPlus", "MIDILike", "TSD"]
+    tokenizations = ["Structured", "REMI", "REMIPlus", "MIDILike", "TSD", "MMM"]
     data_path = Path(data_path)
     files = list(data_path.glob("**/*.mid"))
 
@@ -101,7 +101,7 @@ def test_bpe_conversion(
         )
         assert (
             tokenizers[i] == first_tokenizers[i]
-        ), f"Saving and reloading tokenizer failed. The reloaded tokenizer is different from the first one."
+        ), "Saving and reloading tokenizer failed. The reloaded tokenizer is different from the first one."
 
     # Unbatched BPE
     at_least_one_error = False

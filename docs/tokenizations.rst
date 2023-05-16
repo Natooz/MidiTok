@@ -103,6 +103,13 @@ MuMIDI
     :noindex:
     :show-inheritance:
 
+MMM
+------------------------
+
+.. autoclass:: miditok.MMM
+    :noindex:
+    :show-inheritance:
+
 
 Create yours
 ------------------------

@@ -61,6 +61,7 @@ class REMIPlus(MIDITokenizer):
         max_bar_embedding: Optional[int] = 60,
     ):
         additional_tokens["Program"] = True  # required
+        # code handling rest decoding is writen, but not for detection (encoding)
         additional_tokens["Rest"] = False
         self.programs = additional_tokens.get("programs", list(range(-1, 128)))
         self.max_bar_embedding = (
