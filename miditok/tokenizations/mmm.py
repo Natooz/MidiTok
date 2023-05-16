@@ -49,22 +49,24 @@ class MMM(MIDITokenizer):
     """
 
     def __init__(
-            self,
-            pitch_range: range = PITCH_RANGE,
-            beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
-            nb_velocities: int = NB_VELOCITIES,
-            additional_tokens: Dict[
-                str, Union[bool, int, Tuple[int, int]]
-            ] = ADDITIONAL_TOKENS,
-            special_tokens: List[str] = SPECIAL_TOKENS,
-            density_bins_max: Tuple[int, int] = MMM_DENSITY_BINS_MAX,
-            params: Optional[Union[str, Path]] = None,
+        self,
+        pitch_range: range = PITCH_RANGE,
+        beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
+        nb_velocities: int = NB_VELOCITIES,
+        additional_tokens: Dict[
+            str, Union[bool, int, Tuple[int, int]]
+        ] = ADDITIONAL_TOKENS,
+        special_tokens: List[str] = SPECIAL_TOKENS,
+        density_bins_max: Tuple[int, int] = MMM_DENSITY_BINS_MAX,
+        params: Optional[Union[str, Path]] = None,
     ):
         additional_tokens["Program"] = True  # required
         additional_tokens["Rest"] = False
         self.programs = additional_tokens.get("programs", list(range(-1, 128)))
         self.density_bins_max = density_bins_max
-        self.note_densities = np.linspace(0, density_bins_max[1], density_bins_max[0] + 1, dtype=np.intc)
+        self.note_densities = np.linspace(
+            0, density_bins_max[1], density_bins_max[0] + 1, dtype=np.intc
+        )
         super().__init__(
             pitch_range,
             beat_res,
@@ -76,7 +78,7 @@ class MMM(MIDITokenizer):
         )
 
     def save_params(
-            self, out_path: Union[str, Path], additional_attributes: Optional[Dict] = None
+        self, out_path: Union[str, Path], additional_attributes: Optional[Dict] = None
     ):
         r"""Saves the config / parameters of the tokenizer in a json encoded file.
         This can be useful to keep track of how a dataset has been tokenized.
@@ -102,7 +104,6 @@ class MMM(MIDITokenizer):
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
         time_division = self._current_midi_metadata["time_division"]
-        ticks_per_sample = time_division / max(self.beat_res.values())
         dur_bins = self._durations_ticks[self._current_midi_metadata["time_division"]]
 
         # Creates first events
@@ -133,13 +134,9 @@ class MMM(MIDITokenizer):
                 track.notes,
                 self._current_midi_metadata["time_division"],
                 chord_maps=self.additional_tokens["chord_maps"],
-                specify_root_note=self.additional_tokens[
-                    "chord_tokens_with_root_note"
-                ],
+                specify_root_note=self.additional_tokens["chord_tokens_with_root_note"],
                 beat_res=self._first_beat_res,
-                unknown_chords_nb_notes_range=self.additional_tokens[
-                    "chord_unknown"
-                ],
+                unknown_chords_nb_notes_range=self.additional_tokens["chord_unknown"],
             )
             for chord in chords:
                 events.append(chord)
@@ -164,7 +161,7 @@ class MMM(MIDITokenizer):
                         type="TimeSig",
                         value=f"{time_sig.numerator}/{time_sig.denominator}",
                         time=time_sig.time,
-                        desc=(time_sig.numerator, time_sig.denominator)
+                        desc=(time_sig.numerator, time_sig.denominator),
                     )
                 )
 
@@ -185,7 +182,7 @@ class MMM(MIDITokenizer):
                     value=".".join(map(str, self.durations[index])),
                     time=note.start,
                     desc=f"{duration} ticks",
-                )
+                ),
             ]
 
         # Time events
@@ -205,14 +202,20 @@ class MMM(MIDITokenizer):
                 nb_new_bars = events[ei].time // ticks_per_bar - current_bar
                 if nb_new_bars > 0:
                     for i in range(nb_new_bars):
-                        events += [Event(type="Bar",
-                                         value="End",
-                                         time=(current_bar + i + 1) * ticks_per_bar,
-                                         desc=0, ),
-                                   Event(type="Bar",
-                                         value="Start",
-                                         time=(current_bar + i + 1) * ticks_per_bar,
-                                         desc=0, )]
+                        events += [
+                            Event(
+                                type="Bar",
+                                value="End",
+                                time=(current_bar + i + 1) * ticks_per_bar,
+                                desc=0,
+                            ),
+                            Event(
+                                type="Bar",
+                                value="Start",
+                                time=(current_bar + i + 1) * ticks_per_bar,
+                                desc=0,
+                            ),
+                        ]
 
                     current_bar += nb_new_bars
                     previous_tick = current_bar * ticks_per_bar
@@ -240,10 +243,10 @@ class MMM(MIDITokenizer):
         return events
 
     def tokens_to_track(
-            self,
-            tokens: Union[TokSequence, List, np.ndarray, Any],
-            time_division: Optional[int] = TIME_DIVISION,
-            program: Optional[Tuple[int, bool]] = (0, False),
+        self,
+        tokens: Union[TokSequence, List, np.ndarray, Any],
+        time_division: Optional[int] = TIME_DIVISION,
+        program: Optional[Tuple[int, bool]] = (0, False),
     ) -> None:
         r"""NOT RELEVANT / IMPLEMENTED FOR MMM, use tokens_to_midi instead
 
@@ -275,11 +278,11 @@ class MMM(MIDITokenizer):
 
     @_in_as_seq()
     def tokens_to_midi(
-            self,
-            tokens: Union[TokSequence, List, np.ndarray, Any],
-            _=None,
-            output_path: Optional[str] = None,
-            time_division: int = TIME_DIVISION,
+        self,
+        tokens: Union[TokSequence, List, np.ndarray, Any],
+        _=None,
+        output_path: Optional[str] = None,
+        time_division: int = TIME_DIVISION,
     ) -> MidiFile:
         r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
 
@@ -292,7 +295,7 @@ class MMM(MIDITokenizer):
         tokens = cast(TokSequence, tokens)
         midi = MidiFile(ticks_per_beat=time_division)
         assert (
-                time_division % max(self.beat_res.values()) == 0
+            time_division % max(self.beat_res.values()) == 0
         ), f"Invalid time division, please give one divisible by {max(self.beat_res.values())}"
         tokens = cast(List[str], tokens.tokens)  # for reducing type errors
         ticks_per_sample = time_division // max(self.beat_res.values())
@@ -315,13 +318,15 @@ class MMM(MIDITokenizer):
             tok_type, tok_val = token.split("_")
             if tok_type == "Program":
                 current_program = int(tok_val)
-                instruments.append(Instrument(
-                    program=0 if current_program == -1 else current_program,
-                    is_drum=current_program == -1,
-                    name="Drums"
-                    if current_program == -1
-                    else MIDI_INSTRUMENTS[current_program]["name"],
-                ))
+                instruments.append(
+                    Instrument(
+                        program=0 if current_program == -1 else current_program,
+                        is_drum=current_program == -1,
+                        name="Drums"
+                        if current_program == -1
+                        else MIDI_INSTRUMENTS[current_program]["name"],
+                    )
+                )
                 current_tick = 0
                 current_bar = -1
                 previous_note_end = 0
@@ -331,7 +336,7 @@ class MMM(MIDITokenizer):
             elif tok_type == "Rest":
                 beat, pos = map(int, tokens[ti].split("_")[1].split("."))
                 if (
-                        current_tick < previous_note_end
+                    current_tick < previous_note_end
                 ):  # if in case successive rest happen
                     current_tick = previous_note_end
                 current_tick += beat * time_division + pos * ticks_per_sample
@@ -351,15 +356,15 @@ class MMM(MIDITokenizer):
                 num, den = self._parse_token_time_signature(token.split("_")[1])
                 current_time_signature = time_signature_changes[-1]
                 if (
-                        num != current_time_signature.numerator
-                        and den != current_time_signature.denominator
+                    num != current_time_signature.numerator
+                    and den != current_time_signature.denominator
                 ):
                     time_signature_changes.append(TimeSignature(num, den, current_tick))
             elif tok_type == "Pitch":
                 try:
                     if (
-                            tokens[ti + 1].split("_")[0] == "Velocity"
-                            and tokens[ti + 2].split("_")[0] == "Duration"
+                        tokens[ti + 1].split("_")[0] == "Velocity"
+                        and tokens[ti + 2].split("_")[0] == "Duration"
                     ):
                         pitch = int(tokens[ti].split("_")[1])
                         vel = int(tokens[ti + 1].split("_")[1])
@@ -373,7 +378,7 @@ class MMM(MIDITokenizer):
                             previous_note_end, current_tick + duration
                         )
                 except (
-                        IndexError
+                    IndexError
                 ):  # A well constituted sequence should not raise an exception
                     pass  # However with generated sequences this can happen, or if the sequence isn't finished
         if len(tempo_changes) > 1:
@@ -399,7 +404,7 @@ class MMM(MIDITokenizer):
         return midi
 
     def _create_base_vocabulary(
-            self, sos_eos_tokens: Optional[bool] = None
+        self, sos_eos_tokens: Optional[bool] = None
     ) -> List[str]:
         r"""Creates the vocabulary, as a list of string tokens.
         Each token as to be given as the form of "Type_Value", separated with an underscore.
@@ -412,7 +417,9 @@ class MMM(MIDITokenizer):
         :return: the vocabulary as a list of string.
         """
         # Recreate densities here just in case density_bins_max was loaded from params
-        self.note_densities = np.linspace(0, self.density_bins_max[1], self.density_bins_max[0] + 1, dtype=np.intc)
+        self.note_densities = np.linspace(
+            0, self.density_bins_max[1], self.density_bins_max[0] + 1, dtype=np.intc
+        )
         vocab = []
 
         # TRACK / BAR / FILL
@@ -532,7 +539,7 @@ class MMM(MIDITokenizer):
 
     @_in_as_seq(complete=False, decode_bpe=False)
     def tokens_errors(
-            self, tokens_to_check: Union[TokSequence, List[Union[int, List[int]]]]
+        self, tokens_to_check: Union[TokSequence, List[Union[int, List[int]]]]
     ) -> float:
         tokens_to_check = cast(TokSequence, tokens_to_check)
         nb_tok_predicted = len(tokens_to_check)  # used to norm the score

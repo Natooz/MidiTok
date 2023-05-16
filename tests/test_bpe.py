@@ -101,7 +101,7 @@ def test_bpe_conversion(
         )
         assert (
             tokenizers[i] == first_tokenizers[i]
-        ), f"Saving and reloading tokenizer failed. The reloaded tokenizer is different from the first one."
+        ), "Saving and reloading tokenizer failed. The reloaded tokenizer is different from the first one."
 
     # Unbatched BPE
     at_least_one_error = False
