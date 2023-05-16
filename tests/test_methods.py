@@ -201,15 +201,16 @@ def test_data_augmentation():
             # Loads tokens to compare
             with open(aug_token_path) as json_file:
                 file = json.load(json_file)
+                aug_tokens, aug_programs = file["ids"], file["programs"]
             with open(tokens_path / f"{original_stem}.json") as json_file:
                 file = json.load(json_file)
                 original_tokens, original_programs = file["ids"], file["programs"]
 
             # Compare them
             if tokenizer.unique_track:
-                original_tokens = [original_tokens]
+                original_tokens, aug_tokens = [original_tokens], [aug_tokens]
             for original_track, aug_track, (_, is_drum) in zip(
-                original_tokens, original_programs
+                original_tokens, aug_tokens, original_programs
             ):
                 if is_drum:
                     continue
