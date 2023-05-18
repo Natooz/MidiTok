@@ -497,6 +497,10 @@ class CPWord(MIDITokenizer):
             dic["Rest"] = ["Rest", "Position", "Bar"]
             dic["Pitch"] += ["Rest"]
 
+        for key in dic:
+            dic[key].append("Ignore")
+        dic["Ignore"] = list(dic.keys())
+
         return dic
 
     @_in_as_seq()
