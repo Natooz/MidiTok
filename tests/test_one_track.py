@@ -88,6 +88,9 @@ def test_one_track_midi_to_tokens_to_midi(
                 additional_tokens=add_tokens,
             )
 
+            # printing the tokenizer shouldn't fail
+            _ = str(tokenizer)
+
             # Convert the track in tokens
             tokens = tokenizer(midi)
             if not tokenizer.unique_track:  # or isinstance list
