@@ -1873,10 +1873,14 @@ class MIDITokenizer(ABC):
         return [len(v) for v in self.vocab] if self.is_multi_voc else len(self)
 
     def __repr__(self):
-        return (
-            f'{len(self.len)} tokens {"(multi-voc) " if self.is_multi_voc else ""}'
-            f'{"with BPE" if self.has_bpe else "without BPE"}'
-        )
+        out_str = f"{self.len} tokens"
+        if self.is_multi_voc:
+            out_str += " (multi-voc)"
+        if self.has_bpe:
+            out_str += " with BPE"
+        else:
+            out_str += " without BPE"
+        return out_str
 
     def __getitem__(
         self, item: Union[int, str, Tuple[int, Union[int, str]]]
