@@ -2,7 +2,7 @@
 
 """
 
-CURRENT_VERSION_PACKAGE = "2.0.6"  # used when saving the config of a tokenizer
+CURRENT_VERSION_PACKAGE = "2.0.7"  # used when saving the config of a tokenizer
 
 MIDI_FILES_EXTENSIONS = [".mid", ".midi", ".MID", ".MIDI"]
 
