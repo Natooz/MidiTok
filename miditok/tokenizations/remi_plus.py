@@ -58,7 +58,7 @@ class REMIPlus(MIDITokenizer):
         ] = ADDITIONAL_TOKENS,
         special_tokens: List[str] = SPECIAL_TOKENS,
         params: Optional[Union[str, Path]] = None,
-        max_bar_embedding: Optional[int] = 60,
+        max_bar_embedding: Optional[int] = None,
     ):
         additional_tokens["Program"] = True  # required
         # code handling rest decoding is writen, but not for detection (encoding)
