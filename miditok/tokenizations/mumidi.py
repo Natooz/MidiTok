@@ -130,12 +130,12 @@ class MuMIDI(MIDITokenizer):
         }
         super().save_params(out_path, additional_attributes_tmp)
 
-    def load_params(self, config_file_path: Union[str, Path, PurePath]):
+    def _load_params(self, config_file_path: Union[str, Path, PurePath]):
         r"""Load the parameters of the tokenizer from a config file.
 
         :param config_file_path: path to the tokenizer config file (encoded as json).
         """
-        super().load_params(config_file_path)
+        super()._load_params(config_file_path)
         self.drum_pitch_range = range(*self.drum_pitch_range)
 
     @_out_as_complete_seq

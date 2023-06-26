@@ -172,8 +172,12 @@ You can save and load a tokenizer's parameters and vocabulary. This is especiall
 
 .. autofunction:: miditok.MIDITokenizer.save_params
     :noindex:
-.. autofunction:: miditok.MIDITokenizer.load_params
-    :noindex:
+
+To load a tokenizer from saved parameters, just use the ``params`` argument when creating a it:
+
+..  code-block:: python
+
+    tokenizer = REMI(params=Path("to", "params.json"))
 
 Limitations
 ------------------------
