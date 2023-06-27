@@ -77,11 +77,3 @@ To use BPE, you must first train your tokenizer from data (:py:func:`miditok.MID
 
 .. autofunction:: miditok.MIDITokenizer.decode_bpe
     :noindex:
-
-Slow methods
-------------------------
-
-To use the slow Python BPE, just train your tokenizer with :py:func:`miditok.MIDITokenizer.learn_bpe_slow`, and use the methods from the previous section.
-
-.. autofunction:: miditok.MIDITokenizer.learn_bpe_slow
-    :noindex:

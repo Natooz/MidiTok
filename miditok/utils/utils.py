@@ -75,7 +75,7 @@ def detect_chords(
 ) -> List[Event]:
     r"""Chord detection method. Make sure to sort notes by start time then pitch before:
     ``notes.sort(key=lambda x: (x.start, x.pitch))``.
-    **On very large tracks with high note density this method can slow down processes.**
+    **On very large tracks with high note density this method can be slow.**
     If you plan to use it with the Maestro or GiantMIDI datasets, it can take up to
     hundreds of seconds per MIDI depending on your cpu.
     This method works by iterating over each note, find if it played with other notes, and if it
