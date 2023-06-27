@@ -26,6 +26,14 @@ def test_merge_tracks():
     merge_tracks(midi.instruments)
     assert len(midi.instruments[0].notes) == 2 * len(original_track.notes)
 
+    # Test merge with effects
+    midi.instruments.append(deepcopy(midi.instruments[0]))
+    merge_tracks(midi, effects=True)
+    assert len(midi.instruments[0].notes) == 4 * len(original_track.notes)
+    assert len(midi.instruments[0].pedals) == 2 * len(original_track.pedals)
+    assert len(midi.instruments[0].control_changes) == 2 * len(original_track.control_changes)
+    assert len(midi.instruments[0].pitch_bends) == 2 * len(original_track.pitch_bends)
+
 
 def test_merge_same_program_tracks_and_by_class():
     multitrack_midi_paths = list(Path("tests", "Multitrack_MIDIs").glob("**/*.mid"))
