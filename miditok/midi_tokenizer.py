@@ -163,7 +163,7 @@ class MIDITokenizer(ABC):
 
         # Loading params, or initializing them from args
         if params is not None:
-            self.load_params(params)
+            self._load_params(params)
         else:
             assert (
                 pitch_range.start >= 0 and pitch_range.stop <= 128
@@ -1762,8 +1762,9 @@ class MIDITokenizer(ABC):
         with open(out_path, "w") as outfile:
             json.dump(params, outfile, indent=4)
 
-    def load_params(self, config_file_path: Union[str, Path]):
+    def _load_params(self, config_file_path: Union[str, Path]):
         r"""Loads the parameters of the tokenizer from a config file.
+        This method is not intended to be called outside __init__, when creating a tokenizer.
 
         :param config_file_path: path to the tokenizer config file (encoded as json).
         """
