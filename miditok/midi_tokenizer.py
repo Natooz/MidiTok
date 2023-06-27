@@ -5,7 +5,6 @@ from abc import ABC, abstractmethod
 import math
 from pathlib import Path
 import json
-from random import choices
 from copy import deepcopy
 from typing import List, Tuple, Dict, Union, Callable, Iterable, Optional, Any
 
@@ -221,11 +220,6 @@ class MIDITokenizer(ABC):
         self._token_types_indexes = {}
         self._update_token_types_indexes()
 
-        # Slow BPE attributes
-        self.__bpe_successions = {}
-        if self.bpe_slow:  # loaded from config file
-            self.__set_bpe_slow_tokens_successions()
-
         # Keep in memory durations in ticks for seen time divisions so these values
         # are not calculated each time a MIDI is processed
         self._durations_ticks = {}
@@ -263,14 +257,11 @@ class MIDITokenizer(ABC):
     def vocab_bpe(self) -> [str, int]:  # byte (str) to its id (int)
         r"""Returns the vocabulary learnt with BPE.
         In case the tokenizer has not been trained with BPE, it returns None.
-        In case it was trained with the *slow* BPE method, it returns the base vocabulary.
 
         :return: the BPE model's vocabulary.
         """
         if not self.has_bpe:
             return None
-        elif self.bpe_slow:
-            return self._vocab_base
         else:
             return self._bpe_model.get_vocab()
 
@@ -511,7 +502,7 @@ class MIDITokenizer(ABC):
         if seq.ids is None:
             seq.ids = self._tokens_to_ids(seq.tokens)
 
-        if self.has_bpe and not self.bpe_slow:
+        if self.has_bpe:
             if seq.bytes is None:
                 seq.bytes = self._ids_to_bytes(seq.ids, as_one_str=True)
 
@@ -759,7 +750,7 @@ class MIDITokenizer(ABC):
         else:
             id_ = (
                 len(self._bpe_model.get_vocab())
-                if self.has_bpe and not self.bpe_slow
+                if self.has_bpe
                 else len(self.vocab)
             )
             self._vocab_base[token_str] = id_
@@ -1020,9 +1011,6 @@ class MIDITokenizer(ABC):
             )
             return
         assert (
-            not self.bpe_slow
-        ), "This tokenizer has already been trained with slow BPE. You can't retrain it with fast BPE"
-        assert (
             iterator is not None or tokens_paths is not None
         ), "You must give at an iterator or a path to to token "
 
@@ -1148,16 +1136,7 @@ class MIDITokenizer(ABC):
 
         :param seq: Sequence(s) to apply BPE.
         """
-        if self.bpe_slow:  # will call slow encoding method, one seq at a time
-            if isinstance(seq, list):
-                for seq_ in seq:
-                    seq_.ids = self.__apply_bpe_slow(seq_.ids)
-                    seq_.ids_bpe_encoded = True
-            else:
-                seq.ids = self.__apply_bpe_slow(seq.ids)
-                seq.ids_bpe_encoded = True
-
-        elif isinstance(seq, list):
+        if isinstance(seq, list):
             for seq_ in seq:
                 self.complete_sequence(seq_)
             encoded_tokens = self._bpe_model.encode_batch(
@@ -1172,234 +1151,6 @@ class MIDITokenizer(ABC):
             encoded_tokens = self._bpe_model.encode([seq.bytes], is_pretokenized=True)
             seq.ids = encoded_tokens.ids
             seq.ids_bpe_encoded = True
-
-    def learn_bpe_slow(
-        self,
-        tokens_path: Union[Path, str],
-        vocab_size: int,
-        out_dir: Union[Path, str] = None,
-        files_lim: int = None,
-        save_converted_samples: bool = False,
-        print_seq_len_variation: bool = True,
-    ) -> Tuple[List[float], List[int], List[float]]:
-        r"""**DEPRECIATED - WILL BE REMOVED IN FUTURE UPDATES**
-        Method to construct the vocabulary from BPE, 100% in Python and slower than
-        :py:func:`miditok.MIDITokenizer.learn_bpe`.
-        This method will build (modify) the vocabulary by analyzing an already tokenized dataset to find
-        the most recurrent token successions.
-        **Note that this implementation is in pure Python and will be slow if you use a large amount of
-        tokens files.** It will also not be updated in the future. We advise to use the fast
-        :py:func:`miditok.MIDITokenizer.learn_bpe` method.
-
-        :param tokens_path: path to token files to learn the BPE combinations from.
-        :param vocab_size: the new vocabulary size.
-        :param out_dir: directory to save the tokenizer's parameters and vocabulary after BPE learning is finished.
-        :param files_lim: limit of token files to use. (default: None)
-        :param save_converted_samples: will save in out_path the samples that have been used
-                to create the BPE vocab. Files will keep the same name and relative path. (default: True)
-        :param print_seq_len_variation: prints the mean sequence length before and after BPE,
-                and the variation in %. (default: True)
-        :return: learning metrics, as lists of:
-                - the average number of token combinations covered by the newly created BPE tokens
-                - the maximum number of token combinations
-                - the average sequence length
-                Each index in the list correspond to a learning step.
-        """
-        print(
-            "You are using the slow BPE method, which is depreciated and will be removed in future updates."
-            "We recommend to use the learn_bpe method for much faster (x30-50) learning, encoding and decoding."
-        )
-        assert not self.is_multi_voc, (
-            "You are using a multi-vocabulary tokenizer, "
-            "it is not compatible with byte pair encoding"
-        )
-        assert (
-            not self.has_bpe and not self.bpe_slow
-        ), "This tokenizer has already been trained with fast BPE. You can't retrain it with slow BPE."
-        assert vocab_size > len(self.vocab), (
-            f"vocab_size ({vocab_size}) need to be higher than the size"
-            f"of the current vocabulary ({len(self.vocab)})"
-        )
-        files_paths = list(Path(tokens_path).glob("**/*.json"))
-        assert (
-            len(files_paths) > 0
-        ), "BPE learning: the specified path does not contain tokens files (json)"
-        files_paths_bpe = (
-            choices(files_paths, k=files_lim)
-            if (files_lim is not None and files_lim < len(files_paths))
-            else files_paths
-        )
-        samples, samples_paths = [], []
-        original_lengths = []
-
-        # Loads tokens / samples to analyze
-        for file_path in tqdm(files_paths_bpe, desc="Loading token files"):
-            file = self.load_tokens(file_path)
-            samples.append(file)
-            samples_paths.append(file_path.relative_to(tokens_path))
-            original_lengths += (
-                [len(file["ids"])]
-                if self.unique_track
-                else [len(track) for track in file["ids"]]
-            )
-
-        def replace_token_in_seq(
-            seq: List[int], succession: Tuple[int, int], new_event: str
-        ):
-            j = 0
-            while j < len(seq) - 1:
-                if tuple(seq[j : j + 2]) == succession:
-                    seq[j] = self[f"BPE_{new_event}"]
-                    del seq[j + 1]
-                j += 1
-
-        # Learning Byte Pair Encoding
-        avg_seq_len = [sum(original_lengths) / len(original_lengths)]
-        bpe_comb_nb, bpe_comb_means, bpe_comb_max = [], [], []
-        pbar = tqdm(
-            total=vocab_size - len(self.vocab), desc="Learning byte pair encoding"
-        )
-        while len(self.vocab) < vocab_size:
-            occurrences = {}  # count occurrences of successive tokens
-            for sample in samples:
-                tracks = [sample["ids"]] if self.unique_track else sample["ids"]
-                for track in tracks:
-                    for i in range(len(track) - 1):
-                        try:
-                            occurrences[tuple(track[i : i + 2])] += 1
-                        except KeyError:
-                            occurrences[tuple(track[i : i + 2])] = 1
-
-            # Add new BPE token to vocabulary
-            most_rec_tok_succession = max(
-                occurrences, key=occurrences.get
-            )  # most recurrent succession of two tokens
-            prime_tokens_eq = []  # the equivalent succession with decomposed BPE tokens
-            for token in most_rec_tok_succession:
-                if self[token].split("_")[0] == "BPE":
-                    prime_tokens_eq += map(
-                        int,
-                        self[token].split("_")[1].split(".")[1].split("-"),
-                    )
-                else:
-                    prime_tokens_eq.append(token)
-            final_event_val = (
-                "-".join(map(str, most_rec_tok_succession))
-                + "."
-                + "-".join(map(str, prime_tokens_eq))
-            )
-            self.add_to_vocab(f"BPE_{final_event_val}")
-
-            # Replace newly created token in learning samples
-            for sample in samples:
-                if self.unique_track:
-                    replace_token_in_seq(
-                        sample["ids"], most_rec_tok_succession, final_event_val
-                    )
-                else:
-                    for track in sample["ids"]:
-                        replace_token_in_seq(
-                            track, most_rec_tok_succession, final_event_val
-                        )
-
-            # Compute metrics
-            avg = []
-            for sample in samples:
-                if self.unique_track:
-                    avg.append(len(sample["ids"]))
-                else:
-                    avg += [len(track) for track in sample["ids"]]
-            avg_seq_len.append(np.mean(np.array(avg)).item(0))
-            nb_combs = np.array([len(prime_tokens_eq)])  # bpe-combs.prime-combs
-            bpe_comb_nb = (
-                np.concatenate([bpe_comb_nb, nb_combs])
-                if isinstance(bpe_comb_nb, np.ndarray)
-                else nb_combs
-            )
-            bpe_comb_means.append(np.mean(bpe_comb_nb).item(0))
-            bpe_comb_max.append(np.max(bpe_comb_nb).item(0))
-            pbar.set_postfix(
-                {
-                    "seq_len_variation": f"{(avg_seq_len[-1] - avg_seq_len[0]) / avg_seq_len[0] * 100:.2f}",
-                    "avg_nb_token_combs": f"{bpe_comb_means[-1]:.2f}",
-                    "max_nb_token_combs": f"{bpe_comb_max[-1]}",
-                },
-                refresh=False,
-            )
-            pbar.update(1)
-
-        pbar.close()
-        self.has_bpe = True
-        self.__set_bpe_slow_tokens_successions()
-
-        # Saves dictionary and prints the difference in sequence length
-        if out_dir is not None:
-            if isinstance(out_dir, str):
-                out_dir = Path(out_dir)
-            out_dir.mkdir(parents=True, exist_ok=True)
-
-            if save_converted_samples:
-                for sample, path in zip(samples, samples_paths):
-                    self.save_tokens(
-                        sample["ids"],
-                        Path(out_dir, path).with_suffix(".json"),
-                        sample["programs"],
-                    )
-            self.save_params(
-                out_dir / "config.txt"
-            )  # Saves the parameters with which the MIDIs are converted
-
-        if print_seq_len_variation:
-            print(
-                f"Mean of original lengths: {avg_seq_len[0]}\nMean length after BPE: {avg_seq_len[-1]}"
-            )
-            print(
-                f"Variation from original: {(avg_seq_len[-1] - avg_seq_len[0]) / avg_seq_len[0] * 100:.2f} %"
-            )
-
-        return bpe_comb_means, bpe_comb_max, avg_seq_len
-
-    def __set_bpe_slow_tokens_successions(self):
-        r"""For slow BPE.
-        Creates the bpe_successions attributes, as a dictionary of the form {bpe_token: (tok1, tok2, tok3...)}
-        """
-        self.__bpe_successions = {
-            tok: list(
-                map(
-                    int,
-                    self[tok].split("_")[1].split(".")[0].split("-"),
-                )
-            )
-            for tok, event in enumerate(self.vocab)
-            if event.split("_")[0] == "BPE"
-        }
-
-    def __apply_bpe_slow(self, ids: List[int]) -> List[int]:
-        r"""Converts a sequence of token ids into ids with BPE.
-
-        :param ids: token ids to encode.
-        :return: the ids with BPE applied.
-        """
-        if not self.has_bpe:
-            return ids
-
-        previous_len = len(ids) + 1  # + 1 to fool when entering the loop the first time
-        while previous_len != len(
-            ids
-        ):  # if this is True, it means no more BPE combinations is possible
-            previous_len = len(ids)  # length of the token sequence before applying BPE
-            for (
-                tok,
-                token_succession,
-            ) in (
-                self.__bpe_successions.items()
-            ):  # loops over BPE tokens from the vocabulary
-                occurrences = self.__find_subseq(ids, token_succession)
-                for idx in reversed(occurrences):
-                    ids[idx] = tok
-                    for _ in range(len(token_succession) - 1):
-                        del ids[idx + 1]
-        return ids
 
     @staticmethod
     def __find_subseq(in_list: List[int], pattern: List[int]) -> List[int]:
@@ -1474,14 +1225,7 @@ class MIDITokenizer(ABC):
         :param seq: token sequence to decompose.
         """
 
-        if self.bpe_slow:  # will call slow encoding method, one seq at a time
-            if isinstance(seq, list):
-                [self.decode_bpe(seq_) for seq_ in seq]
-            else:
-                seq.ids = self.__decode_bpe_slow(seq.ids)
-                seq.ids_bpe_encoded = False
-
-        elif isinstance(seq, list):
+        if isinstance(seq, list):
             [self.decode_bpe(seq_) for seq_ in seq]
 
         elif isinstance(seq, TokSequence) and seq.ids_bpe_encoded:
@@ -1495,25 +1239,6 @@ class MIDITokenizer(ABC):
             seq.tokens = decoded_tokens
             seq.ids = self._tokens_to_ids(decoded_tokens)
             seq.ids_bpe_encoded = False
-
-    def __decode_bpe_slow(self, ids: List[int]) -> List[int]:
-        r"""Decodes a sequence of token ids encoded with BPE.
-
-        :param ids: ids sequence to decode.
-        :return: decoded id sequence.
-        """
-        ids = deepcopy(ids)
-        i = 0
-        while i < len(ids):
-            token_type, token_val = self[ids[i]].split("_")
-            if token_type == "BPE":
-                del ids[i]
-                for j, to_insert in enumerate(
-                    map(int, token_val.split(".")[1].split("-"))
-                ):
-                    ids.insert(i + j, to_insert)
-            i += 1
-        return ids
 
     def tokenize_midi_dataset(
         self,
@@ -1734,15 +1459,10 @@ class MIDITokenizer(ABC):
         """
         if additional_attributes is None:
             additional_attributes = {}
-        if (
-            self.has_bpe and "_vocab_base" not in additional_attributes
-        ):  # saves whole vocab if BPE
+        if self.has_bpe:  # saves whole vocab if BPE
             additional_attributes["_vocab_base"] = self._vocab_base
-            if not self.bpe_slow:
-                additional_attributes["_bpe_model"] = self._bpe_model.to_str()
-                additional_attributes[
-                    "_vocab_base_byte_to_token"
-                ] = self._vocab_base_byte_to_token
+            additional_attributes["_bpe_model"] = self._bpe_model.to_str()
+            additional_attributes["_vocab_base_byte_to_token"] = self._vocab_base_byte_to_token
 
         params = {
             "pitch_range": (self.pitch_range.start, self.pitch_range.stop),
@@ -1815,10 +1535,6 @@ class MIDITokenizer(ABC):
         """
         return isinstance(self._vocab_base, list)
 
-    @property
-    def bpe_slow(self) -> bool:
-        return self.has_bpe and self._bpe_model is None
-
     def __call__(self, obj: Any, *args, **kwargs):
         r"""Calling a tokenizer allows to directly convert a MIDI to tokens or the other way around.
         The method automatically detects MIDI and token objects, as well as paths and can directly load
@@ -1858,7 +1574,7 @@ class MIDITokenizer(ABC):
         """
         if self.is_multi_voc:
             return sum([len(v) for v in self.vocab])
-        elif self.has_bpe and not self.bpe_slow:
+        elif self.has_bpe:
             return len(self._bpe_model.get_vocab())
         return len(self.vocab)
 

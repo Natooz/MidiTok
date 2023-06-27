@@ -1,6 +1,6 @@
 #!/usr/bin/python3 python
 
-"""Benchmark comparing slow VS fast BPE.
+"""Benchmark for fast BPE with Hugging Face tokenizers library.
 """
 
 from copy import deepcopy
@@ -69,14 +69,14 @@ def bpe_benchmark(data_path: Union[str, Path, PurePath] = "./tests/Maestro"):
 
     # Record times
     t = PrettyTable(
-        ["Tokenization", "Slow train", "Fast train", "Slow Enc."]
+        ["Tokenization", "Fast train"]
         + [f"Fast enc. bsz={b}" for b in batch_sizes],
-        title="BPE benchmark: Slow = full Python, Fast = with 🤗tokenizers (Rust), "
+        title="BPE benchmark: Fast = with 🤗tokenizers (Rust), "
         "values are in second, bsz is batch size",
     )
     for tokenization in tokenizations:
         tokenizer = create_tokenizer(tokenization)
-        row = [tokenization, None, None, None]
+        row = [tokenization, None]
         row += [None for _ in batch_sizes]
 
         # Loading tokens
@@ -101,7 +101,7 @@ def bpe_benchmark(data_path: Union[str, Path, PurePath] = "./tests/Maestro"):
             start_from_empty_voc=False,
         )
         t1 = time() - t0
-        row[2] = f"{t1:.3f}"
+        row[1] = f"{t1:.3f}"
         print(f"Fast BPE learning for {tokenization} took {t1:.3f} sec")
 
         # Fast BPE tokenization
@@ -116,32 +116,10 @@ def bpe_benchmark(data_path: Union[str, Path, PurePath] = "./tests/Maestro"):
                 tokenizer.apply_bpe(tokens_bpe)
                 tok_times.append((time() - t0) / len(tokens_bpe))  # mean per batch
             mean_time = sum(tok_times) / len(tok_times)
-            row[4 + b] = f"{mean_time:.3f}"
+            row[2 + b] = f"{mean_time:.3f}"
             print(
                 f"Fast BPE encoding for {tokenization} and batch size of {batch_size} took {mean_time:.3f} sec"
             )
-
-        # Slow BPE learning
-        tokenizer = create_tokenizer(tokenization)
-        t0 = time()
-        tokenizer.learn_bpe_slow(
-            Path("tests", "test_results", f"{tokenization}_maestro"),
-            vocab_size=vocab_size,
-        )
-        t1 = time() - t0
-        row[1] = f"{t1:.3f}"
-        print(f"Slow BPE learning for {tokenization} took {t1:.3f} sec")
-
-        # Slow BPE encoding
-        tok_time = 0
-        for tokens in tqdm(data, desc="Encoding slow BPE"):
-            tokens_bpe = deepcopy(tokens)
-            t0 = time()
-            tokenizer.apply_bpe(tokens_bpe)
-            tok_time += time() - t0
-        mean_time = tok_time / len(data)
-        row[3] = f"{mean_time:.3f}"
-        print(f"Slow BPE encoding for {tokenization} took {mean_time:.2f} sec")
 
         t.add_row(row)
 
