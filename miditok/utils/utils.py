@@ -302,7 +302,7 @@ def merge_tracks(
         tracks_[0].control_changes.sort(key=lambda control_change: control_change.time)
         # Pitch bends
         tracks_[0].pitch_bends = sum((t.pitch_bends for t in tracks_), [])
-        tracks_[0].pitch_bends.sort(key=lambda pitch_bend: pitch_bend.start)
+        tracks_[0].pitch_bends.sort(key=lambda pitch_bend: pitch_bend.time)
 
     # Keeps only one track
     if isinstance(tracks, MidiFile):
