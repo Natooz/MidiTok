@@ -83,7 +83,7 @@ def _in_as_seq(complete: bool = True, decode_bpe: bool = True):
 
 
 def _out_as_complete_seq(function: Callable):
-    """Decorator completing a output Sequence object."""
+    """Decorator completing an output Sequence object."""
 
     def wrapper(*args, **kwargs):
         self = args[0]
@@ -290,7 +290,7 @@ class MIDITokenizer(ABC):
                 continue
             t += 1
 
-        # Recalculate max_tick is this could have change after notes quantization
+        # Recalculate max_tick is this could have changed after notes quantization
         if len(midi.instruments) > 0:
             midi.max_tick = max(
                 [max([note.end for note in track.notes]) for track in midi.instruments]
@@ -649,7 +649,7 @@ class MIDITokenizer(ABC):
         :param tokens: tokens to convert. Can be either a :class:`miditok.TokSequence`,
                 a Tensor (PyTorch and Tensorflow are supported), a numpy array or a Python list of ints.
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create).
-        :param program: the MIDI program of the produced track and if it drum. (default (0, False), piano)
+        :param program: the MIDI program of the produced track and if it is drums. (default (0, False), piano)
         :return: the miditoolkit instrument object and the possible tempo changes.
         """
         raise NotImplementedError
@@ -1051,7 +1051,7 @@ class MIDITokenizer(ABC):
             if len(unique_chars) >= vocab_size:
                 print(
                     f"BPE TRAINING: the provided data comprises {len(unique_chars)} base tokens (character level), "
-                    f"whereas the target BPE vocaulary size is inferior ({vocab_size}). No new token can be learned, "
+                    f"whereas the target BPE vocabulary size is inferior ({vocab_size}). No new token can be learned, "
                     f"skipping BPE training."
                 )
                 return
@@ -1567,7 +1567,7 @@ class MIDITokenizer(ABC):
         r"""Returns the length of the vocabulary. If the tokenizer uses embedding
         pooling / have multiple vocabularies, it will return the **sum** of their lengths.
         If the vocabulary was learned with fast BPE, it will return the length of the BPE vocabulary,
-        i.e. the proper number of possible token ids. Otherwise it will return the length of the base vocabulary.
+        i.e. the proper number of possible token ids. Otherwise, it will return the length of the base vocabulary.
         Use the :py:func:`miditok.MIDITokenizer.len` property (``tokenizer.len``) to have the list of lengths.
 
         :return: length of the vocabulary.
