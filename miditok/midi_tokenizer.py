@@ -890,7 +890,6 @@ class MIDITokenizer(ABC):
         r"""Creates the possible time signatures, as tuples of the form:
         (nb_beats, beat_res) where nb_beats is the number of beats per bar.
         Example: (3, 4) means one bar is 3 beat long and each beat is a quarter note.
-        # TODO clarify this, use only denominator
 
         :return: the time signatures.
         """

@@ -171,7 +171,7 @@ class TokenizerConfig:
             Leave ``None`` to not represent unknown chords. (default: None)
     :param nb_tempos: number of tempos "bins" to use. (default: 32)
     :param tempo_range: range of minimum and maximum tempos within which the bins fall. (default: (40, 250))
-    :param time_signature_range: TODO complete
+    :param time_signature_range: range as a tuple (max_beat_res, nb_notes). (default: (8, 2))
     :param programs: sequence of MIDI programs to use. Note that `-1` is used and reserved for drums tracks.
             (default: from -1 to 127 included)
     :param **kwargs: additional parameters that will be saved in `config.additional_params`.
