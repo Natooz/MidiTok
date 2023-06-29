@@ -6,7 +6,7 @@ import math
 from pathlib import Path
 import json
 from copy import deepcopy
-from typing import List, Tuple, Dict, Union, Callable, Iterable, Optional, Any
+from typing import List, Tuple, Dict, Union, Callable, Iterable, Optional, Any, Sequence
 
 import numpy as np
 from tqdm import tqdm
@@ -129,10 +129,9 @@ class MIDITokenizer(ABC):
             # Will overwrite self.config
             self._load_params(params)
         else:
-            assert self.config is not None, (
-                "You must specify either a tokenizer_config (TokenizerConfig object)"
-                "or the path to a saved configuration (params argument)"
-            )
+            # If no TokenizerConfig is given, we falls back to the default parameters
+            if self.config is None:
+                self.config = TokenizerConfig()
             assert (
                 self.config.pitch_range[0] >= 0 and self.config.pitch_range[1] <= 128
             ), "You must specify a pitch_range between 0 and 127 (included, i.e. range.stop at 128)"
@@ -227,7 +226,7 @@ class MIDITokenizer(ABC):
         return self._vocab_base
 
     @property
-    def vocab_bpe(self) -> [str, int]:  # byte (str) to its id (int)
+    def vocab_bpe(self) -> Union[None, Dict[str, int]]:  # byte (str) to its id (int)
         r"""Returns the vocabulary learnt with BPE.
         In case the tokenizer has not been trained with BPE, it returns None.
 
@@ -237,6 +236,24 @@ class MIDITokenizer(ABC):
             return None
         else:
             return self._bpe_model.get_vocab()
+
+    @property
+    def special_tokens(self) -> Sequence[str]:
+        r"""Returns the vocabulary learnt with BPE.
+        In case the tokenizer has not been trained with BPE, it returns None.
+
+        :return: special tokens of the tokenizer
+        """
+        return self.config.special_tokens
+
+    @property
+    def special_tokens_ids(self) -> Sequence[int]:
+        r"""Returns the vocabulary learnt with BPE.
+        In case the tokenizer has not been trained with BPE, it returns None.
+
+        :return: special tokens of the tokenizer
+        """
+        return [self[token] for token in self.special_tokens]
 
     def preprocess_midi(self, midi: MidiFile):
         r"""Pre-process (in place) a MIDI file to quantize its time and note attributes
@@ -481,14 +498,14 @@ class MIDITokenizer(ABC):
                 seq.bytes = self._ids_to_bytes(seq.ids, as_one_str=True)
 
     def _tokens_to_ids(
-        self, tokens: List[Union[str, List[str]]]
+        self, tokens: Sequence[Union[str, List[str]]]
     ) -> List[Union[int, List[int]]]:
         r"""Converts a list of tokens (str) into their associated ids (int).
 
         :param tokens: list of tokens (str) to convert.
         :return: list of corresponding ids (int).
         """
-        if isinstance(tokens[0], list):
+        if isinstance(tokens[0], (list, tuple)):
             ids = []
             for seq in tokens:
                 ids.append([self[i, token] for i, token in enumerate(seq)])
@@ -649,7 +666,7 @@ class MIDITokenizer(ABC):
         This method is called at ``__init__``\.
         """
         vocab = self._create_base_vocabulary()
-        special_tokens = [f"{tok}_None" for tok in self.config.special_tokens]
+        special_tokens = [f"{tok}_None" for tok in self.special_tokens]
 
         if isinstance(vocab[0], list):  # multi-voc
             self._vocab_base = [{} for _ in range(len(vocab))]

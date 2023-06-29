@@ -30,13 +30,16 @@ MidiTok uses [MIDIToolkit](https://github.com/YatingMusic/miditoolkit), which it
 The most basic and useful methods are summarized here. And [here](colab-notebooks/Full_Example_HuggingFace_GPT2_Transformer.ipynb) is a simple notebook example showing how to use Hugging Face models to generate music, with MidiTok taking care of tokenizing MIDIs.
 
 ```python
-from miditok import REMI
+from miditok import REMI, TokenizerConfig
 from miditok.utils import get_midi_programs
 from miditoolkit import MidiFile
 from pathlib import Path
 
+# Creating the tokenizer's configuration, read the doc to explore other parameters
+config = TokenizerConfig(nb_velocities=16, use_chords=True)
+
 # Creates the tokenizer and loads a MIDI
-tokenizer = REMI()  # using the default parameters, read the documentation to customize your tokenizer
+tokenizer = REMI(config)
 midi = MidiFile('path/to/your_midi.mid')
 
 # Converts MIDI to tokens, and back to a MIDI
@@ -57,7 +60,7 @@ tokenizer.learn_bpe(
 )
 
 # Saving our tokenizer, to retrieve it back later with the load_params method
-tokenizer.save_params(Path("path", "to", "save", "tokenizer"))
+tokenizer.save_params(Path("path", "to", "save", "tokenizer.json"))
 
 # Converts the tokenized musics into tokens with BPE
 tokenizer.apply_bpe_to_dataset(Path('path', 'to', 'tokens_noBPE'), Path('path', 'to', 'tokens_BPE'))
@@ -89,11 +92,12 @@ Contributions are gratefully welcomed, feel free to open an issue or send a PR i
 
 ### Todos
 
-* Extend Time Signature to all tokenizations
-* Control Change messages
-* Option to represent pitch values as pitch intervals, as [it seems to improve performances](https://ismir2022program.ismir.net/lbd_369.html).
-* Speeding up MIDI read / load (Rust / C++ binding)
-* Data augmentation on duration values at the MIDI level
+* Option to place `Program` tokens before note tokens for *TSD*, "vanilla" *REMI*, *MIDI-Like* and *Structured*;
+* Extend Time Signature to all tokenizations;
+* Control Change messages;
+* Option to represent pitch values as pitch intervals, as [it seems to improve performances](https://ismir2022program.ismir.net/lbd_369.html);
+* Speeding up MIDI read / load (using a Rust / C++ io library + Python binding ?);
+* Data augmentation on duration values at the MIDI level.
 
 ## Citation
 

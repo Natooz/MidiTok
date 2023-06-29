@@ -1,11 +1,10 @@
 from typing import List, Tuple, Dict, Optional, Union, Any
-from pathlib import Path
 
 import numpy as np
 from miditoolkit import Instrument, Note, TempoChange
 
 from ..midi_tokenizer import MIDITokenizer, _in_as_seq, _out_as_complete_seq
-from ..classes import TokSequence, Event, TokenizerConfig
+from ..classes import TokSequence, Event
 from ..utils import detect_chords
 from ..constants import (
     TIME_DIVISION,
@@ -22,17 +21,7 @@ class TSD(MIDITokenizer):
     note, it could be unsuited for tracks with long pauses. In such case, the
     maximum *TimeShift* value will be used.
     TODO handle programs like REMIPlus
-
-    :param tokenizer_config: the tokenizer's configuration, as a :class:`miditok.classes.TokenizerConfig` object.
-    :param params: path to a tokenizer config file. This will override other arguments and
-            load the tokenizer based on the config file. This is particularly useful if the
-            tokenizer learned Byte Pair Encoding. (default: None)
     """
-
-    def __init__(
-        self, tokenizer_config: TokenizerConfig = None, params: Union[str, Path] = None
-    ):
-        super().__init__(tokenizer_config, False, params)
 
     def _tweak_config_before_creating_voc(self):
         self.config.use_time_signatures = False

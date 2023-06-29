@@ -1,12 +1,11 @@
 from math import ceil
-from pathlib import Path, PurePath
 from typing import List, Tuple, Dict, Optional, Union, Any
 
 import numpy as np
 from miditoolkit import Instrument, Note, TempoChange
 
 from ..midi_tokenizer import MIDITokenizer, _in_as_seq, _out_as_complete_seq
-from ..classes import TokSequence, TokenizerConfig
+from ..classes import TokSequence
 from ..constants import (
     TIME_DIVISION,
     TEMPO,
@@ -26,25 +25,18 @@ class OctupleMono(MIDITokenizer):
     * 4: Bar
     * (+ Optional) Tempo
     * (+ Optional) TimeSignature
-
-    :param tokenizer_config: the tokenizer's configuration, as a :class:`miditok.classes.TokenizerConfig` object.
-    :param params: path to a tokenizer config file. This will override other arguments and
-            load the tokenizer based on the config file. This is particularly useful if the
-            tokenizer learned Byte Pair Encoding. (default: None)
     """
-
-    def __init__(
-        self, tokenizer_config: TokenizerConfig = None, params: Union[str, Path] = None
-    ):
-        super().__init__(tokenizer_config, False, params)
 
     def _tweak_config_before_creating_voc(self):
         self.config.use_chords = False
         self.config.use_rests = False
         self.config.use_programs = False
-        # used in place of positional encoding
 
-        self.max_bar_embedding = 60  # this attribute might increase during encoding
+        # used in place of positional encoding
+        # This attribute might increase over tokenizations, if the tokenizer encounter longer MIDIs
+        if "max_bar_embedding" not in self.config.additional_params:
+            self.config.additional_params["max_bar_embedding"] = 60
+
         token_types = ["Pitch", "Velocity", "Duration", "Position", "Bar"]
         if self.config.use_tempos:
             token_types.append("Tempo")
@@ -53,24 +45,6 @@ class OctupleMono(MIDITokenizer):
         self.vocab_types_idx = {
             type_: idx for idx, type_ in enumerate(token_types)
         }  # used for data augmentation
-
-    def save_params(
-        self, out_path: Union[str, Path, PurePath], additional_attributes: Dict = None
-    ):
-        r"""Saves the config / parameters of the tokenizer in a json encoded file.
-        This can be useful to keep track of how a dataset has been tokenized.
-
-        :param out_path: output path to save the file.
-        :param additional_attributes: any additional information to store in the config file.
-                It can be used to override the default attributes saved in the parent method. (default: None)
-        """
-        if additional_attributes is None:
-            additional_attributes = {}
-        additional_attributes_tmp = {
-            "max_bar_embedding": self.max_bar_embedding,
-            **additional_attributes,
-        }
-        super().save_params(out_path, additional_attributes_tmp)
 
     @_out_as_complete_seq
     def track_to_tokens(self, track: Instrument) -> TokSequence:
@@ -100,10 +74,10 @@ class OctupleMono(MIDITokenizer):
             max(note.end for note in track.notes)
             / (self._current_midi_metadata["time_division"] * 4)
         )
-        if self.max_bar_embedding < nb_bars:
-            for i in range(self.max_bar_embedding, nb_bars):
+        if self.config.additional_params["max_bar_embedding"] < nb_bars:
+            for i in range(self.config.additional_params["max_bar_embedding"], nb_bars):
                 self.add_to_vocab(f"Bar_{i}", 4)
-            self.max_bar_embedding = nb_bars
+            self.config.additional_params["max_bar_embedding"] = nb_bars
 
         tokens = []
         current_tick = -1
@@ -257,7 +231,7 @@ class OctupleMono(MIDITokenizer):
 
         # BAR
         vocab[4] += [
-            f"Bar_{i}" for i in range(self.max_bar_embedding)
+            f"Bar_{i}" for i in range(self.config.additional_params["max_bar_embedding"])
         ]  # bar embeddings (positional encoding)
 
         # TEMPO

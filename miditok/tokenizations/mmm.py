@@ -40,33 +40,20 @@ class MMM(MIDITokenizer):
         density_bins_max: Tuple[int, int] = MMM_DENSITY_BINS_MAX,
         params: Optional[Union[str, Path]] = None,
     ):
-        self.density_bins_max = density_bins_max
-        self.note_densities = np.linspace(
-            0, density_bins_max[1], density_bins_max[0] + 1, dtype=np.intc
-        )
+        if tokenizer_config is not None and "density_bins_max" not in tokenizer_config.additional_params:
+            tokenizer_config.additional_params["density_bins_max"] = density_bins_max
         super().__init__(tokenizer_config, True, params)
 
     def _tweak_config_before_creating_voc(self):
         self.config.use_programs = True
         self.config.use_rests = False
-
-    def save_params(
-        self, out_path: Union[str, Path], additional_attributes: Optional[Dict] = None
-    ):
-        r"""Saves the config / parameters of the tokenizer in a json encoded file.
-        This can be useful to keep track of how a dataset has been tokenized.
-
-        :param out_path: output path to save the file.
-        :param additional_attributes: any additional information to store in the config file.
-                It can be used to override the default attributes saved in the parent method. (default: None)
-        """
-        if additional_attributes is None:
-            additional_attributes = {}
-        additional_attributes_tmp = {
-            "density_bins_max": self.density_bins_max,
-            **additional_attributes,
-        }
-        super().save_params(out_path, additional_attributes_tmp)
+        # Recreate densities here just in case density_bins_max was loaded from params
+        self.config.additional_params["note_densities"] = np.linspace(
+            0,
+            self.config.additional_params["density_bins_max"][1],
+            self.config.additional_params["density_bins_max"][0] + 1,
+            dtype=np.intc,
+        )
 
     def track_to_tokens(self, track: Instrument) -> List[Event]:
         r"""Converts a track (miditoolkit.Instrument object) into a sequence of Event (:class:`miditok.Event`).
@@ -388,10 +375,6 @@ class MMM(MIDITokenizer):
 
         :return: the vocabulary as a list of string.
         """
-        # Recreate densities here just in case density_bins_max was loaded from params
-        self.note_densities = np.linspace(
-            0, self.density_bins_max[1], self.density_bins_max[0] + 1, dtype=np.intc
-        )
         vocab = []
 
         # TRACK / BAR / FILL
@@ -417,7 +400,7 @@ class MMM(MIDITokenizer):
         ]
 
         # NOTE DENSITY
-        vocab += [f"NoteDensity_{i}" for i in self.note_densities]
+        vocab += [f"NoteDensity_{i}" for i in self.config.additional_params["note_densities"]]
 
         # TIME SIGNATURE
         if self.config.use_time_signatures:

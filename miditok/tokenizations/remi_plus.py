@@ -40,32 +40,16 @@ class REMIPlus(MIDITokenizer):
         max_bar_embedding: Optional[int] = None,
         params: Union[str, Path] = None,
     ):
-        # this attribute might increase over tokenizations, if the tokenizer encounter longer MIDIs
-        self.max_bar_embedding = max_bar_embedding
+        if tokenizer_config is not None and "max_bar_embedding" not in tokenizer_config.additional_params:
+            # If used, this attribute might increase over tokenizations, if the tokenizer encounter longer MIDIs
+            tokenizer_config.additional_params["max_bar_embedding"] = max_bar_embedding
         super().__init__(tokenizer_config, True, params)
 
     def _tweak_config_before_creating_voc(self):
         self.config.use_programs = True
         # code handling rest decoding is writen, but not for detection (encoding)
         self.config.use_rests = False
-
-    def save_params(
-        self, out_path: Union[str, Path], additional_attributes: Optional[Dict] = None
-    ):
-        r"""Saves the config / parameters of the tokenizer in a json encoded file.
-        This can be useful to keep track of how a dataset has been tokenized.
-
-        :param out_path: output path to save the file.
-        :param additional_attributes: any additional information to store in the config file.
-                It can be used to override the default attributes saved in the parent method. (default: None)
-        """
-        if additional_attributes is None:
-            additional_attributes = {}
-        additional_attributes_tmp = {
-            "max_bar_embedding": self.max_bar_embedding,
-            **additional_attributes,
-        }
-        super().save_params(out_path, additional_attributes_tmp)
+        # self.unique_track = True
 
     def __notes_to_events(self, tracks: List[Instrument]) -> List[Event]:
         """Convert multi-track notes into one Token sequence.
@@ -93,15 +77,15 @@ class REMIPlus(MIDITokenizer):
             notes_with_program[0][0].start + 1
         )  # so that no rest is created before the first note
         # Bar
-        if self.max_bar_embedding:  # Check bar embedding limit, update if needed
+        if self.config.additional_params["max_bar_embedding"]:  # Check bar embedding limit, update if needed
             nb_bars = ceil(
                 max(n[0].end for n in notes_with_program)
                 / (self._current_midi_metadata["time_division"] * 4)
             )
-            if self.max_bar_embedding < nb_bars:
-                for i in range(self.max_bar_embedding, nb_bars):
+            if self.config.additional_params["max_bar_embedding"] < nb_bars:
+                for i in range(self.config.additional_params["max_bar_embedding"], nb_bars):
                     self.add_to_vocab(f"Bar_{i}")
-                self.max_bar_embedding = nb_bars
+                self.config.additional_params["max_bar_embedding"] = nb_bars
         current_bar = -1
         # Tempo
         current_tempo_idx = 0
@@ -152,7 +136,7 @@ class REMIPlus(MIDITokenizer):
                         Event(
                             type="Bar",
                             value=str(current_bar + i + 1)
-                            if self.max_bar_embedding is not None
+                            if self.config.additional_params["max_bar_embedding"] is not None
                             else "None",
                             time=(current_bar + i + 1) * ticks_per_bar,
                             desc=0,
@@ -463,8 +447,8 @@ class REMIPlus(MIDITokenizer):
         vocab = []
 
         # BAR
-        if self.max_bar_embedding:
-            vocab += [f"Bar_{i}" for i in range(self.max_bar_embedding)]
+        if self.config.additional_params["max_bar_embedding"] is not None:
+            vocab += [f"Bar_{i}" for i in range(self.config.additional_params["max_bar_embedding"])]
         else:
             vocab += ["Bar_None"]
 

@@ -1,12 +1,12 @@
 from math import ceil
-from pathlib import Path, PurePath
+from pathlib import Path
 from typing import List, Tuple, Dict, Optional, Union, Any
 
 import numpy as np
 from miditoolkit import MidiFile, Instrument, Note, TempoChange, TimeSignature
 
 from ..midi_tokenizer import MIDITokenizer, _in_as_seq, _out_as_complete_seq
-from ..classes import TokSequence, Event, TokenizerConfig
+from ..classes import TokSequence, Event
 from ..constants import (
     TIME_DIVISION,
     TIME_SIGNATURE,
@@ -39,23 +39,18 @@ class Octuple(MIDITokenizer):
     **Notes:**
     * Tokens are first sorted by time, then track, then pitch values.
     * Tracks with the same *Program* will be merged.
-
-    :param tokenizer_config: the tokenizer's configuration, as a :class:`miditok.classes.TokenizerConfig` object.
-    :param params: path to a tokenizer config file. This will override other arguments and
-            load the tokenizer based on the config file. This is particularly useful if the
-            tokenizer learned Byte Pair Encoding. (default: None)
     """
-
-    def __init__(
-        self, tokenizer_config: TokenizerConfig = None, params: Union[str, Path] = None
-    ):
-        super().__init__(tokenizer_config, True, params)
 
     def _tweak_config_before_creating_voc(self):
         self.config.use_chords = False
         self.config.use_rests = False
+        self.unique_track = True
+
         # used in place of positional encoding
-        self.max_bar_embedding = 60  # this attribute might increase during encoding
+        # This attribute might increase over tokenizations, if the tokenizer encounter longer MIDIs
+        if "max_bar_embedding" not in self.config.additional_params:
+            self.config.additional_params["max_bar_embedding"] = 60
+
         token_types = ["Pitch", "Velocity", "Duration", "Program", "Position", "Bar"]
         if self.config.use_tempos:
             token_types.append("Tempo")
@@ -64,26 +59,6 @@ class Octuple(MIDITokenizer):
         self.vocab_types_idx = {
             type_: idx for idx, type_ in enumerate(token_types)
         }  # used for data augmentation
-
-    def save_params(
-        self, out_path: Union[str, Path, PurePath], additional_attributes: Dict = None
-    ):
-        r"""Saves the config / parameters of the tokenizer in a json encoded file.
-        This can be useful to keep track of how a dataset has been tokenized.
-        **Note:** if you override this method, you should probably call it (super()) at the end
-            and use the additional_attributes argument.
-
-        :param out_path: output path to save the file.
-        :param additional_attributes: any additional information to store in the config file.
-                It can be used to override the default attributes saved in the parent method. (default: None)
-        """
-        if additional_attributes is None:
-            additional_attributes = {}
-        additional_attributes_tmp = {
-            "max_bar_embedding": self.max_bar_embedding,
-            **additional_attributes,
-        }
-        super().save_params(out_path, additional_attributes_tmp)
 
     @_out_as_complete_seq
     def _midi_to_tokens(self, midi: MidiFile, *args, **kwargs) -> TokSequence:
@@ -127,10 +102,10 @@ class Octuple(MIDITokenizer):
 
         # Check bar embedding limit, update if needed
         nb_bars = ceil(midi.max_tick / (midi.ticks_per_beat * 4))
-        if self.max_bar_embedding < nb_bars:
-            for i in range(self.max_bar_embedding, nb_bars):
+        if self.config.additional_params["max_bar_embedding"] < nb_bars:
+            for i in range(self.config.additional_params["max_bar_embedding"], nb_bars):
                 self.add_to_vocab(f"Bar_{i}", 5)
-            self.max_bar_embedding = nb_bars
+            self.config.additional_params["max_bar_embedding"] = nb_bars
 
         # Convert each track to tokens
         tokens = []
@@ -452,10 +427,8 @@ class Octuple(MIDITokenizer):
         nb_positions = max(self.config.beat_res.values()) * 4  # 4/4 time signature
         vocab[4] += [f"Position_{i}" for i in range(nb_positions)]
 
-        # BAR
-        vocab[5] += [
-            f"Bar_{i}" for i in range(self.max_bar_embedding)
-        ]  # bar embeddings (positional encoding)
+        # BAR (positional encoding)
+        vocab[5] += [f"Bar_{i}" for i in range(self.config.additional_params["max_bar_embedding"])]
 
         # TEMPO
         if self.config.use_tempos:

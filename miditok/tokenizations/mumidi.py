@@ -1,5 +1,5 @@
 from math import ceil
-from pathlib import Path, PurePath
+from pathlib import Path
 from typing import List, Tuple, Dict, Optional, Union, Any
 
 import numpy as np
@@ -54,14 +54,18 @@ class MuMIDI(MIDITokenizer):
         drum_pitch_range: Tuple[int, int] = DRUM_PITCH_RANGE,
         params: Union[str, Path] = None,
     ):
-        self.drum_pitch_range = drum_pitch_range
-        # used in place of positional encoding
-        self.max_bar_embedding = 60  # this attribute might increase during encoding
+        if tokenizer_config is not None:
+            if "drum_pitch_range" not in tokenizer_config.additional_params:
+                tokenizer_config.additional_params["drum_pitch_range"] = drum_pitch_range
+            if "max_bar_embedding" not in tokenizer_config.additional_params:
+                # this attribute might increase over tokenizations, if the tokenizer encounter longer MIDIs
+                tokenizer_config.additional_params["max_bar_embedding"] = 60
         super().__init__(tokenizer_config, True, params=params)
 
     def _tweak_config_before_creating_voc(self):
         self.config.use_rests = False
         self.config.use_time_signatures = False
+        # self.unique_track = True
 
         self.vocab_types_idx = {
             "Pitch": 0,
@@ -80,28 +84,6 @@ class MuMIDI(MIDITokenizer):
             self.vocab_types_idx["Rest"] = 0
         if self.config.use_tempos:
             self.vocab_types_idx["Tempo"] = -3
-
-    def save_params(
-        self, out_path: Union[str, Path, PurePath], additional_attributes: Dict = None
-    ):
-        r"""Saves the config / parameters of the tokenizer in a json encoded file.
-        This can be useful to keep track of how a dataset has been tokenized.
-        **Note:** if you override this method, you should probably call it (super()) at the end
-            and use the additional_attributes argument.
-
-        :param out_path: output path to save the file.
-        :param additional_attributes: any additional information to store in the config file.
-                It can be used to override the default attributes saved in the parent method. (default: None)
-        """
-        if additional_attributes is None:
-            additional_attributes = {}
-        additional_attributes_tmp = {
-            "max_bar_embedding": self.max_bar_embedding,
-            "programs": self.config.programs,
-            "drum_pitch_range": self.drum_pitch_range,
-            **additional_attributes,
-        }
-        super().save_params(out_path, additional_attributes_tmp)
 
     @_out_as_complete_seq
     def _midi_to_tokens(self, midi: MidiFile, *args, **kwargs) -> TokSequence:
@@ -140,10 +122,10 @@ class MuMIDI(MIDITokenizer):
 
         # Check bar embedding limit, update if needed
         nb_bars = ceil(midi.max_tick / (midi.ticks_per_beat * 4))
-        if self.max_bar_embedding < nb_bars:
-            for i in range(self.max_bar_embedding, nb_bars):
+        if self.config.additional_params["max_bar_embedding"] < nb_bars:
+            for i in range(self.config.additional_params["max_bar_embedding"], nb_bars):
                 self.add_to_vocab(f"BarPosEnc_{i}", 1)
-            self.max_bar_embedding = nb_bars
+            self.config.additional_params["max_bar_embedding"] = nb_bars
 
         # Convert each track to tokens (except first pos to track time)
         note_tokens = []
@@ -154,12 +136,6 @@ class MuMIDI(MIDITokenizer):
         note_tokens.sort(
             key=lambda x: (x[0].time, x[0].desc)
         )  # Sort by time then track
-
-        """from copy import deepcopy  # TODO remove
-        toto = deepcopy(note_tokens)
-        for i in range(len(toto)):
-            for j in range(1, len(toto[i])):
-                toto[i][j] = self[j, toto[i][j]]"""
 
         ticks_per_sample = midi.ticks_per_beat / max(self.config.beat_res.values())
         ticks_per_bar = midi.ticks_per_beat * 4
@@ -436,14 +412,14 @@ class MuMIDI(MIDITokenizer):
 
         # PITCH & DRUM PITCHES & BAR & POSITIONS & PROGRAM
         vocab[0] += [f"Pitch_{i}" for i in range(*self.config.pitch_range)]
-        vocab[0] += [f"DrumPitch_{i}" for i in range(*self.drum_pitch_range)]
+        vocab[0] += [f"DrumPitch_{i}" for i in range(*self.config.additional_params["drum_pitch_range"])]
         vocab[0] += ["Bar_None"]  # new bar token
         nb_positions = max(self.config.beat_res.values()) * 4  # 4/* time signature
         vocab[0] += [f"Position_{i}" for i in range(nb_positions)]
         vocab[0] += [f"Program_{program}" for program in self.config.programs]
 
         # BAR POS ENC
-        vocab[1] += [f"BarPosEnc_{i}" for i in range(self.max_bar_embedding)]
+        vocab[1] += [f"BarPosEnc_{i}" for i in range(self.config.additional_params["max_bar_embedding"])]
 
         # POSITION POS ENC
         vocab[2] += [

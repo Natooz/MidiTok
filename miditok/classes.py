@@ -129,11 +129,35 @@ class TokenizerConfig:
             separated between 0 and 127.
     :param special_tokens: list of special tokens. This must be given as a list of strings given
             only the names of the tokens. (default: ``["PAD", "BOS", "EOS", "MASK"]``\)
-    :param use_chords: will use ``Chord`` tokens, if the tokenizer is compatible. (default: False)
-    :param use_rests: will use ``Rest`` tokens, if the tokenizer is compatible. (default: False)
-    :param use_tempos: will use ``Tempo`` tokens, if the tokenizer is compatible. (default: False)
-    :param use_time_signatures: will use ``TimeSignature`` tokens, if the tokenizer is compatible. (default: False)
-    :param use_programs: will use ``Program`` tokens, if the tokenizer is compatible. (default: False)
+    :param use_chords: will use ``Chord`` tokens, if the tokenizer is compatible.
+            A `Chord` token indicates the presence of a chord at a certain time step.
+            MidiTok uses a chord detection method based on onset times and duration. This allows
+            MidiTok to detect precisely chords without ambiguity, whereas most chord detection
+            methods in symbolic music based on chroma features can't. Note that using chords will increase
+            the tokenization time, especially if you are working on music with a high "note density". (default: False)
+    :param use_rests: will use ``Rest`` tokens, if the tokenizer is compatible.
+            `Rest` tokens will be placed whenever a portion of time is silent, i.e. no note is being played.
+            This token type is decoded as a *TimeShift* event. You can choose the minimum and maximum rests
+            values to represent with the ``rest_range`` key in the ``additional_tokens`` dictionary
+            (default is 1/2 beat to 8 beats). Note that rests shorter than one beat are only divisible by the
+            first beat resolution, e.g. a rest of 5/8th of a beat will be a succession of ``Rest_0.4`` and
+            ``Rest_0.1``, where the first number indicate the rest duration in beats and the second in
+            samples / positions. (default: False)
+    :param use_tempos: will use ``Tempo`` tokens, if the tokenizer is compatible.
+            ``Tempo`` tokens will specify the current tempo. This allows to train a model to predict tempo changes.
+            Tempo values are quantized accordingly to the ``nb_tempos`` and ``tempo_range`` entries in the
+            ``additional_tokens`` dictionary (default is 32 tempos from 40 to 250). (default: False)
+    :param use_time_signatures: will use ``TimeSignature`` tokens, if the tokenizer is compatible.
+            `TimeSignature` tokens will specify the current time signature. It is only implemented with
+            :ref:`REMIPlus`, :ref:`Octuple` and :ref:`Octuple Mono` atow. (default: False)
+    :param use_programs: will use ``Program`` tokens, if the tokenizer is compatible.
+            Used to specify an instrument / MIDI program. :ref:`REMIPlus`, :ref:`Octuple`, :ref:`MuMIDI` and
+            :ref:`MuMIDI` natively handle `Program` tokens. This option will be set automatically to true for
+            these tokenizations. For other tokenizations, MidiTok only offers the possibility to include these
+            tokens in the vocabulary for you, but won't use them. MidiTok leaves you the choice / task to represent
+            the program information the way you want. You can do it as in
+            `LakhNES <https://github.com/chrisdonahue/LakhNES>`_ or
+            `MMM <https://metacreation.net/mmm-multi-track-music-machine/>`_. (default: False)
     :param rest_range: range of the rest to use, in beats, as a tuple (beat_division, max_rest_in_beats).
             The beat division divides a beat to determine the minimum rest to represent.
             The minimum rest must be divisible by 2 and lower than the first beat resolution
@@ -150,6 +174,7 @@ class TokenizerConfig:
     :param time_signature_range: TODO complete
     :param programs: sequence of MIDI programs to use. Note that `-1` is used and reserved for drums tracks.
             (default: from -1 to 127 included)
+    :param **kwargs: additional parameters that will be saved in `config.additional_params`.
     """
 
     def __init__(
@@ -171,6 +196,7 @@ class TokenizerConfig:
         tempo_range: Tuple[int, int] = TEMPO_RANGE,
         time_signature_range: Tuple[int, int] = TIME_SIGNATURE_RANGE,
         programs: Sequence[int] = PROGRAMS,
+        **kwargs,
     ):
         # Global parameters
         self.pitch_range: Tuple[int, int] = pitch_range
@@ -190,12 +216,10 @@ class TokenizerConfig:
 
         # Chord params
         self.chord_maps: Dict[str, Tuple] = chord_maps
-        self.chord_tokens_with_root_note: bool = (
-            chord_tokens_with_root_note  # Tokens will look as "Chord_C:maj"
-        )
-        self.chord_unknown: Tuple[
-            int, int
-        ] = chord_unknown  # (3, 6) for chords between 3 and 5 notes
+        # Tokens will look as "Chord_C:maj"
+        self.chord_tokens_with_root_note: bool = chord_tokens_with_root_note
+        # (3, 6) for chords between 3 and 5 notes
+        self.chord_unknown: Tuple[int, int] = chord_unknown
 
         # Tempo params
         self.nb_tempos: int = nb_tempos  # nb of tempo bins for additional tempo tokens, quantized like velocities
@@ -206,6 +230,9 @@ class TokenizerConfig:
 
         # Programs
         self.programs: Sequence[int] = programs
+
+        # Additional params
+        self.additional_params = kwargs
 
     @classmethod
     def from_dict(cls, input_dict: Dict[str, Any], **kwargs):
