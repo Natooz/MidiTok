@@ -255,13 +255,17 @@ class TokenizerConfig:
         config = cls(**input_dict, **kwargs)
         return config
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self, serialize: bool = False) -> Dict[str, Any]:
         r"""
         Serializes this instance to a Python dictionary.
 
+        :param serialize: will serialize the dictionary before returning it, so it can be saved to a JSON file.
         :return: Dictionary of all the attributes that make up this configuration instance.
         """
-        return deepcopy(self.__dict__)
+        dict_config = deepcopy(self.__dict__)
+        if serialize:
+            self.__serialize_dict(dict_config)
+        return dict_config
 
     def __serialize_dict(self, dict_: Dict):
         r"""
@@ -285,8 +289,7 @@ class TokenizerConfig:
             out_path = Path(out_path)
         out_path.parent.mkdir(parents=True, exist_ok=True)
 
-        dict_config = self.to_dict()
-        self.__serialize_dict(dict_config)
+        dict_config = self.to_dict(serialize=True)
         dict_config["beat_res"] = {
             f"{k1}_{k2}": v for (k1, k2), v in dict_config["beat_res"].items()
         }

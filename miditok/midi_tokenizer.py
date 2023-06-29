@@ -1426,7 +1426,7 @@ class MIDITokenizer(ABC):
                 "_vocab_base_byte_to_token"
             ] = self._vocab_base_byte_to_token
 
-        dict_config = self.config.to_dict()
+        dict_config = self.config.to_dict(serialize=True)
         dict_config["beat_res"] = {
             f"{k1}_{k2}": v for (k1, k2), v in dict_config["beat_res"].items()
         }
