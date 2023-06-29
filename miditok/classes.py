@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Union, Any, List, Sequence, Dict, Tuple
 from copy import deepcopy
+from pathlib import Path
+import json
 
 from .constants import (
     PITCH_RANGE,
@@ -20,6 +22,7 @@ from .constants import (
     TEMPO_RANGE,
     TIME_SIGNATURE_RANGE,
     PROGRAMS,
+    CURRENT_VERSION_PACKAGE,
 )
 
 
@@ -243,6 +246,10 @@ class TokenizerConfig:
         :param kwargs: Additional parameters from which to initialize the configuration object.
         :returns: ``AdditionalTokensConfig``: The configuration object instantiated from those parameters.
         """
+        input_dict.update(**input_dict["additional_params"])
+        input_dict.pop("additional_params")
+        if "miditok_version" in input_dict:
+            input_dict.pop("miditok_version")
         config = cls(**input_dict, **kwargs)
         return config
 
@@ -253,6 +260,45 @@ class TokenizerConfig:
         :return: Dictionary of all the attributes that make up this configuration instance.
         """
         return deepcopy(self.__dict__)
+
+    def save_to_json(self, out_path: Union[str, Path]):
+        r"""
+        Save a tokenizer configuration object to the `out_path` path, so that it can be re-loaded later.
+
+        :param out_path: path to the output configuration JSON file.
+        """
+        if isinstance(out_path, str):
+            out_path = Path(out_path)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+
+        dict_config = self.to_dict()
+        dict_config["beat_res"] = {
+            f"{k1}_{k2}": v for (k1, k2), v in dict_config["beat_res"].items()
+        }
+        dict_config["miditok_version"] = CURRENT_VERSION_PACKAGE
+
+        with open(out_path, "w") as outfile:
+            json.dump(dict_config, outfile, indent=4)
+
+    @classmethod
+    def load_from_json(cls, config_file_path: Union[str, Path]) -> "TokenizerConfig":
+        r"""
+        Loads a tokenizer configuration from the `config_path` path.
+
+        :param config_file_path: path to the configuration JSON file to load.
+        """
+        if isinstance(config_file_path, str):
+            config_file_path = Path(config_file_path)
+
+        with open(config_file_path) as param_file:
+            dict_config = json.load(param_file)
+
+        dict_config["beat_res"] = {
+            tuple(map(int, beat_range.split("_"))): res
+            for beat_range, res in dict_config["beat_res"].items()
+        }
+
+        return cls.from_dict(dict_config)
 
     def __eq__(self, other):
         # We don't use the == operator as it yields False when comparing lists and tuples containing the same elements

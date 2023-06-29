@@ -19,23 +19,35 @@ ADDITIONAL_TOKENS_TEST = {
     "tempo_range": (40, 250),
     "time_signature_range": (16, 2),
 }
+tokenizations = [
+    "MIDILike",
+    "TSD",
+    "Structured",
+    "REMI",
+    "REMIPlus",
+    "CPWord",
+    "Octuple",
+    "OctupleMono",
+    "MuMIDI",
+]
+
+
+def test_saving_loading_tokenizer_config():
+    for tokenization in tokenizations:
+        config1 = miditok.TokenizerConfig()
+        config1.save_to_json(f"./tests/configs/tok_conf_{tokenization}.json")
+
+        config2 = miditok.TokenizerConfig.load_from_json(f"./tests/configs/tok_conf_{tokenization}.json")
+
+        assert config1 == config2
+        config1.pitch_range = (0, 777)
+        assert config1 != config2
 
 
 def test_saving_loading_tokenizer():
     r"""Tests to create tokenizers, save their config, and load it back.
     If all went well the tokenizer should be identical.
     """
-    tokenizations = [
-        "MIDILike",
-        "TSD",
-        "Structured",
-        "REMI",
-        "REMIPlus",
-        "CPWord",
-        "Octuple",
-        "OctupleMono",
-        "MuMIDI",
-    ]
 
     for tokenization in tokenizations:
         tokenizer_config = miditok.TokenizerConfig(**ADDITIONAL_TOKENS_TEST)
@@ -54,4 +66,5 @@ def test_saving_loading_tokenizer():
 
 
 if __name__ == "__main__":
+    test_saving_loading_tokenizer_config()
     test_saving_loading_tokenizer()
