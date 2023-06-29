@@ -27,12 +27,13 @@ from .tests_utils import (
 # Special beat res for test, up to 64 beats so the duration and time-shift values are
 # long enough for MIDI-Like and Structured encodings, and with a single beat resolution
 BEAT_RES_TEST = {(0, 64): 8}
-ADDITIONAL_TOKENS_TEST = {
-    "Chord": False,  # set false to speed up tests as it takes some time on maestro MIDIs
-    "Rest": True,
-    "Tempo": True,
-    "TimeSignature": True,
-    "Program": False,
+TOKENIZER_PARAMS = {
+    "beat_res": BEAT_RES_TEST,
+    "use_chords": False,  # set false to speed up tests as it takes some time on maestro MIDIs
+    "use_rests": True,
+    "use_tempos": True,
+    "use_time_signatures": True,
+    "use_programs": False,
     "rest_range": (4, 16),
     "nb_tempos": 32,
     "tempo_range": (40, 250),
@@ -76,16 +77,15 @@ def test_one_track_midi_to_tokens_to_midi(
         has_errors = False
 
         for tokenization in tokenizations:
-            add_tokens = deepcopy(ADDITIONAL_TOKENS_TEST)
+            tokenizer_config = miditok.TokenizerConfig(**TOKENIZER_PARAMS)
             # Increase the number of rest just to cover very long pauses / rests in test examples
             if tokenization in ["MIDILike", "TSD"]:
-                add_tokens["rest_range"] = (
-                    add_tokens["rest_range"][0],
+                tokenizer_config.rest_range = (
+                    tokenizer_config.rest_range[0],
                     max(t[1] for t in BEAT_RES_TEST),
                 )
-            tokenizer = getattr(miditok, tokenization)(
-                beat_res=BEAT_RES_TEST,
-                additional_tokens=add_tokens,
+            tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
+                tokenizer_config=tokenizer_config
             )
 
             # printing the tokenizer shouldn't fail
@@ -139,7 +139,7 @@ def test_one_track_midi_to_tokens_to_midi(
             tracks.append(track)
 
             # Checks tempos
-            if tempo_changes is not None and tokenizer.additional_tokens["Tempo"]:
+            if tempo_changes is not None and tokenizer.config.use_tempos:
                 tempo_errors = tempo_changes_equals(midi.tempo_changes, tempo_changes)
                 if len(tempo_errors) > 0:
                     has_errors = True
@@ -149,10 +149,7 @@ def test_one_track_midi_to_tokens_to_midi(
                     )
 
             # Checks time signatures
-            if (
-                time_sig_changes is not None
-                and tokenizer.additional_tokens["TimeSignature"]
-            ):
+            if time_sig_changes is not None and tokenizer.config.use_time_signatures:
                 time_sig_errors = time_signature_changes_equals(
                     midi.time_signature_changes, time_sig_changes
                 )

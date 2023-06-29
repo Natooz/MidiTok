@@ -270,10 +270,11 @@ def get_offsets(
                     pitch_voc_idx, int(np.min(np.concatenate(ids_pitch)))
                 ].split("_")[1]
         offset_up = min(
-            nb_octave_offset, (tokenizer.pitch_range.stop - 1 - int(max_pitch)) // 12
+            nb_octave_offset,
+            (tokenizer.config.pitch_range[1] - 1 - int(max_pitch)) // 12,
         )
         offset_down = min(
-            nb_octave_offset, (int(min_pitch) - tokenizer.pitch_range.start) // 12
+            nb_octave_offset, (int(min_pitch) - tokenizer.config.pitch_range[0]) // 12
         )
 
         off = []

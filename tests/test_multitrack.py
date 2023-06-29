@@ -34,12 +34,13 @@ from .tests_utils import (
 # Special beat res for test, up to 16 beats so the duration and time-shift values are
 # long enough for MIDI-Like and Structured encodings, and with a single beat resolution
 BEAT_RES_TEST = {(0, 16): 8}
-ADDITIONAL_TOKENS_TEST = {
-    "Chord": True,
-    "Rest": True,
-    "Tempo": True,
-    "TimeSignature": True,
-    "Program": True,
+TOKENIZER_PARAMS = {
+    "beat_res": BEAT_RES_TEST,
+    "use_chords": True,
+    "use_rests": True,
+    "use_tempos": True,
+    "use_time_signatures": True,
+    "use_programs": True,
     "chord_maps": miditok.constants.CHORD_MAPS,
     "chord_tokens_with_root_note": True,  # Tokens will look as "Chord_C:maj"
     "chord_unknown": (3, 6),
@@ -87,9 +88,9 @@ def test_multitrack_midi_to_tokens_to_midi(
         has_errors = False
 
         for tokenization in tokenizations:
-            tokenizer = getattr(miditok, tokenization)(
-                beat_res=BEAT_RES_TEST,
-                additional_tokens=deepcopy(ADDITIONAL_TOKENS_TEST),
+            tokenizer_config = miditok.TokenizerConfig(**TOKENIZER_PARAMS)
+            tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
+                tokenizer_config=tokenizer_config
             )
 
             # Process the MIDI
@@ -159,7 +160,7 @@ def test_multitrack_midi_to_tokens_to_midi(
 
             # Checks tempos
             if (
-                tokenizer.additional_tokens["Tempo"] and tokenization != "MuMIDI"
+                tokenizer.config.use_tempos and tokenization != "MuMIDI"
             ):  # MuMIDI doesn't decode tempos
                 tempo_errors = tempo_changes_equals(
                     midi_to_compare.tempo_changes, new_midi.tempo_changes
@@ -172,7 +173,7 @@ def test_multitrack_midi_to_tokens_to_midi(
                     )
 
             # Checks time signatures
-            if tokenizer.additional_tokens["TimeSignature"] and tokenization in [
+            if tokenizer.config.use_time_signatures and tokenization in [
                 "Octuple",
                 "REMIPlus",
             ]:

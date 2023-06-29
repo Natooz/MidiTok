@@ -70,7 +70,7 @@ def detect_chords(
     specify_root_note: bool = True,
     beat_res: int = 4,
     onset_offset: int = 1,
-    unknown_chords_nb_notes_range: Union[bool, Tuple[int]] = False,
+    unknown_chords_nb_notes_range: Tuple[int, int] = None,
     simul_notes_limit: int = 10,
 ) -> List[Event]:
     r"""Chord detection method. Make sure to sort notes by start time then pitch before:
@@ -84,14 +84,16 @@ def detect_chords(
     :param notes: notes to analyse (sorted by starting time, them pitch)
     :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
     :param chord_maps: list of chord maps, to be given as a dictionary where keys are chord qualities
-                    (e.g. "maj") and values pitch maps as tuples of integers (e.g. (0, 4, 7)).
-                    You can use or take as an example ``miditok.constants.CHORD_MAPS``.
-    :param specify_root_note: the root note of each chord will be specified in Events / tokens (default: True).
+            (e.g. "maj") and values pitch maps as tuples of integers (e.g. (0, 4, 7)).
+            You can use ``miditok.constants.CHORD_MAPS`` as an example.
+    :param specify_root_note: the root note of each chord will be specified in Events / tokens.
+            Tokens will look as "Chord_C:maj". (default: True)
     :param beat_res: beat resolution, i.e. nb of samples per beat (default 4).
     :param onset_offset: maximum offset (in samples) ∈ N separating notes starts to consider them
-                    starting at the same time / onset (default is 1).
-    :param unknown_chords_nb_notes_range: will detect only chords recognized in the chord maps. If set to False,
-                    non recognized chords of *n* notes will give a *Chord_n* token (default False).
+            starting at the same time / onset (default is 1).
+    :param unknown_chords_nb_notes_range: range of number of notes to represent unknown chords.
+            If you want to represent chords that does not match any combination in ``chord_maps``, use this argument.
+            Leave ``None`` to not represent unknown chords. (default: None)
     :param simul_notes_limit: nb of simultaneous notes being processed when looking for a chord
             this parameter allows to speed up the chord detection, and must be >= 5 (default 10).
     :return: the detected chords as Event objects.
@@ -148,7 +150,7 @@ def detect_chords(
                     break
 
             # We found a chord quality, or we specify unknown chords
-            if not (unknown_chords_nb_notes_range is False and is_unknown_chord):
+            if not (unknown_chords_nb_notes_range is not None and is_unknown_chord):
                 if specify_root_note:
                     chord_quality = (
                         f"{PITCH_CLASSES[notes[count, 0] % 12]}:{chord_quality}"

@@ -31,7 +31,9 @@ def test_merge_tracks():
     merge_tracks(midi, effects=True)
     assert len(midi.instruments[0].notes) == 4 * len(original_track.notes)
     assert len(midi.instruments[0].pedals) == 2 * len(original_track.pedals)
-    assert len(midi.instruments[0].control_changes) == 2 * len(original_track.control_changes)
+    assert len(midi.instruments[0].control_changes) == 2 * len(
+        original_track.control_changes
+    )
     assert len(midi.instruments[0].pitch_bends) == 2 * len(original_track.pitch_bends)
 
 

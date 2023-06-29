@@ -11,7 +11,7 @@ from .tokenizations import (
     MMM,
 )
 from .midi_tokenizer import MIDITokenizer
-from .classes import Event, TokSequence
+from .classes import Event, TokSequence, TokenizerConfig
 
 from .utils import utils
 from .data_augmentation import data_augmentation

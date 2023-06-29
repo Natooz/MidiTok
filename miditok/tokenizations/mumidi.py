@@ -6,14 +6,9 @@ import numpy as np
 from miditoolkit import MidiFile, Instrument, Note, TempoChange
 
 from ..midi_tokenizer import MIDITokenizer, _in_as_seq, _out_as_complete_seq
-from ..classes import TokSequence, Event
+from ..classes import TokSequence, Event, TokenizerConfig
 from ..utils import detect_chords
 from ..constants import (
-    PITCH_RANGE,
-    NB_VELOCITIES,
-    BEAT_RES,
-    ADDITIONAL_TOKENS,
-    SPECIAL_TOKENS,
     TIME_DIVISION,
     TEMPO,
     MIDI_INSTRUMENTS,
@@ -46,38 +41,28 @@ class MuMIDI(MIDITokenizer):
         * Tokens are first sorted by time, then track, then pitch values.
         * Tracks with the same *Program* will be merged.
 
-    :param pitch_range: range of MIDI pitches to use
-    :param beat_res: beat resolutions, as a dictionary:
-            {(beat_x1, beat_x2): beat_res_1, (beat_x2, beat_x3): beat_res_2, ...}
-            The keys are tuples indicating a range of beats, ex 0 to 3 for the first bar, and
-            the values are the resolution to apply to the ranges, in samples per beat, ex 8
-    :param nb_velocities: number of velocity bins
-    :param additional_tokens: additional tokens (chords, time signature, rests, tempo...) to use,
-            to be given as a dictionary. (default: None is used)
-    :param special_tokens: list of special tokens. This must be given as a list of strings given
-            only the names of the tokens. (default: ``["PAD", "BOS", "EOS", "MASK"]``)
+    :param tokenizer_config: the tokenizer's configuration, as a :class:`miditok.classes.TokenizerConfig` object.
+    :param drum_pitch_range: range of used MIDI pitches for drums exclusively
     :param params: path to a tokenizer config file. This will override other arguments and
             load the tokenizer based on the config file. This is particularly useful if the
             tokenizer learned Byte Pair Encoding. (default: None)
-    :param drum_pitch_range: range of used MIDI pitches for drums exclusively
     """
 
     def __init__(
         self,
-        pitch_range: range = PITCH_RANGE,
-        beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
-        nb_velocities: int = NB_VELOCITIES,
-        additional_tokens: Dict[str, bool] = ADDITIONAL_TOKENS,
-        special_tokens: List[str] = SPECIAL_TOKENS,
+        tokenizer_config: TokenizerConfig = None,
+        drum_pitch_range: Tuple[int, int] = DRUM_PITCH_RANGE,
         params: Union[str, Path] = None,
-        drum_pitch_range: range = DRUM_PITCH_RANGE,
     ):
-        additional_tokens["Rest"] = False
-        additional_tokens["TimeSignature"] = False  # not compatible
         self.drum_pitch_range = drum_pitch_range
-        self.programs = additional_tokens.get("programs", list(range(-1, 128)))
         # used in place of positional encoding
         self.max_bar_embedding = 60  # this attribute might increase during encoding
+        super().__init__(tokenizer_config, True, params=params)
+
+    def _tweak_config_before_creating_voc(self):
+        self.config.use_rests = False
+        self.config.use_time_signatures = False
+
         self.vocab_types_idx = {
             "Pitch": 0,
             "DrumPitch": 0,
@@ -89,21 +74,12 @@ class MuMIDI(MIDITokenizer):
             "Velocity": -2,
             "Duration": -1,
         }
-        if additional_tokens["Chord"]:
+        if self.config.use_chords:
             self.vocab_types_idx["Chord"] = 0
-        if additional_tokens["Rest"]:
+        if self.config.use_rests:
             self.vocab_types_idx["Rest"] = 0
-        if additional_tokens["Tempo"]:
+        if self.config.use_tempos:
             self.vocab_types_idx["Tempo"] = -3
-        super().__init__(
-            pitch_range,
-            beat_res,
-            nb_velocities,
-            additional_tokens,
-            special_tokens,
-            True,
-            params=params,
-        )
 
     def save_params(
         self, out_path: Union[str, Path, PurePath], additional_attributes: Dict = None
@@ -121,22 +97,11 @@ class MuMIDI(MIDITokenizer):
             additional_attributes = {}
         additional_attributes_tmp = {
             "max_bar_embedding": self.max_bar_embedding,
-            "programs": self.programs,
-            "drum_pitch_range": (
-                self.drum_pitch_range.start,
-                self.drum_pitch_range.stop,
-            ),
+            "programs": self.config.programs,
+            "drum_pitch_range": self.drum_pitch_range,
             **additional_attributes,
         }
         super().save_params(out_path, additional_attributes_tmp)
-
-    def _load_params(self, config_file_path: Union[str, Path, PurePath]):
-        r"""Load the parameters of the tokenizer from a config file.
-
-        :param config_file_path: path to the tokenizer config file (encoded as json).
-        """
-        super()._load_params(config_file_path)
-        self.drum_pitch_range = range(*self.drum_pitch_range)
 
     @_out_as_complete_seq
     def _midi_to_tokens(self, midi: MidiFile, *args, **kwargs) -> TokSequence:
@@ -183,7 +148,7 @@ class MuMIDI(MIDITokenizer):
         # Convert each track to tokens (except first pos to track time)
         note_tokens = []
         for track in midi.instruments:
-            if track.program in self.programs:
+            if track.program in self.config.programs:
                 note_tokens += self.track_to_tokens(track)
 
         note_tokens.sort(
@@ -196,7 +161,7 @@ class MuMIDI(MIDITokenizer):
             for j in range(1, len(toto[i])):
                 toto[i][j] = self[j, toto[i][j]]"""
 
-        ticks_per_sample = midi.ticks_per_beat / max(self.beat_res.values())
+        ticks_per_sample = midi.ticks_per_beat / max(self.config.beat_res.values())
         ticks_per_bar = midi.ticks_per_beat * 4
         tokens = []
 
@@ -210,7 +175,7 @@ class MuMIDI(MIDITokenizer):
         ].tempo
         for note_token in note_tokens:
             # (Tempo) update tempo values current_tempo
-            if self.additional_tokens["Tempo"]:
+            if self.config.use_tempos:
                 # If the current tempo is not the last one
                 if current_tempo_idx + 1 < len(
                     self.current_midi_metadata["tempo_changes"]
@@ -242,7 +207,7 @@ class MuMIDI(MIDITokenizer):
                             f"BarPosEnc_{current_bar + i + 1}",
                             "PositionPosEnc_None",
                         ]
-                        if self.additional_tokens["Tempo"]:
+                        if self.config.use_tempos:
                             bar_token.append(f"Tempo_{current_tempo}")
                         tokens.append(bar_token)
                     current_bar += nb_new_bars
@@ -252,7 +217,7 @@ class MuMIDI(MIDITokenizer):
                     f"BarPosEnc_{current_bar}",
                     f"PositionPosEnc_{current_pos}",
                 ]
-                if self.additional_tokens["Tempo"]:
+                if self.config.use_tempos:
                     pos_token.append(f"Tempo_{current_tempo}")
                 tokens.append(pos_token)
             # Program (track)
@@ -263,7 +228,7 @@ class MuMIDI(MIDITokenizer):
                     f"BarPosEnc_{current_bar}",
                     f"PositionPosEnc_{current_pos}",
                 ]
-                if self.additional_tokens["Tempo"]:
+                if self.config.use_tempos:
                     track_token.append(f"Tempo_{current_tempo}")
                 tokens.append(track_token)
 
@@ -271,7 +236,7 @@ class MuMIDI(MIDITokenizer):
             note_token[0] = str(note_token[0])
             note_token.insert(1, f"BarPosEnc_{current_bar}")
             note_token.insert(2, f"PositionPosEnc_{current_pos}")
-            if self.additional_tokens["Tempo"]:
+            if self.config.use_tempos:
                 note_token.insert(3, f"Tempo_{current_tempo}")
             tokens.append(note_token)
 
@@ -324,14 +289,14 @@ class MuMIDI(MIDITokenizer):
                 )
 
         # Adds chord tokens if specified
-        if self.additional_tokens["Chord"] and not track.is_drum:
+        if self.config.use_chords and not track.is_drum:
             chords = detect_chords(
                 track.notes,
                 self._current_midi_metadata["time_division"],
-                chord_maps=self.additional_tokens["chord_maps"],
-                specify_root_note=self.additional_tokens["chord_tokens_with_root_note"],
+                chord_maps=self.config.chord_maps,
+                specify_root_note=self.config.chord_tokens_with_root_note,
                 beat_res=self._first_beat_res,
-                unknown_chords_nb_notes_range=self.additional_tokens["chord_unknown"],
+                unknown_chords_nb_notes_range=self.config.chord_unknown,
             )
             unsqueezed = []
             for c in range(len(chords)):
@@ -373,11 +338,11 @@ class MuMIDI(MIDITokenizer):
         :return: the midi object (miditoolkit.MidiFile)
         """
         assert (
-            time_division % max(self.beat_res.values()) == 0
-        ), f"Invalid time division, please give one divisible by {max(self.beat_res.values())}"
+            time_division % max(self.config.beat_res.values()) == 0
+        ), f"Invalid time division, please give one divisible by {max(self.config.beat_res.values())}"
         midi = MidiFile(ticks_per_beat=time_division)
         midi.tempo_changes.append(TempoChange(TEMPO, 0))
-        ticks_per_sample = time_division // max(self.beat_res.values())
+        ticks_per_sample = time_division // max(self.config.beat_res.values())
 
         tracks = {}
         current_tick = 0
@@ -470,12 +435,12 @@ class MuMIDI(MIDITokenizer):
         vocab = [[] for _ in range(3)]
 
         # PITCH & DRUM PITCHES & BAR & POSITIONS & PROGRAM
-        vocab[0] += [f"Pitch_{i}" for i in self.pitch_range]
-        vocab[0] += [f"DrumPitch_{i}" for i in self.drum_pitch_range]
+        vocab[0] += [f"Pitch_{i}" for i in range(*self.config.pitch_range)]
+        vocab[0] += [f"DrumPitch_{i}" for i in range(*self.drum_pitch_range)]
         vocab[0] += ["Bar_None"]  # new bar token
-        nb_positions = max(self.beat_res.values()) * 4  # 4/* time signature
+        nb_positions = max(self.config.beat_res.values()) * 4  # 4/* time signature
         vocab[0] += [f"Position_{i}" for i in range(nb_positions)]
-        vocab[0] += [f"Program_{program}" for program in self.programs]
+        vocab[0] += [f"Program_{program}" for program in self.config.programs]
 
         # BAR POS ENC
         vocab[1] += [f"BarPosEnc_{i}" for i in range(self.max_bar_embedding)]
@@ -487,15 +452,15 @@ class MuMIDI(MIDITokenizer):
         vocab[2] += [f"PositionPosEnc_{i}" for i in range(nb_positions)]  # pos enc
 
         # CHORD
-        if self.additional_tokens["Chord"]:
+        if self.config.use_chords:
             vocab[0] += self._create_chords_tokens()
 
         # REST
-        if self.additional_tokens["Rest"]:
+        if self.config.use_rests:
             vocab[0] += [f'Rest_{".".join(map(str, rest))}' for rest in self.rests]
 
         # TEMPO
-        if self.additional_tokens["Tempo"]:
+        if self.config.use_tempos:
             vocab.append([f"Tempo_{i}" for i in self.tempos])
 
         # Velocity and Duration in last position
@@ -525,7 +490,7 @@ class MuMIDI(MIDITokenizer):
         dic["Pitch"] = ["Pitch", "Program", "Bar", "Position"]
         dic["DrumPitch"] = ["DrumPitch", "Program", "Bar", "Position"]
 
-        if self.additional_tokens["Chord"]:
+        if self.config.use_chords:
             dic["Program"] += ["Chord"]
             dic["Chord"] = ["Pitch"]
 
