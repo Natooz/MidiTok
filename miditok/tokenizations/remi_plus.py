@@ -51,6 +51,11 @@ class REMIPlus(MIDITokenizer):
         self.config.use_rests = False
         # self.unique_track = True
 
+        # In case the tokenizer has been created without specifying any config or params file path
+        if "max_bar_embedding" not in self.config.additional_params:
+            # If used, this attribute might increase over tokenizations, if the tokenizer encounter longer MIDIs
+            self.config.additional_params["max_bar_embedding"] = None
+
     def __notes_to_events(self, tracks: List[Instrument]) -> List[Event]:
         """Convert multi-track notes into one Token sequence.
 

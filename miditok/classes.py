@@ -4,6 +4,8 @@ from copy import deepcopy
 from pathlib import Path
 import json
 
+from numpy import ndarray
+
 from .constants import (
     PITCH_RANGE,
     BEAT_RES,
@@ -89,7 +91,7 @@ class TokSequence:
             )
 
     def __eq__(self, other) -> bool:
-        """Checks if too sequences are equal.
+        r"""Checks if too sequences are equal.
         This is performed by comparing their attributes (ids, tokens...).
         **Both sequences must have at least one common attribute initialized (not None) for this method to work,
         otherwise it will return False.**
@@ -239,7 +241,7 @@ class TokenizerConfig:
 
     @classmethod
     def from_dict(cls, input_dict: Dict[str, Any], **kwargs):
-        """
+        r"""
         Instantiates an ``AdditionalTokensConfig`` from a Python dictionary of parameters.
 
         :param input_dict: Dictionary that will be used to instantiate the configuration object.
@@ -254,16 +256,28 @@ class TokenizerConfig:
         return config
 
     def to_dict(self) -> Dict[str, Any]:
-        """
+        r"""
         Serializes this instance to a Python dictionary.
 
         :return: Dictionary of all the attributes that make up this configuration instance.
         """
         return deepcopy(self.__dict__)
 
+    def __serialize_dict(self, dict_: Dict):
+        r"""
+        Converts numpy arrays to lists recursively within a dictionary.
+
+        :param dict_: dictionary to serialize
+        """
+        for key in dict_:
+            if isinstance(dict_[key], dict):
+                self.__serialize_dict(dict_[key])
+            elif isinstance(dict_[key], ndarray):
+                dict_[key] = dict_[key].tolist()
+
     def save_to_json(self, out_path: Union[str, Path]):
         r"""
-        Save a tokenizer configuration object to the `out_path` path, so that it can be re-loaded later.
+        Saves a tokenizer configuration object to the `out_path` path, so that it can be re-loaded later.
 
         :param out_path: path to the output configuration JSON file.
         """
@@ -272,6 +286,7 @@ class TokenizerConfig:
         out_path.parent.mkdir(parents=True, exist_ok=True)
 
         dict_config = self.to_dict()
+        self.__serialize_dict(dict_config)
         dict_config["beat_res"] = {
             f"{k1}_{k2}": v for (k1, k2), v in dict_config["beat_res"].items()
         }

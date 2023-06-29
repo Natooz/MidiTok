@@ -47,13 +47,18 @@ class MMM(MIDITokenizer):
     def _tweak_config_before_creating_voc(self):
         self.config.use_programs = True
         self.config.use_rests = False
-        # Recreate densities here just in case density_bins_max was loaded from params
-        self.config.additional_params["note_densities"] = np.linspace(
-            0,
-            self.config.additional_params["density_bins_max"][1],
-            self.config.additional_params["density_bins_max"][0] + 1,
-            dtype=np.intc,
-        )
+        # Recreate densities here just in case density_bins_max was loaded from params (list to np array)
+        if "note_densities" in self.config.additional_params:
+            if isinstance(self.config.additional_params["note_densities"], (list, tuple)):
+                self.config.additional_params["note_densities"] = \
+                    np.array(self.config.additional_params["note_densities"])
+        else:
+            self.config.additional_params["note_densities"] = np.linspace(
+                0,
+                self.config.additional_params["density_bins_max"][1],
+                self.config.additional_params["density_bins_max"][0] + 1,
+                dtype=np.intc,
+            )
 
     def track_to_tokens(self, track: Instrument) -> List[Event]:
         r"""Converts a track (miditoolkit.Instrument object) into a sequence of Event (:class:`miditok.Event`).
@@ -65,10 +70,11 @@ class MMM(MIDITokenizer):
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
         time_division = self._current_midi_metadata["time_division"]
         dur_bins = self._durations_ticks[self._current_midi_metadata["time_division"]]
+        note_density_bins = self.config.additional_params["note_densities"]
 
         # Creates first events
         note_density = len(track.notes) / self._current_midi_metadata["max_tick"]
-        note_density = int(np.argmin(np.abs(dur_bins - note_density)))
+        note_density = int(np.argmin(np.abs(note_density_bins - note_density)))
         events: List[Event] = [
             Event("Track", "Start", 0),
             Event(
