@@ -7,6 +7,8 @@ This page features the bases of MidiTok, of how tokenizers work.
 Tokens and vocabulary
 ------------------------
 
+A token is a distinct element, part of a sequence of tokens. In natural language, a token can be a character, a subword or a word. A sentence can then be tokenized into a sequence of tokens representing the words and punctuation.
+For symbolic music, tokens can represent the values of the note attributes (pitch, valocity, duration) or time events. These are the "basic" tokens, that can be compared to the characters in natural language. With :ref:`Byte Pair Encoding (BPE)`, tokens can represent **successions** of these basic tokens.
 A token can take three forms, which we name by convention:
 
 * Token (``string``): the form describing it, e.g. *Pitch_50*.
@@ -14,6 +16,16 @@ A token can take three forms, which we name by convention:
 * Byte (``string``): an unique associated byte, used internally for :ref:`Byte Pair Encoding (BPE)`.
 
 MidiTok works with :ref:`TokSequence` objects to output token sequences of represented by these three forms.
+
+Vocabulary
+------------------------
+
+The vocabulary of a tokenizer acts as a lookup table, linking tokens (string / byte) to their ids (integer). The vocabulary is an attribute of the tokenizer and can be accessed with ``tokenizer.vocab``. The vocabulary is a Python dictionary binding tokens (keys) to their ids (values).
+For tokenizations with embedding embedding pooling (e.g. :ref:`CPWord` or :ref:`Octuple`), ``tokenizer.vocab`` will be a list of ``Vocabulary`` objects, and the ``tokenizer.is_multi_vocab`` property will be ``True``.
+
+**With Byte Pair Encoding:**
+``tokenizer.vocab`` holds all the basic tokens describing the note and time attributes of music. By analogy with text, these tokens can be seen as unique characters.
+After training a tokenizer with :ref:`Byte Pair Encoding (BPE)`, a new vocabulary is built with newly created tokens from pairs of basic tokens. This vocabulary can be accessed with ``tokenizer.vocab_bpe``, and binds tokens as bytes (string) to their associated ids (int). This is the vocabulary of the 🤗tokenizers BPE model.
 
 TokSequence
 ------------------------
@@ -26,35 +38,28 @@ You can use the :py:func:`miditok.MIDITokenizer.complete_sequence` method to aut
     :noindex:
     :members:
 
-Vocabulary
-------------------------
-
-The vocabulary of a tokenizer acts as a lookup table, linking tokens (string) to their ids (integer). The vocabulary is an attribute of the tokenizer and can be accessed with ``tokenizer.vocab``. The vocabulary is a Python dictionary binding tokens (keys) to their ids (values).
-For tokenizations with embedding embedding pooling (e.g. :ref:`CPWord` or :ref:`Octuple`), ``tokenizer.vocab`` will be a list of ``Vocabulary`` objects, and the ``tokenizer.is_multi_vocab`` property will be ``True``.
-
-**With Byte Pair Encoding:**
-``tokenizer.vocab`` holds all the basic tokens describing the note and time attributes of music. By analogy with text, these tokens can be seen as unique characters.
-After training a tokenizer with :ref:`Byte Pair Encoding (BPE)`, a new vocabulary is built with newly created tokens from pairs of basic tokens. This vocabulary can be accessed with ``tokenizer.vocab_bpe``, and binds tokens as bytes (string) to their associated ids (int). This is the vocabulary of the 🤗tokenizers BPE model.
-
 MIDI Tokenizer
 ------------------------
 
 MidiTok features several MIDI tokenizations, all inheriting from the :class:`miditok.MIDITokenizer` class.
-The documentation of the arguments teaches you how to create a custom tokenizer.
+You can customize your tokenizer by creating it with a custom :ref:`Tokenizer config`.
 
 .. autoclass:: miditok.MIDITokenizer
+    :members:
+
+Tokenizer config
+------------------------
+
+All tokenizers are initialized with common parameters, that are hold in a ``TokenizerConfig`` object, documented below. You can access a tokenizer's configuration with `tokenizer.config`.
+Some tokenizers might take additional specific arguments / parameters when creating them.
+
+.. autoclass:: miditok.TokenizerConfig
     :members:
 
 Additional tokens
 ------------------------
 
-MidiTok offers to include additional tokens on music information. You can specify them in the ``additional_tokens`` argument when creating a tokenizer.
-
-* **Chords:** indicates the presence of a chord at a certain time step. MidiTok uses a chord detection method based on onset times and duration. This allows MidiTok to detect precisely chords without ambiguity, whereas most chord detection methods in symbolic music based on chroma features can't.
-* **Rests:** includes *Rest* tokens whenever a portion of time is silent, i.e. no note is being played. This token type is decoded as a *TimeShift* event. You can choose the minimum and maximum rests values to represent with the ``rest_range`` key in the ``additional_tokens`` dictionary (default is 1/2 beat to 8 beats). Note that rests shorter than one beat are only divisible by the first beat resolution, e.g. a rest of 5/8th of a beat will be a succession of ``Rest_0.4`` and ``Rest_0.1``, where the first number indicate the rest duration in beats and the second in samples / positions.
-* **Tempos:** specifies the current tempo. This allows to train a model to predict tempo changes. Tempo values are quantized accordingly to the ``nb_tempos`` and ``tempo_range`` entries in the ``additional_tokens`` dictionary (default is 32 tempos from 40 to 250).
-* **Programs:** used to specify an instrument / MIDI program. MidiTok only offers the possibility to include these tokens in the vocabulary for you, but won't use them. If you need model multitrack symbolic music with other methods than Octuple / MuMIDI, MidiTok leaves you the choice / task to represent the track information the way you want. You can do it as in `LakhNES <https://github.com/chrisdonahue/LakhNES>`_ or `MMM <https://metacreation.net/mmm-multi-track-music-machine/>`_.
-* **Time Signature:** specifies the current time signature. Only implemented with :ref:`REMIPlus`, :ref:`Octuple` and :ref:`Octuple Mono` atow.
+MidiTok offers to include additional tokens on music information. You can specify them in the ``tokenizer_config`` argument (:class:`miditok.TokenizerConfig`) when creating a tokenizer. The :class:`miditok.TokenizerConfig` documentations specifically details the role of each of them, and their associated parameters.
 
 .. list-table:: Compatibility table of tokenizations and additional tokens.
    :header-rows: 1
@@ -131,7 +136,7 @@ To use special tokens, you must specify them with the ``special_tokens`` argumen
 * **EOS** (``EOS_None``): "End Of Sequence" tokens, indicating that a token sequence is ending. For autoregressive generation, this token can be used to stop it.
 * **MASK** (``MASK_None``): a masking token, to use when pre-training a (bidirectional) model with a self-supervised objective like `BERT <https://arxiv.org/abs/1810.04805>`_.
 
-**Note:** you can use the ``tokenizer.special_tokens`` argument to get the list of the special tokens of a tokenizer.
+**Note:** you can use the ``tokenizer.special_tokens`` property to get the list of the special tokens of a tokenizer, and ``tokenizer.special_tokens`` for their ids.
 
 Magic methods
 ------------------------
@@ -163,7 +168,7 @@ Magic methods
 ..  code-block:: python
 
     if tokenizer1 == tokenizer2:
-        print("The tokenizers have the same vocabulary!")
+        print("The tokenizers have the same vocabulary and configurations!")
 
 Save / Load tokenizer
 ------------------------

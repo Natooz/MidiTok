@@ -16,12 +16,13 @@ from tqdm import tqdm
 # Special beat res for test, up to 64 beats so the duration and time-shift values are
 # long enough for MIDI-Like and Structured encodings, and with a single beat resolution
 BEAT_RES_TEST = {(0, 4): 8, (4, 12): 4}
-ADDITIONAL_TOKENS_TEST = {
-    "Chord": False,  # set false to speed up tests as it takes some time on maestro MIDIs
-    "Rest": True,
-    "Tempo": True,
-    "TimeSignature": True,
-    "Program": False,
+TOKENIZER_PARAMS = {
+    "beat_res": BEAT_RES_TEST,
+    "use_chords": False,  # set false to speed up tests as it takes some time on maestro MIDIs
+    "use_rests": True,
+    "use_tempos": True,
+    "use_time_signatures": True,
+    "use_programs": False,
     "rest_range": (4, 16),
     "nb_tempos": 32,
     "tempo_range": (40, 250),
@@ -47,9 +48,9 @@ def test_bpe_conversion(
     first_tokenizers = []
     first_samples_bpe = {tok: [] for tok in tokenizations}
     for tokenization in tokenizations:
-        add_tokens = deepcopy(ADDITIONAL_TOKENS_TEST)
+        tokenizer_config = miditok.TokenizerConfig(**TOKENIZER_PARAMS)
         tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
-            beat_res=BEAT_RES_TEST, additional_tokens=add_tokens
+            tokenizer_config=tokenizer_config
         )
         tokenizer.tokenize_midi_dataset(
             files, Path("tests", "test_results", tokenization)

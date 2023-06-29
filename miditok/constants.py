@@ -2,7 +2,7 @@
 
 """
 
-CURRENT_VERSION_PACKAGE = "2.0.7"  # used when saving the config of a tokenizer
+CURRENT_VERSION_PACKAGE = "2.1.0"  # used when saving the config of a tokenizer
 
 MIDI_FILES_EXTENSIONS = [".mid", ".midi", ".MID", ".MIDI"]
 
@@ -12,6 +12,28 @@ MIDI_FILES_EXTENSIONS = [".mid", ".midi", ".MID", ".MIDI"]
 # List of unicode characters: https://www.fileformat.info/info/charset/UTF-8/list.htm
 CHR_ID_START = 33
 
+# MIDI encodings default parameters, used when tokenizing a dataset and using tokens
+# These are the parameters from which a MIDI file will be tokenized
+# the recommended pitches for piano in the GM2 specs are from 21 to 108
+PITCH_RANGE = (21, 109)
+BEAT_RES = {(0, 4): 8, (4, 12): 4}  # samples per beat
+# nb of velocity bins, velocities values from 0 to 127 will be quantized
+NB_VELOCITIES = 32
+# default special tokens
+SPECIAL_TOKENS = ["PAD", "BOS", "EOS", "MASK"]
+
+USE_CHORDS = False
+USE_RESTS = False
+USE_TEMPOS = False
+USE_TIME_SIGNATURE = False
+USE_PROGRAMS = False
+
+# rest params, (/min_rest, max_rest_in_BEAT)
+REST_RANGE = (2, 8)
+
+# Chord params
+# "chord_unknown" specifies the range of number of notes that can form "unknown" chords (that do not fit
+# in "chord_maps") to add in tokens
 # Known chord maps, with 0 as root note
 CHORD_MAPS = {
     "min": (0, 3, 7),
@@ -29,48 +51,28 @@ CHORD_MAPS = {
     "9maj": (0, 4, 7, 10, 14),
     "9min": (0, 4, 7, 10, 13),
 }
-UNKNOWN_CHORD_PREFIX = "ukn"
+# Tokens will look as "Chord_C:maj"
+CHORD_TOKENS_WITH_ROOT_NOTE = False
+# (3, 6) for chords between 3 and 5 notes
+CHORD_UNKNOWN = None
+UNKNOWN_CHORD_PREFIX = "ukn"  # only used in methods
 
-# MIDI encodings default parameters, used when tokenizing a dataset and using tokens
-# These are the parameters from which a MIDI file will be tokenized
-PITCH_RANGE = range(
-    21, 109
-)  # the recommended pitches for piano in the GM2 specs are from 21 to 108
-BEAT_RES = {(0, 4): 8, (4, 12): 4}  # samples per beat
-NB_VELOCITIES = (
-    32  # nb of velocity bins, velocities values from 0 to 127 will be quantized
-)
-ADDITIONAL_TOKENS = {
-    "Chord": False,
-    "Rest": False,
-    "Tempo": False,
-    "TimeSignature": False,
-    "Program": False,
-    # rest params
-    "rest_range": (
-        2,
-        8,
-    ),  # (/min_rest, max_rest_in_BEAT), first divides a whole note/rest
-    # Chord params
-    # "chord_unknown" specifies the range of number of notes that can form "unknown" chords (that do not fit
-    # in "chord_maps") to add in tokens
-    "chord_maps": CHORD_MAPS,
-    "chord_tokens_with_root_note": True,  # Tokens will look as "Chord_C:maj"
-    "chord_unknown": False,  # (3, 6) for chords between 3 and 5 notes
-    # Tempo params
-    "nb_tempos": 32,  # nb of tempo bins for additional tempo tokens, quantized like velocities
-    "tempo_range": (40, 250),  # (min_tempo, max_tempo)
-    # Time signature params
-    "time_signature_range": (8, 2),
-    # Programs
-    "programs": list(range(-1, 128)),
-}  # (max_beat_res, max_bar_length_in_NOTE)
-SPECIAL_TOKENS = ["PAD", "BOS", "EOS", "MASK"]  # default special tokens
+# Tempo params
+# nb of tempo bins for additional tempo tokens, quantized like velocities
+NB_TEMPOS = 32
+TEMPO_RANGE = (40, 250)  # (min_tempo, max_tempo)
+
+# Time signature params
+TIME_SIGNATURE_RANGE = (8, 2)
+
+# Programs
+PROGRAMS = list(range(-1, 128))
+
 
 # Tokenizers specific parameters
 # For MuMIDI, recommended range from the GM2 specs
 # note: we ignore the "Applause" at pitch 88 of the orchestra drum set, increase to 89 if you need it
-DRUM_PITCH_RANGE = range(27, 88)
+DRUM_PITCH_RANGE = (27, 88)
 MMM_DENSITY_BINS_MAX = (10, 20)
 
 # Defaults values when writing new MIDI files

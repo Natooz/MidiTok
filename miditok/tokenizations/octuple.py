@@ -1,5 +1,5 @@
 from math import ceil
-from pathlib import Path, PurePath
+from pathlib import Path
 from typing import List, Tuple, Dict, Optional, Union, Any
 
 import numpy as np
@@ -8,11 +8,6 @@ from miditoolkit import MidiFile, Instrument, Note, TempoChange, TimeSignature
 from ..midi_tokenizer import MIDITokenizer, _in_as_seq, _out_as_complete_seq
 from ..classes import TokSequence, Event
 from ..constants import (
-    PITCH_RANGE,
-    NB_VELOCITIES,
-    BEAT_RES,
-    ADDITIONAL_TOKENS,
-    SPECIAL_TOKENS,
     TIME_DIVISION,
     TIME_SIGNATURE,
     TEMPO,
@@ -44,74 +39,26 @@ class Octuple(MIDITokenizer):
     **Notes:**
     * Tokens are first sorted by time, then track, then pitch values.
     * Tracks with the same *Program* will be merged.
-
-    :param pitch_range: range of MIDI pitches to use
-    :param beat_res: beat resolutions, as a dictionary:
-            {(beat_x1, beat_x2): beat_res_1, (beat_x2, beat_x3): beat_res_2, ...}
-            The keys are tuples indicating a range of beats, ex 0 to 3 for the first bar, and
-            the values are the resolution to apply to the ranges, in samples per beat, ex 8
-    :param nb_velocities: number of velocity bins
-    :param additional_tokens: additional tokens (chords, time signature, rests, tempo...) to use,
-            to be given as a dictionary. (default: None is used)
-    :param special_tokens: list of special tokens. This must be given as a list of strings given
-            only the names of the tokens. (default: ``["PAD", "BOS", "EOS", "MASK"]``)
-    :param params: path to a tokenizer config file. This will override other arguments and
-            load the tokenizer based on the config file. This is particularly useful if the
-            tokenizer learned Byte Pair Encoding. (default: None)
     """
 
-    def __init__(
-        self,
-        pitch_range: range = PITCH_RANGE,
-        beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
-        nb_velocities: int = NB_VELOCITIES,
-        additional_tokens: Dict[str, bool] = ADDITIONAL_TOKENS,
-        special_tokens: List[str] = SPECIAL_TOKENS,
-        params: Union[str, Path] = None,
-    ):
-        additional_tokens["Chord"] = False  # Incompatible additional token
-        additional_tokens["Rest"] = False
+    def _tweak_config_before_creating_voc(self):
+        self.config.use_chords = False
+        self.config.use_rests = False
+        self.unique_track = True
+
         # used in place of positional encoding
-        self.programs = additional_tokens.get("programs", list(range(-1, 128)))
-        self.max_bar_embedding = 60  # this attribute might increase during encoding
+        # This attribute might increase over tokenizations, if the tokenizer encounter longer MIDIs
+        if "max_bar_embedding" not in self.config.additional_params:
+            self.config.additional_params["max_bar_embedding"] = 60
+
         token_types = ["Pitch", "Velocity", "Duration", "Program", "Position", "Bar"]
-        if additional_tokens["Tempo"]:
+        if self.config.use_tempos:
             token_types.append("Tempo")
-        if additional_tokens["TimeSignature"]:
+        if self.config.use_time_signatures:
             token_types.append("TimeSignature")
         self.vocab_types_idx = {
             type_: idx for idx, type_ in enumerate(token_types)
         }  # used for data augmentation
-        super().__init__(
-            pitch_range,
-            beat_res,
-            nb_velocities,
-            additional_tokens,
-            special_tokens,
-            True,
-            params=params,
-        )
-
-    def save_params(
-        self, out_path: Union[str, Path, PurePath], additional_attributes: Dict = None
-    ):
-        r"""Saves the config / parameters of the tokenizer in a json encoded file.
-        This can be useful to keep track of how a dataset has been tokenized.
-        **Note:** if you override this method, you should probably call it (super()) at the end
-            and use the additional_attributes argument.
-
-        :param out_path: output path to save the file.
-        :param additional_attributes: any additional information to store in the config file.
-                It can be used to override the default attributes saved in the parent method. (default: None)
-        """
-        if additional_attributes is None:
-            additional_attributes = {}
-        additional_attributes_tmp = {
-            "max_bar_embedding": self.max_bar_embedding,
-            "programs": self.programs,
-            **additional_attributes,
-        }
-        super().save_params(out_path, additional_attributes_tmp)
 
     @_out_as_complete_seq
     def _midi_to_tokens(self, midi: MidiFile, *args, **kwargs) -> TokSequence:
@@ -155,20 +102,20 @@ class Octuple(MIDITokenizer):
 
         # Check bar embedding limit, update if needed
         nb_bars = ceil(midi.max_tick / (midi.ticks_per_beat * 4))
-        if self.max_bar_embedding < nb_bars:
-            for i in range(self.max_bar_embedding, nb_bars):
+        if self.config.additional_params["max_bar_embedding"] < nb_bars:
+            for i in range(self.config.additional_params["max_bar_embedding"], nb_bars):
                 self.add_to_vocab(f"Bar_{i}", 5)
-            self.max_bar_embedding = nb_bars
+            self.config.additional_params["max_bar_embedding"] = nb_bars
 
         # Convert each track to tokens
         tokens = []
         for track in midi.instruments:
-            if track.program in self.programs:
+            if track.program in self.config.programs:
                 tokens += self.track_to_tokens(track)
 
         tokens.sort(
             key=lambda x: (x[0].time, x[0].desc, x[0].value)
-        )  # Sort by time then track then pitch
+        )  # Sort by time, then track, then pitch
 
         # Convert pitch events into tokens
         for time_step in tokens:
@@ -195,7 +142,7 @@ class Octuple(MIDITokenizer):
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
         time_division = self.current_midi_metadata["time_division"]
-        ticks_per_sample = time_division / max(self.beat_res.values())
+        ticks_per_sample = time_division / max(self.config.beat_res.values())
         dur_bins = self._durations_ticks[time_division]
 
         tokens = []
@@ -249,7 +196,7 @@ class Octuple(MIDITokenizer):
             ]
 
             # (Tempo)
-            if self.additional_tokens["Tempo"]:
+            if self.config.use_tempos:
                 # If the current tempo is not the last one
                 if current_tempo_idx + 1 < len(
                     self.current_midi_metadata["tempo_changes"]
@@ -269,7 +216,7 @@ class Octuple(MIDITokenizer):
                 token.append(f"Tempo_{current_tempo}")
 
             # (TimeSignature)
-            if self.additional_tokens["TimeSignature"]:
+            if self.config.use_time_signatures:
                 # If the current time signature is not the last one
                 if current_time_sig_idx + 1 < len(
                     self.current_midi_metadata["time_sig_changes"]
@@ -326,21 +273,21 @@ class Octuple(MIDITokenizer):
         :return: the midi object (miditoolkit.MidiFile)
         """
         assert (
-            time_division % max(self.beat_res.values()) == 0
-        ), f"Invalid time division, please give one divisible by {max(self.beat_res.values())}"
+            time_division % max(self.config.beat_res.values()) == 0
+        ), f"Invalid time division, please give one divisible by {max(self.config.beat_res.values())}"
         midi = MidiFile(ticks_per_beat=time_division)
-        ticks_per_sample = time_division // max(self.beat_res.values())
+        ticks_per_sample = time_division // max(self.config.beat_res.values())
         tokens = tokens.tokens
 
         tempo_changes = [TempoChange(TEMPO, 0)]
-        if self.additional_tokens["Tempo"]:
+        if self.config.use_tempos:
             for i in range(len(tokens)):
                 if tokens[i][6].split("_")[1] != "None":
                     tempo_changes = [TempoChange(int(tokens[i][6].split("_")[1]), 0)]
                     break
 
         time_sig = TIME_SIGNATURE
-        if self.additional_tokens["TimeSignature"]:
+        if self.config.use_time_signatures:
             for i in range(len(tokens)):
                 if tokens[i][-1].split("_")[1] != "None":
                     time_sig = self._parse_token_time_signature(
@@ -382,14 +329,14 @@ class Octuple(MIDITokenizer):
             )
 
             # Tempo, adds a TempoChange if necessary
-            if self.additional_tokens["Tempo"] and time_step[6].split("_")[1] != "None":
+            if self.config.use_tempos and time_step[6].split("_")[1] != "None":
                 tempo = int(time_step[6].split("_")[1])
                 if tempo != tempo_changes[-1].tempo:
                     tempo_changes.append(TempoChange(tempo, current_tick))
 
             # Time Signature, adds a TimeSignatureChange if necessary
             if (
-                self.additional_tokens["TimeSignature"]
+                self.config.use_time_signatures
                 and time_step[-1].split("_")[1] != "None"
             ):
                 time_sig = self._parse_token_time_signature(time_step[-1].split("_")[1])
@@ -463,7 +410,7 @@ class Octuple(MIDITokenizer):
         vocab = [[] for _ in range(6)]
 
         # PITCH
-        vocab[0] += [f"Pitch_{i}" for i in self.pitch_range]
+        vocab[0] += [f"Pitch_{i}" for i in range(*self.config.pitch_range)]
 
         # VELOCITY
         vocab[1] += [f"Velocity_{i}" for i in self.velocities]
@@ -474,23 +421,21 @@ class Octuple(MIDITokenizer):
         ]
 
         # PROGRAM
-        vocab[3] += [f"Program_{i}" for i in self.programs]
+        vocab[3] += [f"Program_{i}" for i in self.config.programs]
 
         # POSITION
-        nb_positions = max(self.beat_res.values()) * 4  # 4/4 time signature
+        nb_positions = max(self.config.beat_res.values()) * 4  # 4/4 time signature
         vocab[4] += [f"Position_{i}" for i in range(nb_positions)]
 
-        # BAR
-        vocab[5] += [
-            f"Bar_{i}" for i in range(self.max_bar_embedding)
-        ]  # bar embeddings (positional encoding)
+        # BAR (positional encoding)
+        vocab[5] += [f"Bar_{i}" for i in range(self.config.additional_params["max_bar_embedding"])]
 
         # TEMPO
-        if self.additional_tokens["Tempo"]:
+        if self.config.use_tempos:
             vocab.append([f"Tempo_{i}" for i in self.tempos])
 
         # TIME_SIGNATURE
-        if self.additional_tokens["TimeSignature"]:
+        if self.config.use_time_signatures:
             vocab.append([f"TimeSig_{i[0]}/{i[1]}" for i in self.time_signatures])
 
         return vocab
@@ -519,7 +464,7 @@ class Octuple(MIDITokenizer):
         """
         err = 0
         current_bar = current_pos = -1
-        current_pitches = {p: [] for p in self.programs}
+        current_pitches = {p: [] for p in self.config.programs}
 
         for token in tokens.tokens:
             if any(tok.split("_")[1] == "None" for tok in token):
@@ -537,14 +482,14 @@ class Octuple(MIDITokenizer):
             elif bar_value > current_bar:
                 current_bar = bar_value
                 current_pos = -1
-                current_pitches = {p: [] for p in self.programs}
+                current_pitches = {p: [] for p in self.config.programs}
 
             # Position
             if pos_value < current_pos:
                 has_error = True
             elif pos_value > current_pos:
                 current_pos = pos_value
-                current_pitches = {p: [] for p in self.programs}
+                current_pitches = {p: [] for p in self.config.programs}
 
             # Pitch
             if pitch_value in current_pitches[program_value]:

@@ -1,5 +1,4 @@
 from typing import List, Tuple, Dict, Optional, Union, Any
-from pathlib import Path
 
 import numpy as np
 from miditoolkit import Instrument, Note, TempoChange
@@ -7,11 +6,6 @@ from miditoolkit import Instrument, Note, TempoChange
 from ..midi_tokenizer import MIDITokenizer, _in_as_seq, _out_as_complete_seq
 from ..classes import TokSequence, Event
 from ..constants import (
-    PITCH_RANGE,
-    NB_VELOCITIES,
-    BEAT_RES,
-    ADDITIONAL_TOKENS,
-    SPECIAL_TOKENS,
     TIME_DIVISION,
     TEMPO,
     MIDI_INSTRUMENTS,
@@ -28,44 +22,13 @@ class Structured(MIDITokenizer):
     **Note:** as Structured uses *TimeShifts* events to move the time from note to
     note, it could be unsuited for tracks with long pauses. In such case, the
     maximum *TimeShift* value will be used.
-
-    :param pitch_range: range of MIDI pitches to use
-    :param beat_res: beat resolutions, as a dictionary:
-            {(beat_x1, beat_x2): beat_res_1, (beat_x2, beat_x3): beat_res_2, ...}
-            The keys are tuples indicating a range of beats, ex 0 to 3 for the first bar, and
-            the values are the resolution to apply to the ranges, in samples per beat, ex 8
-    :param nb_velocities: number of velocity bins
-    :param additional_tokens: additional tokens (chords, time signature, rests, tempo...) to use,
-            to be given as a dictionary. (default: None is used)
-    :param special_tokens: list of special tokens. This must be given as a list of strings given
-            only the names of the tokens. (default: ``["PAD", "BOS", "EOS", "MASK"]``)
-    :param params: path to a tokenizer config file. This will override other arguments and
-            load the tokenizer based on the config file. This is particularly useful if the
-            tokenizer learned Byte Pair Encoding. (default: None)
     """
 
-    def __init__(
-        self,
-        pitch_range: range = PITCH_RANGE,
-        beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
-        nb_velocities: int = NB_VELOCITIES,
-        additional_tokens: Dict[str, Union[bool, int]] = ADDITIONAL_TOKENS,
-        special_tokens: List[str] = SPECIAL_TOKENS,
-        params: Union[str, Path] = None,
-    ):
-        # No additional tokens
-        additional_tokens["Chord"] = False  # Incompatible additional token
-        additional_tokens["Rest"] = False
-        additional_tokens["Tempo"] = False
-        additional_tokens["TimeSignature"] = False
-        super().__init__(
-            pitch_range,
-            beat_res,
-            nb_velocities,
-            additional_tokens,
-            special_tokens,
-            params=params,
-        )
+    def _tweak_config_before_creating_voc(self):
+        self.config.use_chords = False
+        self.config.use_rests = False
+        self.config.use_tempos = False
+        self.config.use_time_signatures = False
 
     @_out_as_complete_seq
     def track_to_tokens(self, track: Instrument) -> TokSequence:
@@ -138,7 +101,7 @@ class Structured(MIDITokenizer):
                 )
             )
         # Adds the last note
-        if track.notes[-1].pitch not in self.pitch_range:
+        if track.notes[-1].pitch not in range(*self.config.pitch_range):
             if len(events) > 0:
                 del events[-1]
         else:
@@ -241,7 +204,7 @@ class Structured(MIDITokenizer):
         vocab = []
 
         # PITCH
-        vocab += [f"Pitch_{i}" for i in self.pitch_range]
+        vocab += [f"Pitch_{i}" for i in range(*self.config.pitch_range)]
 
         # VELOCITY
         vocab += [f"Velocity_{i}" for i in self.velocities]
@@ -258,7 +221,7 @@ class Structured(MIDITokenizer):
         ]
 
         # PROGRAM
-        if self.additional_tokens["Program"]:
+        if self.config.use_programs:
             vocab += [f"Program_{program}" for program in range(-1, 128)]
 
         return vocab

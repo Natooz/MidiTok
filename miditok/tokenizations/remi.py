@@ -1,5 +1,4 @@
 from typing import List, Tuple, Dict, Optional, Union, Any
-from pathlib import Path
 
 import numpy as np
 from miditoolkit import Instrument, Note, TempoChange
@@ -8,11 +7,6 @@ from ..midi_tokenizer import MIDITokenizer, _in_as_seq, _out_as_complete_seq
 from ..classes import TokSequence, Event
 from ..utils import detect_chords
 from ..constants import (
-    PITCH_RANGE,
-    NB_VELOCITIES,
-    BEAT_RES,
-    ADDITIONAL_TOKENS,
-    SPECIAL_TOKENS,
     TIME_DIVISION,
     TEMPO,
     MIDI_INSTRUMENTS,
@@ -31,41 +25,10 @@ class REMI(MIDITokenizer):
     of two token types: a *TempoClass* indicating if the tempo is fast or slow, and a
     *TempoValue* indicating its value. MidiTok only uses one *Tempo* token for its value
     (see :ref:`Additional tokens`).
-
-    :param pitch_range: range of MIDI pitches to use
-    :param beat_res: beat resolutions, as a dictionary:
-            {(beat_x1, beat_x2): beat_res_1, (beat_x2, beat_x3): beat_res_2, ...}
-            The keys are tuples indicating a range of beats, ex 0 to 3 for the first bar, and
-            the values are the resolution to apply to the ranges, in samples per beat, ex 8
-    :param nb_velocities: number of velocity bins
-    :param additional_tokens: additional tokens (chords, time signature, rests, tempo...) to use,
-            to be given as a dictionary. (default: None is used)
-    :param special_tokens: list of special tokens. This must be given as a list of strings given
-            only the names of the tokens. (default: ``["PAD", "BOS", "EOS", "MASK"]``)
-    :param params: path to a tokenizer config file. This will override other arguments and
-            load the tokenizer based on the config file. This is particularly useful if the
-            tokenizer learned Byte Pair Encoding. (default: None)
     """
 
-    def __init__(
-        self,
-        pitch_range: range = PITCH_RANGE,
-        beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
-        nb_velocities: int = NB_VELOCITIES,
-        additional_tokens: Dict[str, Union[bool, int]] = ADDITIONAL_TOKENS,
-        special_tokens: List[str] = SPECIAL_TOKENS,
-        params: Union[str, Path] = None,
-    ):
-        self.encoder = []
-        additional_tokens["TimeSignature"] = False  # not compatible
-        super().__init__(
-            pitch_range,
-            beat_res,
-            nb_velocities,
-            additional_tokens,
-            special_tokens,
-            params=params,
-        )
+    def _tweak_config_before_creating_voc(self):
+        self.config.use_time_signatures = False
 
     @_out_as_complete_seq
     def track_to_tokens(self, track: Instrument) -> TokSequence:
@@ -77,14 +40,14 @@ class REMI(MIDITokenizer):
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
         ticks_per_sample = self._current_midi_metadata["time_division"] / max(
-            self.beat_res.values()
+            self.config.beat_res.values()
         )
         ticks_per_bar = self._current_midi_metadata["time_division"] * 4
         dur_bins = self._durations_ticks[self._current_midi_metadata["time_division"]]
         min_rest = (
             self._current_midi_metadata["time_division"] * self.rests[0][0]
             + ticks_per_sample * self.rests[0][1]
-            if self.additional_tokens["Rest"]
+            if self.config.use_rests
             else 0
         )
 
@@ -104,7 +67,7 @@ class REMI(MIDITokenizer):
             if note.start != previous_tick:
                 # (Rest)
                 if (
-                    self.additional_tokens["Rest"]
+                    self.config.use_rests
                     and note.start > previous_note_end
                     and note.start - previous_note_end >= min_rest
                 ):
@@ -171,7 +134,7 @@ class REMI(MIDITokenizer):
                 )
 
                 # (Tempo)
-                if self.additional_tokens["Tempo"]:
+                if self.config.use_tempos:
                     # If the current tempo is not the last one
                     if current_tempo_idx + 1 < len(
                         self._current_midi_metadata["tempo_changes"]
@@ -225,14 +188,14 @@ class REMI(MIDITokenizer):
             previous_note_end = max(previous_note_end, note.end)
 
         # Adds chord events if specified
-        if self.additional_tokens["Chord"] and not track.is_drum:
+        if self.config.use_chords and not track.is_drum:
             events += detect_chords(
                 track.notes,
                 self._current_midi_metadata["time_division"],
-                chord_maps=self.additional_tokens["chord_maps"],
-                specify_root_note=self.additional_tokens["chord_tokens_with_root_note"],
+                chord_maps=self.config.chord_maps,
+                specify_root_note=self.config.chord_tokens_with_root_note,
                 beat_res=self._first_beat_res,
-                unknown_chords_nb_notes_range=self.additional_tokens["chord_unknown"],
+                unknown_chords_nb_notes_range=self.config.chord_unknown,
             )
 
         events.sort(key=lambda x: (x.time, self._order(x)))
@@ -255,11 +218,11 @@ class REMI(MIDITokenizer):
         :return: the miditoolkit instrument object and tempo changes
         """
         assert (
-            time_division % max(self.beat_res.values()) == 0
-        ), f"Invalid time division, please give one divisible by {max(self.beat_res.values())}"
+            time_division % max(self.config.beat_res.values()) == 0
+        ), f"Invalid time division, please give one divisible by {max(self.config.beat_res.values())}"
         tokens = tokens.tokens
 
-        ticks_per_sample = time_division // max(self.beat_res.values())
+        ticks_per_sample = time_division // max(self.config.beat_res.values())
         ticks_per_bar = time_division * 4
         name = "Drums" if program[1] else MIDI_INSTRUMENTS[program[0]]["name"]
         instrument = Instrument(program[0], is_drum=program[1], name=name)
@@ -338,7 +301,7 @@ class REMI(MIDITokenizer):
         vocab = ["Bar_None"]
 
         # PITCH
-        vocab += [f"Pitch_{i}" for i in self.pitch_range]
+        vocab += [f"Pitch_{i}" for i in range(*self.config.pitch_range)]
 
         # VELOCITY
         vocab += [f"Velocity_{i}" for i in self.velocities]
@@ -349,23 +312,23 @@ class REMI(MIDITokenizer):
         ]
 
         # POSITION
-        nb_positions = max(self.beat_res.values()) * 4  # 4/4 time signature
+        nb_positions = max(self.config.beat_res.values()) * 4  # 4/4 time signature
         vocab += [f"Position_{i}" for i in range(nb_positions)]
 
         # CHORD
-        if self.additional_tokens["Chord"]:
+        if self.config.use_chords:
             vocab += self._create_chords_tokens()
 
         # REST
-        if self.additional_tokens["Rest"]:
+        if self.config.use_rests:
             vocab += [f'Rest_{".".join(map(str, rest))}' for rest in self.rests]
 
         # TEMPO
-        if self.additional_tokens["Tempo"]:
+        if self.config.use_tempos:
             vocab += [f"Tempo_{i}" for i in self.tempos]
 
         # PROGRAM
-        if self.additional_tokens["Program"]:
+        if self.config.use_programs:
             vocab += [f"Program_{program}" for program in range(-1, 128)]
 
         return vocab
@@ -387,21 +350,19 @@ class REMI(MIDITokenizer):
         dic["Velocity"] = ["Duration"]
         dic["Duration"] = ["Pitch", "Position", "Bar"]
 
-        if self.additional_tokens["Program"]:
+        if self.config.use_programs:
             dic["Program"] = ["Bar"]
 
-        if self.additional_tokens["Chord"]:
+        if self.config.use_chords:
             dic["Chord"] = ["Pitch"]
             dic["Duration"] += ["Chord"]
             dic["Position"] += ["Chord"]
 
-        if self.additional_tokens["Tempo"]:
-            dic["Tempo"] = (
-                ["Chord", "Pitch"] if self.additional_tokens["Chord"] else ["Pitch"]
-            )
+        if self.config.use_tempos:
+            dic["Tempo"] = ["Chord", "Pitch"] if self.config.use_chords else ["Pitch"]
             dic["Position"] += ["Tempo"]
 
-        if self.additional_tokens["Rest"]:
+        if self.config.use_rests:
             dic["Rest"] = ["Rest", "Position", "Bar"]
             dic["Duration"] += ["Rest"]
 

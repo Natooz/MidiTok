@@ -1,5 +1,4 @@
 from typing import List, Tuple, Dict, Optional, Union, Any
-from pathlib import Path
 
 import numpy as np
 from miditoolkit import Instrument, Note, TempoChange
@@ -7,16 +6,7 @@ from miditoolkit import Instrument, Note, TempoChange
 from ..midi_tokenizer import MIDITokenizer, _in_as_seq, _out_as_complete_seq
 from ..classes import TokSequence, Event
 from ..utils import detect_chords
-from ..constants import (
-    PITCH_RANGE,
-    NB_VELOCITIES,
-    BEAT_RES,
-    ADDITIONAL_TOKENS,
-    SPECIAL_TOKENS,
-    TIME_DIVISION,
-    TEMPO,
-    MIDI_INSTRUMENTS,
-)
+from ..constants import TIME_DIVISION, TEMPO, MIDI_INSTRUMENTS
 
 
 class CPWord(MIDITokenizer):
@@ -40,51 +30,23 @@ class CPWord(MIDITokenizer):
     (one per token type). This means that the training requires to add multiple losses.
     For generation, the decoding implies sample from several distributions, which can be
     very delicate. Hence, we do not recommend this tokenization for generation with small models.
-
-    :param pitch_range: range of MIDI pitches to use
-    :param beat_res: beat resolutions, as a dictionary:
-            {(beat_x1, beat_x2): beat_res_1, (beat_x2, beat_x3): beat_res_2, ...}
-            The keys are tuples indicating a range of beats, ex 0 to 3 for the first bar, and
-            the values are the resolution to apply to the ranges, in samples per beat, ex 8
-    :param nb_velocities: number of velocity bins
-    :param additional_tokens: additional tokens (chords, time signature, rests, tempo...) to use,
-            to be given as a dictionary. (default: None is used)
-    :param special_tokens: list of special tokens. This must be given as a list of strings given
-            only the names of the tokens. (default: ``["PAD", "BOS", "EOS", "MASK"]``)
-    :param params: path to a tokenizer config file. This will override other arguments and
-            load the tokenizer based on the config file. This is particularly useful if the
-            tokenizer learned Byte Pair Encoding. (default: None)
     """
 
-    def __init__(
-        self,
-        pitch_range: range = PITCH_RANGE,
-        beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
-        nb_velocities: int = NB_VELOCITIES,
-        additional_tokens: Dict[str, bool] = ADDITIONAL_TOKENS,
-        special_tokens: List[str] = SPECIAL_TOKENS,
-        params: Union[str, Path] = None,
-    ):
-        # Indexes of additional token types within a compound token
-        additional_tokens["TimeSignature"] = False  # not compatible
+    def _tweak_config_before_creating_voc(self):
+        self.config.use_time_signatures = False
         token_types = ["Family", "Position", "Pitch", "Velocity", "Duration"]
-        add_tokens = ["Program", "Chord", "Rest", "Tempo"]
-        for add_token in add_tokens:
-            if additional_tokens[add_token]:
+        for add_tok_attr, add_token in [
+            ("use_programs", "Program"),
+            ("use_chords", "Chord"),
+            ("use_rests", "Rest"),
+            ("use_tempos", "Tempo"),
+        ]:
+            if getattr(self.config, add_tok_attr):
                 token_types.append(add_token)
         self.vocab_types_idx = {
             type_: idx for idx, type_ in enumerate(token_types)
         }  # used for data augmentation
         self.vocab_types_idx["Bar"] = 1  # same as position
-
-        super().__init__(
-            pitch_range,
-            beat_res,
-            nb_velocities,
-            additional_tokens,
-            special_tokens,
-            params=params,
-        )
 
     @_out_as_complete_seq
     def track_to_tokens(self, track: Instrument) -> TokSequence:
@@ -96,14 +58,14 @@ class CPWord(MIDITokenizer):
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
         ticks_per_sample = self._current_midi_metadata["time_division"] / max(
-            self.beat_res.values()
+            self.config.beat_res.values()
         )
         ticks_per_bar = self._current_midi_metadata["time_division"] * 4
         dur_bins = self._durations_ticks[self._current_midi_metadata["time_division"]]
         min_rest = (
             self._current_midi_metadata["time_division"] * self.rests[0][0]
             + ticks_per_sample * self.rests[0][1]
-            if self.additional_tokens["Rest"]
+            if self.config.use_rests
             else 0
         )
         tokens: List[List[Union[str, Event]]] = []  # list of lists of tokens
@@ -123,7 +85,7 @@ class CPWord(MIDITokenizer):
             if note.start != previous_tick:
                 # (Rest)
                 if (
-                    self.additional_tokens["Rest"]
+                    self.config.use_rests
                     and note.start > previous_note_end
                     and note.start - previous_note_end >= min_rest
                 ):
@@ -162,7 +124,7 @@ class CPWord(MIDITokenizer):
                     current_bar = previous_tick // ticks_per_bar
 
                 # (Tempo)
-                if self.additional_tokens["Tempo"]:
+                if self.config.use_tempos:
                     # If the current tempo is not the last one
                     if current_tempo_idx + 1 < len(
                         self._current_midi_metadata["tempo_changes"]
@@ -196,9 +158,7 @@ class CPWord(MIDITokenizer):
                     self.__create_cp_token(
                         int(note.start),
                         pos=pos_index,
-                        tempo=current_tempo
-                        if self.additional_tokens["Tempo"]
-                        else None,
+                        tempo=current_tempo if self.config.use_tempos else None,
                         desc="Position",
                     )
                 )
@@ -222,14 +182,14 @@ class CPWord(MIDITokenizer):
         tokens.sort(key=lambda x: x[0].time)
 
         # Adds chord tokens if specified
-        if self.additional_tokens["Chord"] and not track.is_drum:
+        if self.config.use_chords and not track.is_drum:
             chord_events = detect_chords(
                 track.notes,
                 self._current_midi_metadata["time_division"],
-                chord_maps=self.additional_tokens["chord_maps"],
-                specify_root_note=self.additional_tokens["chord_tokens_with_root_note"],
+                chord_maps=self.config.chord_maps,
+                specify_root_note=self.config.chord_tokens_with_root_note,
                 beat_res=self._first_beat_res,
-                unknown_chords_nb_notes_range=self.additional_tokens["chord_unknown"],
+                unknown_chords_nb_notes_range=self.config.chord_unknown,
             )
             count = 0
             for chord_event in chord_events:
@@ -299,8 +259,8 @@ class CPWord(MIDITokenizer):
             "Ignore_None",
             "Ignore_None",
         ]
-        for add_tok in ["Program", "Chord", "Rest", "Tempo"]:
-            if self.additional_tokens[add_tok]:
+        for add_tok_attr in ["use_programs", "use_chords", "use_rests", "use_tempos"]:
+            if getattr(self.config, add_tok_attr):
                 cp_token_template.append("Ignore_None")
 
         if bar:
@@ -341,10 +301,10 @@ class CPWord(MIDITokenizer):
         :return: the miditoolkit instrument object and tempo changes
         """
         assert (
-            time_division % max(self.beat_res.values()) == 0
-        ), f"Invalid time division, please give one divisible by {max(self.beat_res.values())}"
+            time_division % max(self.config.beat_res.values()) == 0
+        ), f"Invalid time division, please give one divisible by {max(self.config.beat_res.values())}"
 
-        ticks_per_sample = time_division // max(self.beat_res.values())
+        ticks_per_sample = time_division // max(self.config.beat_res.values())
         ticks_per_bar = time_division * 4
         name = "Drums" if program[1] else MIDI_INSTRUMENTS[program[0]]["name"]
         instrument = Instrument(program[0], is_drum=program[1], name=name)
@@ -384,12 +344,12 @@ class CPWord(MIDITokenizer):
                         current_bar * ticks_per_bar
                         + int(compound_token[1].split("_")[1]) * ticks_per_sample
                     )
-                    if self.additional_tokens["Tempo"]:
+                    if self.config.use_tempos:
                         tempo = int(compound_token[-1].split("_")[1])
                         if tempo != tempo_changes[-1].tempo:
                             tempo_changes.append(TempoChange(tempo, current_tick))
                 elif (
-                    self.additional_tokens["Rest"]
+                    self.config.use_rests
                     and compound_token[self.vocab_types_idx["Rest"]].split("_")[1]
                     != "None"
                 ):
@@ -428,14 +388,14 @@ class CPWord(MIDITokenizer):
         vocab[0].append("Family_Note")
 
         # POSITION
-        nb_positions = max(self.beat_res.values()) * 4  # 4/* time signature
+        nb_positions = max(self.config.beat_res.values()) * 4  # 4/* time signature
         vocab[1].append("Ignore_None")
         vocab[1].append("Bar_None")
         vocab[1] += [f"Position_{i}" for i in range(nb_positions)]
 
         # PITCH
         vocab[2].append("Ignore_None")
-        vocab[2] += [f"Pitch_{i}" for i in self.pitch_range]
+        vocab[2] += [f"Pitch_{i}" for i in range(*self.config.pitch_range)]
 
         # VELOCITY
         vocab[3].append("Ignore_None")
@@ -448,24 +408,24 @@ class CPWord(MIDITokenizer):
         ]
 
         # PROGRAM
-        if self.additional_tokens["Program"]:
+        if self.config.use_programs:
             vocab += [
                 ["Ignore_None"] + [f"Program_{program}" for program in range(-1, 128)]
             ]
 
         # CHORD
-        if self.additional_tokens["Chord"]:
+        if self.config.use_chords:
             vocab += [["Ignore_None"] + self._create_chords_tokens()]
 
         # REST
-        if self.additional_tokens["Rest"]:
+        if self.config.use_rests:
             vocab += [
                 ["Ignore_None"]
                 + [f'Rest_{".".join(map(str, rest))}' for rest in self.rests]
             ]
 
         # TEMPO
-        if self.additional_tokens["Tempo"]:
+        if self.config.use_tempos:
             vocab += [["Ignore_None"] + [f"Tempo_{i}" for i in self.tempos]]
 
         return vocab
@@ -489,11 +449,11 @@ class CPWord(MIDITokenizer):
         dic["Position"] = ["Pitch"]
         dic["Pitch"] = ["Pitch", "Bar", "Position"]
 
-        if self.additional_tokens["Chord"]:
+        if self.config.use_chords:
             dic["Rest"] = ["Rest", "Position"]
             dic["Pitch"] += ["Rest"]
 
-        if self.additional_tokens["Rest"]:
+        if self.config.use_rests:
             dic["Rest"] = ["Rest", "Position", "Bar"]
             dic["Pitch"] += ["Rest"]
 

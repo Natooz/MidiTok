@@ -69,8 +69,7 @@ def bpe_benchmark(data_path: Union[str, Path, PurePath] = "./tests/Maestro"):
 
     # Record times
     t = PrettyTable(
-        ["Tokenization", "Fast train"]
-        + [f"Fast enc. bsz={b}" for b in batch_sizes],
+        ["Tokenization", "Fast train"] + [f"Fast enc. bsz={b}" for b in batch_sizes],
         title="BPE benchmark: Fast = with 🤗tokenizers (Rust), "
         "values are in second, bsz is batch size",
     )

@@ -5,14 +5,9 @@ from typing import Any, Dict, List, Optional, Tuple, Union, cast
 import numpy as np
 from miditoolkit import Instrument, MidiFile, Note, TempoChange, TimeSignature
 
-from ..classes import Event, TokSequence
+from ..classes import Event, TokSequence, TokenizerConfig
 from ..constants import (
-    ADDITIONAL_TOKENS,
-    BEAT_RES,
     MIDI_INSTRUMENTS,
-    NB_VELOCITIES,
-    PITCH_RANGE,
-    SPECIAL_TOKENS,
     TEMPO,
     TIME_DIVISION,
     TIME_SIGNATURE,
@@ -31,69 +26,35 @@ class REMIPlus(MIDITokenizer):
     position within the current bar. The number of positions is determined by
     the ``beat_res`` argument, the maximum value will be used as resolution.
 
-    :param pitch_range: range of MIDI pitches to use
-    :param beat_res: beat resolutions, as a dictionary:
-            {(beat_x1, beat_x2): beat_res_1, (beat_x2, beat_x3): beat_res_2, ...}
-            The keys are tuples indicating a range of beats, ex 0 to 3 for the first bar, and
-            the values are the resolution to apply to the ranges, in samples per beat, ex 8
-    :param nb_velocities: number of velocity bins
-    :param additional_tokens: additional tokens (chords, time signature, rests, tempo...) to use,
-            to be given as a dictionary. (default: None is used)
-    :param special_tokens: list of special tokens. This must be given as a list of strings given
-            only the names of the tokens. (default: ``["PAD", "BOS", "EOS", "MASK"]``)
+    :param tokenizer_config: the tokenizer's configuration, as a :class:`miditok.classes.TokenizerConfig` object.
+    :param max_bar_embedding: Maximum number of bars ("Bar_0", "Bar_1",...,"Bar_{num_bars-1}").
+            If None passed, creates "Bar_None" token only in vocabulary for Bar token.
     :param params: path to a tokenizer config file. This will override other arguments and
             load the tokenizer based on the config file. This is particularly useful if the
             tokenizer learned Byte Pair Encoding. (default: None)
-    :param max_bar_embedding: Maximum number of bars ("Bar_0", "Bar_1",...,"Bar_{num_bars-1}").
-            If None passed, creates "Bar_None" token only in vocabulary for Bar token.
     """
 
     def __init__(
         self,
-        pitch_range: range = PITCH_RANGE,
-        beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
-        nb_velocities: int = NB_VELOCITIES,
-        additional_tokens: Dict[
-            str, Union[bool, int, Tuple[int, int]]
-        ] = ADDITIONAL_TOKENS,
-        special_tokens: List[str] = SPECIAL_TOKENS,
-        params: Optional[Union[str, Path]] = None,
+        tokenizer_config: TokenizerConfig = None,
         max_bar_embedding: Optional[int] = None,
+        params: Union[str, Path] = None,
     ):
-        additional_tokens["Program"] = True  # required
+        if tokenizer_config is not None and "max_bar_embedding" not in tokenizer_config.additional_params:
+            # If used, this attribute might increase over tokenizations, if the tokenizer encounter longer MIDIs
+            tokenizer_config.additional_params["max_bar_embedding"] = max_bar_embedding
+        super().__init__(tokenizer_config, True, params)
+
+    def _tweak_config_before_creating_voc(self):
+        self.config.use_programs = True
         # code handling rest decoding is writen, but not for detection (encoding)
-        additional_tokens["Rest"] = False
-        self.programs = additional_tokens.get("programs", list(range(-1, 128)))
-        self.max_bar_embedding = (
-            max_bar_embedding  # this attribute might increase during encoding
-        )
-        super().__init__(
-            pitch_range,
-            beat_res,
-            nb_velocities,
-            additional_tokens,
-            special_tokens,
-            unique_track=True,  # handles multi-track sequences in single stream
-            params=params,  # type: ignore
-        )
+        self.config.use_rests = False
+        # self.unique_track = True
 
-    def save_params(
-        self, out_path: Union[str, Path], additional_attributes: Optional[Dict] = None
-    ):
-        r"""Saves the config / parameters of the tokenizer in a json encoded file.
-        This can be useful to keep track of how a dataset has been tokenized.
-
-        :param out_path: output path to save the file.
-        :param additional_attributes: any additional information to store in the config file.
-                It can be used to override the default attributes saved in the parent method. (default: None)
-        """
-        if additional_attributes is None:
-            additional_attributes = {}
-        additional_attributes_tmp = {
-            "max_bar_embedding": self.max_bar_embedding,
-            **additional_attributes,
-        }
-        super().save_params(out_path, additional_attributes_tmp)
+        # In case the tokenizer has been created without specifying any config or params file path
+        if "max_bar_embedding" not in self.config.additional_params:
+            # If used, this attribute might increase over tokenizations, if the tokenizer encounter longer MIDIs
+            self.config.additional_params["max_bar_embedding"] = None
 
     def __notes_to_events(self, tracks: List[Instrument]) -> List[Event]:
         """Convert multi-track notes into one Token sequence.
@@ -112,7 +73,7 @@ class REMIPlus(MIDITokenizer):
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
         time_division = self._current_midi_metadata["time_division"]
-        ticks_per_sample = time_division / max(self.beat_res.values())
+        ticks_per_sample = time_division / max(self.config.beat_res.values())
         dur_bins = self._durations_ticks[self._current_midi_metadata["time_division"]]
         # Creates events
         events: List[Event] = []
@@ -121,15 +82,15 @@ class REMIPlus(MIDITokenizer):
             notes_with_program[0][0].start + 1
         )  # so that no rest is created before the first note
         # Bar
-        if self.max_bar_embedding:  # Check bar embedding limit, update if needed
+        if self.config.additional_params["max_bar_embedding"]:  # Check bar embedding limit, update if needed
             nb_bars = ceil(
                 max(n[0].end for n in notes_with_program)
                 / (self._current_midi_metadata["time_division"] * 4)
             )
-            if self.max_bar_embedding < nb_bars:
-                for i in range(self.max_bar_embedding, nb_bars):
+            if self.config.additional_params["max_bar_embedding"] < nb_bars:
+                for i in range(self.config.additional_params["max_bar_embedding"], nb_bars):
                     self.add_to_vocab(f"Bar_{i}")
-                self.max_bar_embedding = nb_bars
+                self.config.additional_params["max_bar_embedding"] = nb_bars
         current_bar = -1
         # Tempo
         current_tempo_idx = 0
@@ -148,21 +109,17 @@ class REMIPlus(MIDITokenizer):
         )
         ticks_per_bar = time_division * current_time_sig[0]
         # (Chord)
-        if self.additional_tokens.get("Chord", False):  # "Chord" in additional tokens
+        if self.config.use_chords:  # "Chord" in additional tokens
             for track in tracks:  # find chords per track
                 if track.is_drum:
                     continue
                 chords = detect_chords(
                     track.notes,
                     self._current_midi_metadata["time_division"],
-                    chord_maps=self.additional_tokens["chord_maps"],
-                    specify_root_note=self.additional_tokens[
-                        "chord_tokens_with_root_note"
-                    ],
+                    chord_maps=self.config.chord_maps,
+                    specify_root_note=self.config.chord_tokens_with_root_note,
                     beat_res=self._first_beat_res,
-                    unknown_chords_nb_notes_range=self.additional_tokens[
-                        "chord_unknown"
-                    ],
+                    unknown_chords_nb_notes_range=self.config.chord_unknown,
                 )
                 for chord in chords:
                     pos_index = int((chord.time % ticks_per_bar) / ticks_per_sample)
@@ -184,7 +141,7 @@ class REMIPlus(MIDITokenizer):
                         Event(
                             type="Bar",
                             value=str(current_bar + i + 1)
-                            if self.max_bar_embedding is not None
+                            if self.config.additional_params["max_bar_embedding"] is not None
                             else "None",
                             time=(current_bar + i + 1) * ticks_per_bar,
                             desc=0,
@@ -193,7 +150,7 @@ class REMIPlus(MIDITokenizer):
                 current_bar += nb_new_bars
 
                 # (TimeSignature)
-                if self.additional_tokens["TimeSignature"]:
+                if self.config.use_time_signatures:
                     # If the current time signature is not the last one
                     if current_time_sig_idx + 1 < len(
                         self._current_midi_metadata["time_sig_changes"]
@@ -226,7 +183,7 @@ class REMIPlus(MIDITokenizer):
                         )
 
                 # (Tempo)
-                if self.additional_tokens["Tempo"]:
+                if self.config.use_tempos:
                     is_tempo_changed = False
                     # If the current tempo is not the last one
                     if current_tempo_idx + 1 < len(
@@ -373,10 +330,10 @@ class REMIPlus(MIDITokenizer):
         tokens = cast(TokSequence, tokens)
         midi = MidiFile(ticks_per_beat=time_division)
         assert (
-            time_division % max(self.beat_res.values()) == 0
-        ), f"Invalid time division, please give one divisible by {max(self.beat_res.values())}"
+            time_division % max(self.config.beat_res.values()) == 0
+        ), f"Invalid time division, please give one divisible by {max(self.config.beat_res.values())}"
         tokens = cast(List[str], tokens.tokens)  # for reducing type errors
-        ticks_per_sample = time_division // max(self.beat_res.values())
+        ticks_per_sample = time_division // max(self.config.beat_res.values())
 
         # RESULTS
         instruments: Dict[int, Instrument] = {}
@@ -495,13 +452,13 @@ class REMIPlus(MIDITokenizer):
         vocab = []
 
         # BAR
-        if self.max_bar_embedding:
-            vocab += [f"Bar_{i}" for i in range(self.max_bar_embedding)]
+        if self.config.additional_params["max_bar_embedding"] is not None:
+            vocab += [f"Bar_{i}" for i in range(self.config.additional_params["max_bar_embedding"])]
         else:
             vocab += ["Bar_None"]
 
         # PITCH
-        vocab += [f"Pitch_{i}" for i in self.pitch_range]
+        vocab += [f"Pitch_{i}" for i in range(*self.config.pitch_range)]
 
         # VELOCITY
         vocab += [f"Velocity_{i}" for i in self.velocities]
@@ -512,24 +469,23 @@ class REMIPlus(MIDITokenizer):
         ]
 
         # POSITION
-        nb_positions = max(self.beat_res.values()) * 4  # 4/4 time signature
+        nb_positions = max(self.config.beat_res.values()) * 4  # 4/4 time signature
         vocab += [f"Position_{i}" for i in range(nb_positions)]
 
         # TIME SIGNATURE
-        if self.additional_tokens["TimeSignature"]:
+        if self.config.use_time_signatures:
             vocab += [f"TimeSig_{i[0]}/{i[1]}" for i in self.time_signatures]
 
         # CHORD
-        if self.additional_tokens["Chord"]:
+        if self.config.use_chords:
             vocab += self._create_chords_tokens()
 
         # TEMPO
-        if self.additional_tokens["Tempo"]:
+        if self.config.use_tempos:
             vocab += [f"Tempo_{i}" for i in self.tempos]
 
         # PROGRAM
-        if self.additional_tokens["Program"]:
-            vocab += [f"Program_{program}" for program in self.programs]
+        vocab += [f"Program_{program}" for program in self.config.programs]
 
         return vocab
 
@@ -548,15 +504,15 @@ class REMIPlus(MIDITokenizer):
         dic["Velocity"] = ["Duration"]
         dic["Duration"] = ["Program", "Position", "Bar"]
 
-        if self.additional_tokens["TimeSignature"]:
+        if self.config.use_time_signatures:
             dic["Bar"] = ["TimeSig", "Bar"]
             dic["TimeSig"] = ["Position"]
 
-        if self.additional_tokens["Chord"]:
+        if self.config.use_chords:
             dic["Chord"] = ["Position"]
             dic["Position"] += ["Chord"]
 
-        if self.additional_tokens["Tempo"]:
+        if self.config.use_tempos:
             dic["Tempo"] = ["Position"]
             dic["Position"] += ["Tempo"]
 
@@ -601,7 +557,7 @@ class REMIPlus(MIDITokenizer):
         previous_type = tokens[0].split("_")[0]
         current_pos = -1
         current_program = 0
-        current_pitches = {p: [] for p in self.programs}
+        current_pitches = {p: [] for p in self.config.programs}
 
         # Init first note and current pitches if needed
         if previous_type == "Pitch":
@@ -617,7 +573,7 @@ class REMIPlus(MIDITokenizer):
             if event_type in self.tokens_types_graph[previous_type]:
                 if event_type == "Bar":  # reset
                     current_pos = -1
-                    current_pitches = {p: [] for p in self.programs}
+                    current_pitches = {p: [] for p in self.config.programs}
                 elif previous_type == "Pitch":
                     pitch_val = int(event_value)
                     if pitch_val in current_pitches[current_program]:
@@ -629,7 +585,7 @@ class REMIPlus(MIDITokenizer):
                         err_time += 1  # token position value <= to the current position
                     else:
                         current_pos = int(event_value)
-                        current_pitches = {p: [] for p in self.programs}
+                        current_pitches = {p: [] for p in self.config.programs}
                 elif event_type == "Program":  # reset
                     current_program = int(event_value)
             # Bad token type

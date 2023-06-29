@@ -6,7 +6,7 @@ import math
 from pathlib import Path
 import json
 from copy import deepcopy
-from typing import List, Tuple, Dict, Union, Callable, Iterable, Optional, Any
+from typing import List, Tuple, Dict, Union, Callable, Iterable, Optional, Any, Sequence
 
 import numpy as np
 from tqdm import tqdm
@@ -15,7 +15,7 @@ from tokenizers import Tokenizer as TokenizerFast
 from tokenizers.models import BPE
 from tokenizers.trainers import BpeTrainer
 
-from .classes import Event, TokSequence
+from .classes import Event, TokSequence, TokenizerConfig
 from .utils import (
     remove_duplicated_notes,
     get_midi_programs,
@@ -25,11 +25,6 @@ from .data_augmentation import data_augmentation_dataset
 from .constants import (
     TIME_DIVISION,
     CURRENT_VERSION_PACKAGE,
-    PITCH_RANGE,
-    BEAT_RES,
-    NB_VELOCITIES,
-    ADDITIONAL_TOKENS,
-    SPECIAL_TOKENS,
     CHR_ID_START,
     PITCH_CLASSES,
     UNKNOWN_CHORD_PREFIX,
@@ -97,29 +92,7 @@ def _out_as_complete_seq(function: Callable):
 class MIDITokenizer(ABC):
     r"""MIDI tokenizer base class, containing common methods and attributes for all tokenizers.
 
-    :param pitch_range: (default: range(21, 109)) range of MIDI pitches to use. Pitches can take
-            values between 0 and 127 (included).
-            The `General MIDI 2 (GM2) specifications <https://www.midi.org/specifications-old/item/general-midi-2>`_
-            indicate the **recommended** ranges of pitches per MIDI program (instrument).
-            These recommended ranges can also be found in ``miditok.constants`` .
-            In all cases, the range from 21 to 108 (included) covers all the recommended values.
-            When processing a MIDI, the notes with pitches under or above this range can be discarded.
-    :param beat_res: (default: `{(0, 4): 8, (4, 12): 4}`) beat resolutions, as a dictionary in the form:
-            ``{(beat_x1, beat_x2): beat_res_1, (beat_x2, beat_x3): beat_res_2, ...}``
-            The keys are tuples indicating a range of beats, ex 0 to 3 for the first bar, and
-            the values are the resolution (in samples per beat) to apply to the ranges, ex 8.
-            This allows to use **Duration** / **TimeShift** tokens of different lengths / resolutions.
-            Note: for tokenization with **Position** tokens, the total number of possible positions will
-            be set at four times the maximum resolution given (``max(beat_res.values)``\).
-    :param nb_velocities: (default: 32) number of velocity bins. In the MIDI norm, velocities can take
-            up to 128 values (0 to 127). This parameter allows to reduce the number of velocity values.
-            The velocities of the MIDIs resolution will be downsampled to ``nb_velocities`` values, equally
-            separated between 0 and 127.
-    :param additional_tokens: (default: None used) specify which additional tokens to use.
-            Compatibilities between tokenization and additional tokens may vary.
-            See :ref:`Additional tokens` for the details and available tokens.
-    :param special_tokens: list of special tokens. This must be given as a list of strings given
-            only the names of the tokens. (default: ``["PAD", "BOS", "EOS", "MASK"]``\)
+    :param tokenizer_config: the tokenizer's configuration, as a :class:`miditok.classes.TokenizerConfig` object.
     :param unique_track: set to True if the tokenizer works only with a unique track.
             Tokens will be saved as a single track. This applies to representations that natively handle
             multiple tracks such as Octuple, resulting in a single "stream" of tokens for all tracks.
@@ -131,83 +104,78 @@ class MIDITokenizer(ABC):
 
     def __init__(
         self,
-        pitch_range: range = PITCH_RANGE,
-        beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
-        nb_velocities: int = NB_VELOCITIES,
-        additional_tokens: Dict[
-            str, Union[bool, int, Dict[str, Tuple], Tuple[int, int]]
-        ] = ADDITIONAL_TOKENS,
-        special_tokens: List[str] = SPECIAL_TOKENS,
+        tokenizer_config: TokenizerConfig = None,
         unique_track: bool = False,
         params: Union[str, Path] = None,
     ):
         # Initialize params
-        self._vocab_base = (
-            {}
-        )  # vocab of prime tokens, can be viewed as unique char / bytes
-        self.__vocab_base_inv = {}  # the other way, to decode id (int) -> token (str)
-        self._vocab_base_id_to_byte = (
-            {}
-        )  # id (int) -> byte (str), as this might not be chr(id) after BPE training
-        self._vocab_base_byte_to_token = (
-            {}
-        )  # byte (str) -> token (str), for basic tokens
-        self._vocab_bpe_bytes_to_tokens = (
-            {}
-        )  # byte(s) -> token(s), for faster BPE decoding
+        self.config = deepcopy(tokenizer_config)
+        # vocab of prime tokens, can be viewed as unique char / bytes
+        self._vocab_base = {}
+        # the other way, to decode id (int) -> token (str)
+        self.__vocab_base_inv = {}
+        # id (int) -> byte (str), as this might not be chr(id) after BPE training
+        self._vocab_base_id_to_byte = {}
+        # byte (str) -> token (str), for basic tokens
+        self._vocab_base_byte_to_token = {}
+        # byte(s) -> token(s), for faster BPE decoding
+        self._vocab_bpe_bytes_to_tokens = {}
         self.has_bpe = False
-
         # Fast BPE tokenizer backed with 🤗tokenizers
         self._bpe_model = None
 
         # Loading params, or initializing them from args
         if params is not None:
+            # Will overwrite self.config
             self._load_params(params)
         else:
+            # If no TokenizerConfig is given, we falls back to the default parameters
+            if self.config is None:
+                self.config = TokenizerConfig()
             assert (
-                pitch_range.start >= 0 and pitch_range.stop <= 128
+                self.config.pitch_range[0] >= 0 and self.config.pitch_range[1] <= 128
             ), "You must specify a pitch_range between 0 and 127 (included, i.e. range.stop at 128)"
             assert (
-                0 < nb_velocities < 128
+                0 < self.config.nb_velocities < 128
             ), "You must specify a nb_velocities between 1 and 127 (included)"
-            self.pitch_range = pitch_range
-            self.beat_res = beat_res
-            self._nb_velocities = nb_velocities
-            self.additional_tokens = additional_tokens
-            self.special_tokens = special_tokens if special_tokens is not None else []
             self.unique_track = unique_track
+
+        # Tweak the tokenizer's configuration and / or attributes before creating the vocabulary
+        # This method is intended to be overridden by inheriting tokenizer classes
+        self._tweak_config_before_creating_voc()
 
         # Init duration and velocity values
         self.durations = self.__create_durations_tuples()
-        self.velocities = np.linspace(0, 127, self._nb_velocities + 1, dtype=np.intc)[
-            1:
-        ]  # remove velocity 0
-        self._first_beat_res = list(self.beat_res.values())[0]
-        for beat_range, res in self.beat_res.items():
+        # [1:] so that there is no velocity_0
+        self.velocities = np.linspace(
+            0, 127, self.config.nb_velocities + 1, dtype=np.intc
+        )[1:]
+        self._first_beat_res = list(self.config.beat_res.values())[0]
+        for beat_range, res in self.config.beat_res.items():
             if 0 in beat_range:
                 self._first_beat_res = res
                 break
 
         # Tempos
         self.tempos = np.zeros(1)
-        if self.additional_tokens["Tempo"]:
+        if self.config.use_tempos:
             self.tempos = np.linspace(
-                *self.additional_tokens["tempo_range"],
-                self.additional_tokens["nb_tempos"],
+                *self.config.tempo_range,
+                self.config.nb_tempos,
                 dtype=np.intc,
             )
 
         # Rests
         self.rests = []
-        if self.additional_tokens["Rest"]:
+        if self.config.use_rests:
             assert (
-                self.additional_tokens["rest_range"][0] // 4 <= self._first_beat_res
+                self.config.rest_range[0] // 4 <= self._first_beat_res
             ), "The minimum rest value must be equal or superior to the initial beat resolution"
             self.rests = self.__create_rests()
 
         # Time Signatures
         self.time_signatures = []
-        if self.additional_tokens["TimeSignature"]:
+        if self.config.use_time_signatures:
             self.time_signatures = self.__create_time_signatures()
 
         # Vocabulary and token types graph
@@ -227,6 +195,10 @@ class MIDITokenizer(ABC):
         # Holds the tempo changes, time signature, time division and key signature of a
         # MIDI (being parsed) so that methods processing tracks can access them
         self._current_midi_metadata = {}  # needs to be updated each time a MIDI is read
+
+    def _tweak_config_before_creating_voc(self):
+        # called after setting the tokenizer's TokenizerConfig (.config). To be customized by tokenizer classes.
+        pass
 
     @property
     def vocab(
@@ -254,7 +226,7 @@ class MIDITokenizer(ABC):
         return self._vocab_base
 
     @property
-    def vocab_bpe(self) -> [str, int]:  # byte (str) to its id (int)
+    def vocab_bpe(self) -> Union[None, Dict[str, int]]:  # byte (str) to its id (int)
         r"""Returns the vocabulary learnt with BPE.
         In case the tokenizer has not been trained with BPE, it returns None.
 
@@ -264,6 +236,24 @@ class MIDITokenizer(ABC):
             return None
         else:
             return self._bpe_model.get_vocab()
+
+    @property
+    def special_tokens(self) -> Sequence[str]:
+        r"""Returns the vocabulary learnt with BPE.
+        In case the tokenizer has not been trained with BPE, it returns None.
+
+        :return: special tokens of the tokenizer
+        """
+        return self.config.special_tokens
+
+    @property
+    def special_tokens_ids(self) -> Sequence[int]:
+        r"""Returns the vocabulary learnt with BPE.
+        In case the tokenizer has not been trained with BPE, it returns None.
+
+        :return: special tokens of the tokenizer
+        """
+        return [self[token] for token in self.special_tokens]
 
     def preprocess_midi(self, midi: MidiFile):
         r"""Pre-process (in place) a MIDI file to quantize its time and note attributes
@@ -296,14 +286,14 @@ class MIDITokenizer(ABC):
                 [max([note.end for note in track.notes]) for track in midi.instruments]
             )
 
-        if self.additional_tokens["Tempo"]:
+        if self.config.use_tempos:
             self._quantize_tempos(midi.tempo_changes, midi.ticks_per_beat)
 
         if len(midi.time_signature_changes) == 0:  # can sometimes happen
             midi.time_signature_changes.append(
                 TimeSignature(4, 4, 0)
             )  # 4/4 by default in this case
-        if self.additional_tokens["TimeSignature"]:
+        if self.config.use_time_signatures:
             self._quantize_time_signatures(
                 midi.time_signature_changes, midi.ticks_per_beat
             )
@@ -317,10 +307,11 @@ class MIDITokenizer(ABC):
         :param notes: notes to quantize.
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed).
         """
-        ticks_per_sample = int(time_division / max(self.beat_res.values()))
+        ticks_per_sample = int(time_division / max(self.config.beat_res.values()))
         i = 0
+        pitches = range(*self.config.pitch_range)
         while i < len(notes):
-            if notes[i].pitch not in self.pitch_range:
+            if notes[i].pitch not in pitches:
                 del notes[i]
                 continue
             start_offset = notes[i].start % ticks_per_sample
@@ -359,7 +350,7 @@ class MIDITokenizer(ABC):
         :param tempos: tempo changes to quantize.
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed).
         """
-        ticks_per_sample = int(time_division / max(self.beat_res.values()))
+        ticks_per_sample = int(time_division / max(self.config.beat_res.values()))
         prev_tempo = -1
         i = 0
         while i < len(tempos):
@@ -507,14 +498,14 @@ class MIDITokenizer(ABC):
                 seq.bytes = self._ids_to_bytes(seq.ids, as_one_str=True)
 
     def _tokens_to_ids(
-        self, tokens: List[Union[str, List[str]]]
+        self, tokens: Sequence[Union[str, List[str]]]
     ) -> List[Union[int, List[int]]]:
         r"""Converts a list of tokens (str) into their associated ids (int).
 
         :param tokens: list of tokens (str) to convert.
         :return: list of corresponding ids (int).
         """
-        if isinstance(tokens[0], list):
+        if isinstance(tokens[0], (list, tuple)):
             ids = []
             for seq in tokens:
                 ids.append([self[i, token] for i, token in enumerate(seq)])
@@ -748,11 +739,7 @@ class MIDITokenizer(ABC):
                 len(self.__vocab_base_inv[vocab_idx])
             ] = token_str
         else:
-            id_ = (
-                len(self._bpe_model.get_vocab())
-                if self.has_bpe
-                else len(self.vocab)
-            )
+            id_ = len(self._bpe_model.get_vocab()) if self.has_bpe else len(self.vocab)
             self._vocab_base[token_str] = id_
             self.__vocab_base_inv[len(self.__vocab_base_inv)] = token_str
 
@@ -773,31 +760,27 @@ class MIDITokenizer(ABC):
         :return: chord tokens, created from the tokenizer's params
         """
         tokens = []
-        if self.additional_tokens.get("chord_tokens_with_root_note", False):
+        if self.config.chord_tokens_with_root_note:
             tokens += [
                 f"Chord_{root_note}:{chord_quality}"
-                for chord_quality in self.additional_tokens["chord_maps"]
+                for chord_quality in self.config.chord_maps
                 for root_note in PITCH_CLASSES
             ]
         else:
             tokens += [
-                f"Chord_{chord_quality}"
-                for chord_quality in self.additional_tokens["chord_maps"]
+                f"Chord_{chord_quality}" for chord_quality in self.config.chord_maps
             ]
 
         # Unknown chords
-        if self.additional_tokens["chord_unknown"] is not False:
-            if self.additional_tokens["chord_tokens_with_root_note"]:
+        if self.config.chord_unknown is not None:
+            if self.config.chord_tokens_with_root_note:
                 tokens += [
                     f"Chord_{root_note}:{UNKNOWN_CHORD_PREFIX}{i}"
-                    for i in range(*self.additional_tokens["chord_unknown"])
+                    for i in range(*self.config.chord_unknown)
                     for root_note in PITCH_CLASSES
                 ]
             else:
-                tokens += [
-                    f"Chord_{i}"
-                    for i in range(*self.additional_tokens["chord_unknown"])
-                ]
+                tokens += [f"Chord_{i}" for i in range(*self.config.chord_unknown)]
 
         return tokens
 
@@ -825,12 +808,12 @@ class MIDITokenizer(ABC):
         No token type can precede a BOS token, and EOS token cannot precede any other token.
         """
         original_token_types = list(self.tokens_types_graph.keys())
-        for special_token in self.special_tokens:
+        for special_token in self.config.special_tokens:
             if special_token == "EOS":
                 self.tokens_types_graph["EOS"] = []
             else:
-                self.tokens_types_graph[special_token] = (
-                    original_token_types + self.special_tokens
+                self.tokens_types_graph[special_token] = original_token_types + list(
+                    self.config.special_tokens
                 )
 
             if special_token != "BOS":
@@ -849,14 +832,18 @@ class MIDITokenizer(ABC):
         :return: the duration bins.
         """
         durations = []
-        for beat_range, beat_res in self.beat_res.items():
+        for beat_range, beat_res in self.config.beat_res.items():
             durations += [
                 (beat, pos, beat_res)
                 for beat in range(*beat_range)
                 for pos in range(beat_res)
             ]
         durations += [
-            (max(max(self.beat_res)), 0, self.beat_res[max(self.beat_res)])
+            (
+                max(max(self.config.beat_res)),
+                0,
+                self.config.beat_res[max(self.config.beat_res)],
+            )
         ]  # the last one
         del durations[0]  # removes duration of 0
         return durations
@@ -876,8 +863,8 @@ class MIDITokenizer(ABC):
     def __create_rests(self) -> List[Tuple]:
         r"""Creates the possible rests in beat / position units, as tuple of the form:
         (beat, pos) where beat is the number of beats, pos the number of "samples"
-        The rests are calculated from the value of self.additional_tokens[rest_range],
-        which first value divide a beat to determine the minimum rest represented,
+        The rests are calculated from the value of self.config.rest_range,
+        which first value divides a beat to determine the minimum rest to represent,
         and the second the maximum rest in beats.
         The rests shorter than 1 beat will scale x2, as rests in music theory (semiquaver, quaver, crotchet...)
         Note that the values of the rests in positions will be determined by the beat
@@ -888,7 +875,7 @@ class MIDITokenizer(ABC):
 
         :return: the rests.
         """
-        div, max_beat = self.additional_tokens["rest_range"]
+        div, max_beat = self.config.rest_range
         assert (
             div % 2 == 0 and div <= self._first_beat_res
         ), f"The minimum rest must be divisible by 2 and lower than the first beat resolution ({self._first_beat_res})"
@@ -900,15 +887,13 @@ class MIDITokenizer(ABC):
         return rests
 
     def __create_time_signatures(self) -> List[Tuple]:
-        r"""Creates the possible time signatures, as tuple of the form:
+        r"""Creates the possible time signatures, as tuples of the form:
         (nb_beats, beat_res) where nb_beats is the number of beats per bar.
         Example: (3, 4) means one bar is 3 beat long and each beat is a quarter note.
 
         :return: the time signatures.
         """
-        max_beat_res, nb_notes = self.additional_tokens.get(
-            "time_signature_range", (4, 1)
-        )
+        max_beat_res, nb_notes = self.config.time_signature_range
         assert (
             max_beat_res > 0 and math.log2(max_beat_res).is_integer()
         ), "The beat resolution in time signature must be a power of 2"
@@ -934,7 +919,7 @@ class MIDITokenizer(ABC):
         :param denominator: time signature's denominator (beat resolution).
         :return: the numerator and denominator of a reduced and decomposed time signature.
         """
-        max_beat_res, nb_notes = self.additional_tokens["time_signature_range"]
+        max_beat_res, nb_notes = self.config.time_signature_range
 
         # reduction (when denominator exceed max_beat_res)
         while (
@@ -1059,7 +1044,7 @@ class MIDITokenizer(ABC):
         # Create new tokenizer model
         if self._bpe_model is None or start_from_empty_voc:
             nb_bytes = (
-                len(self.special_tokens)
+                len(self.config.special_tokens)
                 if start_from_empty_voc
                 else len(self._vocab_base)
             )
@@ -1077,7 +1062,7 @@ class MIDITokenizer(ABC):
 
         # Trains the tokenizer
         special_tokens_bytes = self._ids_to_bytes(
-            self._tokens_to_ids([f"{tok}_None" for tok in self.special_tokens])
+            self._tokens_to_ids([f"{tok}_None" for tok in self.config.special_tokens])
         )
         trainer = BpeTrainer(
             vocab_size=vocab_size,
@@ -1151,31 +1136,6 @@ class MIDITokenizer(ABC):
             encoded_tokens = self._bpe_model.encode([seq.bytes], is_pretokenized=True)
             seq.ids = encoded_tokens.ids
             seq.ids_bpe_encoded = True
-
-    @staticmethod
-    def __find_subseq(in_list: List[int], pattern: List[int]) -> List[int]:
-        """Finds the locations of a pattern within a list.
-        Adapted from: https://stackoverflow.com/questions/10106901/elegant-find-sub-list-in-list
-        Related: https://www.reddit.com/r/learnpython/comments/2xqlwj/using_npwhere_to_find_subarrays/
-        After testing, the numba jit version does not seem to be much faster.
-        The conversion of python lists to numba.typed.List() seems to also take time.
-
-        :param in_list: input list to analyze.
-        :param pattern: pattern to detect.
-        :return: indices of in_list where the pattern has been found.
-        """
-        matches = []
-        next_possible_idx = 0
-        for i in range(len(in_list)):
-            if (
-                in_list[i] == pattern[0]
-                and in_list[i : i + len(pattern)] == pattern
-                and i >= next_possible_idx
-            ):
-                matches.append(i)
-                next_possible_idx = i + len(pattern)
-
-        return matches
 
     def apply_bpe_to_dataset(
         self, dataset_path: Union[Path, str], out_path: Union[Path, str] = None
@@ -1296,7 +1256,7 @@ class MIDITokenizer(ABC):
                 continue
 
             # Checks the time division is valid
-            if midi.ticks_per_beat < max(self.beat_res.values()) * 4:
+            if midi.ticks_per_beat < max(self.config.beat_res.values()) * 4:
                 continue
             # Passing the MIDI to validation tests if given
             if validation_fn is not None:
@@ -1462,14 +1422,16 @@ class MIDITokenizer(ABC):
         if self.has_bpe:  # saves whole vocab if BPE
             additional_attributes["_vocab_base"] = self._vocab_base
             additional_attributes["_bpe_model"] = self._bpe_model.to_str()
-            additional_attributes["_vocab_base_byte_to_token"] = self._vocab_base_byte_to_token
+            additional_attributes[
+                "_vocab_base_byte_to_token"
+            ] = self._vocab_base_byte_to_token
 
+        dict_config = self.config.to_dict(serialize=True)
+        dict_config["beat_res"] = {
+            f"{k1}_{k2}": v for (k1, k2), v in dict_config["beat_res"].items()
+        }
         params = {
-            "pitch_range": (self.pitch_range.start, self.pitch_range.stop),
-            "beat_res": {f"{k1}_{k2}": v for (k1, k2), v in self.beat_res.items()},
-            "_nb_velocities": len(self.velocities),
-            "additional_tokens": self.additional_tokens,
-            "special_tokens": self.special_tokens,
+            "config": dict_config,
             "unique_track": self.unique_track,
             "has_bpe": self.has_bpe,
             "tokenization": self.__class__.__name__,
@@ -1491,26 +1453,28 @@ class MIDITokenizer(ABC):
         with open(config_file_path) as param_file:
             params = json.load(param_file)
 
-        params["pitch_range"] = range(*params["pitch_range"])
+        # Grab config, or creates one with default parameters (for retro-compatibility with previous version)
+        self.config = TokenizerConfig()
+        config_attributes = list(self.config.to_dict().keys())
+        old_add_tokens_attr = {
+            "Chord": "use_chords",
+            "Rest": "use_rests",
+            "Tempo": "use_tempos",
+            "TimeSignature": "use_time_signatures",
+            "Program": "use_program",
+        }
 
+        # Overwrite config attributes
         for key, value in params.items():
             if key in ["tokenization", "miditok_version"]:
                 continue
-            elif key == "beat_res":
-                value = {
-                    tuple(map(int, beat_range.split("_"))): res
-                    for beat_range, res in value.items()
-                }
-            elif key == "additional_tokens":
-                value["TimeSignature"] = value.get("TimeSignature", False)
             elif key == "_vocab_base":
                 self._vocab_base = value
                 self.__vocab_base_inv = {v: k for k, v in value.items()}
                 continue
             elif key == "_bpe_model":
-                self._bpe_model = TokenizerFast.from_str(
-                    value
-                )  # using 🤗tokenizers builtin method
+                # using 🤗tokenizers builtin method
+                self._bpe_model = TokenizerFast.from_str(value)
                 continue
             elif key == "_vocab_base_byte_to_token":
                 self._vocab_base_byte_to_token = value
@@ -1522,6 +1486,23 @@ class MIDITokenizer(ABC):
                     k: [self._vocab_base_byte_to_token[b] for b in k]
                     for k in self._bpe_model.get_vocab()
                 }
+                continue
+            elif key == "config":
+                value["beat_res"] = {
+                    tuple(map(int, beat_range.split("_"))): res
+                    for beat_range, res in value["beat_res"].items()
+                }
+                value = TokenizerConfig.from_dict(value)
+            elif key in config_attributes:
+                if key == "beat_res":
+                    value = {
+                        tuple(map(int, beat_range.split("_"))): res
+                        for beat_range, res in value.items()
+                    }
+                # Convert old attribute from < v2.1.0 to new for TokenizerConfig
+                elif key in old_add_tokens_attr:
+                    key = old_add_tokens_attr[key]
+                setattr(self.config, key, value)
                 continue
 
             setattr(self, key, value)
@@ -1646,7 +1627,7 @@ class MIDITokenizer(ABC):
 
     def __eq__(self, other) -> bool:
         r"""Checks if two tokenizers are identical. This is done by comparing their vocabularies,
-        as they are built depending on most of their attributes.
+        and configuration.
 
         :param other: tokenizer to compare.
         :return: True if the vocabulary(ies) are identical, False otherwise.
@@ -1659,5 +1640,6 @@ class MIDITokenizer(ABC):
                 self._vocab_base == other._vocab_base
                 and bpe_voc_eq
                 and self._vocab_base_byte_to_token == other._vocab_base_byte_to_token
+                and self.config == other.config
             )
         return False

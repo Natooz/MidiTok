@@ -1,5 +1,4 @@
 from typing import List, Tuple, Dict, Optional, Union, Any
-from pathlib import Path
 
 import numpy as np
 from miditoolkit import Instrument, Note, TempoChange
@@ -8,11 +7,6 @@ from ..midi_tokenizer import MIDITokenizer, _in_as_seq, _out_as_complete_seq
 from ..classes import TokSequence, Event
 from ..utils import detect_chords
 from ..constants import (
-    PITCH_RANGE,
-    NB_VELOCITIES,
-    BEAT_RES,
-    ADDITIONAL_TOKENS,
-    SPECIAL_TOKENS,
     TIME_DIVISION,
     TEMPO,
     MIDI_INSTRUMENTS,
@@ -26,40 +20,11 @@ class TSD(MIDITokenizer):
     **Note:** as TSD uses *TimeShifts* events to move the time from note to
     note, it could be unsuited for tracks with long pauses. In such case, the
     maximum *TimeShift* value will be used.
-
-    :param pitch_range: range of MIDI pitches to use
-    :param beat_res: beat resolutions, as a dictionary:
-            {(beat_x1, beat_x2): beat_res_1, (beat_x2, beat_x3): beat_res_2, ...}
-            The keys are tuples indicating a range of beats, ex 0 to 3 for the first bar, and
-            the values are the resolution to apply to the ranges, in samples per beat, ex 8
-    :param nb_velocities: number of velocity bins
-    :param additional_tokens: additional tokens (chords, time signature, rests, tempo...) to use,
-            to be given as a dictionary. (default: None is used)
-    :param special_tokens: list of special tokens. This must be given as a list of strings given
-            only the names of the tokens. (default: ``["PAD", "BOS", "EOS", "MASK"]``)
-    :param params: path to a tokenizer config file. This will override other arguments and
-            load the tokenizer based on the config file. This is particularly useful if the
-            tokenizer learned Byte Pair Encoding. (default: None)
+    TODO handle programs like REMIPlus
     """
 
-    def __init__(
-        self,
-        pitch_range: range = PITCH_RANGE,
-        beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
-        nb_velocities: int = NB_VELOCITIES,
-        additional_tokens: Dict[str, bool] = ADDITIONAL_TOKENS,
-        special_tokens: List[str] = SPECIAL_TOKENS,
-        params: Union[str, Path] = None,
-    ):
-        additional_tokens["TimeSignature"] = False  # not compatible
-        super().__init__(
-            pitch_range,
-            beat_res,
-            nb_velocities,
-            additional_tokens,
-            special_tokens,
-            params=params,
-        )
+    def _tweak_config_before_creating_voc(self):
+        self.config.use_time_signatures = False
 
     @_out_as_complete_seq
     def track_to_tokens(self, track: Instrument) -> TokSequence:
@@ -72,13 +37,13 @@ class TSD(MIDITokenizer):
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
         ticks_per_sample = self._current_midi_metadata["time_division"] / max(
-            self.beat_res.values()
+            self.config.beat_res.values()
         )
         dur_bins = self._durations_ticks[self._current_midi_metadata["time_division"]]
         min_rest = (
             self._current_midi_metadata["time_division"] * self.rests[0][0]
             + ticks_per_sample * self.rests[0][1]
-            if self.additional_tokens["Rest"]
+            if self.config.use_rests
             else 0
         )
         events = []
@@ -108,7 +73,7 @@ class TSD(MIDITokenizer):
                 )
             )
         # Adds tempo events if specified
-        if self.additional_tokens["Tempo"]:
+        if self.config.use_tempos:
             for tempo_change in self._current_midi_metadata["tempo_changes"]:
                 events.append(
                     Event(
@@ -133,7 +98,7 @@ class TSD(MIDITokenizer):
             # (Rest)
             elif (
                 event.type in ["Pitch", "Tempo"]
-                and self.additional_tokens["Rest"]
+                and self.config.use_rests
                 and event.time - previous_note_end >= min_rest
             ):
                 rest_beat, rest_pos = divmod(
@@ -203,14 +168,14 @@ class TSD(MIDITokenizer):
             previous_tick = event.time
 
         # Adds chord events if specified
-        if self.additional_tokens["Chord"] and not track.is_drum:
+        if self.config.use_chords and not track.is_drum:
             events += detect_chords(
                 track.notes,
                 self._current_midi_metadata["time_division"],
-                chord_maps=self.additional_tokens["chord_maps"],
-                specify_root_note=self.additional_tokens["chord_tokens_with_root_note"],
+                chord_maps=self.config.chord_maps,
+                specify_root_note=self.config.chord_tokens_with_root_note,
                 beat_res=self._first_beat_res,
-                unknown_chords_nb_notes_range=self.additional_tokens["chord_unknown"],
+                unknown_chords_nb_notes_range=self.config.chord_unknown,
             )
 
         events.sort(key=lambda x: (x.time, self._order(x)))
@@ -232,7 +197,7 @@ class TSD(MIDITokenizer):
         :param program: the MIDI program of the produced track and if it drum, (default (0, False), piano)
         :return: the miditoolkit instrument object and tempo changes
         """
-        ticks_per_sample = time_division // max(self.beat_res.values())
+        ticks_per_sample = time_division // max(self.config.beat_res.values())
         tokens = tokens.tokens
 
         name = "Drums" if program[1] else MIDI_INSTRUMENTS[program[0]]["name"]
@@ -292,7 +257,7 @@ class TSD(MIDITokenizer):
         vocab = []
 
         # NOTE ON
-        vocab += [f"Pitch_{i}" for i in self.pitch_range]
+        vocab += [f"Pitch_{i}" for i in range(*self.config.pitch_range)]
 
         # VELOCITY
         vocab += [f"Velocity_{i}" for i in self.velocities]
@@ -309,19 +274,19 @@ class TSD(MIDITokenizer):
         ]
 
         # CHORD
-        if self.additional_tokens["Chord"]:
+        if self.config.use_chords:
             vocab += self._create_chords_tokens()
 
         # REST
-        if self.additional_tokens["Rest"]:
+        if self.config.use_rests:
             vocab += [f'Rest_{".".join(map(str, rest))}' for rest in self.rests]
 
         # TEMPO
-        if self.additional_tokens["Tempo"]:
+        if self.config.use_tempos:
             vocab += [f"Tempo_{i}" for i in self.tempos]
 
         # PROGRAM
-        if self.additional_tokens["Program"]:
+        if self.config.use_programs:
             vocab += [f"Program_{program}" for program in range(-1, 128)]
 
         return vocab
@@ -341,19 +306,19 @@ class TSD(MIDITokenizer):
         dic["Duration"] = ["Pitch", "TimeShift"]
         dic["TimeShift"] = ["Pitch"]
 
-        if self.additional_tokens["Chord"]:
+        if self.config.use_chords:
             dic["Chord"] = ["Pitch"]
             dic["TimeShift"] += ["Chord"]
 
-        if self.additional_tokens["Tempo"]:
+        if self.config.use_tempos:
             dic["TimeShift"] += ["Tempo"]
             dic["Tempo"] = ["Pitch", "TimeShift"]
-            if self.additional_tokens["Chord"]:
+            if self.config.use_chords:
                 dic["Tempo"] += ["Chord"]
 
-        if self.additional_tokens["Rest"]:
+        if self.config.use_rests:
             dic["Rest"] = ["Rest", "Pitch", "TimeShift"]
-            if self.additional_tokens["Chord"]:
+            if self.config.use_chords:
                 dic["Rest"] += ["Chord"]
             dic["Duration"] += ["Rest"]
 
