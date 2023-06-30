@@ -23,7 +23,7 @@ import miditok
 from miditoolkit import MidiFile
 from tqdm import tqdm
 
-from .tests_utils import (
+from tests_utils import (
     midis_equals,
     tempo_changes_equals,
     reduce_note_durations,
@@ -33,7 +33,7 @@ from .tests_utils import (
 
 # Special beat res for test, up to 16 beats so the duration and time-shift values are
 # long enough for MIDI-Like and Structured encodings, and with a single beat resolution
-BEAT_RES_TEST = {(0, 16): 8}
+BEAT_RES_TEST = {(0, 16): 300}
 TOKENIZER_PARAMS = {
     "beat_res": BEAT_RES_TEST,
     "use_chords": True,
@@ -46,7 +46,7 @@ TOKENIZER_PARAMS = {
     "chord_unknown": (3, 6),
     "rest_range": (
         4,
-        1024,
+        512,
     ),  # very high value to cover every possible rest in the test files
     "nb_tempos": 32,
     "tempo_range": (40, 250),
@@ -64,6 +64,7 @@ def test_multitrack_midi_to_tokens_to_midi(
 
     """
     tokenizations = [
+        "TSD",
         "REMI",
         "REMIPlus",
         "CPWord",
@@ -105,7 +106,7 @@ def test_multitrack_midi_to_tokens_to_midi(
 
             # Sort and merge tracks if needed
             # MIDI produced with Octuple contains tracks ordered by program
-            if tokenization in ["Octuple", "MuMIDI", "REMIPlus"]:
+            if tokenizer.unique_track:
                 miditok.utils.merge_same_program_tracks(
                     midi_to_compare.instruments
                 )  # merge tracks
