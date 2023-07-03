@@ -45,23 +45,26 @@ def _in_as_seq(complete: bool = True, decode_bpe: bool = True):
             self = args[0]
             seq = args[1]
             if not isinstance(seq, TokSequence) and not all(isinstance(seq_, TokSequence) for seq_ in seq):
-                ids = tokens = events = None
                 try:
-                    ids = convert_ids_tensors_to_list(seq)
+                    arg = ("ids", convert_ids_tensors_to_list(seq))
                 except (AttributeError, ValueError, TypeError, IndexError):
                     if isinstance(seq[0], str) or (
                         isinstance(seq[0], str) and isinstance(seq[0][0], str)
                     ):
-                        tokens = seq
+                        arg = ("tokens", seq)
                     else:  # list of Event, very unlikely
-                        events = seq
+                        arg = ("events", seq)
 
-                seq = TokSequence(
-                    ids=ids,
-                    tokens=tokens,
-                    events=events,
-                    ids_bpe_encoded=self._are_ids_bpe_encoded(ids),
-                )
+                if isinstance(arg[1][0], list):
+                    seq = []
+                    for obj in arg[1]:
+                        kwarg = {arg[0]: obj}
+                        seq.append(TokSequence(**kwarg))
+                        seq[-1].ids_bpe_encoded = self._are_ids_bpe_encoded(seq[-1].ids)
+                else:
+                    kwarg = {arg[0]: arg[1]}
+                    seq = TokSequence(**kwarg)
+                    seq.ids_bpe_encoded = self._are_ids_bpe_encoded(seq.ids)
 
             if self.has_bpe and decode_bpe:
                 self.decode_bpe(seq)
