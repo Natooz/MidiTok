@@ -156,9 +156,11 @@ class TokenizerConfig:
             `TimeSignature` tokens will specify the current time signature. It is only implemented with
             :ref:`REMIPlus`, :ref:`Octuple` and :ref:`Octuple Mono` atow. (default: False)
     :param use_programs: will use ``Program`` tokens, if the tokenizer is compatible.
-            Used to specify an instrument / MIDI program. :ref:`REMIPlus`, :ref:`Octuple`, :ref:`MuMIDI` and
-            :ref:`MuMIDI` natively handle `Program` tokens. This option will be set automatically to true for
-            these tokenizations. For other tokenizations, MidiTok only offers the possibility to include these
+            Used to specify an instrument / MIDI program. Some tokenizations use natively programs: :ref:`REMIPlus`
+            and :ref:`TSDPlus` adds `Program` tokens before `Pitch` tokens, :ref:`CPWord`, :ref:`Octuple` and
+            :ref:`MuMIDI` add a `Program` tokens with the stacks of `Pitch`, `Velocity` and `Duration` tokens.
+            This option will be set automatically to true for :ref:`Octuple` and :ref:`MuMIDI`.
+            For non-mentioned tokenizations, MidiTok only offers the possibility to include these
             tokens in the vocabulary for you, but won't use them. MidiTok leaves you the choice / task to represent
             the program information the way you want. You can do it as in
             `LakhNES <https://github.com/chrisdonahue/LakhNES>`_ or

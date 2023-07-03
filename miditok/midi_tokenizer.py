@@ -44,29 +44,38 @@ def _in_as_seq(complete: bool = True, decode_bpe: bool = True):
         def wrapper(*args, **kwargs):
             self = args[0]
             seq = args[1]
-            if not isinstance(seq, TokSequence):
-                ids = tokens = events = None
+            if not isinstance(seq, TokSequence) and not all(
+                isinstance(seq_, TokSequence) for seq_ in seq
+            ):
                 try:
-                    ids = convert_ids_tensors_to_list(seq)
+                    arg = ("ids", convert_ids_tensors_to_list(seq))
                 except (AttributeError, ValueError, TypeError, IndexError):
                     if isinstance(seq[0], str) or (
                         isinstance(seq[0], str) and isinstance(seq[0][0], str)
                     ):
-                        tokens = seq
+                        arg = ("tokens", seq)
                     else:  # list of Event, very unlikely
-                        events = seq
+                        arg = ("events", seq)
 
-                seq = TokSequence(
-                    ids=ids,
-                    tokens=tokens,
-                    events=events,
-                    ids_bpe_encoded=self._ids_are_bpe_encoded(ids),
-                )
+                if isinstance(arg[1][0], list):
+                    seq = []
+                    for obj in arg[1]:
+                        kwarg = {arg[0]: obj}
+                        seq.append(TokSequence(**kwarg))
+                        seq[-1].ids_bpe_encoded = self._are_ids_bpe_encoded(seq[-1].ids)
+                else:
+                    kwarg = {arg[0]: arg[1]}
+                    seq = TokSequence(**kwarg)
+                    seq.ids_bpe_encoded = self._are_ids_bpe_encoded(seq.ids)
 
             if self.has_bpe and decode_bpe:
                 self.decode_bpe(seq)
             if complete:
-                self.complete_sequence(seq)
+                if isinstance(seq, TokSequence):
+                    self.complete_sequence(seq)
+                else:
+                    for seq_ in seq:
+                        self.complete_sequence(seq_)
 
             args = list(args)
             args[1] = seq
@@ -413,7 +422,7 @@ class MIDITokenizer(ABC):
         override this method, e.g. Octuple or PopMAG.
 
         :param midi: the MIDI object to convert.
-        :return: sequences of tokens.
+        :return: a list of :class:`miditok.TokSequence` objects.
         """
         # Convert each track to tokens
         tokens = []
@@ -424,7 +433,7 @@ class MIDITokenizer(ABC):
 
     def midi_to_tokens(
         self, midi: MidiFile, apply_bpe_if_possible: bool = True, *args, **kwargs
-    ) -> List[TokSequence]:
+    ) -> Union[TokSequence, List[TokSequence]]:
         r"""Tokenizes a MIDI file.
         This method returns a list of :class:`miditok.TokSequence`.
 
@@ -433,7 +442,8 @@ class MIDITokenizer(ABC):
 
         :param midi: the MIDI object to convert.
         :param apply_bpe_if_possible: will apply BPE if the tokenizer's vocabulary was learned with.
-        :return: sequences of tokens.
+        :return: a :class:`miditok.TokSequence` if `tokenizer.unique_track` is true, else a list of
+                :class:`miditok.TokSequence` objects.
         """
         # Check if the durations values have been calculated before for this time division
         if midi.ticks_per_beat not in self._durations_ticks:
@@ -1166,7 +1176,7 @@ class MIDITokenizer(ABC):
             )
             self.save_tokens(seq, out_, sample["programs"])
 
-    def _ids_are_bpe_encoded(self, ids: Union[List[int], np.ndarray]) -> bool:
+    def _are_ids_bpe_encoded(self, ids: Union[List[int], np.ndarray]) -> bool:
         r"""A small check telling if a sequence of ids are encoded with BPE.
         This is performed by checking if any id has a value superior or equal to the length
         of the base vocabulary.
@@ -1308,16 +1318,14 @@ class MIDITokenizer(ABC):
         err_note = 0  # i.e. duplicated
         previous_type = tokens[0].split("_")[0]
         current_pos = -1
-        current_pitches = []
+        current_program = 0
+        current_pitches = {p: [] for p in self.config.programs}
         note_tokens_types = ["Pitch", "NoteOn"]
 
         # Init first note and current pitches if needed
         if previous_type in note_tokens_types:
-            if previous_type in ["Pitch", "NoteOn"]:
-                pitch_val = int(tokens[0].split("_")[1])
-            else:  # PitchVel or PitchVelDur
-                pitch_val = int(tokens[0].split("_")[1].split("-")[0])
-            current_pitches.append(pitch_val)
+            pitch_val = int(tokens[0].split("_")[1])
+            current_pitches[current_program].append(pitch_val)
         elif previous_type == "Position":
             current_pos = int(tokens[0].split("_")[1])
 
@@ -1328,20 +1336,22 @@ class MIDITokenizer(ABC):
             if event_type in self.tokens_types_graph[previous_type]:
                 if event_type == "Bar":  # reset
                     current_pos = -1
-                    current_pitches = []
+                    current_pitches = {p: [] for p in self.config.programs}
                 elif event_type in ["TimeShift", "Time-Shift", "Rest"]:
-                    current_pitches = []
+                    current_pitches = {p: [] for p in self.config.programs}
                 elif event_type in note_tokens_types:
                     pitch_val = int(event_value)
-                    if pitch_val in current_pitches:
+                    if pitch_val in current_pitches[current_program]:
                         err_note += 1  # pitch already played at current position
                     else:
-                        current_pitches.append(pitch_val)
+                        current_pitches[current_program].append(pitch_val)
                 elif event_type == "Position":
                     if int(event_value) <= current_pos and previous_type != "Rest":
                         err_time += 1  # token position value <= to the current position
                     current_pos = int(event_value)
-                    current_pitches = []
+                    current_pitches = {p: [] for p in self.config.programs}
+                elif event_type == "Program":  # reset
+                    current_program = int(event_value)
             # Bad token type
             else:
                 err_type += 1

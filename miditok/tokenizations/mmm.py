@@ -40,7 +40,10 @@ class MMM(MIDITokenizer):
         density_bins_max: Tuple[int, int] = MMM_DENSITY_BINS_MAX,
         params: Optional[Union[str, Path]] = None,
     ):
-        if tokenizer_config is not None and "density_bins_max" not in tokenizer_config.additional_params:
+        if (
+            tokenizer_config is not None
+            and "density_bins_max" not in tokenizer_config.additional_params
+        ):
             tokenizer_config.additional_params["density_bins_max"] = density_bins_max
         super().__init__(tokenizer_config, True, params)
 
@@ -49,9 +52,12 @@ class MMM(MIDITokenizer):
         self.config.use_rests = False
         # Recreate densities here just in case density_bins_max was loaded from params (list to np array)
         if "note_densities" in self.config.additional_params:
-            if isinstance(self.config.additional_params["note_densities"], (list, tuple)):
-                self.config.additional_params["note_densities"] = \
-                    np.array(self.config.additional_params["note_densities"])
+            if isinstance(
+                self.config.additional_params["note_densities"], (list, tuple)
+            ):
+                self.config.additional_params["note_densities"] = np.array(
+                    self.config.additional_params["note_densities"]
+                )
         else:
             self.config.additional_params["note_densities"] = np.linspace(
                 0,
@@ -406,7 +412,9 @@ class MMM(MIDITokenizer):
         ]
 
         # NOTE DENSITY
-        vocab += [f"NoteDensity_{i}" for i in self.config.additional_params["note_densities"]]
+        vocab += [
+            f"NoteDensity_{i}" for i in self.config.additional_params["note_densities"]
+        ]
 
         # TIME SIGNATURE
         if self.config.use_time_signatures:

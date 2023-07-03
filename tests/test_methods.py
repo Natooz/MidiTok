@@ -20,7 +20,7 @@ import miditok
 
 
 def test_convert_tensors():
-    original = [[2, 6, 87, 89, 25, 15]]
+    original = [[2, 6, 95, 130, 25, 15]]
     types = [ptTensor, ptIntTensor, ptFloatTensor, tfTensor]
 
     tokenizer = miditok.TSD()

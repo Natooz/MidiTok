@@ -93,7 +93,9 @@ def test_one_track_midi_to_tokens_to_midi(
 
             # Convert the track in tokens
             tokens = tokenizer(midi)
-            if not tokenizer.unique_track:  # or isinstance list
+            if (
+                not tokenizer.unique_track or tokenization == "TSD"
+            ):  # or isinstance list
                 tokens = tokens[0]
 
             # Checks types and values conformity following the rules
@@ -106,7 +108,9 @@ def test_one_track_midi_to_tokens_to_midi(
             # Convert back tokens into a track object
             tempo_changes = None
             time_sig_changes = None
-            if tokenizer.unique_track:
+            if tokenizer.unique_track or tokenization == "TSD":
+                if tokenization == "TSD":
+                    tokens = [tokens]
                 new_midi = tokenizer.tokens_to_midi(
                     tokens, time_division=midi.ticks_per_beat
                 )

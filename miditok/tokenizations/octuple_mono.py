@@ -231,7 +231,8 @@ class OctupleMono(MIDITokenizer):
 
         # BAR
         vocab[4] += [
-            f"Bar_{i}" for i in range(self.config.additional_params["max_bar_embedding"])
+            f"Bar_{i}"
+            for i in range(self.config.additional_params["max_bar_embedding"])
         ]  # bar embeddings (positional encoding)
 
         # TEMPO

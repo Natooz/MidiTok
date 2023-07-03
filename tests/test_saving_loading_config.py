@@ -37,7 +37,9 @@ def test_saving_loading_tokenizer_config():
         config1 = miditok.TokenizerConfig()
         config1.save_to_json(f"./tests/configs/tok_conf_{tokenization}.json")
 
-        config2 = miditok.TokenizerConfig.load_from_json(f"./tests/configs/tok_conf_{tokenization}.json")
+        config2 = miditok.TokenizerConfig.load_from_json(
+            f"./tests/configs/tok_conf_{tokenization}.json"
+        )
 
         assert config1 == config2
         config1.pitch_range = (0, 777)

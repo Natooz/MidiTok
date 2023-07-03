@@ -56,7 +56,9 @@ class MuMIDI(MIDITokenizer):
     ):
         if tokenizer_config is not None:
             if "drum_pitch_range" not in tokenizer_config.additional_params:
-                tokenizer_config.additional_params["drum_pitch_range"] = drum_pitch_range
+                tokenizer_config.additional_params[
+                    "drum_pitch_range"
+                ] = drum_pitch_range
             if "max_bar_embedding" not in tokenizer_config.additional_params:
                 # this attribute might increase over tokenizations, if the tokenizer encounter longer MIDIs
                 tokenizer_config.additional_params["max_bar_embedding"] = 60
@@ -412,14 +414,20 @@ class MuMIDI(MIDITokenizer):
 
         # PITCH & DRUM PITCHES & BAR & POSITIONS & PROGRAM
         vocab[0] += [f"Pitch_{i}" for i in range(*self.config.pitch_range)]
-        vocab[0] += [f"DrumPitch_{i}" for i in range(*self.config.additional_params["drum_pitch_range"])]
+        vocab[0] += [
+            f"DrumPitch_{i}"
+            for i in range(*self.config.additional_params["drum_pitch_range"])
+        ]
         vocab[0] += ["Bar_None"]  # new bar token
         nb_positions = max(self.config.beat_res.values()) * 4  # 4/* time signature
         vocab[0] += [f"Position_{i}" for i in range(nb_positions)]
         vocab[0] += [f"Program_{program}" for program in self.config.programs]
 
         # BAR POS ENC
-        vocab[1] += [f"BarPosEnc_{i}" for i in range(self.config.additional_params["max_bar_embedding"])]
+        vocab[1] += [
+            f"BarPosEnc_{i}"
+            for i in range(self.config.additional_params["max_bar_embedding"])
+        ]
 
         # POSITION POS ENC
         vocab[2] += [

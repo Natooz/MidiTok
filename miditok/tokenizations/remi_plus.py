@@ -40,7 +40,10 @@ class REMIPlus(MIDITokenizer):
         max_bar_embedding: Optional[int] = None,
         params: Union[str, Path] = None,
     ):
-        if tokenizer_config is not None and "max_bar_embedding" not in tokenizer_config.additional_params:
+        if (
+            tokenizer_config is not None
+            and "max_bar_embedding" not in tokenizer_config.additional_params
+        ):
             # If used, this attribute might increase over tokenizations, if the tokenizer encounter longer MIDIs
             tokenizer_config.additional_params["max_bar_embedding"] = max_bar_embedding
         super().__init__(tokenizer_config, True, params)
@@ -82,13 +85,17 @@ class REMIPlus(MIDITokenizer):
             notes_with_program[0][0].start + 1
         )  # so that no rest is created before the first note
         # Bar
-        if self.config.additional_params["max_bar_embedding"]:  # Check bar embedding limit, update if needed
+        if self.config.additional_params[
+            "max_bar_embedding"
+        ]:  # Check bar embedding limit, update if needed
             nb_bars = ceil(
                 max(n[0].end for n in notes_with_program)
                 / (self._current_midi_metadata["time_division"] * 4)
             )
             if self.config.additional_params["max_bar_embedding"] < nb_bars:
-                for i in range(self.config.additional_params["max_bar_embedding"], nb_bars):
+                for i in range(
+                    self.config.additional_params["max_bar_embedding"], nb_bars
+                ):
                     self.add_to_vocab(f"Bar_{i}")
                 self.config.additional_params["max_bar_embedding"] = nb_bars
         current_bar = -1
@@ -141,7 +148,8 @@ class REMIPlus(MIDITokenizer):
                         Event(
                             type="Bar",
                             value=str(current_bar + i + 1)
-                            if self.config.additional_params["max_bar_embedding"] is not None
+                            if self.config.additional_params["max_bar_embedding"]
+                            is not None
                             else "None",
                             time=(current_bar + i + 1) * ticks_per_bar,
                             desc=0,
@@ -453,7 +461,10 @@ class REMIPlus(MIDITokenizer):
 
         # BAR
         if self.config.additional_params["max_bar_embedding"] is not None:
-            vocab += [f"Bar_{i}" for i in range(self.config.additional_params["max_bar_embedding"])]
+            vocab += [
+                f"Bar_{i}"
+                for i in range(self.config.additional_params["max_bar_embedding"])
+            ]
         else:
             vocab += ["Bar_None"]
 
