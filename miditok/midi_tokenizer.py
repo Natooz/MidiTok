@@ -44,7 +44,9 @@ def _in_as_seq(complete: bool = True, decode_bpe: bool = True):
         def wrapper(*args, **kwargs):
             self = args[0]
             seq = args[1]
-            if not isinstance(seq, TokSequence) and not all(isinstance(seq_, TokSequence) for seq_ in seq):
+            if not isinstance(seq, TokSequence) and not all(
+                isinstance(seq_, TokSequence) for seq_ in seq
+            ):
                 try:
                     arg = ("ids", convert_ids_tensors_to_list(seq))
                 except (AttributeError, ValueError, TypeError, IndexError):

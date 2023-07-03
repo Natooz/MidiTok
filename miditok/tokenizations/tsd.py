@@ -37,7 +37,7 @@ class TSD(MIDITokenizer):
         """
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
-        dur_bins = self._durations_ticks[self._current_midi_metadata['time_division']]
+        dur_bins = self._durations_ticks[self._current_midi_metadata["time_division"]]
         program = track.program if not track.is_drum else -1
         events = []
 
@@ -97,7 +97,7 @@ class TSD(MIDITokenizer):
         :param events: note events to complete.
         :return: the same events, with time events inserted.
         """
-        dur_bins = self._durations_ticks[self._current_midi_metadata['time_division']]
+        dur_bins = self._durations_ticks[self._current_midi_metadata["time_division"]]
         ticks_per_sample = self._current_midi_metadata["time_division"] / max(
             self.config.beat_res.values()
         )
@@ -117,9 +117,9 @@ class TSD(MIDITokenizer):
             if event.time != previous_tick:
                 # (Rest)
                 if (
-                        event.type in ["Pitch", "Tempo", "TimeSig"]
-                        and self.config.use_rests
-                        and event.time - previous_note_end >= min_rest
+                    event.type in ["Pitch", "Tempo", "TimeSig"]
+                    and self.config.use_rests
+                    and event.time - previous_note_end >= min_rest
                 ):
                     # untouched tick value to the order is not messed after sorting
                     # in case of tempo change, we need to take its time as reference
@@ -142,7 +142,7 @@ class TSD(MIDITokenizer):
                             )
                         )
                         previous_tick += (
-                                rest_beat * self._current_midi_metadata["time_division"]
+                            rest_beat * self._current_midi_metadata["time_division"]
                         )
 
                     while rest_pos >= self.rests[0][1]:
@@ -195,7 +195,9 @@ class TSD(MIDITokenizer):
         all_events.sort(key=lambda x: (x.time, self._order(x)))
         return all_events
 
-    def _midi_to_tokens(self, midi: MidiFile, *args, **kwargs) -> Union[TokSequence, List[TokSequence]]:
+    def _midi_to_tokens(
+        self, midi: MidiFile, *args, **kwargs
+    ) -> Union[TokSequence, List[TokSequence]]:
         r"""Converts a preprocessed MIDI object to a sequence of tokens.
 
         :param midi: the MIDI objet to convert.
@@ -246,9 +248,12 @@ class TSD(MIDITokenizer):
 
         return tok_sequence
 
-    def tokens_to_track(self, tokens: Union[TokSequence, List, np.ndarray, Any],
-                        time_division: Optional[int] = TIME_DIVISION,
-                        program: Optional[Tuple[int, bool]] = (0, False)) -> Tuple[Instrument, List[TempoChange]]:
+    def tokens_to_track(
+        self,
+        tokens: Union[TokSequence, List, np.ndarray, Any],
+        time_division: Optional[int] = TIME_DIVISION,
+        program: Optional[Tuple[int, bool]] = (0, False),
+    ) -> Tuple[Instrument, List[TempoChange]]:
         pass
 
     def track_to_tokens(self, track: Instrument) -> TokSequence:
@@ -256,11 +261,14 @@ class TSD(MIDITokenizer):
 
     @_in_as_seq()
     def tokens_to_midi(
-            self,
-            tokens: Union[Union[TokSequence, List, np.ndarray, Any], List[Union[TokSequence, List, np.ndarray, Any]]],
-            _=None,
-            output_path: Optional[str] = None,
-            time_division: int = TIME_DIVISION,
+        self,
+        tokens: Union[
+            Union[TokSequence, List, np.ndarray, Any],
+            List[Union[TokSequence, List, np.ndarray, Any]],
+        ],
+        _=None,
+        output_path: Optional[str] = None,
+        time_division: int = TIME_DIVISION,
     ) -> MidiFile:
         r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
 
@@ -277,7 +285,7 @@ class TSD(MIDITokenizer):
             tokens[i] = tokens[i].tokens
         midi = MidiFile(ticks_per_beat=time_division)
         assert (
-                time_division % max(self.config.beat_res.values()) == 0
+            time_division % max(self.config.beat_res.values()) == 0
         ), f"Invalid time division, please give one divisible by {max(self.config.beat_res.values())}"
         ticks_per_sample = time_division // max(self.config.beat_res.values())
 
@@ -298,15 +306,15 @@ class TSD(MIDITokenizer):
                 elif token.split("_")[0] == "Rest":
                     beat, pos = map(int, seq[ti].split("_")[1].split("."))
                     if (
-                            current_tick < previous_note_end
+                        current_tick < previous_note_end
                     ):  # if in case successive rest happen
                         current_tick = previous_note_end
                     current_tick += beat * time_division + pos * ticks_per_sample
                 elif token.split("_")[0] == "Pitch":
                     try:
                         if (
-                                seq[ti + 1].split("_")[0] == "Velocity"
-                                and seq[ti + 2].split("_")[0] == "Duration"
+                            seq[ti + 1].split("_")[0] == "Velocity"
+                            and seq[ti + 2].split("_")[0] == "Duration"
                         ):
                             pitch = int(seq[ti].split("_")[1])
                             vel = int(seq[ti + 1].split("_")[1])
@@ -315,7 +323,9 @@ class TSD(MIDITokenizer):
                             )
                             if current_program not in instruments.keys():
                                 instruments[current_program] = Instrument(
-                                    program=0 if current_program == -1 else current_program,
+                                    program=0
+                                    if current_program == -1
+                                    else current_program,
                                     is_drum=current_program == -1,
                                     name="Drums"
                                     if current_program == -1
@@ -328,7 +338,7 @@ class TSD(MIDITokenizer):
                                 previous_note_end, current_tick + duration
                             )
                     except (
-                            IndexError
+                        IndexError
                     ):  # A well constituted sequence should not raise an exception
                         pass  # However with generated sequences this can happen, or if the sequence isn't finished
                 elif token.split("_")[0] == "Program":
@@ -343,10 +353,12 @@ class TSD(MIDITokenizer):
                     num, den = self._parse_token_time_signature(token.split("_")[1])
                     current_time_signature = time_signature_changes[-1]
                     if (
-                            num != current_time_signature.numerator
-                            and den != current_time_signature.denominator
+                        num != current_time_signature.numerator
+                        and den != current_time_signature.denominator
                     ):
-                        time_signature_changes.append(TimeSignature(num, den, current_tick))
+                        time_signature_changes.append(
+                            TimeSignature(num, den, current_tick)
+                        )
         if len(tempo_changes) > 1:
             del tempo_changes[0]  # delete mocked tempo change
         tempo_changes[0].time = 0

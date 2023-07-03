@@ -428,7 +428,10 @@ class Octuple(MIDITokenizer):
         vocab[4] += [f"Position_{i}" for i in range(nb_positions)]
 
         # BAR (positional encoding)
-        vocab[5] += [f"Bar_{i}" for i in range(self.config.additional_params["max_bar_embedding"])]
+        vocab[5] += [
+            f"Bar_{i}"
+            for i in range(self.config.additional_params["max_bar_embedding"])
+        ]
 
         # TEMPO
         if self.config.use_tempos:

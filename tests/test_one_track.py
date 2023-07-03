@@ -93,7 +93,9 @@ def test_one_track_midi_to_tokens_to_midi(
 
             # Convert the track in tokens
             tokens = tokenizer(midi)
-            if not tokenizer.unique_track or tokenization == "TSD":  # or isinstance list
+            if (
+                not tokenizer.unique_track or tokenization == "TSD"
+            ):  # or isinstance list
                 tokens = tokens[0]
 
             # Checks types and values conformity following the rules
