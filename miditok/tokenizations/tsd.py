@@ -114,54 +114,68 @@ class TSD(MIDITokenizer):
         previous_note_end = events[0].time + 1
         for e, event in enumerate(events.copy()):
             # No time shift
-            if event.time == previous_tick:
-                continue
+            if event.time != previous_tick:
+                # (Rest)
+                if (
+                        event.type in ["Pitch", "Tempo", "TimeSig"]
+                        and self.config.use_rests
+                        and event.time - previous_note_end >= min_rest
+                ):
+                    # untouched tick value to the order is not messed after sorting
+                    # in case of tempo change, we need to take its time as reference
+                    rest_tick = max(previous_note_end, previous_tick)
+                    rest_beat, rest_pos = divmod(
+                        event.time - rest_tick,
+                        self._current_midi_metadata["time_division"],
+                    )
+                    rest_beat = min(rest_beat, max([r[0] for r in self.rests]))
+                    rest_pos = round(rest_pos / ticks_per_sample)
+                    previous_tick = rest_tick
 
-            # (Rest)
-            elif (
-                    event.type in ["Pitch", "Tempo"]
-                    and self.config.use_rests
-                    and event.time - previous_note_end >= min_rest
-            ):
-                rest_beat, rest_pos = divmod(
-                    event.time - previous_tick,
-                    self._current_midi_metadata["time_division"],
-                )
-                rest_beat = min(rest_beat, max([r[0] for r in self.rests]))
-                rest_pos = round(rest_pos / ticks_per_sample)
-                rest_tick = previous_tick  # untouched tick value to the order is not messed after sorting
-
-                if rest_beat > 0:
-                    all_events.append(
-                        Event(
-                            type="Rest",
-                            value=f"{rest_beat}.0",
-                            time=rest_tick,
-                            desc=f"{rest_beat}.0",
+                    if rest_beat > 0:
+                        all_events.append(
+                            Event(
+                                type="Rest",
+                                value=f"{rest_beat}.0",
+                                time=rest_tick,
+                                desc=f"{rest_beat}.0",
+                            )
                         )
-                    )
-                    previous_tick += (
-                            rest_beat * self._current_midi_metadata["time_division"]
-                    )
-
-                while rest_pos >= self.rests[0][1]:
-                    rest_pos_temp = min(
-                        [r[1] for r in self.rests], key=lambda x: abs(x - rest_pos)
-                    )
-                    all_events.append(
-                        Event(
-                            type="Rest",
-                            value=f"0.{rest_pos_temp}",
-                            time=rest_tick,
-                            desc=f"0.{rest_pos_temp}",
+                        previous_tick += (
+                                rest_beat * self._current_midi_metadata["time_division"]
                         )
-                    )
-                    previous_tick += round(rest_pos_temp * ticks_per_sample)
-                    rest_pos -= rest_pos_temp
 
-                # Adds an additional time shift if needed
-                if rest_pos > 0:
-                    time_shift = round(rest_pos * ticks_per_sample)
+                    while rest_pos >= self.rests[0][1]:
+                        rest_pos_temp = min(
+                            [r[1] for r in self.rests], key=lambda x: abs(x - rest_pos)
+                        )
+                        all_events.append(
+                            Event(
+                                type="Rest",
+                                value=f"0.{rest_pos_temp}",
+                                time=rest_tick,
+                                desc=f"0.{rest_pos_temp}",
+                            )
+                        )
+                        previous_tick += round(rest_pos_temp * ticks_per_sample)
+                        rest_pos -= rest_pos_temp
+
+                    # Adds an additional time shift if needed
+                    if rest_pos > 0:
+                        time_shift = round(rest_pos * ticks_per_sample)
+                        index = np.argmin(np.abs(dur_bins - time_shift))
+                        all_events.append(
+                            Event(
+                                type="TimeShift",
+                                value=".".join(map(str, self.durations[index])),
+                                time=previous_tick,
+                                desc=f"{time_shift} ticks",
+                            )
+                        )
+
+                # Time shift
+                else:
+                    time_shift = event.time - previous_tick
                     index = np.argmin(np.abs(dur_bins - time_shift))
                     all_events.append(
                         Event(
@@ -171,23 +185,11 @@ class TSD(MIDITokenizer):
                             desc=f"{time_shift} ticks",
                         )
                     )
+                previous_tick = event.time
 
-            # Time shift
-            else:
-                time_shift = event.time - previous_tick
-                index = np.argmin(np.abs(dur_bins - time_shift))
-                all_events.append(
-                    Event(
-                        type="TimeShift",
-                        value=".".join(map(str, self.durations[index])),
-                        time=previous_tick,
-                        desc=f"{time_shift} ticks",
-                    )
-                )
-
+            # Update max offset time of the notes encountered
             if event.type == "Pitch":
                 previous_note_end = max(previous_note_end, event.desc)
-            previous_tick = event.time
 
         # Sort the tokens so that they come in the good order
         all_events.sort(key=lambda x: (x.time, self._order(x)))
