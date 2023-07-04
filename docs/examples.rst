@@ -9,21 +9,27 @@ A basic example showing how to create a tokenizer, with a selection of custom pa
 
 ..  code-block:: python
 
-    from miditok import REMI  # here we choose to use REMI
+    from miditok import REMI, TokenizerConfig  # here we choose to use REMI
     from miditok.utils import get_midi_programs
 
     # Our parameters
-    pitch_range = range(21, 109)
-    beat_res = {(0, 4): 8, (4, 12): 4}
-    nb_velocities = 32
-    additional_tokens = {'Chord': True, 'Rest': False, 'Tempo': True, 'Program': False, 'TimeSignature': False,
-                         'rest_range': (2, 8),  # (half, 8 beats)
-                         'nb_tempos': 32,  # nb of tempo bins
-                         'tempo_range': (40, 250)}  # (min, max)
-    special_tokens = ["PAD", "BOS", "EOS", "MASK"]
+    TOKENIZER_PARAMS = {
+        "pitch_range": range(21, 109),
+        "beat_res": {(0, 4): 8, (4, 12): 4},
+        "nb_velocities": 32,
+        "special_tokens": ["PAD", "BOS", "EOS", "MASK"],
+        "use_chords": True,
+        "use_rests": False,
+        "use_tempos": True,
+        "use_time_signatures": False,
+        "use_programs": False,
+        "nb_tempos": 32,  # nb of tempo bins
+        "tempo_range": (40, 250),  # (min, max)
+    }
+    config = TokenizerConfig(**TOKENIZER_PARAMS)
 
     # Creates the tokenizer and loads a MIDI
-    tokenizer = REMI(pitch_range, beat_res, nb_velocities, additional_tokens, special_tokens)
+    tokenizer = REMI(config)
 
 MIDI - Tokens conversion
 -------------------------------
