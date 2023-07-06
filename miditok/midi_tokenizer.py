@@ -1027,7 +1027,7 @@ class MIDITokenizer(ABC):
                 iterator += (
                     [[byte_] for byte_ in bytes_]
                     if not self.unique_track
-                    else [[bytes_]]
+                    else [bytes_]
                 )
 
             # This doesn't seem to work, the trainer pre-processes the sequences, but then no word remains
