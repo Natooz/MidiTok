@@ -90,7 +90,10 @@ def data_augmentation_dataset(
                 Tuple[int, int, int], List[Union[int, List[int]]]
             ] = {}
             for track, (_, is_drum) in zip(ids, programs):
-                if is_drum:  # we dont augment drums
+                # we dont augment drums
+                if not tokenizer.unique_track and is_drum:
+                    continue
+                elif tokenizer.unique_track and all(p[1] for p in programs):
                     continue
                 corrected_offsets = deepcopy(offsets)
                 vel_dim = int(128 / len(tokenizer.velocities))
@@ -113,12 +116,13 @@ def data_augmentation_dataset(
                         augmented_tokens[aug_offsets].append(seq)
                     except KeyError:
                         augmented_tokens[aug_offsets] = [seq]
-            for i, (track, (_, is_drum)) in enumerate(
-                zip(ids, programs)
-            ):  # adding drums to all already augmented
-                if is_drum:
-                    for aug_offsets in augmented_tokens:
-                        augmented_tokens[aug_offsets].insert(i, track)
+            if not tokenizer.unique_track:
+                for i, (track, (_, is_drum)) in enumerate(
+                    zip(ids, programs)
+                ):  # adding drums to all already augmented
+                    if is_drum:
+                        for aug_offsets in augmented_tokens:
+                            augmented_tokens[aug_offsets].insert(i, track)
 
             # Save augmented tracks as json
             for aug_offsets, tracks_seq in augmented_tokens.items():
@@ -138,6 +142,8 @@ def data_augmentation_dataset(
                 nb_augmentations += 1
                 nb_tracks_augmented += len(tracks_seq)
             if copy_original_in_new_location and out_path is not None:
+                if tokenizer.unique_track:
+                    ids = ids[0]
                 tokenizer.save_tokens(
                     ids, out_path / f"{file_path.stem}.json", programs
                 )
@@ -448,6 +454,17 @@ def data_augmentation_tokens(
             )
             note_off_tokens = np.array(tokenizer.token_ids_of_type("NoteOff"))
             mask_pitch = np.isin(tokens, pitch_tokens)
+            # If applicable, removes drum notes from the mask
+            if tokenizer.unique_track:
+                for idx, is_note in enumerate(mask_pitch):
+                    if (
+                        is_note
+                        and idx > 0
+                        and tokenizer[tokens[idx - 1]] == "Program_-1"
+                    ):
+                        mask_pitch[idx] = False
+                        if len(note_off_tokens) > 0:
+                            note_off_tokens[idx] = False
         else:
             pitch_tokens = np.array(tokenizer.token_ids_of_type("Pitch", pitch_voc_idx))
             mask_pitch = np.full_like(tokens, 0, dtype=np.bool_)

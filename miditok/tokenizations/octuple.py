@@ -301,7 +301,7 @@ class Octuple(MIDITokenizer):
         current_time_sig_tick = 0
         current_time_sig_bar = 0
 
-        tracks = dict([(n, []) for n in range(-1, 128)])
+        tracks = dict([(n, []) for n in self.config.programs])
         for time_step in tokens:
             if any(tok.split("_")[1] == "None" for tok in time_step[:6]):
                 continue  # Either padding, mask: error of prediction or end of sequence anyway

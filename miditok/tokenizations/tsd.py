@@ -426,7 +426,7 @@ class TSD(MIDITokenizer):
 
         # PROGRAM
         if self.config.use_programs:
-            vocab += [f"Program_{program}" for program in range(-1, 128)]
+            vocab += [f"Program_{program}" for program in self.config.programs]
 
         # TIME SIGNATURE
         if self.config.use_time_signatures:

@@ -329,7 +329,7 @@ class REMI(MIDITokenizer):
 
         # PROGRAM
         if self.config.use_programs:
-            vocab += [f"Program_{program}" for program in range(-1, 128)]
+            vocab += [f"Program_{program}" for program in self.config.programs]
 
         return vocab
 

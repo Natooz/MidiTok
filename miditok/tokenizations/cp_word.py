@@ -410,7 +410,8 @@ class CPWord(MIDITokenizer):
         # PROGRAM
         if self.config.use_programs:
             vocab += [
-                ["Ignore_None"] + [f"Program_{program}" for program in range(-1, 128)]
+                ["Ignore_None"]
+                + [f"Program_{program}" for program in self.config.programs]
             ]
 
         # CHORD
