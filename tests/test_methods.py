@@ -214,10 +214,14 @@ def test_data_augmentation():
             ):
                 if is_drum:
                     continue
-                for original_token, aug_token in zip(original_track, aug_track):
+                for idx, (original_token, aug_token) in enumerate(zip(original_track, aug_track)):
                     if not tokenizer.is_multi_voc:
                         if original_token in pitch_tokens:
-                            assert aug_token == original_token + offsets[0]
+                            pitch_offset = offsets[0]
+                            # no offset for drum pitches
+                            if tokenizer.unique_track and idx > 0 and tokenizer[original_track[idx - 1]] == "Program_-1":
+                                pitch_offset = 0
+                            assert aug_token == original_token + pitch_offset
                         elif original_token in vel_tokens:
                             assert aug_token in [
                                 original_token + offsets[1],
