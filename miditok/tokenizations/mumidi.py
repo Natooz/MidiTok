@@ -101,27 +101,6 @@ class MuMIDI(MIDITokenizer):
         :param midi: the MIDI object to convert
         :return: sequences of tokens
         """
-        # Check if the durations values have been calculated before for this time division
-        if midi.ticks_per_beat not in self._durations_ticks:
-            self._durations_ticks[midi.ticks_per_beat] = np.array(
-                [
-                    (beat * res + pos) * midi.ticks_per_beat // res
-                    for beat, pos, res in self.durations
-                ]
-            )
-        # Preprocess the MIDI file
-        self.preprocess_midi(midi)
-
-        # Register MIDI metadata
-        self.current_midi_metadata = {
-            "time_division": midi.ticks_per_beat,
-            "tempo_changes": midi.tempo_changes,
-            "time_sig_changes": midi.time_signature_changes,
-            "key_sig_changes": midi.key_signature_changes,
-        }
-
-        # **************** OVERRIDE FROM HERE, KEEP THE LINES ABOVE IN YOUR METHOD ****************
-
         # Check bar embedding limit, update if needed
         nb_bars = ceil(midi.max_tick / (midi.ticks_per_beat * 4))
         if self.config.additional_params["max_bar_embedding"] < nb_bars:
@@ -148,7 +127,7 @@ class MuMIDI(MIDITokenizer):
         current_pos = -1
         current_track = -2  # because -2 doesn't exist
         current_tempo_idx = 0
-        current_tempo = self.current_midi_metadata["tempo_changes"][
+        current_tempo = self._current_midi_metadata["tempo_changes"][
             current_tempo_idx
         ].tempo
         for note_token in note_tokens:
@@ -156,10 +135,10 @@ class MuMIDI(MIDITokenizer):
             if self.config.use_tempos:
                 # If the current tempo is not the last one
                 if current_tempo_idx + 1 < len(
-                    self.current_midi_metadata["tempo_changes"]
+                    self._current_midi_metadata["tempo_changes"]
                 ):
                     # Will loop over incoming tempo changes
-                    for tempo_change in self.current_midi_metadata["tempo_changes"][
+                    for tempo_change in self._current_midi_metadata["tempo_changes"][
                         current_tempo_idx + 1 :
                     ]:
                         # If this tempo change happened before the current moment
@@ -232,7 +211,7 @@ class MuMIDI(MIDITokenizer):
         """
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
-        dur_bins = self._durations_ticks[self.current_midi_metadata["time_division"]]
+        dur_bins = self._durations_ticks[self._current_midi_metadata["time_division"]]
 
         tokens = []
         for note in track.notes:
@@ -319,9 +298,15 @@ class MuMIDI(MIDITokenizer):
             time_division % max(self.config.beat_res.values()) == 0
         ), f"Invalid time division, please give one divisible by {max(self.config.beat_res.values())}"
         midi = MidiFile(ticks_per_beat=time_division)
-        midi.tempo_changes.append(TempoChange(TEMPO, 0))
-        ticks_per_sample = time_division // max(self.config.beat_res.values())
 
+        # Tempos
+        if self.config.use_tempos:
+            first_tempo = int(tokens.tokens[0][3].split("_")[1])
+        else:
+            first_tempo = TEMPO
+        midi.tempo_changes.append(TempoChange(first_tempo, 0))
+
+        ticks_per_sample = time_division // max(self.config.beat_res.values())
         tracks = {}
         current_tick = 0
         current_bar = -1
@@ -356,6 +341,12 @@ class MuMIDI(MIDITokenizer):
                 tracks[current_track].append(
                     Note(vel, pitch, current_tick, current_tick + duration)
                 )
+
+            # Decode tempo if required
+            if self.config.use_tempos:
+                tempo_val = int(time_step[3].split("_")[1])
+                if tempo_val != midi.tempo_changes[-1].tempo:
+                    midi.tempo_changes.append(TempoChange(tempo_val, current_tick))
 
         # Appends created notes to MIDI object
         for program, notes in tracks.items():

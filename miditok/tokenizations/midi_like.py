@@ -178,7 +178,6 @@ class MIDILike(MIDITokenizer):
 
         return TokSequence(events=events)
 
-    @_in_as_seq()
     def tokens_to_track(
         self,
         tokens: Union[TokSequence, List, np.ndarray, Any],

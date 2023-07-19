@@ -138,6 +138,31 @@ To use special tokens, you must specify them with the ``special_tokens`` argumen
 
 **Note:** you can use the ``tokenizer.special_tokens`` property to get the list of the special tokens of a tokenizer, and ``tokenizer.special_tokens`` for their ids.
 
+
+Tokens & TokSequence input / output format
+------------------------
+
+Depending on the tokenizer at use, the **format** of the tokens returned by the ``midi_to_tokens`` method may vary, as well as the expected format for the ``tokens_to_midi`` method. For any tokenizer, the format is the same for both methods.
+
+The format is deduced from the ``is_multi_voc`` and ``unique_track`` tokenizer properties. In short: **unique_track** being True means that the tokenizer will convert a MIDI file into a single stream of tokens for all instrument tracks, otherwise it will convert each track to a distinct token stream; **is_mult_voc** being True means that each token stream is a list of lists of tokens, of shape ``(T,C)`` for T time steps and C subtokens per time step.
+
+This results in four situations, where I is the number of tracks, T is the number of tokens (or time steps) and C the number of subtokens per time step:
+
+* **is_multi_voc** and **unique_track** are both **False**: ``[I,(T)]``
+* **is_multi_voc** is **False** and **unique_track** is **True**: ``(T)``
+* **is_multi_voc** is **True** and **unique_track** is **False**: ``[I,(T,C)]``
+* **is_multi_voc** and **unique_track** are both **True**: ``(T,C)``
+
+**Note that if there is no I dimension in the format, the output of ``midi_to_tokens`` is a ``TokSequence`` object, otherwise it is a list of ``TokSequence`` objects (one per token stream / track).**
+
+Some tokenizer examples to illustrate:
+
+* **TSD** without ``config.use_programs`` will not have multiple vocabularies and will treat each MIDI track as a unique stream of tokens, hence it will convert MIDI files to a list of ``TokSequence`` objects, ``(I,T)`` format.
+* **TSD** with ``config.use_programs`` being True will convert all MIDI tracks to a single stream of tokens, hence one ``TokSequence`` object, ``(T)`` format.
+* **CPWord** is a multi-voc tokenizer and treats each MIDI track as a distinct stream of tokens, hence it will convert MIDI files to a list of ``TokSequence`` objects with ``(I,T,C)`` format.
+* **Octuple** is a multi-voc tokenizer and converts all MIDI track to a single stream of tokens, hence it will convert MIDI files to a ``TokSequence`` object, ``(T,C)`` format.
+
+
 Magic methods
 ------------------------
 

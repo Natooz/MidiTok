@@ -78,28 +78,6 @@ class Octuple(MIDITokenizer):
         :param midi: the MIDI object to convert
         :return: sequences of tokens
         """
-        # Check if the durations values have been calculated before for this time division
-        if midi.ticks_per_beat not in self._durations_ticks:
-            self._durations_ticks[midi.ticks_per_beat] = np.array(
-                [
-                    (beat * res + pos) * midi.ticks_per_beat // res
-                    for beat, pos, res in self.durations
-                ]
-            )
-
-        # Preprocess the MIDI file
-        self.preprocess_midi(midi)
-
-        # Register MIDI metadata
-        self.current_midi_metadata = {
-            "time_division": midi.ticks_per_beat,
-            "tempo_changes": midi.tempo_changes,
-            "time_sig_changes": midi.time_signature_changes,
-            "key_sig_changes": midi.key_signature_changes,
-        }
-
-        # **************** OVERRIDE FROM HERE, KEEP THE LINES ABOVE IN YOUR METHOD ****************
-
         # Check bar embedding limit, update if needed
         nb_bars = ceil(midi.max_tick / (midi.ticks_per_beat * 4))
         if self.config.additional_params["max_bar_embedding"] < nb_bars:
@@ -141,7 +119,7 @@ class Octuple(MIDITokenizer):
         """
         # Make sure the notes are sorted first by their onset (start) times, second by pitch
         # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
-        time_division = self.current_midi_metadata["time_division"]
+        time_division = self._current_midi_metadata["time_division"]
         ticks_per_sample = time_division / max(self.config.beat_res.values())
         dur_bins = self._durations_ticks[time_division]
 
@@ -150,13 +128,13 @@ class Octuple(MIDITokenizer):
         current_bar = -1
         current_pos = -1
         current_tempo_idx = 0
-        current_tempo = self.current_midi_metadata["tempo_changes"][
+        current_tempo = self._current_midi_metadata["tempo_changes"][
             current_tempo_idx
         ].tempo
         current_time_sig_idx = 0
         current_time_sig_tick = 0
         current_time_sig_bar = 0
-        time_sig_change = self.current_midi_metadata["time_sig_changes"][
+        time_sig_change = self._current_midi_metadata["time_sig_changes"][
             current_time_sig_idx
         ]
         current_time_sig = self._reduce_time_signature(
@@ -199,10 +177,10 @@ class Octuple(MIDITokenizer):
             if self.config.use_tempos:
                 # If the current tempo is not the last one
                 if current_tempo_idx + 1 < len(
-                    self.current_midi_metadata["tempo_changes"]
+                    self._current_midi_metadata["tempo_changes"]
                 ):
                     # Will loop over incoming tempo changes
-                    for tempo_change in self.current_midi_metadata["tempo_changes"][
+                    for tempo_change in self._current_midi_metadata["tempo_changes"][
                         current_tempo_idx + 1 :
                     ]:
                         # If this tempo change happened before the current moment
@@ -219,10 +197,10 @@ class Octuple(MIDITokenizer):
             if self.config.use_time_signatures:
                 # If the current time signature is not the last one
                 if current_time_sig_idx + 1 < len(
-                    self.current_midi_metadata["time_sig_changes"]
+                    self._current_midi_metadata["time_sig_changes"]
                 ):
                     # Will loop over incoming time signature changes
-                    for time_sig_change in self.current_midi_metadata[
+                    for time_sig_change in self._current_midi_metadata[
                         "time_sig_changes"
                     ][current_time_sig_idx + 1 :]:
                         # If this time signature change happened before the current moment

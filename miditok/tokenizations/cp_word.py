@@ -285,7 +285,6 @@ class CPWord(MIDITokenizer):
 
         return cp_token_template
 
-    @_in_as_seq()
     def tokens_to_track(
         self,
         tokens: Union[TokSequence, List, np.ndarray, Any],

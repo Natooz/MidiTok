@@ -22,6 +22,7 @@ from .tests_utils import (
     track_equals,
     tempo_changes_equals,
     time_signature_changes_equals,
+    adapt_tempo_changes_times,
 )
 
 # Special beat res for test, up to 64 beats so the duration and time-shift values are
@@ -73,6 +74,7 @@ def test_one_track_midi_to_tokens_to_midi(
     for i, file_path in enumerate(tqdm(files, desc="Testing One Track")):
         # Reads the midi
         midi = MidiFile(file_path)
+        adapt_tempo_changes_times(midi.instruments, midi.tempo_changes)
         tracks = [deepcopy(midi.instruments[0])]
         has_errors = False
 
@@ -93,9 +95,7 @@ def test_one_track_midi_to_tokens_to_midi(
 
             # Convert the track in tokens
             tokens = tokenizer(midi)
-            if (
-                not tokenizer.unique_track or tokenization == "TSD"
-            ):  # or isinstance list
+            if not tokenizer.unique_track:
                 tokens = tokens[0]
 
             # Checks types and values conformity following the rules
@@ -106,22 +106,16 @@ def test_one_track_midi_to_tokens_to_midi(
                 )
 
             # Convert back tokens into a track object
-            tempo_changes = None
+            if not tokenizer.unique_track:
+                tokens = [tokens]
+            new_midi = tokenizer.tokens_to_midi(
+                tokens, time_division=midi.ticks_per_beat
+            )
+            track = new_midi.instruments[0]
+            tempo_changes = new_midi.tempo_changes
             time_sig_changes = None
-            if tokenizer.unique_track or tokenization == "TSD":
-                if tokenization == "TSD":
-                    tokens = [tokens]
-                new_midi = tokenizer.tokens_to_midi(
-                    tokens, time_division=midi.ticks_per_beat
-                )
-                track = new_midi.instruments[0]
-                if tokenization == "Octuple":
-                    tempo_changes = new_midi.tempo_changes
-                    time_sig_changes = new_midi.time_signature_changes
-            else:
-                track, tempo_changes = tokenizer.tokens_to_track(
-                    tokens, midi.ticks_per_beat
-                )
+            if tokenization == "Octuple":
+                time_sig_changes = new_midi.time_signature_changes
 
             # Checks its good
             errors = track_equals(midi.instruments[0], track)
