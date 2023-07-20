@@ -216,7 +216,7 @@ class MMM(MIDITokenizer):
 
     def tokens_to_track(
         self,
-        tokens: Union[TokSequence, List, np.ndarray, Any],
+        tokens: TokSequence,
         time_division: Optional[int] = TIME_DIVISION,
         program: Optional[Tuple[int, bool]] = (0, False),
     ) -> None:

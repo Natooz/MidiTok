@@ -180,7 +180,7 @@ class MIDILike(MIDITokenizer):
 
     def tokens_to_track(
         self,
-        tokens: Union[TokSequence, List, np.ndarray, Any],
+        tokens: TokSequence,
         time_division: Optional[int] = TIME_DIVISION,
         program: Optional[Tuple[int, bool]] = (0, False),
         default_duration: int = None,
@@ -350,7 +350,7 @@ class MIDILike(MIDITokenizer):
         return dic
 
     @_in_as_seq(complete=False, decode_bpe=False)
-    def tokens_errors(self, tokens: Union[TokSequence, List, np.ndarray, Any]) -> float:
+    def tokens_errors(self, tokens: Union[TokSequence, List, np.ndarray, Any]) -> Union[float, List[float]]:
         r"""Checks if a sequence of tokens is made of good token types
         successions and returns the error ratio (lower is better).
         The Pitch and Position values are also analyzed:
@@ -360,6 +360,10 @@ class MIDILike(MIDITokenizer):
         :param tokens: sequence of tokens to check
         :return: the error ratio (lower is better)
         """
+        # If list of TokSequence -> recursive
+        if isinstance(tokens, list):
+            return [self.tokens_errors(tok_seq) for tok_seq in tokens]
+
         nb_tok_predicted = len(tokens)  # used to norm the score
         if self.has_bpe:
             self.decode_bpe(tokens)

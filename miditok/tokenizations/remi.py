@@ -1,9 +1,9 @@
-from typing import List, Tuple, Dict, Optional, Union, Any
+from typing import List, Tuple, Dict, Optional
 
 import numpy as np
 from miditoolkit import Instrument, Note, TempoChange
 
-from ..midi_tokenizer import MIDITokenizer, _in_as_seq, _out_as_complete_seq
+from ..midi_tokenizer import MIDITokenizer, _out_as_complete_seq
 from ..classes import TokSequence, Event
 from ..utils import detect_chords
 from ..constants import (
@@ -204,7 +204,7 @@ class REMI(MIDITokenizer):
 
     def tokens_to_track(
         self,
-        tokens: Union[TokSequence, List, np.ndarray, Any],
+        tokens: TokSequence,
         time_division: Optional[int] = TIME_DIVISION,
         program: Optional[Tuple[int, bool]] = (0, False),
     ) -> Tuple[Instrument, List[TempoChange]]:

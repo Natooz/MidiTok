@@ -33,8 +33,8 @@ from .constants import (
 
 
 def _in_as_seq(complete: bool = True, decode_bpe: bool = True):
-    """Decorator creating if necessary and completing a TokSequence object before that the function is called.
-    This decorator is used by the :py:meth:`miditok.MIDITokenizer.track_to_tokens` method.
+    r"""Decorator creating if necessary and completing a TokSequence object before that the function is called.
+    This decorator is made to be used by the :py:meth:`miditok.MIDITokenizer.tokens_to_midi` method.
 
     :param complete: will complete the sequence, i.e. complete its ``ids`` , ``tokens`` and ``events`` .
     :param decode_bpe: will decode BPE, if applicable. This step is performed before completing the sequence.
@@ -42,7 +42,7 @@ def _in_as_seq(complete: bool = True, decode_bpe: bool = True):
 
     def decorator(function: Callable = None):
         def wrapper(*args, **kwargs):
-            self = args[0]
+            tokenizer = args[0]
             seq = args[1]
             if not isinstance(seq, TokSequence) and not all(
                 isinstance(seq_, TokSequence) for seq_ in seq
@@ -57,25 +57,38 @@ def _in_as_seq(complete: bool = True, decode_bpe: bool = True):
                     else:  # list of Event, very unlikely
                         arg = ("events", seq)
 
+                # Deduce nb of subscript, if tokenizer is multi-voc or unique_track
+                nb_subscripts = nb_real_subscripts = 1
+                if not tokenizer.unique_track:
+                    nb_subscripts += 1
+                if tokenizer.is_multi_voc:
+                    nb_subscripts += 1
                 if isinstance(arg[1][0], list):
+                    nb_real_subscripts += 1
+                    if isinstance(arg[1][0][0], list):
+                        nb_real_subscripts += 1
+
+                if not tokenizer.unique_track and nb_subscripts == nb_real_subscripts:
                     seq = []
                     for obj in arg[1]:
                         kwarg = {arg[0]: obj}
                         seq.append(TokSequence(**kwarg))
-                        seq[-1].ids_bpe_encoded = self._are_ids_bpe_encoded(seq[-1].ids)
-                else:
+                        if not tokenizer.is_multi_voc:
+                            seq[-1].ids_bpe_encoded = tokenizer._are_ids_bpe_encoded(seq[-1].ids)
+                else:  # 1 subscript, unique_track and no multi-voc
                     kwarg = {arg[0]: arg[1]}
                     seq = TokSequence(**kwarg)
-                    seq.ids_bpe_encoded = self._are_ids_bpe_encoded(seq.ids)
+                    if not tokenizer.is_multi_voc:
+                        seq.ids_bpe_encoded = tokenizer._are_ids_bpe_encoded(seq.ids)
 
-            if self.has_bpe and decode_bpe:
-                self.decode_bpe(seq)
+            if tokenizer.has_bpe and decode_bpe:
+                tokenizer.decode_bpe(seq)
             if complete:
                 if isinstance(seq, TokSequence):
-                    self.complete_sequence(seq)
+                    tokenizer.complete_sequence(seq)
                 else:
                     for seq_ in seq:
-                        self.complete_sequence(seq_)
+                        tokenizer.complete_sequence(seq_)
 
             args = list(args)
             args[1] = seq
@@ -589,6 +602,7 @@ class MIDITokenizer(ABC):
         tokens = [tok for toks in tokens for tok in toks]  # flatten
         return tokens
 
+    @_in_as_seq()
     def tokens_to_midi(
         self,
         tokens: Union[TokSequence, List, np.ndarray, Any],
@@ -639,7 +653,7 @@ class MIDITokenizer(ABC):
     @abstractmethod
     def tokens_to_track(
         self,
-        tokens: Union[TokSequence, List, np.ndarray, Any],
+        tokens: TokSequence,
         time_division: Optional[int] = TIME_DIVISION,
         program: Optional[Tuple[int, bool]] = (0, False),
     ) -> Tuple[Instrument, List[TempoChange]]:
@@ -1291,7 +1305,7 @@ class MIDITokenizer(ABC):
     @_in_as_seq(complete=False, decode_bpe=False)
     def tokens_errors(
         self, tokens: Union[TokSequence, List[Union[int, List[int]]]]
-    ) -> float:
+    ) -> Union[float, List[float]]:
         r"""Checks if a sequence of tokens is made of good token types
         successions and returns the error ratio (lower is better).
         The common implementation in MIDITokenizer class will check token types,
@@ -1303,6 +1317,10 @@ class MIDITokenizer(ABC):
         :param tokens: sequence of tokens to check.
         :return: the error ratio (lower is better).
         """
+        # If list of TokSequence -> recursive
+        if isinstance(tokens, list):
+            return [self.tokens_errors(tok_seq) for tok_seq in tokens]
+
         nb_tok_predicted = len(tokens)  # used to norm the score
         if self.has_bpe:
             self.decode_bpe(tokens)
