@@ -266,14 +266,14 @@ class TSD(MIDITokenizer):
             Union[TokSequence, List, np.ndarray, Any],
             List[Union[TokSequence, List, np.ndarray, Any]],
         ],
-        _=None,
+        programs: Optional[List[Tuple[int, bool]]] = None,
         output_path: Optional[str] = None,
         time_division: int = TIME_DIVISION,
     ) -> MidiFile:
         r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
 
         :param tokens: tokens to convert. Can be either a list of :class:`miditok.TokSequence`,
-        :param _: unused, to match parent method signature
+        :param programs: programs of the tracks. If none is given, will default to piano, program 0. (default: None)
         :param output_path: path to save the file. (default: None)
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create).
         :return: the midi object (:class:`miditoolkit.MidiFile`).
@@ -297,7 +297,15 @@ class TSD(MIDITokenizer):
         current_tick = 0
         current_program = 0
         previous_note_end = 0
-        for seq in tokens:
+        for si, seq in enumerate(tokens):
+            # Set track / sequence program if needed
+            if not self.unique_track:
+                current_tick = 0
+                previous_note_end = 0
+                if programs is not None:
+                    current_program = -1 if programs[si][1] else programs[si][0]
+
+            # Decode tokens
             for ti, token in enumerate(seq):
                 if token.split("_")[0] == "TimeShift":
                     current_tick += self._token_duration_to_ticks(

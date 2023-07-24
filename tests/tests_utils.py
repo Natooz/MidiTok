@@ -7,6 +7,20 @@ from typing import Tuple, List, Union
 from miditoolkit import MidiFile, Instrument, Note, TempoChange, TimeSignature
 
 
+ALL_TOKENIZATIONS = [
+    "MIDILike",
+    "TSD",
+    "Structured",
+    "REMI",
+    "REMIPlus",
+    "CPWord",
+    "Octuple",
+    "OctupleMono",
+    "MuMIDI",
+    "MMM",
+]
+
+
 def midis_equals(
     midi1: MidiFile, midi2: MidiFile
 ) -> List[Tuple[int, str, List[Tuple[str, Union[Note, int], int]]]]:

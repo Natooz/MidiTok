@@ -105,14 +105,11 @@ def test_multitrack_midi_to_tokens_to_midi(
                     )
 
             # Sort and merge tracks if needed
-            # MIDI produced with Octuple contains tracks ordered by program
+            # MIDI produced with unique_track contains tracks with different orders
             if tokenizer.unique_track:
-                miditok.utils.merge_same_program_tracks(
-                    midi_to_compare.instruments
-                )  # merge tracks
-            for (
-                track
-            ) in midi_to_compare.instruments:  # reduce the duration of notes to long
+                miditok.utils.merge_same_program_tracks(midi_to_compare.instruments)
+            # reduce the duration of notes to long
+            for track in midi_to_compare.instruments:
                 reduce_note_durations(
                     track.notes,
                     max(tu[1] for tu in BEAT_RES_TEST) * midi_to_compare.ticks_per_beat,

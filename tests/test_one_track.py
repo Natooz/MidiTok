@@ -19,6 +19,7 @@ from miditoolkit import MidiFile, Marker
 from tqdm import tqdm
 
 from .tests_utils import (
+    ALL_TOKENIZATIONS,
     track_equals,
     tempo_changes_equals,
     time_signature_changes_equals,
@@ -56,18 +57,6 @@ def test_one_track_midi_to_tokens_to_midi(
     :param data_path: root path to the data to test
     :param saving_erroneous_midis: will save MIDIs converted back with errors, to be used to debug
     """
-    tokenizations = [
-        "MIDILike",
-        "TSD",
-        "Structured",
-        "REMI",
-        "REMIPlus",
-        "CPWord",
-        "Octuple",
-        "OctupleMono",
-        "MuMIDI",
-        "MMM",
-    ]
     files = list(Path(data_path).glob("**/*.mid"))
     at_least_one_error = False
 
@@ -78,7 +67,7 @@ def test_one_track_midi_to_tokens_to_midi(
         tracks = [deepcopy(midi.instruments[0])]
         has_errors = False
 
-        for tokenization in tokenizations:
+        for tokenization in ALL_TOKENIZATIONS:
             tokenizer_config = miditok.TokenizerConfig(**TOKENIZER_PARAMS)
             # Increase the number of rest just to cover very long pauses / rests in test examples
             if tokenization in ["MIDILike", "TSD"]:
