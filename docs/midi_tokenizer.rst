@@ -142,7 +142,7 @@ To use special tokens, you must specify them with the ``special_tokens`` argumen
 Tokens & TokSequence input / output format
 ------------------------
 
-Depending on the tokenizer at use, the **format** of the tokens returned by the ``midi_to_tokens`` method may vary, as well as the expected format for the ``tokens_to_midi`` method. The format is given by the `tokenizer.io_format` property. For any tokenizer, the format is the same for both methods.
+Depending on the tokenizer at use, the **format** of the tokens returned by the ``midi_to_tokens`` method may vary, as well as the expected format for the ``tokens_to_midi`` method. The format is given by the ``tokenizer.io_format` property. For any tokenizer, the format is the same for both methods.
 
 The format is deduced from the ``is_multi_voc`` and ``one_token_stream`` tokenizer properties. In short: **one_token_stream** being True means that the tokenizer will convert a MIDI file into a single stream of tokens for all instrument tracks, otherwise it will convert each track to a distinct token stream; **is_mult_voc** being True means that each token stream is a list of lists of tokens, of shape ``(T,C)`` for T time steps and C subtokens per time step.
 
@@ -153,7 +153,7 @@ This results in four situations, where I is the number of tracks, T is the numbe
 * **is_multi_voc** is **True** and **one_token_stream** is **False**: ``[I,(T,C)]``
 * **is_multi_voc** and **one_token_stream** are both **True**: ``(T,C)``
 
-**Note that if there is no I dimension in the format, the output of **``midi_to_tokens``** is a **:class:`miditok.TokSequence`** object, otherwise it is a list of **:class:`miditok.TokSequence`** objects (one per token stream / track).**
+**Note that if there is no I dimension in the format, the output of** ``midi_to_tokens`` **is a** :class:`miditok.TokSequence` **object, otherwise it is a list of** :class:`miditok.TokSequence` **objects (one per token stream / track).**
 
 Some tokenizer examples to illustrate:
 
@@ -163,7 +163,7 @@ Some tokenizer examples to illustrate:
 * **Octuple** is a multi-voc tokenizer and converts all MIDI track to a single stream of tokens, hence it will convert MIDI files to a ``TokSequence`` object, ``(T,C)`` format.
 
 
-**You can use the **``convert_sequence_to_tokseq``** method to automatically convert a input sequence, of ids (integers) or tokens (string), into a **:class:`miditok.TokSequence`** or list of **:class:`miditok.TokSequence`** objects with the appropriate format of the tokenizer being used.**
+**You can use the** ``convert_sequence_to_tokseq`` **method to automatically convert a input sequence, of ids (integers) or tokens (string), into a** :class:`miditok.TokSequence` **or list of** :class:`miditok.TokSequence` **objects with the appropriate format of the tokenizer being used.**
 
 .. autofunction:: miditok.convert_sequence_to_tokseq
     :noindex:
