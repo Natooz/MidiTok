@@ -27,7 +27,7 @@ class TSD(MIDITokenizer):
     def _tweak_config_before_creating_voc(self):
         self.config.use_time_signatures = False
         if self.config.use_programs:
-            self.unique_track = True
+            self.one_token_stream = True
 
     def __notes_to_events(self, track: Instrument) -> List[Event]:
         r"""Converts notes of a track (``miditoolkit.Instrument``) into a sequence of `Event` objects.
@@ -201,7 +201,7 @@ class TSD(MIDITokenizer):
         r"""Converts a preprocessed MIDI object to a sequence of tokens.
 
         :param midi: the MIDI objet to convert.
-        :return: a :class:`miditok.TokSequence` if `tokenizer.unique_track` is true, else a list of
+        :return: a :class:`miditok.TokSequence` if `tokenizer.one_token_stream` is true, else a list of
                 :class:`miditok.TokSequence` objects.
         """
         # Convert each track to tokens
@@ -210,7 +210,7 @@ class TSD(MIDITokenizer):
         # Adds note tokens
         for track in midi.instruments:
             note_events = self.__notes_to_events(track)
-            if self.unique_track:
+            if self.one_token_stream:
                 all_events += note_events
             else:
                 all_events.append(note_events)
@@ -226,14 +226,14 @@ class TSD(MIDITokenizer):
                         desc=tempo_change.tempo,
                     )
                 )
-            if self.unique_track:
+            if self.one_token_stream:
                 all_events += tempo_events
             else:
                 for i in range(len(all_events)):
                     all_events[i] += tempo_events
 
         # Add time events
-        if self.unique_track:
+        if self.one_token_stream:
             all_events.sort(key=lambda x: x.time)
             all_events = self.__add_time_note_events(all_events)
             tok_sequence = TokSequence(events=all_events)
@@ -278,8 +278,8 @@ class TSD(MIDITokenizer):
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create).
         :return: the midi object (:class:`miditoolkit.MidiFile`).
         """
-        # Unsqueeze tokens in case of unique_track
-        if self.unique_track:  # ie single token seq
+        # Unsqueeze tokens in case of one_token_stream
+        if self.one_token_stream:  # ie single token seq
             tokens = [tokens]
         for i in range(len(tokens)):
             tokens[i] = tokens[i].tokens
@@ -299,7 +299,7 @@ class TSD(MIDITokenizer):
         previous_note_end = 0
         for si, seq in enumerate(tokens):
             # Set track / sequence program if needed
-            if not self.unique_track:
+            if not self.one_token_stream:
                 current_tick = 0
                 previous_note_end = 0
                 if programs is not None:

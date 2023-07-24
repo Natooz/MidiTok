@@ -78,7 +78,7 @@ def test_bpe_conversion(
 
         for file_path in files:
             tokens = tokenizer(file_path, apply_bpe_if_possible=False)
-            if not tokenizer.unique_track:
+            if not tokenizer.one_token_stream:
                 tokens = tokens[0]
             to_tok = tokenizer._bytes_to_tokens(tokens.bytes)
             to_id = tokenizer._tokens_to_ids(to_tok)
@@ -112,7 +112,7 @@ def test_bpe_conversion(
 
         for tokenization, tokenizer in zip(tokenizations, tokenizers):
             tokens_no_bpe = tokenizer(deepcopy(midi), apply_bpe_if_possible=False)
-            if not tokenizer.unique_track:
+            if not tokenizer.one_token_stream:
                 tokens_no_bpe = tokens_no_bpe[0]
             tokens_bpe = deepcopy(tokens_no_bpe)  # with BPE
 
@@ -144,7 +144,7 @@ def test_bpe_conversion(
         for i, file_path in enumerate(tqdm(files, desc="Testing BPE batched")):
             # Reads the midi
             midi = MidiFile(file_path)
-            if not tokenizer.unique_track:
+            if not tokenizer.one_token_stream:
                 samples_no_bpe.append(tokenizer(midi, apply_bpe_if_possible=False)[0])
             else:
                 samples_no_bpe.append(tokenizer(midi, apply_bpe_if_possible=False))

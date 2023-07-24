@@ -44,7 +44,7 @@ class Octuple(MIDITokenizer):
     def _tweak_config_before_creating_voc(self):
         self.config.use_chords = False
         self.config.use_rests = False
-        self.unique_track = True
+        self.one_token_stream = True
 
         # used in place of positional encoding
         # This attribute might increase over tokenizations, if the tokenizer encounter longer MIDIs

@@ -105,8 +105,8 @@ def test_multitrack_midi_to_tokens_to_midi(
                     )
 
             # Sort and merge tracks if needed
-            # MIDI produced with unique_track contains tracks with different orders
-            if tokenizer.unique_track:
+            # MIDI produced with one_token_stream contains tracks with different orders
+            if tokenizer.one_token_stream:
                 miditok.utils.merge_same_program_tracks(midi_to_compare.instruments)
             # reduce the duration of notes to long
             for track in midi_to_compare.instruments:
@@ -134,7 +134,7 @@ def test_multitrack_midi_to_tokens_to_midi(
 
             # Checks types and values conformity following the rules
             tokens_types = tokenizer.tokens_errors(
-                tokens[0] if not tokenizer.unique_track else tokens
+                tokens[0] if not tokenizer.one_token_stream else tokens
             )
             if tokens_types != 0.0:
                 print(

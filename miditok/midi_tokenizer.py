@@ -32,6 +32,83 @@ from .constants import (
 )
 
 
+def convert_sequence_to_tokseq(
+        tokenizer,
+        input_seq,
+        complete_seq: bool = True,
+        decode_bpe: bool = True
+) -> Union[TokSequence, List[TokSequence]]:
+    r"""Converts a sequence into a **:class:`miditok.TokSequence`** or list of **:class:`miditok.TokSequence`**
+    objects with the appropriate format of the tokenizer being used.
+
+    :param tokenizer: tokenizer being used with the sequence.
+    :param input_seq: sequence to convert. It can be a list of ids (integers), tokens (string) or events (Event).
+        It can also be a Pytorch or TensorFlow tensor, or Numpy array representing ids.
+    :param complete_seq: will complete the output sequence(s). (default: True)
+    :param decode_bpe: if the input sequence contains ids, and that they contain BPE tokens, these tokens will
+        be decoded. (default: True)
+    :return:
+    """
+    # Deduce the type of data (ids/tokens/events)
+    try:
+        arg = ("ids", convert_ids_tensors_to_list(input_seq))
+    except (AttributeError, ValueError, TypeError, IndexError):
+        if isinstance(input_seq[0], str) or (
+                isinstance(input_seq[0], list) and isinstance(input_seq[0][0], str)
+        ):
+            arg = ("tokens", input_seq)
+        else:  # list of Event, but unlikely
+            arg = ("events", input_seq)
+
+    # Deduce nb of subscripts / dims
+    nb_io_dims = len(tokenizer.io_format)
+    nb_seq_dims = 1
+    if isinstance(arg[1][0], list):
+        nb_seq_dims += 1
+        if isinstance(arg[1][0][0], list):
+            nb_seq_dims += 1
+
+    # Check the number of dimensions is good
+    # In case of no one_token_stream and one dimension short --> unsqueeze
+    if not tokenizer.one_token_stream and nb_seq_dims == nb_io_dims - 1:
+        print(f"The input sequence has one dimension less than expected ({nb_seq_dims} instead of "
+              f"{nb_io_dims}). It is being unsqueezed to conform with the tokenizer's i/o format "
+              f"({tokenizer.io_format})")
+        arg = (arg[0], [arg[1]])
+
+    elif nb_seq_dims != nb_io_dims:
+        raise ValueError(f"The input sequence does not have the expected dimension "
+                         f"({nb_seq_dims} instead of {nb_io_dims}).")
+
+    # Convert to TokSequence
+    if not tokenizer.one_token_stream and nb_io_dims == nb_seq_dims:
+        seq = []
+        for obj in arg[1]:
+            kwarg = {arg[0]: obj}
+            seq.append(TokSequence(**kwarg))
+            if not tokenizer.is_multi_voc:
+                seq[-1].ids_bpe_encoded = tokenizer._are_ids_bpe_encoded(
+                    seq[-1].ids
+                )
+    else:  # 1 subscript, one_token_stream and no multi-voc
+        kwarg = {arg[0]: arg[1]}
+        seq = TokSequence(**kwarg)
+        if not tokenizer.is_multi_voc:
+            seq.ids_bpe_encoded = tokenizer._are_ids_bpe_encoded(seq.ids)
+
+    # decode BPE and complete the output sequence(s) if requested
+    if tokenizer.has_bpe and decode_bpe:
+        tokenizer.decode_bpe(seq)
+    if complete_seq:
+        if isinstance(seq, TokSequence):
+            tokenizer.complete_sequence(seq)
+        else:
+            for seq_ in seq:
+                tokenizer.complete_sequence(seq_)
+
+    return seq
+
+
 def _in_as_seq(complete: bool = True, decode_bpe: bool = True):
     r"""Decorator creating if necessary and completing a TokSequence object before that the function is called.
     This decorator is made to be used by the :py:meth:`miditok.MIDITokenizer.tokens_to_midi` method.
@@ -47,50 +124,16 @@ def _in_as_seq(complete: bool = True, decode_bpe: bool = True):
             if not isinstance(seq, TokSequence) and not all(
                 isinstance(seq_, TokSequence) for seq_ in seq
             ):
-                try:
-                    arg = ("ids", convert_ids_tensors_to_list(seq))
-                except (AttributeError, ValueError, TypeError, IndexError):
-                    if isinstance(seq[0], str) or (
-                        isinstance(seq[0], str) and isinstance(seq[0][0], str)
-                    ):
-                        arg = ("tokens", seq)
-                    else:  # list of Event, very unlikely
-                        arg = ("events", seq)
-
-                # Deduce nb of subscript, if tokenizer is multi-voc or unique_track
-                nb_subscripts = nb_real_subscripts = 1
-                if not tokenizer.unique_track:
-                    nb_subscripts += 1
-                if tokenizer.is_multi_voc:
-                    nb_subscripts += 1
-                if isinstance(arg[1][0], list):
-                    nb_real_subscripts += 1
-                    if isinstance(arg[1][0][0], list):
-                        nb_real_subscripts += 1
-
-                if not tokenizer.unique_track and nb_subscripts == nb_real_subscripts:
-                    seq = []
-                    for obj in arg[1]:
-                        kwarg = {arg[0]: obj}
-                        seq.append(TokSequence(**kwarg))
-                        if not tokenizer.is_multi_voc:
-                            seq[-1].ids_bpe_encoded = tokenizer._are_ids_bpe_encoded(
-                                seq[-1].ids
-                            )
-                else:  # 1 subscript, unique_track and no multi-voc
-                    kwarg = {arg[0]: arg[1]}
-                    seq = TokSequence(**kwarg)
-                    if not tokenizer.is_multi_voc:
-                        seq.ids_bpe_encoded = tokenizer._are_ids_bpe_encoded(seq.ids)
-
-            if tokenizer.has_bpe and decode_bpe:
-                tokenizer.decode_bpe(seq)
-            if complete:
-                if isinstance(seq, TokSequence):
-                    tokenizer.complete_sequence(seq)
-                else:
-                    for seq_ in seq:
-                        tokenizer.complete_sequence(seq_)
+                seq = convert_sequence_to_tokseq(tokenizer, seq, complete, decode_bpe)
+            else:
+                if tokenizer.has_bpe and decode_bpe:
+                    tokenizer.decode_bpe(seq)
+                if complete:
+                    if isinstance(seq, TokSequence):
+                        tokenizer.complete_sequence(seq)
+                    else:
+                        for seq_ in seq:
+                            tokenizer.complete_sequence(seq_)
 
             args = list(args)
             args[1] = seq
@@ -117,9 +160,9 @@ class MIDITokenizer(ABC):
     r"""MIDI tokenizer base class, containing common methods and attributes for all tokenizers.
 
     :param tokenizer_config: the tokenizer's configuration, as a :class:`miditok.classes.TokenizerConfig` object.
-    :param unique_track: set to True if the tokenizer works only with a unique track.
-            Tokens will be saved as a single track. This applies to representations that natively handle
-            multiple tracks such as Octuple, resulting in a single "stream" of tokens for all tracks.
+    :param one_token_stream: give True if the tokenizer handle all the tracks of a MIDI as a single sequence of tokens.
+            Tokens will be saved as a single sequence. This applies to representations that natively handle
+            multiple tracks such as Octuple or REMIPlus, resulting in a single "stream" of tokens per MIDI.
             This attribute will be saved in config files of the tokenizer. (default: False)
     :param params: path to a tokenizer config file. This will override other arguments and
             load the tokenizer based on the config file. This is particularly useful if the
@@ -129,7 +172,7 @@ class MIDITokenizer(ABC):
     def __init__(
         self,
         tokenizer_config: TokenizerConfig = None,
-        unique_track: bool = False,
+        one_token_stream: bool = False,
         params: Union[str, Path] = None,
     ):
         # Initialize params
@@ -162,7 +205,7 @@ class MIDITokenizer(ABC):
             assert (
                 0 < self.config.nb_velocities < 128
             ), "You must specify a nb_velocities between 1 and 127 (included)"
-            self.unique_track = unique_track
+            self.one_token_stream = one_token_stream
 
         # Tweak the tokenizer's configuration and / or attributes before creating the vocabulary
         # This method is intended to be overridden by inheriting tokenizer classes
@@ -457,7 +500,7 @@ class MIDITokenizer(ABC):
 
         :param midi: the MIDI object to convert.
         :param apply_bpe_if_possible: will apply BPE if the tokenizer's vocabulary was learned with.
-        :return: a :class:`miditok.TokSequence` if `tokenizer.unique_track` is true, else a list of
+        :return: a :class:`miditok.TokSequence` if `tokenizer.one_token_stream` is true, else a list of
                 :class:`miditok.TokSequence` objects.
         """
         # Check if the durations values have been calculated before for this time division
@@ -619,14 +662,14 @@ class MIDITokenizer(ABC):
         :param tokens: tokens to convert. Can be either a list of :class:`miditok.TokSequence`,
                 a Tensor (PyTorch and Tensorflow are supported), a numpy array or a Python list of ints.
                 The first dimension represents tracks, unless the tokenizer handle tracks altogether as a
-                single token sequence (e.g. Octuple, MuMIDI): tokenizer.unique_track == True.
+                single token sequence (e.g. Octuple, MuMIDI): tokenizer.one_token_stream == True.
         :param programs: programs of the tracks. If none is given, will default to piano, program 0. (default: None)
         :param output_path: path to save the file. (default: None)
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create).
         :return: the midi object (miditoolkit.MidiFile).
         """
         midi = MidiFile(ticks_per_beat=time_division)
-        # if self.unique_track:
+        # if self.one_token_stream:
         #    tokens = [tokens]
         for i, track_tokens in enumerate(tokens):
             if programs is not None:
@@ -1041,7 +1084,7 @@ class MIDITokenizer(ABC):
                     sample["ids"], as_one_str=True
                 )  # list of str (bytes)
                 iterator += (
-                    [[byte_] for byte_ in bytes_] if not self.unique_track else [bytes_]
+                    [[byte_] for byte_ in bytes_] if not self.one_token_stream else [bytes_]
                 )
 
             # This doesn't seem to work, the trainer pre-processes the sequences, but then no word remains
@@ -1178,7 +1221,7 @@ class MIDITokenizer(ABC):
             sample = self.load_tokens(path)
             seq = (
                 TokSequence(ids=sample["ids"])
-                if self.unique_track
+                if self.one_token_stream
                 else [TokSequence(ids=track) for track in sample["ids"]]
             )
             self.apply_bpe(seq)
@@ -1460,7 +1503,7 @@ class MIDITokenizer(ABC):
         }
         params = {
             "config": dict_config,
-            "unique_track": self.unique_track,
+            "one_token_stream": self.one_token_stream,
             "has_bpe": self.has_bpe,
             "tokenization": self.__class__.__name__,
             "miditok_version": CURRENT_VERSION_PACKAGE,
@@ -1532,6 +1575,9 @@ class MIDITokenizer(ABC):
                     key = old_add_tokens_attr[key]
                 setattr(self.config, key, value)
                 continue
+            elif key == "unique_track":
+                # For config files <= v2.1.1 before the attribute is renamed
+                self.one_token_stream = value
 
             setattr(self, key, value)
 
@@ -1543,6 +1589,17 @@ class MIDITokenizer(ABC):
         :return: True is the tokenizer uses embedding pooling else False.
         """
         return isinstance(self._vocab_base, list)
+
+    @property
+    def io_format(self) -> Tuple[str]:
+        format_ = []
+        if not self.one_token_stream:
+            format_.append("I")
+        format_.append("T")
+        if self.is_multi_voc:
+            format_.append("C")
+
+        return tuple(d for d in format_)
 
     def __call__(self, obj: Any, *args, **kwargs):
         r"""Calling a tokenizer allows to directly convert a MIDI to tokens or the other way around.
@@ -1599,13 +1656,22 @@ class MIDITokenizer(ABC):
         return [len(v) for v in self.vocab] if self.is_multi_voc else len(self)
 
     def __repr__(self):
-        out_str = f"{self.len} tokens"
+        out_str = f"{self.len} tokens with {self.io_format} io format"
+
+        # one_token_stream / multi-voc
+        tmp = []
+        if self.one_token_stream:
+            tmp.append("one token stream")
         if self.is_multi_voc:
-            out_str += " (multi-voc)"
+            tmp.append("multi-voc")
+        if len(tmp) > 0:
+            out_str += f"({', '.join(tmp)})"
+
+        # BPE
         if self.has_bpe:
-            out_str += " with BPE"
+            out_str += ", with BPE"
         else:
-            out_str += " without BPE"
+            out_str += ", without BPE"
         return out_str
 
     def __getitem__(

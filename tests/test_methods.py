@@ -207,7 +207,7 @@ def test_data_augmentation():
                 original_tokens, original_programs = file["ids"], file["programs"]
 
             # Compare them
-            if tokenizer.unique_track:
+            if tokenizer.one_token_stream:
                 original_tokens, aug_tokens = [original_tokens], [aug_tokens]
             for original_track, aug_track, (_, is_drum) in zip(
                 original_tokens, aug_tokens, original_programs
@@ -222,7 +222,7 @@ def test_data_augmentation():
                             pitch_offset = offsets[0]
                             # no offset for drum pitches
                             if (
-                                tokenizer.unique_track
+                                tokenizer.one_token_stream
                                 and idx > 0
                                 and tokenizer[original_track[idx - 1]] == "Program_-1"
                             ):

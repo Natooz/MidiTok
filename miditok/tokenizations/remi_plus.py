@@ -52,7 +52,7 @@ class REMIPlus(MIDITokenizer):
         self.config.use_programs = True
         # code handling rest decoding is writen, but not for detection (encoding)
         self.config.use_rests = False
-        # self.unique_track = True
+        # self.one_token_stream = True
 
         # In case the tokenizer has been created without specifying any config or params file path
         if "max_bar_embedding" not in self.config.additional_params:

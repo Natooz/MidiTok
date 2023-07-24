@@ -84,7 +84,7 @@ def test_one_track_midi_to_tokens_to_midi(
 
             # Convert the track in tokens
             tokens = tokenizer(midi)
-            if not tokenizer.unique_track:
+            if not tokenizer.one_token_stream:
                 tokens = tokens[0]
 
             # Checks types and values conformity following the rules
@@ -95,7 +95,7 @@ def test_one_track_midi_to_tokens_to_midi(
                 )
 
             # Convert back tokens into a track object
-            if not tokenizer.unique_track:
+            if not tokenizer.one_token_stream:
                 tokens = [tokens]
             new_midi = tokenizer.tokens_to_midi(
                 tokens, time_division=midi.ticks_per_beat

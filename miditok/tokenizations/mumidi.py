@@ -67,7 +67,7 @@ class MuMIDI(MIDITokenizer):
     def _tweak_config_before_creating_voc(self):
         self.config.use_rests = False
         self.config.use_time_signatures = False
-        # self.unique_track = True
+        # self.one_token_stream = True
 
         self.vocab_types_idx = {
             "Pitch": 0,

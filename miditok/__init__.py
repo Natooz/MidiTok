@@ -10,7 +10,7 @@ from .tokenizations import (
     MuMIDI,
     MMM,
 )
-from .midi_tokenizer import MIDITokenizer
+from .midi_tokenizer import MIDITokenizer, convert_sequence_to_tokseq
 from .classes import Event, TokSequence, TokenizerConfig
 
 from .utils import utils

@@ -49,8 +49,8 @@ def encode_decode_and_check(tokenizer: miditok.MIDITokenizer, midi: MidiFile):
         if track.is_drum:
             track.program = 0  # need to be done before sorting tracks per program
     # Sort and merge tracks if needed
-    # MIDI produced with unique_track contains tracks with different orders
-    if tokenizer.unique_track:
+    # MIDI produced with one_token_stream contains tracks with different orders
+    if tokenizer.one_token_stream:
         miditok.utils.merge_same_program_tracks(midi_to_compare.instruments)
     # reduce the duration of notes to long
     for track in midi_to_compare.instruments:
@@ -65,14 +65,14 @@ def encode_decode_and_check(tokenizer: miditok.MIDITokenizer, midi: MidiFile):
 
     # Convert the midi to tokens, and keeps the ids (integers)
     tokens = tokenizer(midi_to_compare)
-    if tokenizer.unique_track:
+    if tokenizer.one_token_stream:
         tokens = tokens.ids
     else:
         tokens = [stream.ids for stream in tokens]
 
     # Convert back token ids to a MIDI object
     kwargs = {"time_division": midi.ticks_per_beat}
-    if not tokenizer.unique_track:
+    if not tokenizer.one_token_stream:
         kwargs["programs"] = miditok.utils.get_midi_programs(midi_to_compare)
     try:
         decoded_midi = tokenizer(tokens, **kwargs)
@@ -116,7 +116,7 @@ def test_io_formats():
             encode_decode_and_check(tokenizer, midi) or at_least_one_error
         )
 
-        # If TSD, also test in use_programs / unique_track mode
+        # If TSD, also test in use_programs / one_token_stream mode
         if tokenization == "TSD":
             tokenizer_config = miditok.TokenizerConfig(**TOKENIZER_PARAMS)
             tokenizer_config.use_programs = True
