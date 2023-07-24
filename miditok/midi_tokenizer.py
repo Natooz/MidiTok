@@ -38,7 +38,7 @@ def convert_sequence_to_tokseq(
         complete_seq: bool = True,
         decode_bpe: bool = True
 ) -> Union[TokSequence, List[TokSequence]]:
-    r"""Converts a sequence into a **:class:`miditok.TokSequence`** or list of **:class:`miditok.TokSequence`**
+    r"""Converts a sequence into a :class:`miditok.TokSequence` or list of :class:`miditok.TokSequence`
     objects with the appropriate format of the tokenizer being used.
 
     :param tokenizer: tokenizer being used with the sequence.
@@ -110,8 +110,8 @@ def convert_sequence_to_tokseq(
 
 
 def _in_as_seq(complete: bool = True, decode_bpe: bool = True):
-    r"""Decorator creating if necessary and completing a TokSequence object before that the function is called.
-    This decorator is made to be used by the :py:meth:`miditok.MIDITokenizer.tokens_to_midi` method.
+    r"""Decorator creating if necessary and completing a :class:`miditok.TokSequence` object before that the function
+    is called. This decorator is made to be used by the :py:meth:`miditok.MIDITokenizer.tokens_to_midi` method.
 
     :param complete: will complete the sequence, i.e. complete its ``ids`` , ``tokens`` and ``events`` .
     :param decode_bpe: will decode BPE, if applicable. This step is performed before completing the sequence.
@@ -145,7 +145,7 @@ def _in_as_seq(complete: bool = True, decode_bpe: bool = True):
 
 
 def _out_as_complete_seq(function: Callable):
-    """Decorator completing an output Sequence object."""
+    r"""Decorator completing an output :class:`miditok.TokSequence` object."""
 
     def wrapper(*args, **kwargs):
         self = args[0]
