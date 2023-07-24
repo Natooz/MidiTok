@@ -47,9 +47,7 @@ def encode_decode_and_check(tokenizer: miditok.MIDITokenizer, midi: MidiFile):
     midi_to_compare = deepcopy(midi)
     for track in midi_to_compare.instruments:
         if track.is_drum:
-            track.program = (
-                0  # need to be done before sorting tracks per program
-            )
+            track.program = 0  # need to be done before sorting tracks per program
     # Sort and merge tracks if needed
     # MIDI produced with unique_track contains tracks with different orders
     if tokenizer.unique_track:
@@ -114,7 +112,9 @@ def test_io_formats():
             tokenizer_config=tokenizer_config
         )
 
-        at_least_one_error = encode_decode_and_check(tokenizer, midi) or at_least_one_error
+        at_least_one_error = (
+            encode_decode_and_check(tokenizer, midi) or at_least_one_error
+        )
 
         # If TSD, also test in use_programs / unique_track mode
         if tokenization == "TSD":
@@ -123,7 +123,9 @@ def test_io_formats():
             tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
                 tokenizer_config=tokenizer_config
             )
-            at_least_one_error = encode_decode_and_check(tokenizer, midi) or at_least_one_error
+            at_least_one_error = (
+                encode_decode_and_check(tokenizer, midi) or at_least_one_error
+            )
 
     assert not at_least_one_error
 

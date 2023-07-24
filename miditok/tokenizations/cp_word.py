@@ -464,7 +464,9 @@ class CPWord(MIDITokenizer):
         return dic
 
     @_in_as_seq()
-    def tokens_errors(self, tokens: Union[TokSequence, List, np.ndarray, Any]) -> Union[float, List[float]]:
+    def tokens_errors(
+        self, tokens: Union[TokSequence, List, np.ndarray, Any]
+    ) -> Union[float, List[float]]:
         r"""Checks if a sequence of tokens is made of good token types
         successions and returns the error ratio (lower is better).
         The Pitch and Position values are also analyzed:

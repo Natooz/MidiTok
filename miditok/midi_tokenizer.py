@@ -74,7 +74,9 @@ def _in_as_seq(complete: bool = True, decode_bpe: bool = True):
                         kwarg = {arg[0]: obj}
                         seq.append(TokSequence(**kwarg))
                         if not tokenizer.is_multi_voc:
-                            seq[-1].ids_bpe_encoded = tokenizer._are_ids_bpe_encoded(seq[-1].ids)
+                            seq[-1].ids_bpe_encoded = tokenizer._are_ids_bpe_encoded(
+                                seq[-1].ids
+                            )
                 else:  # 1 subscript, unique_track and no multi-voc
                     kwarg = {arg[0]: arg[1]}
                     seq = TokSequence(**kwarg)
