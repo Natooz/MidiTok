@@ -14,7 +14,7 @@ A basic example showing how to create a tokenizer, with a selection of custom pa
 
     # Our parameters
     TOKENIZER_PARAMS = {
-        "pitch_range": range(21, 109),
+        "pitch_range": (21, 109),
         "beat_res": {(0, 4): 8, (4, 12): 4},
         "nb_velocities": 32,
         "special_tokens": ["PAD", "BOS", "EOS", "MASK"],
