@@ -15,3 +15,4 @@ from .classes import Event, TokSequence, TokenizerConfig
 
 from .utils import utils
 from .data_augmentation import data_augmentation
+from .pytorch_data import pytorch_data

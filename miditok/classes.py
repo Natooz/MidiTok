@@ -1,3 +1,6 @@
+"""
+Common classes.
+"""
 from dataclasses import dataclass
 from typing import Union, Any, List, Sequence, Dict, Tuple
 from copy import deepcopy
@@ -114,7 +117,7 @@ class TokSequence:
 class TokenizerConfig:
     r"""
     MIDI tokenizer base class, containing common methods and attributes for all tokenizers.
-    :param pitch_range: (default: range(21, 109)) range of MIDI pitches to use. Pitches can take
+    :param pitch_range: (default: (21, 109)) range of MIDI pitches to use. Pitches can take
             values between 0 and 127 (included).
             The `General MIDI 2 (GM2) specifications <https://www.midi.org/specifications-old/item/general-midi-2>`_
             indicate the **recommended** ranges of pitches per MIDI program (instrument).

@@ -130,5 +130,61 @@ def test_io_formats():
     assert not at_least_one_error
 
 
+def test_split_seq():
+    min_seq_len = 50
+    max_seq_len = 100
+    seq = list(range(320))
+    subseqs = miditok.pytorch_data.split_seq_in_subsequences(seq, min_seq_len, max_seq_len)
+
+    assert [i for subseq in subseqs for i in subseq] == seq[:300], "Sequence split failed"
+
+
+def test_dataset_ram():
+    # One token stream
+    config = miditok.TokenizerConfig(use_programs=True)
+    tokenizer_os = miditok.TSD(config)
+    dataset_os = miditok.pytorch_data.DatasetTok(
+        list(Path("tests", "Maestro_MIDIs").glob("**/*.mid")),
+        50,
+        100,
+        tokenizer_os,
+    )
+    for _ in dataset_os:
+        pass
+
+    # Multiple token streams
+    tokenizer_ms = miditok.TSD(miditok.TokenizerConfig())
+    dataset_ms = miditok.pytorch_data.DatasetTok(
+        list(Path("tests", "Multitrack_MIDIs").glob("**/*.mid")),
+        50,
+        100,
+        tokenizer_ms,
+    )
+
+    assert True
+
+
+def test_dataset_io():
+    midi_paths = list(Path("tests", "Multitrack_MIDIs").glob("**/*.mid"))[:3]
+    tokens_dir = Path("tests", "dataset_io_tokens")
+
+    config = miditok.TokenizerConfig(use_programs=True)
+    tokenizer = miditok.TSD(config)
+    tokenizer.tokenize_midi_dataset(midi_paths, tokens_dir)
+
+    dataset = miditok.pytorch_data.DatasetJsonIO(
+        list(tokens_dir.glob("**/*.json")),
+        100,
+    )
+
+    for _ in dataset:
+        pass
+
+    assert True
+
+
 if __name__ == "__main__":
     test_io_formats()
+    test_split_seq()
+    test_dataset_ram()
+    test_dataset_io()
