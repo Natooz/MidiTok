@@ -20,11 +20,15 @@ def test_split_seq():
 
 
 def test_dataset_ram():
-    # One token stream
+    multitrack_midis_paths = list(Path("tests", "Multitrack_MIDIs").glob("**/*.mid"))[:3]
+    one_track_midis_paths = list(Path("tests", "Maestro_MIDIs").glob("**/*.mid"))[:3]
+    tokens_os_dir = Path("tests", "multitrack_tokens_os")
+
+    # MIDI + One token stream
     config = miditok.TokenizerConfig(use_programs=True)
     tokenizer_os = miditok.TSD(config)
     dataset_os = miditok.pytorch_data.DatasetTok(
-        list(Path("tests", "Maestro_MIDIs").glob("**/*.mid")),
+        one_track_midis_paths,
         50,
         100,
         tokenizer_os,
@@ -32,30 +36,49 @@ def test_dataset_ram():
     for _ in dataset_os:
         pass
 
-    # Multiple token streams
+    # MIDI + Multiple token streams
     tokenizer_ms = miditok.TSD(miditok.TokenizerConfig())
     dataset_ms = miditok.pytorch_data.DatasetTok(
-        list(Path("tests", "Multitrack_MIDIs").glob("**/*.mid")),
+        multitrack_midis_paths,
         50,
         100,
         tokenizer_ms,
+    )
+    _ = dataset_ms.__repr__()
+    dataset_ms.reduce_nb_samples(2)
+    assert len(dataset_ms) == 2
+
+    # JSON + one token stream
+    if not tokens_os_dir.is_dir():
+        tokenizer_os.tokenize_midi_dataset(
+            multitrack_midis_paths,
+            tokens_os_dir,
+        )
+    _ = miditok.pytorch_data.DatasetTok(
+        list(tokens_os_dir.glob("**/*.json")),
+        50,
+        100,
     )
 
     assert True
 
 
 def test_dataset_io():
-    midi_paths = list(Path("tests", "Multitrack_MIDIs").glob("**/*.mid"))[:3]
-    tokens_dir = Path("tests", "dataset_io_tokens")
+    multitrack_midis_paths = list(Path("tests", "Multitrack_MIDIs").glob("**/*.mid"))[:3]
+    tokens_os_dir = Path("tests", "multitrack_tokens_os")
 
-    config = miditok.TokenizerConfig(use_programs=True)
-    tokenizer = miditok.TSD(config)
-    tokenizer.tokenize_midi_dataset(midi_paths, tokens_dir)
+    if not tokens_os_dir.is_dir():
+        config = miditok.TokenizerConfig(use_programs=True)
+        tokenizer = miditok.TSD(config)
+        tokenizer.tokenize_midi_dataset(multitrack_midis_paths, tokens_os_dir)
 
     dataset = miditok.pytorch_data.DatasetJsonIO(
-        list(tokens_dir.glob("**/*.json")),
+        list(tokens_os_dir.glob("**/*.json")),
         100,
     )
+
+    dataset.reduce_nb_samples(2)
+    assert len(dataset) == 2
 
     for _ in dataset:
         pass
@@ -64,21 +87,35 @@ def test_dataset_io():
 
 
 def test_split_dataset_to_subsequences():
-    midi_paths = list(Path("tests", "Multitrack_MIDIs").glob("**/*.mid"))[:3]
-    tokens_dir = Path("tests", "dataset_io_tokens")
-    tokens_split_dir = Path("tests", "dataset_io_tokens_split")
+    multitrack_midis_paths = list(Path("tests", "Multitrack_MIDIs").glob("**/*.mid"))[:3]
+    tokens_os_dir = Path("tests", "multitrack_tokens_os")
+    tokens_split_dir = Path("tests", "multitrack_tokens_os_split")
+    tokens_split_dir_ms = Path("tests", "multitrack_tokens_ms_split")
 
-    if not tokens_dir.is_dir():
+    # One token stream
+    if not tokens_os_dir.is_dir():
         config = miditok.TokenizerConfig(use_programs=True)
         tokenizer = miditok.TSD(config)
-        tokenizer.tokenize_midi_dataset(midi_paths, tokens_dir)
-
+        tokenizer.tokenize_midi_dataset(multitrack_midis_paths, tokens_os_dir)
     miditok.pytorch_data.split_dataset_to_subsequences(
-        list(tokens_dir.glob("**/*.json")),
+        list(tokens_os_dir.glob("**/*.json")),
         tokens_split_dir,
         50,
         100,
         True,
+    )
+
+    # Multiple token streams
+    if not tokens_split_dir_ms.is_dir():
+        config = miditok.TokenizerConfig(use_programs=False)
+        tokenizer = miditok.TSD(config)
+        tokenizer.tokenize_midi_dataset(multitrack_midis_paths, tokens_split_dir_ms)
+    miditok.pytorch_data.split_dataset_to_subsequences(
+        list(tokens_split_dir_ms.glob("**/*.json")),
+        tokens_split_dir,
+        50,
+        100,
+        False,
     )
 
     assert True

@@ -200,7 +200,7 @@ class OctupleMono(MIDITokenizer):
 
         return instrument, tempo_changes
 
-    def _create_base_vocabulary(self, sos_eos_tokens: bool = None) -> List[List[str]]:
+    def _create_base_vocabulary(self) -> List[List[str]]:
         r"""Creates the vocabulary, as a list of string tokens.
         Each token as to be given as the form of "Type_Value", separated with an underscore.
         Example: Pitch_58
