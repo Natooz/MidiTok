@@ -65,6 +65,7 @@ def test_multitrack_midi_to_tokens_to_midi(
     """
     tokenizations = [
         "TSD",
+        "Structured"
         "REMI",
         "REMIPlus",
         "CPWord",

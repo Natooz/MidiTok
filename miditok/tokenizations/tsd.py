@@ -19,8 +19,11 @@ class TSD(MIDITokenizer):
     r"""TSD, for Time Shift Duration, is similar to MIDI-Like :ref:`MIDI-Like`
     but uses explicit *Duration* tokens to represent note durations, which have
     showed `better results than with NoteOff tokens <https://arxiv.org/abs/2002.00212>`_.
-    **Note:** as TSD uses *TimeShifts* events to move the time from note to
-    note, it could be unsuited for tracks with long pauses. In such case, the
+    If you specify `use_programs` as `True` in the config file, the tokenizer will add `Program` tokens before
+    each `Pitch` tokens to specify its instrument, and will treat all tracks as a single streeam of tokens.
+
+    **Note:** as `TSD` uses *TimeShifts* events to move the time from note to
+    note, it can be unsuited for tracks with pauses longer than the maximum `TimeShift` value. In such cases, the
     maximum *TimeShift* value will be used.
     """
 
