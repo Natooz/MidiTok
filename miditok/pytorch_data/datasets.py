@@ -1,6 +1,5 @@
 """
 PyTorch `Dataset` objects, to be used with PyTorch `DataLoaders` to load and send data during training.
-TODO doc, explain Datasets -> dict (here no labels), Collator handle dict etc
 """
 from pathlib import Path
 from typing import List, Union, Sequence, Any, Mapping
@@ -8,8 +7,7 @@ from abc import ABC
 from copy import deepcopy
 import json
 
-from torch import LongTensor
-import torch
+from torch import LongTensor, randint
 from torch.utils.data import Dataset
 from miditok import MIDITokenizer
 from miditoolkit import MidiFile
@@ -106,7 +104,7 @@ class _DatasetABC(Dataset, ABC):
 
         :param nb_samples: number of samples to keep. They will be randomly picked.
         """
-        idx = torch.randint(0, len(self), (nb_samples,))
+        idx = randint(0, len(self), (nb_samples,))
         self.samples = [self.samples[id_] for id_ in idx.tolist()]
         if self.labels is not None:
             self.labels = [self.labels[id_] for id_ in idx.tolist()]
