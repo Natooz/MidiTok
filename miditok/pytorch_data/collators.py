@@ -116,7 +116,8 @@ def _add_bos_eos_tokens_to_batch(
     if bos_tok_id is None and eos_tok_id is None:
         return
 
-    (sos_shape := list(batch[0].shape))[0] = 1  # (1) or (1,Z)
+    sos_shape = list(batch[0].shape)
+    sos_shape[0] = 1  # (1) or (1,Z)
     for i in range(len(batch)):
         if bos_tok_id is not None and eos_tok_id is not None:
             batch[i] = torch.cat(
