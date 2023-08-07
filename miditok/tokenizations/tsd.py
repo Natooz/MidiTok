@@ -390,7 +390,7 @@ class TSD(MIDITokenizer):
             midi.dump(output_path)
         return midi
 
-    def _create_base_vocabulary(self, sos_eos_tokens: bool = False) -> List[str]:
+    def _create_base_vocabulary(self) -> List[str]:
         r"""Creates the vocabulary, as a list of string tokens.
         Each token as to be given as the form of "Type_Value", separated with an underscore.
         Example: Pitch_58

@@ -8,3 +8,16 @@ from .mumidi import MuMIDI
 from .octuple import Octuple
 from .octuple_mono import OctupleMono
 from .mmm import MMM
+
+__all__ = [
+    "MIDILike",
+    "REMI",
+    "REMIPlus",
+    "TSD",
+    "Structured",
+    "Octuple",
+    "OctupleMono",
+    "CPWord",
+    "MuMIDI",
+    "MMM",
+]

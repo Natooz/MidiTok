@@ -1,13 +1,7 @@
 #!/usr/bin/python3 python
 
-"""One track test file
-This test method is to be used with MIDI files of one track (like the maestro dataset).
-It is mostly useful to measure the performance of encodings where time is based on
-time shifts tokens, as these files usually don't contain tracks with very long pauses,
-i.e. long duration / time-shift values probably out of range of the tokenizer's vocabulary.
-
-NOTE: encoded tracks has to be compared with the quantized original track.
-
+"""
+Testing the possible I/O formats of the tokenizers.
 """
 
 from copy import deepcopy

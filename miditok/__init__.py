@@ -1,3 +1,5 @@
+from .midi_tokenizer import MIDITokenizer, convert_sequence_to_tokseq
+from .classes import Event, TokSequence, TokenizerConfig
 from .tokenizations import (
     MIDILike,
     REMI,
@@ -10,8 +12,33 @@ from .tokenizations import (
     MuMIDI,
     MMM,
 )
-from .midi_tokenizer import MIDITokenizer, convert_sequence_to_tokseq
-from .classes import Event, TokSequence, TokenizerConfig
 
 from .utils import utils
-from .data_augmentation import data_augmentation
+from miditok import data_augmentation
+
+
+__all__ = [
+    "MIDITokenizer",
+    "convert_sequence_to_tokseq",
+    "Event",
+    "TokSequence",
+    "TokenizerConfig",
+    "MIDILike",
+    "REMI",
+    "REMIPlus",
+    "TSD",
+    "Structured",
+    "Octuple",
+    "OctupleMono",
+    "CPWord",
+    "MuMIDI",
+    "MMM",
+    "utils",
+    "data_augmentation",
+]
+
+try:
+    from miditok import pytorch_data
+    __all__.append("pytorch_data")
+except ImportError as e:
+    pass

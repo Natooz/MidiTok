@@ -184,7 +184,7 @@ class Structured(MIDITokenizer):
 
         return instrument, [TempoChange(TEMPO, 0)]
 
-    def _create_base_vocabulary(self, sos_eos_tokens: bool = None) -> List[str]:
+    def _create_base_vocabulary(self) -> List[str]:
         r"""Creates the vocabulary, as a list of string tokens.
         Each token as to be given as the form of "Type_Value", separated with an underscore.
         Example: Pitch_58
@@ -195,11 +195,6 @@ class Structured(MIDITokenizer):
 
         :return: the vocabulary as a list of string.
         """
-        if sos_eos_tokens is not None:
-            print(
-                "\033[93msos_eos_tokens argument is depreciated and will be removed in a future update, "
-                "_create_vocabulary now uses self._sos_eos attribute set a class init \033[0m"
-            )
         vocab = []
 
         # PITCH

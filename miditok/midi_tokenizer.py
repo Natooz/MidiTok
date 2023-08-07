@@ -1271,6 +1271,7 @@ class MIDITokenizer(ABC):
         self,
         midi_paths: Union[List[str], List[Path]],
         out_dir: Union[str, Path],
+        tokenizer_config_file_name: str = "tokenizer.conf",
         validation_fn: Callable[[MidiFile], bool] = None,
         data_augment_offsets=None,
         apply_bpe: bool = True,
@@ -1286,20 +1287,23 @@ class MIDITokenizer(ABC):
 
         :param midi_paths: paths of the MIDI files.
         :param out_dir: output directory to save the converted files.
+        :param tokenizer_config_file_name: name of the tokenizer config file name. This file will be saved in
+            `out_dir`. (default: "tokenizer.conf")
         :param validation_fn: a function checking if the MIDI is valid on your requirements
             (e.g. time signature, minimum/maximum length, instruments ...).
         :param data_augment_offsets: data augmentation arguments, to be passed to the
             miditok.data_augmentation.data_augmentation_dataset method. Has to be given as a list / tuple
             of offsets pitch octaves, velocities, durations, and finally their directions (up/down). (default: None)
-        :param apply_bpe: will apply BPE on the dataset to save, if the vocabulary was learned with.
-        :param save_programs: will also save the programs of the tracks of the MIDI. (default: True)
+        :param apply_bpe: will apply BPE on the dataset to save, if the vocabulary was learned with. (default: True)
+        :param save_programs: will also save the programs of the tracks of the MIDI. Note that this option is
+            probably unnecessary when using a multitrack tokenizer, as the Program information is present within the
+            tokens, and that the tracks having the same programs are likely to have been merged. (default: True)
         :param logging: logs progress bar.
         """
         out_dir = Path(out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
-        self.save_params(
-            out_dir / "config.txt"
-        )  # Saves the parameters with which the MIDIs are converted
+        # Saves the tokenizer so that it can be reloaded
+        self.save_params(out_dir / tokenizer_config_file_name)
 
         for midi_path in (
             tqdm(
@@ -1317,9 +1321,8 @@ class MIDITokenizer(ABC):
                 if logging:
                     print(f"File not found: {midi_path}")
                 continue
-            except (
-                Exception
-            ):  # ValueError, OSError, FileNotFoundError, IOError, EOFError, mido.KeySignatureError
+            except Exception:
+                # known are ValueError, OSError, FileNotFoundError, IOError, EOFError, mido.KeySignatureError
                 continue
 
             # Checks the time division is valid
@@ -1330,10 +1333,10 @@ class MIDITokenizer(ABC):
                 if not validation_fn(midi):
                     continue
 
-            # Converting the MIDI to tokens and saving them as json
-            tokens = self(
-                midi, apply_bpe_if_possible=False
-            )  # BPE will be applied after if ordered
+            # Tokenizing the MIDI, without BPE here as this will be done at the end (as we might perform data aug)
+            tokens = self(midi, apply_bpe_if_possible=False)
+
+            # Save the tokens as JSON
             self.save_tokens(
                 tokens,
                 Path(out_dir, f"{Path(midi_path).stem}.json").with_suffix(".json"),
