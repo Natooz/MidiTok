@@ -20,10 +20,11 @@ from pathlib import Path
 from typing import Union
 
 import miditok
-from miditoolkit import MidiFile
+from miditoolkit import MidiFile, Marker
 from tqdm import tqdm
 
 from .tests_utils import (
+    ALL_TOKENIZATIONS,
     midis_equals,
     tempo_changes_equals,
     reduce_note_durations,
@@ -37,7 +38,7 @@ BEAT_RES_TEST = {(0, 16): 8}
 TOKENIZER_PARAMS = {
     "beat_res": BEAT_RES_TEST,
     "use_chords": True,
-    "use_rests": True,
+    "use_rests": True,  # tempo decode fails when False for MIDILike because beat_res range is too short
     "use_tempos": True,
     "use_time_signatures": True,
     "use_programs": True,
@@ -63,17 +64,6 @@ def test_multitrack_midi_to_tokens_to_midi(
     times quantized, and maybe a some duplicated notes removed
 
     """
-    tokenizations = [
-        "TSD",
-        "Structured"
-        "REMI",
-        "REMIPlus",
-        "CPWord",
-        "Octuple",
-        "OctupleMono",
-        "MuMIDI",
-        "MMM",
-    ]
     files = list(Path(data_path).glob("**/*.mid"))
     at_least_one_error = False
 
@@ -89,7 +79,7 @@ def test_multitrack_midi_to_tokens_to_midi(
             continue
         has_errors = False
 
-        for tokenization in tokenizations:
+        for tokenization in ALL_TOKENIZATIONS:
             tokenizer_config = miditok.TokenizerConfig(**TOKENIZER_PARAMS)
             tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
                 tokenizer_config=tokenizer_config
@@ -107,15 +97,14 @@ def test_multitrack_midi_to_tokens_to_midi(
 
             # Sort and merge tracks if needed
             # MIDI produced with one_token_stream contains tracks with different orders
-            if tokenizer.one_token_stream:
-                miditok.utils.merge_same_program_tracks(midi_to_compare.instruments)
-            # reduce the duration of notes to long
+            # This step is also performed in preprocess_midi, but we need to call it here for the assertions below
+            tokenizer.preprocess_midi(midi_to_compare)
             for track in midi_to_compare.instruments:
                 reduce_note_durations(
                     track.notes,
                     max(tu[1] for tu in BEAT_RES_TEST) * midi_to_compare.ticks_per_beat,
                 )
-                miditok.utils.remove_duplicated_notes(track.notes)
+                miditok.utils.fix_offsets_overlapping_notes(track.notes)
             if tokenization in ["Octuple", "REMIPlus"]:  # needed
                 adapt_tempo_changes_times(
                     midi_to_compare.instruments, midi_to_compare.tempo_changes
@@ -146,11 +135,11 @@ def test_multitrack_midi_to_tokens_to_midi(
             errors = midis_equals(midi_to_compare, new_midi)
             if len(errors) > 0:
                 has_errors = True
-                """for track_err in errors:
-                    if track_err[-1][0] != 'len':
+                for e, track_err in enumerate(errors):
+                    if track_err[-1][0][0] != 'len':
                         for err, note, exp in track_err[-1]:
-                            new_midi.markers.append(Marker(f'ERR {tokenization} with note {err} (pitch {note.pitch})',
-                                                           note.start))"""
+                            new_midi.markers.append(Marker(f'{e}: with note {err} (pitch {note.pitch})',
+                                                           note.start))
                 print(
                     f"MIDI {i} - {file_path} failed to encode/decode NOTES with "
                     f"{tokenization} ({sum(len(t[2]) for t in errors)} errors)"

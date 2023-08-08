@@ -20,6 +20,7 @@ from .utils import (
     remove_duplicated_notes,
     get_midi_programs,
     convert_ids_tensors_to_list,
+    merge_same_program_tracks,
 )
 from .data_augmentation import data_augmentation_dataset
 from .constants import (
@@ -331,6 +332,11 @@ class MIDITokenizer(ABC):
 
         :param midi: MIDI object to preprocess.
         """
+        # Merge instruments of the same program / inst before preprocessing them
+        # This allows to avoid potential duplicated notes in some multitrack settings
+        if self.config.use_programs and self.one_token_stream:
+            merge_same_program_tracks(midi.instruments)
+
         t = 0
         while t < len(midi.instruments):
             self._quantize_notes(
@@ -1393,7 +1399,8 @@ class MIDITokenizer(ABC):
         elif previous_type == "Position":
             current_pos = int(tokens[0].split("_")[1])
 
-        for token in tokens[1:]:
+        for ti, token in enumerate(tokens[1:]):
+            # err_tokens = tokens[ti - 4: ti + 4]  # uncomment for debug
             event_type, event_value = token.split("_")[0], token.split("_")[1]
 
             # Good token type

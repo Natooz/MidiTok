@@ -22,7 +22,7 @@ class Structured(MIDITokenizer):
     To keep this property, no additional token can be inserted in MidiTok's implementation,
     except *Program* that can optionally be added preceding `Pitch` tokens.
     If you specify `use_programs` as `True` in the config file, the tokenizer will add `Program` tokens before
-    each `Pitch` tokens to specify its instrument, and will treat all tracks as a single streeam of tokens.
+    each `Pitch` tokens to specify its instrument, and will treat all tracks as a single stream of tokens.
 
     **Note:** as `Structured` uses *TimeShifts* events to move the time from note to
     note, it can be unsuited for tracks with pauses longer than the maximum `TimeShift` value. In such cases, the
@@ -163,6 +163,7 @@ class Structured(MIDITokenizer):
 
         # Add time events
         if self.one_token_stream:
+            all_events.sort(key=lambda x: x.time)
             all_events = self.__add_time_note_events(all_events)
             tok_sequence = TokSequence(events=all_events)
             self.complete_sequence(tok_sequence)
