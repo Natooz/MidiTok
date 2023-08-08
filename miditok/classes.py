@@ -159,15 +159,12 @@ class TokenizerConfig:
             `TimeSignature` tokens will specify the current time signature. It is only implemented with
             :ref:`REMIPlus`, :ref:`Octuple` and :ref:`Octuple Mono` atow. (default: False)
     :param use_programs: will use ``Program`` tokens, if the tokenizer is compatible.
-            Used to specify an instrument / MIDI program. Some tokenizations use natively programs: :ref:`REMIPlus`
-            and :ref:`TSDPlus` adds `Program` tokens before `Pitch` tokens, :ref:`CPWord`, :ref:`Octuple` and
-            :ref:`MuMIDI` add a `Program` tokens with the stacks of `Pitch`, `Velocity` and `Duration` tokens.
-            This option will be set automatically to true for :ref:`Octuple` and :ref:`MuMIDI`.
-            For non-mentioned tokenizations, MidiTok only offers the possibility to include these
-            tokens in the vocabulary for you, but won't use them. MidiTok leaves you the choice / task to represent
-            the program information the way you want. You can do it as in
-            `LakhNES <https://github.com/chrisdonahue/LakhNES>`_ or
-            `MMM <https://metacreation.net/mmm-multi-track-music-machine/>`_. (default: False)
+            Used to specify an instrument / MIDI program. The :ref:`Octuple`, :ref:`MMM` and :ref:`MuMIDI` tokenizers
+            use natively `Program` tokens, this option is always enabled. :ref:`TSD`, :ref:`REMI`, :ref:`REMIPlus`,
+            :ref:`MIDILike` and :ref:`Structured` will add `Program` tokens before each `Pitch` / `NoteOn` token to
+            indicate its associated instrument and will treat all the tracks of a MIDI as a single sequence of tokens.
+            :ref:`CPWord`, :ref:`Octuple` and :ref:`MuMIDI` add a `Program` tokens with the stacks of `Pitch`,
+            `Velocity` and `Duration` tokens. (default: False)
     :param rest_range: range of the rest to use, in beats, as a tuple (beat_division, max_rest_in_beats).
             The beat division divides a beat to determine the minimum rest to represent.
             The minimum rest must be divisible by 2 and lower than the first beat resolution
