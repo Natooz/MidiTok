@@ -24,6 +24,7 @@ class REMIPlus(REMI):
 
     This class is identical to :ref:`REMI` with `Program` and `TimeSignature` tokens enabled.
     """
+
     def _tweak_config_before_creating_voc(self):
         self.config.use_programs = True
         self.config.use_time_signatures = True
@@ -57,6 +58,7 @@ __all__ = [
 
 try:
     from miditok import pytorch_data
+
     __all__.append("pytorch_data")
 except ImportError as e:
     pass

@@ -14,13 +14,19 @@ def test_split_seq():
     min_seq_len = 50
     max_seq_len = 100
     seq = list(range(320))
-    subseqs = miditok.pytorch_data.split_seq_in_subsequences(seq, min_seq_len, max_seq_len)
+    subseqs = miditok.pytorch_data.split_seq_in_subsequences(
+        seq, min_seq_len, max_seq_len
+    )
 
-    assert [i for subseq in subseqs for i in subseq] == seq[:300], "Sequence split failed"
+    assert [i for subseq in subseqs for i in subseq] == seq[
+        :300
+    ], "Sequence split failed"
 
 
 def test_dataset_ram():
-    multitrack_midis_paths = list(Path("tests", "Multitrack_MIDIs").glob("**/*.mid"))[:3]
+    multitrack_midis_paths = list(Path("tests", "Multitrack_MIDIs").glob("**/*.mid"))[
+        :3
+    ]
     one_track_midis_paths = list(Path("tests", "Maestro_MIDIs").glob("**/*.mid"))[:3]
     tokens_os_dir = Path("tests", "multitrack_tokens_os")
 
@@ -64,7 +70,9 @@ def test_dataset_ram():
 
 
 def test_dataset_io():
-    multitrack_midis_paths = list(Path("tests", "Multitrack_MIDIs").glob("**/*.mid"))[:3]
+    multitrack_midis_paths = list(Path("tests", "Multitrack_MIDIs").glob("**/*.mid"))[
+        :3
+    ]
     tokens_os_dir = Path("tests", "multitrack_tokens_os")
 
     if not tokens_os_dir.is_dir():
@@ -87,7 +95,9 @@ def test_dataset_io():
 
 
 def test_split_dataset_to_subsequences():
-    multitrack_midis_paths = list(Path("tests", "Multitrack_MIDIs").glob("**/*.mid"))[:3]
+    multitrack_midis_paths = list(Path("tests", "Multitrack_MIDIs").glob("**/*.mid"))[
+        :3
+    ]
     tokens_os_dir = Path("tests", "multitrack_tokens_os")
     tokens_split_dir = Path("tests", "multitrack_tokens_os_split")
     tokens_split_dir_ms = Path("tests", "multitrack_tokens_ms_split")
@@ -134,21 +144,30 @@ def test_collator():
 
     # Just input ids
     batch_from_dataloader = [
-        {"input_ids": randint(0, 300, (seq_len, ))} for seq_len in seq_lengths
+        {"input_ids": randint(0, 300, (seq_len,))} for seq_len in seq_lengths
     ]
     batch_collated = collator(batch_from_dataloader)
     # seq_len + 1 as we add 2 tokens (BOS & EOS) but shift labels so -1
-    assert list(batch_collated["input_ids"].size()) == [len(seq_lengths), max(seq_lengths) + 1]
+    assert list(batch_collated["input_ids"].size()) == [
+        len(seq_lengths),
+        max(seq_lengths) + 1,
+    ]
 
     # This time with labels already in batch and embed pooling, padding right
     collator.pad_on_left = False
     batch_from_dataloader = [
-        {"input_ids": randint(0, 300, (seq_len, 5)),
-         "labels": randint(0, 300, (seq_len, 5))}
+        {
+            "input_ids": randint(0, 300, (seq_len, 5)),
+            "labels": randint(0, 300, (seq_len, 5)),
+        }
         for seq_len in seq_lengths
     ]
     batch_collated = collator(batch_from_dataloader)
-    assert list(batch_collated["input_ids"].size()) == [len(seq_lengths), max(seq_lengths) + 1, 5]
+    assert list(batch_collated["input_ids"].size()) == [
+        len(seq_lengths),
+        max(seq_lengths) + 1,
+        5,
+    ]
 
     assert True
 

@@ -136,10 +136,14 @@ def test_multitrack_midi_to_tokens_to_midi(
             if len(errors) > 0:
                 has_errors = True
                 for e, track_err in enumerate(errors):
-                    if track_err[-1][0][0] != 'len':
+                    if track_err[-1][0][0] != "len":
                         for err, note, exp in track_err[-1]:
-                            new_midi.markers.append(Marker(f'{e}: with note {err} (pitch {note.pitch})',
-                                                           note.start))
+                            new_midi.markers.append(
+                                Marker(
+                                    f"{e}: with note {err} (pitch {note.pitch})",
+                                    note.start,
+                                )
+                            )
                 print(
                     f"MIDI {i} - {file_path} failed to encode/decode NOTES with "
                     f"{tokenization} ({sum(len(t[2]) for t in errors)} errors)"

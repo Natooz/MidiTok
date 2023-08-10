@@ -189,14 +189,14 @@ class Structured(MIDITokenizer):
 
     @_in_as_seq()
     def tokens_to_midi(
-            self,
-            tokens: Union[
-                Union[TokSequence, List, np.ndarray, Any],
-                List[Union[TokSequence, List, np.ndarray, Any]],
-            ],
-            programs: Optional[List[Tuple[int, bool]]] = None,
-            output_path: Optional[str] = None,
-            time_division: int = TIME_DIVISION,
+        self,
+        tokens: Union[
+            Union[TokSequence, List, np.ndarray, Any],
+            List[Union[TokSequence, List, np.ndarray, Any]],
+        ],
+        programs: Optional[List[Tuple[int, bool]]] = None,
+        output_path: Optional[str] = None,
+        time_division: int = TIME_DIVISION,
     ) -> MidiFile:
         r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
 
@@ -213,7 +213,7 @@ class Structured(MIDITokenizer):
             tokens[i] = tokens[i].tokens
         midi = MidiFile(ticks_per_beat=time_division)
         assert (
-                time_division % max(self.config.beat_res.values()) == 0
+            time_division % max(self.config.beat_res.values()) == 0
         ), f"Invalid time division, please give one divisible by {max(self.config.beat_res.values())}"
 
         # RESULTS
@@ -239,8 +239,8 @@ class Structured(MIDITokenizer):
                 elif token.split("_")[0] == "Pitch":
                     try:
                         if (
-                                seq[ti + 1].split("_")[0] == "Velocity"
-                                and seq[ti + 2].split("_")[0] == "Duration"
+                            seq[ti + 1].split("_")[0] == "Velocity"
+                            and seq[ti + 2].split("_")[0] == "Duration"
                         ):
                             pitch = int(seq[ti].split("_")[1])
                             vel = int(seq[ti + 1].split("_")[1])
@@ -261,7 +261,7 @@ class Structured(MIDITokenizer):
                                 Note(vel, pitch, current_tick, current_tick + duration)
                             )
                     except (
-                            IndexError
+                        IndexError
                     ):  # A well constituted sequence should not raise an exception
                         pass  # However with generated sequences this can happen, or if the sequence isn't finished
                 elif token.split("_")[0] == "Program":

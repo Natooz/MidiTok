@@ -146,11 +146,15 @@ class REMI(MIDITokenizer):
         previous_tick = -1
         previous_note_end = 0
         current_time_sig = TIME_SIGNATURE
-        ticks_per_bar = self._current_midi_metadata["time_division"] * current_time_sig[0]
+        ticks_per_bar = (
+            self._current_midi_metadata["time_division"] * current_time_sig[0]
+        )
         for e, event in enumerate(events):
             if event.type == "TimeSig":
                 current_time_sig = list(map(int, event.value.split("/")))
-                ticks_per_bar = self._current_midi_metadata["time_division"] * current_time_sig[0]
+                ticks_per_bar = (
+                    self._current_midi_metadata["time_division"] * current_time_sig[0]
+                )
             if event.time != previous_tick:
                 # (Rest)
                 if (
@@ -158,7 +162,6 @@ class REMI(MIDITokenizer):
                     and self.config.use_rests
                     and event.time - previous_note_end >= min_rest
                 ):
-
                     previous_tick = previous_note_end
                     rest_beat, rest_pos = divmod(
                         event.time - previous_tick,
@@ -334,14 +337,14 @@ class REMI(MIDITokenizer):
 
     @_in_as_seq()
     def tokens_to_midi(
-            self,
-            tokens: Union[
-                Union[TokSequence, List, np.ndarray, Any],
-                List[Union[TokSequence, List, np.ndarray, Any]],
-            ],
-            programs: Optional[List[Tuple[int, bool]]] = None,
-            output_path: Optional[str] = None,
-            time_division: int = TIME_DIVISION,
+        self,
+        tokens: Union[
+            Union[TokSequence, List, np.ndarray, Any],
+            List[Union[TokSequence, List, np.ndarray, Any]],
+        ],
+        programs: Optional[List[Tuple[int, bool]]] = None,
+        output_path: Optional[str] = None,
+        time_division: int = TIME_DIVISION,
     ) -> MidiFile:
         r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
 
@@ -358,7 +361,7 @@ class REMI(MIDITokenizer):
             tokens[i] = tokens[i].tokens
         midi = MidiFile(ticks_per_beat=time_division)
         assert (
-                time_division % max(self.config.beat_res.values()) == 0
+            time_division % max(self.config.beat_res.values()) == 0
         ), f"Invalid time division, please give one divisible by {max(self.config.beat_res.values())}"
         ticks_per_sample = time_division // max(self.config.beat_res.values())
 
@@ -388,7 +391,7 @@ class REMI(MIDITokenizer):
                 elif token.split("_")[0] == "Rest":
                     beat, pos = map(int, seq[ti].split("_")[1].split("."))
                     if (
-                            current_tick < previous_note_end
+                        current_tick < previous_note_end
                     ):  # if in case successive rest happen
                         current_tick = previous_note_end
                     current_tick += beat * time_division + pos * ticks_per_sample
@@ -405,8 +408,8 @@ class REMI(MIDITokenizer):
                 elif token.split("_")[0] == "Pitch":
                     try:
                         if (
-                                seq[ti + 1].split("_")[0] == "Velocity"
-                                and seq[ti + 2].split("_")[0] == "Duration"
+                            seq[ti + 1].split("_")[0] == "Velocity"
+                            and seq[ti + 2].split("_")[0] == "Duration"
                         ):
                             pitch = int(seq[ti].split("_")[1])
                             vel = int(seq[ti + 1].split("_")[1])
@@ -430,7 +433,7 @@ class REMI(MIDITokenizer):
                                 previous_note_end, current_tick + duration
                             )
                     except (
-                            IndexError
+                        IndexError
                     ):  # A well constituted sequence should not raise an exception
                         pass  # However with generated sequences this can happen, or if the sequence isn't finished
                 elif token.split("_")[0] == "Program":
@@ -447,8 +450,12 @@ class REMI(MIDITokenizer):
                         num != time_signature_changes[-1].numerator
                         and den != time_signature_changes[-1].denominator
                     ):
-                        time_signature_changes.append(TimeSignature(num, den, current_tick))
-                        ticks_per_bar = self._current_midi_metadata["time_division"] * num
+                        time_signature_changes.append(
+                            TimeSignature(num, den, current_tick)
+                        )
+                        ticks_per_bar = (
+                            self._current_midi_metadata["time_division"] * num
+                        )
         if len(tempo_changes) > 1:
             del tempo_changes[0]  # delete mocked tempo change
         tempo_changes[0].time = 0

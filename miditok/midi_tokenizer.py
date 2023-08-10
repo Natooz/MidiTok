@@ -34,10 +34,7 @@ from .constants import (
 
 
 def convert_sequence_to_tokseq(
-        tokenizer,
-        input_seq,
-        complete_seq: bool = True,
-        decode_bpe: bool = True
+    tokenizer, input_seq, complete_seq: bool = True, decode_bpe: bool = True
 ) -> Union[TokSequence, List[TokSequence]]:
     r"""Converts a sequence into a :class:`miditok.TokSequence` or list of :class:`miditok.TokSequence`
     objects with the appropriate format of the tokenizer being used.
@@ -55,7 +52,7 @@ def convert_sequence_to_tokseq(
         arg = ("ids", convert_ids_tensors_to_list(input_seq))
     except (AttributeError, ValueError, TypeError, IndexError):
         if isinstance(input_seq[0], str) or (
-                isinstance(input_seq[0], list) and isinstance(input_seq[0][0], str)
+            isinstance(input_seq[0], list) and isinstance(input_seq[0][0], str)
         ):
             arg = ("tokens", input_seq)
         else:  # list of Event, but unlikely
@@ -72,14 +69,18 @@ def convert_sequence_to_tokseq(
     # Check the number of dimensions is good
     # In case of no one_token_stream and one dimension short --> unsqueeze
     if not tokenizer.one_token_stream and nb_seq_dims == nb_io_dims - 1:
-        print(f"The input sequence has one dimension less than expected ({nb_seq_dims} instead of "
-              f"{nb_io_dims}). It is being unsqueezed to conform with the tokenizer's i/o format "
-              f"({tokenizer.io_format})")
+        print(
+            f"The input sequence has one dimension less than expected ({nb_seq_dims} instead of "
+            f"{nb_io_dims}). It is being unsqueezed to conform with the tokenizer's i/o format "
+            f"({tokenizer.io_format})"
+        )
         arg = (arg[0], [arg[1]])
 
     elif nb_seq_dims != nb_io_dims:
-        raise ValueError(f"The input sequence does not have the expected dimension "
-                         f"({nb_seq_dims} instead of {nb_io_dims}).")
+        raise ValueError(
+            f"The input sequence does not have the expected dimension "
+            f"({nb_seq_dims} instead of {nb_io_dims})."
+        )
 
     # Convert to TokSequence
     if not tokenizer.one_token_stream and nb_io_dims == nb_seq_dims:
@@ -88,9 +89,7 @@ def convert_sequence_to_tokseq(
             kwarg = {arg[0]: obj}
             seq.append(TokSequence(**kwarg))
             if not tokenizer.is_multi_voc:
-                seq[-1].ids_bpe_encoded = tokenizer._are_ids_bpe_encoded(
-                    seq[-1].ids
-                )
+                seq[-1].ids_bpe_encoded = tokenizer._are_ids_bpe_encoded(seq[-1].ids)
     else:  # 1 subscript, one_token_stream and no multi-voc
         kwarg = {arg[0]: arg[1]}
         seq = TokSequence(**kwarg)
@@ -1090,7 +1089,9 @@ class MIDITokenizer(ABC):
                     sample["ids"], as_one_str=True
                 )  # list of str (bytes)
                 iterator += (
-                    [[byte_] for byte_ in bytes_] if not self.one_token_stream else [bytes_]
+                    [[byte_] for byte_ in bytes_]
+                    if not self.one_token_stream
+                    else [bytes_]
                 )
 
             # This doesn't seem to work, the trainer pre-processes the sequences, but then no word remains

@@ -193,7 +193,11 @@ class MIDILike(MIDITokenizer):
                 previous_tick = event.time
 
             # Update max offset time of the notes encountered
-            if event.type == "Program" and event.desc == "ProgramChord" and e + 2 < len(events):
+            if (
+                event.type == "Program"
+                and event.desc == "ProgramChord"
+                and e + 2 < len(events)
+            ):
                 # Next second event is either Program with the end info
                 previous_note_end = max(previous_note_end, events[e + 2].desc)
             elif event.type in ["NoteOn", "Program"]:
@@ -274,15 +278,15 @@ class MIDILike(MIDITokenizer):
 
     @_in_as_seq()
     def tokens_to_midi(
-            self,
-            tokens: Union[
-                Union[TokSequence, List, np.ndarray, Any],
-                List[Union[TokSequence, List, np.ndarray, Any]],
-            ],
-            programs: Optional[List[Tuple[int, bool]]] = None,
-            output_path: Optional[str] = None,
-            time_division: int = TIME_DIVISION,
-            default_duration: int = None,
+        self,
+        tokens: Union[
+            Union[TokSequence, List, np.ndarray, Any],
+            List[Union[TokSequence, List, np.ndarray, Any]],
+        ],
+        programs: Optional[List[Tuple[int, bool]]] = None,
+        output_path: Optional[str] = None,
+        time_division: int = TIME_DIVISION,
+        default_duration: int = None,
     ) -> MidiFile:
         r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
 
@@ -301,11 +305,11 @@ class MIDILike(MIDITokenizer):
             tokens[i] = tokens[i].tokens
         midi = MidiFile(ticks_per_beat=time_division)
         assert (
-                time_division % max(self.config.beat_res.values()) == 0
+            time_division % max(self.config.beat_res.values()) == 0
         ), f"Invalid time division, please give one divisible by {max(self.config.beat_res.values())}"
         ticks_per_sample = time_division // max(self.config.beat_res.values())
         max_duration = self.durations[-1][0] * time_division + self.durations[-1][1] * (
-                time_division // self.durations[-1][2]
+            time_division // self.durations[-1][2]
         )
 
         # RESULTS
@@ -333,7 +337,7 @@ class MIDILike(MIDITokenizer):
                 elif token.split("_")[0] == "Rest":
                     beat, pos = map(int, seq[ti].split("_")[1].split("."))
                     if (
-                            current_tick < previous_note_end
+                        current_tick < previous_note_end
                     ):  # if in case successive rest happen
                         current_tick = previous_note_end
                     current_tick += beat * time_division + pos * ticks_per_sample
@@ -351,13 +355,13 @@ class MIDILike(MIDITokenizer):
                                 tok_type, tok_val = seq[i].split("_")
                                 if tok_type == "Program":
                                     noff_program = int(tok_val)
-                                elif (
-                                    tok_type == "NoteOff"
-                                    and int(tok_val) == pitch
-                                ):
+                                elif tok_type == "NoteOff" and int(tok_val) == pitch:
                                     good_noff = True
                                     if self.config.use_programs:
-                                        if not (noff_program is not None and noff_program == current_program):
+                                        if not (
+                                            noff_program is not None
+                                            and noff_program == current_program
+                                        ):
                                             good_noff = False
                                     if good_noff:
                                         duration = offset_tick
@@ -370,10 +374,10 @@ class MIDILike(MIDITokenizer):
                                 elif tok_type == "Rest":
                                     beat, pos = map(int, tok_val.split("."))
                                     offset_tick += (
-                                            beat * time_division + pos * ticks_per_sample
+                                        beat * time_division + pos * ticks_per_sample
                                     )
                                 if (
-                                        offset_tick > max_duration
+                                    offset_tick > max_duration
                                 ):  # will not look for Note Off beyond
                                     break
 
@@ -391,7 +395,12 @@ class MIDILike(MIDITokenizer):
                                         else MIDI_INSTRUMENTS[current_program]["name"],
                                     )
                                 instruments[current_program].notes.append(
-                                    Note(vel, pitch, current_tick, current_tick + duration)
+                                    Note(
+                                        vel,
+                                        pitch,
+                                        current_tick,
+                                        current_tick + duration,
+                                    )
                                 )
                                 previous_note_end = max(
                                     previous_note_end, current_tick + duration
@@ -411,8 +420,8 @@ class MIDILike(MIDITokenizer):
                     num, den = self._parse_token_time_signature(token.split("_")[1])
                     current_time_signature = time_signature_changes[-1]
                     if (
-                            num != current_time_signature.numerator
-                            and den != current_time_signature.denominator
+                        num != current_time_signature.numerator
+                        and den != current_time_signature.denominator
                     ):
                         time_signature_changes.append(
                             TimeSignature(num, den, current_tick)

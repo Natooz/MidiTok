@@ -63,7 +63,9 @@ def remove_duplicated_notes(notes: List[Note], filter_by_starting_tick: bool = T
             notes[i].pitch == notes[i + 1].pitch
             and notes[i].start == notes[i + 1].start
         ):
-            if filter_by_starting_tick or (not filter_by_starting_tick and notes[i].end == notes[i + 1].end):
+            if filter_by_starting_tick or (
+                not filter_by_starting_tick and notes[i].end == notes[i + 1].end
+            ):
                 # We keep the next note which has a longer duration
                 del notes[i]
         else:
