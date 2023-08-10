@@ -12,7 +12,6 @@ ALL_TOKENIZATIONS = [
     "TSD",
     "Structured",
     "REMI",
-    "REMIPlus",
     "CPWord",
     "Octuple",
     "OctupleMono",

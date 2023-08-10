@@ -120,7 +120,7 @@ class TSD(MIDITokenizer):
             if event.time != previous_tick:
                 # (Rest)
                 if (
-                    event.type in ["Pitch", "Tempo", "TimeSig"]
+                    event.type in ["Pitch", "Chord", "Tempo", "TimeSig"]
                     and self.config.use_rests
                     and event.time - previous_note_end >= min_rest
                 ):
