@@ -107,19 +107,19 @@ Cells with ❕ markers means the additional token is implemented by default and 
      - ✅
    * - Program
      - ✅¹
-     - ✅
      - ✅¹
      - ✅¹
      - ✅¹
-     - ✅
+     - ✅¹
+     - ✅²
      - ✅❕
      - ✅❕
      - ✅❕
    * - Time signature
-     - ❌
      - ✅
-     - ❌
-     - ❌
+     - ✅
+     - ✅
+     - ✅
      - ❌
      - ❌
      - ✅
@@ -127,6 +127,7 @@ Cells with ❕ markers means the additional token is implemented by default and 
      - ✅
 
 **¹** the tokenizer will add `Program` tokens before each `Pitch` / `NoteOn` token, and will treat all the tracks of a MIDI as a single sequence of tokens.
+**²** unimplemented, the tokenizer's vocabulary will contain the `Program` tokens, but it will not use it.
 
 Special tokens
 ------------------------

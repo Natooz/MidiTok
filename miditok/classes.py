@@ -156,8 +156,11 @@ class TokenizerConfig:
             Tempo values are quantized accordingly to the ``nb_tempos`` and ``tempo_range`` entries in the
             ``additional_tokens`` dictionary (default is 32 tempos from 40 to 250). (default: False)
     :param use_time_signatures: will use ``TimeSignature`` tokens, if the tokenizer is compatible.
-            `TimeSignature` tokens will specify the current time signature. It is only implemented with
-            :ref:`REMIPlus`, :ref:`Octuple` and :ref:`Octuple Mono` atow. (default: False)
+            `TimeSignature` tokens will specify the current time signature. Note that :ref:`REMI` and :ref:`REMIPlus`
+            adds a `TimeSignature` token at the beginning of each Bar (i.e. after `Bar` tokens), while :ref:`TSD` and
+            :ref:`MIDILike` will only represent time signature changes (MIDI messages) as they come. If you want more
+            "recalls" of the current time signature within your token sequences, you can preprocess you MIDI file to
+            add more TimeSignatureChange objects. (default: False)
     :param use_programs: will use ``Program`` tokens, if the tokenizer is compatible.
             Used to specify an instrument / MIDI program. The :ref:`Octuple`, :ref:`MMM` and :ref:`MuMIDI` tokenizers
             use natively `Program` tokens, this option is always enabled. :ref:`TSD`, :ref:`REMI`, :ref:`REMIPlus`,

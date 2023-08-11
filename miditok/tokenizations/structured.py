@@ -106,39 +106,30 @@ class Structured(MIDITokenizer):
         :return: the same events, with time events inserted.
         """
         dur_bins = self._durations_ticks[self._current_midi_metadata["time_division"]]
-        all_events = events.copy()
+        all_events = []
         token_type_to_check = "Program" if self.one_token_stream else "Pitch"
 
         # Add "TimeShift" tokens before each "Pitch" tokens
         previous_tick = 0
-        nb_notes_current_tick = 0
         for e, event in enumerate(events):
-            if event.type != token_type_to_check:
-                all_events[e].desc = nb_notes_current_tick
-                continue
-            if event.time != previous_tick:
-                nb_notes_current_tick = 0
-            else:
-                nb_notes_current_tick += 1
-            all_events[e].desc = nb_notes_current_tick
-            # Time shift
-            # time_shift = track.notes[n + 1].start - note.start
-            time_shift = event.time - previous_tick
-            index = np.argmin(np.abs(dur_bins - time_shift))
-            all_events.append(
-                Event(
-                    type="TimeShift",
-                    time=event.time,
-                    desc=nb_notes_current_tick,
-                    value=".".join(map(str, self.durations[index]))
-                    if time_shift != 0
-                    else "0.0.1",
+            if event.type == token_type_to_check:
+                # Time shift
+                time_shift = event.time - previous_tick
+                index = np.argmin(np.abs(dur_bins - time_shift))
+                all_events.append(
+                    Event(
+                        type="TimeShift",
+                        time=event.time,
+                        desc=f"{time_shift} ticks",
+                        value=".".join(map(str, self.durations[index]))
+                        if time_shift != 0
+                        else "0.0.1",
+                    )
                 )
-            )
-            previous_tick = event.time
+                previous_tick = event.time
 
-        # Sort the tokens so that they come in the good order
-        all_events.sort(key=lambda x: (x.time, x.desc, self._order(x)))
+            all_events.append(event)
+
         return all_events
 
     def _midi_to_tokens(
@@ -337,15 +328,3 @@ class Structured(MIDITokenizer):
             dic["Program"] = ["Pitch"]
             dic["TimeShift"] = ["Program"]
         return dic
-
-    @staticmethod
-    def _order(x: Event) -> int:
-        r"""Helper function to sort events in the right order
-
-        :param x: event to get order index
-        :return: an order int
-        """
-        if x.type == "TimeShift":
-            return 0
-        else:
-            return 1

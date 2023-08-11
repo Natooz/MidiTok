@@ -34,7 +34,6 @@ class MIDILike(MIDITokenizer):
     """
 
     def _tweak_config_before_creating_voc(self):
-        self.config.use_time_signatures = False
         if self.config.use_programs:
             self.one_token_stream = True
 
@@ -114,7 +113,7 @@ class MIDILike(MIDITokenizer):
         )
 
         # Add time events
-        all_events = events.copy()
+        all_events = []
         previous_tick = 0
         previous_note_end = events[0].time + 1
         for e, event in enumerate(events):
@@ -192,13 +191,15 @@ class MIDILike(MIDITokenizer):
                     )
                 previous_tick = event.time
 
+            all_events.append(event)
+
             # Update max offset time of the notes encountered
             if (
                 event.type == "Program"
                 and event.desc == "ProgramChord"
                 and e + 2 < len(events)
             ):
-                # Next second event is either Program with the end info
+                # Next second event is a Program with the end info
                 previous_note_end = max(previous_note_end, events[e + 2].desc)
             elif event.type in ["NoteOn", "Program"]:
                 previous_note_end = max(previous_note_end, event.desc)
@@ -206,8 +207,6 @@ class MIDILike(MIDITokenizer):
                 # Next event is either a NoteOn or Program with the end info
                 previous_note_end = max(previous_note_end, events[e + 1].desc)
 
-        # Sort the tokens so that they come in the good order
-        all_events.sort(key=lambda x: (x.time, self._order(x)))
         return all_events
 
     def _midi_to_tokens(
@@ -221,16 +220,10 @@ class MIDILike(MIDITokenizer):
         """
         # Convert each track to tokens
         all_events = []
+        if not self.one_token_stream:
+            for i in range(len(midi.instruments)):
+                all_events.append([])
 
-        # Adds note tokens
-        for track in midi.instruments:
-            # Fix offsets overlapping notes
-            fix_offsets_overlapping_notes(track.notes)
-            note_events = self.__notes_to_events(track)
-            if self.one_token_stream:
-                all_events += note_events
-            else:
-                all_events.append(note_events)
         # Adds tempo events if specified
         if self.config.use_tempos:
             tempo_events = []
@@ -248,6 +241,33 @@ class MIDILike(MIDITokenizer):
             else:
                 for i in range(len(all_events)):
                     all_events[i] += tempo_events
+
+        # Add time signature tokens if specified
+        if self.config.use_time_signatures:
+            time_sig_events = []
+            for time_signature_change in midi.time_signature_changes:
+                time_sig_events.append(
+                    Event(
+                        type="TimeSig",
+                        value=f"{time_signature_change.numerator}/{time_signature_change.denominator}",
+                        time=time_signature_change.time,
+                    )
+                )
+            if self.one_token_stream:
+                all_events += time_sig_events
+            else:
+                for i in range(len(all_events)):
+                    all_events[i] += time_sig_events
+
+        # Adds note tokens
+        for ti, track in enumerate(midi.instruments):
+            # Fix offsets overlapping notes
+            fix_offsets_overlapping_notes(track.notes)
+            note_events = self.__notes_to_events(track)
+            if self.one_token_stream:
+                all_events += note_events
+            else:
+                all_events[ti] += note_events
 
         # Add time events
         if self.one_token_stream:
@@ -492,6 +512,10 @@ class MIDILike(MIDITokenizer):
         if self.config.use_programs:
             vocab += [f"Program_{program}" for program in self.config.programs]
 
+        # TIME SIGNATURE
+        if self.config.use_time_signatures:
+            vocab += [f"TimeSig_{i[0]}/{i[1]}" for i in self.time_signatures]
+
         return vocab
 
     def _create_token_types_graph(self) -> Dict[str, List[str]]:
@@ -519,8 +543,18 @@ class MIDILike(MIDITokenizer):
             dic["Tempo"] = ["NoteOn", "TimeShift"]
             if self.config.use_chords:
                 dic["Tempo"] += ["Chord"]
-            if self.config.use_tempos:
+            if self.config.use_rests:
                 dic["Tempo"].append("Rest")  # only for first token
+
+        if self.config.use_time_signatures:
+            dic["TimeShift"] += ["TimeSig"]
+            dic["TimeSig"] = ["NoteOn", "TimeShift"]
+            if self.config.use_chords:
+                dic["TimeSig"] += ["Chord"]
+            if self.config.use_rests:
+                dic["TimeSig"].append("Rest")  # only for first token
+            if self.config.use_tempos:
+                dic["Tempo"].append("TimeSig")
 
         if self.config.use_rests:
             dic["Rest"] = ["Rest", "NoteOn", "TimeShift"]
@@ -544,6 +578,9 @@ class MIDILike(MIDITokenizer):
             if self.config.use_tempos:
                 dic["Tempo"].append("Program")
                 dic["Tempo"].remove("NoteOn")
+            if self.config.use_time_signatures:
+                dic["TimeSig"].append("Program")
+                dic["TimeSig"].remove("NoteOn")
             if self.config.use_rests:
                 dic["Rest"].append("Program")
                 dic["Rest"].remove("NoteOn")
@@ -638,17 +675,3 @@ class MIDILike(MIDITokenizer):
                 err += 1
 
         return err / nb_tok_predicted
-
-    @staticmethod
-    def _order(x: Event) -> int:
-        r"""Helper function to sort events in the right order
-
-        :param x: event to get order index
-        :return: an order int
-        """
-        if x.type == "Tempo":
-            return 2
-        elif x.type == "TimeShift" or x.type == "Rest":
-            return 1000  # always last
-        else:  # for other types of events, the order should be handle when inserting the events in the sequence
-            return 4

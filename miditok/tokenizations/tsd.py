@@ -28,7 +28,6 @@ class TSD(MIDITokenizer):
     """
 
     def _tweak_config_before_creating_voc(self):
-        self.config.use_time_signatures = False
         if self.config.use_programs:
             self.one_token_stream = True
 
@@ -112,10 +111,10 @@ class TSD(MIDITokenizer):
         )
 
         # Add time events
-        all_events = events.copy()
+        all_events = []
         previous_tick = 0
         previous_note_end = events[0].time + 1
-        for e, event in enumerate(events.copy()):
+        for e, event in enumerate(events):
             # No time shift
             if event.time != previous_tick:
                 # (Rest)
@@ -190,12 +189,12 @@ class TSD(MIDITokenizer):
                     )
                 previous_tick = event.time
 
+            all_events.append(event)
+
             # Update max offset time of the notes encountered
             if event.type == "Pitch":
                 previous_note_end = max(previous_note_end, event.desc)
 
-        # Sort the tokens so that they come in the good order
-        all_events.sort(key=lambda x: (x.time, self._order(x)))
         return all_events
 
     def _midi_to_tokens(
@@ -209,14 +208,10 @@ class TSD(MIDITokenizer):
         """
         # Convert each track to tokens
         all_events = []
+        if not self.one_token_stream:
+            for i in range(len(midi.instruments)):
+                all_events.append([])
 
-        # Adds note tokens
-        for track in midi.instruments:
-            note_events = self.__notes_to_events(track)
-            if self.one_token_stream:
-                all_events += note_events
-            else:
-                all_events.append(note_events)
         # Adds tempo events if specified
         if self.config.use_tempos:
             tempo_events = []
@@ -234,6 +229,31 @@ class TSD(MIDITokenizer):
             else:
                 for i in range(len(all_events)):
                     all_events[i] += tempo_events
+
+        # Add time signature tokens if specified
+        if self.config.use_time_signatures:
+            time_sig_events = []
+            for time_signature_change in midi.time_signature_changes:
+                time_sig_events.append(
+                    Event(
+                        type="TimeSig",
+                        value=f"{time_signature_change.numerator}/{time_signature_change.denominator}",
+                        time=time_signature_change.time,
+                    )
+                )
+            if self.one_token_stream:
+                all_events += time_sig_events
+            else:
+                for i in range(len(all_events)):
+                    all_events[i] += time_sig_events
+
+        # Adds note tokens
+        for ti, track in enumerate(midi.instruments):
+            note_events = self.__notes_to_events(track)
+            if self.one_token_stream:
+                all_events += note_events
+            else:
+                all_events[ti] += note_events
 
         # Add time events
         if self.one_token_stream:
@@ -470,6 +490,14 @@ class TSD(MIDITokenizer):
             if self.config.use_chords:
                 dic["Tempo"] += ["Chord"]
 
+        if self.config.use_time_signatures:
+            dic["TimeShift"] += ["TimeSig"]
+            dic["TimeSig"] = ["Pitch", "TimeShift"]
+            if self.config.use_chords:
+                dic["TimeSig"] += ["Chord"]
+            if self.config.use_tempos:
+                dic["Tempo"].append("TimeSig")
+
         if self.config.use_rests:
             dic["Rest"] = ["Rest", "Pitch", "TimeShift"]
             dic["Duration"] += ["Rest"]
@@ -495,24 +523,11 @@ class TSD(MIDITokenizer):
             if self.config.use_tempos:
                 dic["Tempo"] += ["Program"]
                 dic["Tempo"].remove("Pitch")
+            if self.config.use_tempos:
+                dic["TimeSig"] += ["Program"]
+                dic["TimeSig"].remove("Pitch")
             if self.config.use_rests:
                 dic["Rest"] += ["Program"]
                 dic["Rest"].remove("Pitch")
 
         return dic
-
-    @staticmethod
-    def _order(x: Event) -> int:
-        r"""Helper function to sort events in the right order
-
-        :param x: event to get order index
-        :return: an order int
-        """
-        if x.type == "Tempo":
-            return 1
-        elif x.type == "TimeSig":
-            return 2
-        elif x.type == "TimeShift" or x.type == "Rest":
-            return 1000  # always last
-        else:  # for other types of events, the order should be handle when inserting the events in the sequence
-            return 4
