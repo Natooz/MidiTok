@@ -54,7 +54,9 @@ class REMI(MIDITokenizer):
         ):
             # If used, this attribute might increase over tokenizations, if the tokenizer encounter longer MIDIs
             tokenizer_config.additional_params["max_bar_embedding"] = max_bar_embedding
-        one_stream = tokenizer_config.use_programs if tokenizer_config is not None else False
+        one_stream = (
+            tokenizer_config.use_programs if tokenizer_config is not None else False
+        )
         super().__init__(tokenizer_config, one_stream, params)
 
     def _tweak_config_before_creating_voc(self):
@@ -443,7 +445,7 @@ class REMI(MIDITokenizer):
                 elif token.split("_")[0] == "Tempo":
                     # If your encoding include tempo tokens, each Position token should be followed by
                     # a tempo token, but if it is not the case this method will skip this step
-                tempo = float(token.split("_")[1])
+                    tempo = float(token.split("_")[1])
                     if tempo != tempo_changes[-1].tempo:
                         tempo_changes.append(TempoChange(tempo, current_tick))
                 elif token.split("_")[0] == "TimeSig":
