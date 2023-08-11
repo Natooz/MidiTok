@@ -261,7 +261,7 @@ class MIDILike(MIDITokenizer):
                 beat, pos = map(int, events[ei].value.split("."))
                 current_tick += beat * time_division + pos * ticks_per_sample
             elif events[ei].type == "Tempo":
-                tempo = int(events[ei].value)
+                tempo = float(events[ei].value)
                 if tempo != tempo_changes[-1].tempo:
                     tempo_changes.append(TempoChange(tempo, current_tick))
             ei += 1

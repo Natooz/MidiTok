@@ -221,7 +221,7 @@ class CPWord(MIDITokenizer):
         dur: str = None,
         chord: str = None,
         rest: str = None,
-        tempo: int = None,
+        tempo: float = None,
         program: int = None,
         desc: str = "",
     ) -> List[Union[Event, str]]:
@@ -344,7 +344,7 @@ class CPWord(MIDITokenizer):
                         + int(compound_token[1].split("_")[1]) * ticks_per_sample
                     )
                     if self.config.use_tempos:
-                        tempo = int(compound_token[-1].split("_")[1])
+                        tempo = float(compound_token[-1].split("_")[1])
                         if tempo != tempo_changes[-1].tempo:
                             tempo_changes.append(TempoChange(tempo, current_tick))
                 elif (
