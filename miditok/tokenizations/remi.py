@@ -54,7 +54,8 @@ class REMI(MIDITokenizer):
         ):
             # If used, this attribute might increase over tokenizations, if the tokenizer encounter longer MIDIs
             tokenizer_config.additional_params["max_bar_embedding"] = max_bar_embedding
-        super().__init__(tokenizer_config, tokenizer_config.use_programs, params)
+        one_stream = tokenizer_config.use_programs if tokenizer_config is not None else False
+        super().__init__(tokenizer_config, one_stream, params)
 
     def _tweak_config_before_creating_voc(self):
         # In case the tokenizer has been created without specifying any config or params file path
@@ -379,6 +380,7 @@ class REMI(MIDITokenizer):
             # Set track / sequence program if needed
             if not self.one_token_stream:
                 current_tick = 0
+                current_bar = -1
                 previous_note_end = 0
                 if programs is not None:
                     current_program = -1 if programs[si][1] else programs[si][0]

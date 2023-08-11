@@ -111,7 +111,7 @@ def test_io_formats():
         )
 
         # If TSD, also test in use_programs / one_token_stream mode
-        if tokenization == "TSD":
+        if tokenization in ["TSD", "REMI", "MIDILike", "Structured"]:
             tokenizer_config = miditok.TokenizerConfig(**TOKENIZER_PARAMS)
             tokenizer_config.use_programs = True
             tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
