@@ -182,4 +182,3 @@ def _pad_left(batch: List[LongTensor], pad_token_id: int) -> LongTensor:
     )  # (N,T)
     batch = torch.flip(batch, dims=(1,)).long()
     return batch
-

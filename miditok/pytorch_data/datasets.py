@@ -16,7 +16,9 @@ from tqdm import tqdm
 from ..constants import MIDI_FILES_EXTENSIONS
 
 
-def split_seq_in_subsequences(seq: Sequence[any], min_seq_len: int, max_seq_len: int) -> List[Sequence[Any]]:
+def split_seq_in_subsequences(
+    seq: Sequence[any], min_seq_len: int, max_seq_len: int
+) -> List[Sequence[Any]]:
     r"""Split a sequence of tokens into subsequences for which `min_seq_len <= len(sub_seq) <= max_seq_len`.
 
     :param seq: sequence to split.
@@ -29,18 +31,18 @@ def split_seq_in_subsequences(seq: Sequence[any], min_seq_len: int, max_seq_len:
     while i < len(seq):
         if i >= len(seq) - min_seq_len:
             break  # last sample is too short
-        sub_seq.append(LongTensor(seq[i: i + max_seq_len]))
+        sub_seq.append(LongTensor(seq[i : i + max_seq_len]))
         i += len(sub_seq[-1])  # could be replaced with max_seq_len
 
     return sub_seq
 
 
 def split_dataset_to_subsequences(
-        files_paths: Sequence[Union[Path, str]],
-        out_dir: Union[Path, str],
-        min_seq_len: int,
-        max_seq_len: int,
-        one_token_stream: bool = True,
+    files_paths: Sequence[Union[Path, str]],
+    out_dir: Union[Path, str],
+    min_seq_len: int,
+    max_seq_len: int,
+    one_token_stream: bool = True,
 ):
     """
 
@@ -64,7 +66,9 @@ def split_dataset_to_subsequences(
         else:
             subseqs = []
             for track_seq in tokens["ids"]:
-                subseqs += split_seq_in_subsequences(track_seq, min_seq_len, max_seq_len)
+                subseqs += split_seq_in_subsequences(
+                    track_seq, min_seq_len, max_seq_len
+                )
 
         # Save subsequences
         for i, subseq in enumerate(subseqs):
@@ -85,15 +89,18 @@ class _DatasetABC(Dataset, ABC):
     :param labels_key_name: name of the dictionary key containing the labels data when iterating the dataset.
             (default: "labels")
     """
+
     def __init__(
-            self,
-            samples: Sequence[Any] = None,
-            labels: Sequence[Any] = None,
-            sample_key_name: str = "input_ids",
-            labels_key_name: str = "labels",
+        self,
+        samples: Sequence[Any] = None,
+        labels: Sequence[Any] = None,
+        sample_key_name: str = "input_ids",
+        labels_key_name: str = "labels",
     ):
         if samples is not None and labels is not None:
-            assert len(samples) == len(labels), "The number of samples must be the same as the number of labels"
+            assert len(samples) == len(
+                labels
+            ), "The number of samples must be the same as the number of labels"
         self.samples = samples if samples is not None else []
         self.labels = labels
         self.sample_key_name = sample_key_name
@@ -167,10 +174,10 @@ class DatasetTok(_DatasetABC):
             one_token_stream = tokenizer.one_token_stream
 
         for file_path in tqdm(
-                files_paths,
-                desc=f"Loading data: {files_paths[0].parent}",
-                miniters=int(len(files_paths) / 20),
-                maxinterval=480,
+            files_paths,
+            desc=f"Loading data: {files_paths[0].parent}",
+            miniters=int(len(files_paths) / 20),
+            maxinterval=480,
         ):
             if file_path.suffix in MIDI_FILES_EXTENSIONS:
                 midi = MidiFile(file_path)
@@ -226,7 +233,7 @@ class DatasetJsonIO(_DatasetABC):
         with open(self.samples[idx]) as json_file:
             token_ids = json.load(json_file)["ids"]
         if self.max_seq_len is not None and len(token_ids) > self.max_seq_len:
-            token_ids = token_ids[:self.max_seq_len]
+            token_ids = token_ids[: self.max_seq_len]
         item = {"input_ids": LongTensor(token_ids)}
 
         return item

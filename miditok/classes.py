@@ -157,18 +157,18 @@ class TokenizerConfig:
             Tempo values are quantized accordingly to the ``nb_tempos`` and ``tempo_range`` entries in the
             ``additional_tokens`` dictionary (default is 32 tempos from 40 to 250). (default: False)
     :param use_time_signatures: will use ``TimeSignature`` tokens, if the tokenizer is compatible.
-            `TimeSignature` tokens will specify the current time signature. It is only implemented with
-            :ref:`REMIPlus`, :ref:`Octuple` and :ref:`Octuple Mono` atow. (default: False)
+            `TimeSignature` tokens will specify the current time signature. Note that :ref:`REMI` and :ref:`REMIPlus`
+            adds a `TimeSignature` token at the beginning of each Bar (i.e. after `Bar` tokens), while :ref:`TSD` and
+            :ref:`MIDILike` will only represent time signature changes (MIDI messages) as they come. If you want more
+            "recalls" of the current time signature within your token sequences, you can preprocess you MIDI file to
+            add more TimeSignatureChange objects. (default: False)
     :param use_programs: will use ``Program`` tokens, if the tokenizer is compatible.
-            Used to specify an instrument / MIDI program. Some tokenizations use natively programs: :ref:`REMIPlus`
-            and :ref:`TSDPlus` adds `Program` tokens before `Pitch` tokens, :ref:`CPWord`, :ref:`Octuple` and
-            :ref:`MuMIDI` add a `Program` tokens with the stacks of `Pitch`, `Velocity` and `Duration` tokens.
-            This option will be set automatically to true for :ref:`Octuple` and :ref:`MuMIDI`.
-            For non-mentioned tokenizations, MidiTok only offers the possibility to include these
-            tokens in the vocabulary for you, but won't use them. MidiTok leaves you the choice / task to represent
-            the program information the way you want. You can do it as in
-            `LakhNES <https://github.com/chrisdonahue/LakhNES>`_ or
-            `MMM <https://metacreation.net/mmm-multi-track-music-machine/>`_. (default: False)
+            Used to specify an instrument / MIDI program. The :ref:`Octuple`, :ref:`MMM` and :ref:`MuMIDI` tokenizers
+            use natively `Program` tokens, this option is always enabled. :ref:`TSD`, :ref:`REMI`, :ref:`REMIPlus`,
+            :ref:`MIDILike` and :ref:`Structured` will add `Program` tokens before each `Pitch` / `NoteOn` token to
+            indicate its associated instrument and will treat all the tracks of a MIDI as a single sequence of tokens.
+            :ref:`CPWord`, :ref:`Octuple` and :ref:`MuMIDI` add a `Program` tokens with the stacks of `Pitch`,
+            `Velocity` and `Duration` tokens. (default: False)
     :param rest_range: range of the rest to use, in beats, as a tuple (beat_division, max_rest_in_beats).
             The beat division divides a beat to determine the minimum rest to represent.
             The minimum rest must be divisible by 2 and lower than the first beat resolution

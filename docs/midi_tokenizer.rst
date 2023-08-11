@@ -60,6 +60,7 @@ Additional tokens
 ------------------------
 
 MidiTok offers to include additional tokens on music information. You can specify them in the ``tokenizer_config`` argument (:class:`miditok.TokenizerConfig`) when creating a tokenizer. The :class:`miditok.TokenizerConfig` documentations specifically details the role of each of them, and their associated parameters.
+Cells with ❕ markers means the additional token is implemented by default and not optionnal.
 
 .. list-table:: Compatibility table of tokenizations and additional tokens.
    :header-rows: 1
@@ -105,25 +106,28 @@ MidiTok offers to include additional tokens on music information. You can specif
      - ✅
      - ✅
    * - Program
-     - ✅
-     - ✅
-     - ✅
-     - ✅
-     - ✅
-     - ✅
-     - ✅
-     - ✅
-     - ✅
+     - ✅¹
+     - ✅¹
+     - ✅¹
+     - ✅¹
+     - ✅¹
+     - ✅²
+     - ✅❕
+     - ✅❕
+     - ✅❕
    * - Time signature
-     - ❌
+     - ✅
+     - ✅
+     - ✅
      - ✅
      - ❌
      - ❌
-     - ❌
-     - ❌
      - ✅
      - ❌
      - ✅
+
+**¹** the tokenizer will add `Program` tokens before each `Pitch` / `NoteOn` token, and will treat all the tracks of a MIDI as a single sequence of tokens.
+**²** unimplemented, the tokenizer's vocabulary will contain the `Program` tokens, but it will not use it.
 
 Special tokens
 ------------------------

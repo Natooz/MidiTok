@@ -81,19 +81,13 @@ MidiTok implements the tokenizations: (links to original papers)
 
 You can find short presentations in the [documentation](https://miditok.readthedocs.io/en/latest/tokenizations.html).
 
-## Limitations
-
-Tokenizations using Bar tokens (REMI, Compound Word and MuMIDI) **only considers a 4/x time signature** for now. This means that each bar is considered covering 4 beats.
-REMI+ and Octuple support it.
-
 ## Contributions
 
 Contributions are gratefully welcomed, feel free to open an issue or send a PR if you want to add a tokenization or speed up the code. You can read the [contribution guide](CONTRIBUTING.md) for details.
 
 ### Todos
 
-* Option to place `Program` tokens before note tokens for *TSD*, "vanilla" *REMI*, *MIDI-Like* and *Structured*;
-* Extend Time Signature to all tokenizations;
+* Extend unimplemented additional tokens to all compatible tokenizations;
 * Control Change messages;
 * Option to represent pitch values as pitch intervals, as [it seems to improve performances](https://ismir2022program.ismir.net/lbd_369.html);
 * Speeding up MIDI read / load (using a Rust / C++ io library + Python binding ?);

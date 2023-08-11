@@ -47,20 +47,47 @@ def get_midi_programs(midi: MidiFile) -> List[Tuple[int, bool]]:
     return [(int(track.program), track.is_drum) for track in midi.instruments]
 
 
-def remove_duplicated_notes(notes: List[Note]):
+def remove_duplicated_notes(notes: List[Note], filter_by_starting_tick: bool = True):
     r"""Removes (inplace) possible duplicated notes, i.e. with the same pitch, starting and ending times.
-    Before running this function make sure the notes has been sorted by start then pitch then end values:
-    notes.sort(key=lambda x: (x.start, x.pitch, x.end))
+    Before running this method make sure the notes has been sorted by start then pitch then end values:
+    `notes.sort(key=lambda x: (x.start, x.pitch, x.end))`
 
     :param notes: notes to analyse
+    :param filter_by_starting_tick: will remove identical notes being played at the same onset time regarless of their
+        duration / offset time. If this argument is disabled, only 100% identical notes will be deduplicated,
+        i.e. with the same duration too. (default: True)
     """
-    for i in range(len(notes) - 1, 0, -1):  # removing possible duplicated notes
+    i = 0
+    while i + 1 < len(notes):
         if (
-            notes[i].pitch == notes[i - 1].pitch
-            and notes[i].start == notes[i - 1].start
-            and notes[i].end >= notes[i - 1].end
+            notes[i].pitch == notes[i + 1].pitch
+            and notes[i].start == notes[i + 1].start
         ):
-            del notes[i]
+            if filter_by_starting_tick or (
+                not filter_by_starting_tick and notes[i].end == notes[i + 1].end
+            ):
+                # We keep the next note which has a longer duration
+                del notes[i]
+        else:
+            i += 1
+
+
+def fix_offsets_overlapping_notes(notes: List[Note]):
+    r"""Reduces the durations of overlapping notes, so that when a note starts, if it was previously being played,
+    th previous note will end.
+    Before running this method make sure the notes has been sorted by start then pitch then end values:
+    `notes.sort(key=lambda x: (x.start, x.pitch, x.end))`
+
+    :param notes: notes to fix.
+    """
+    for i in range(len(notes) - 1):
+        j = i + 1
+        while j < len(notes) and notes[j].start <= notes[i].end:
+            if notes[i].pitch == notes[j].pitch:
+                notes[i].end = notes[j].start
+                # Break here as it will not encounter other notes with .start before this one
+                break
+            j += 1
 
 
 def detect_chords(
