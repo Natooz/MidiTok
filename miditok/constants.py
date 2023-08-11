@@ -61,6 +61,7 @@ UNKNOWN_CHORD_PREFIX = "ukn"  # only used in methods
 # nb of tempo bins for additional tempo tokens, quantized like velocities
 NB_TEMPOS = 32
 TEMPO_RANGE = (40, 250)  # (min_tempo, max_tempo)
+LOG_TEMPOS = False  # log or linear scale tempos
 
 # Time signature params
 TIME_SIGNATURE_RANGE = (8, 2)

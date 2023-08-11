@@ -166,7 +166,7 @@ class OctupleMono(MIDITokenizer):
         if self.config.use_tempos:
             for i in range(len(tokens)):
                 if tokens[i][-1].split("_")[1] != "None":
-                    tempo_changes = [TempoChange(int(tokens[i][-1].split("_")[1]), 0)]
+                    tempo_changes = [TempoChange(float(tokens[i][-1].split("_")[1]), 0)]
                     break
 
         for time_step in tokens:
@@ -194,7 +194,7 @@ class OctupleMono(MIDITokenizer):
 
             # Tempo, adds a TempoChange if necessary
             if self.config.use_tempos and time_step[-1].split("_")[1] != "None":
-                tempo = int(time_step[-1].split("_")[1])
+                tempo = float(time_step[-1].split("_")[1])
                 if tempo != tempo_changes[-1].tempo:
                     tempo_changes.append(TempoChange(tempo, current_tick))
 

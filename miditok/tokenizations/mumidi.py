@@ -301,7 +301,7 @@ class MuMIDI(MIDITokenizer):
 
         # Tempos
         if self.config.use_tempos:
-            first_tempo = int(tokens.tokens[0][3].split("_")[1])
+            first_tempo = float(tokens.tokens[0][3].split("_")[1])
         else:
             first_tempo = TEMPO
         midi.tempo_changes.append(TempoChange(first_tempo, 0))
@@ -344,7 +344,7 @@ class MuMIDI(MIDITokenizer):
 
             # Decode tempo if required
             if self.config.use_tempos:
-                tempo_val = int(time_step[3].split("_")[1])
+                tempo_val = float(time_step[3].split("_")[1])
                 if tempo_val != midi.tempo_changes[-1].tempo:
                     midi.tempo_changes.append(TempoChange(tempo_val, current_tick))
 

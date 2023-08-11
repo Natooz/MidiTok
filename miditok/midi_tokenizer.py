@@ -226,11 +226,7 @@ class MIDITokenizer(ABC):
         # Tempos
         self.tempos = np.zeros(1)
         if self.config.use_tempos:
-            self.tempos = np.linspace(
-                *self.config.tempo_range,
-                self.config.nb_tempos,
-                dtype=np.intc,
-            )
+            self.tempos = self.__create_tempos()
 
         # Rests
         self.rests = []
@@ -959,6 +955,19 @@ class MIDITokenizer(ABC):
             div //= 2
         rests += [(i, 0) for i in range(1, max_beat + 1)]
         return rests
+
+    def __create_tempos(self) -> np.ndarray:
+        r"""Creates the possible tempos, as a float number array.
+
+        The self.config.nb_tempos tempos are distributed in the self.config.tempo_range
+        using either log or linear scaled values based on the value of self.config.log_tempos.
+
+        :return: the tempos.
+        """
+        tempo_fn = np.geomspace if self.config.log_tempos else np.linspace
+        tempos = tempo_fn(*self.config.tempo_range, self.config.nb_tempos).round(2)
+
+        return tempos
 
     def __create_time_signatures(self) -> List[Tuple]:
         r"""Creates the possible time signatures, as tuples of the form:

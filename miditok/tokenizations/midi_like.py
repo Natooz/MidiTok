@@ -433,7 +433,7 @@ class MIDILike(MIDITokenizer):
                 elif token.split("_")[0] == "Tempo":
                     # If your encoding include tempo tokens, each Position token should be followed by
                     # a tempo token, but if it is not the case this method will skip this step
-                    tempo = int(token.split("_")[1])
+                tempo = float(events[ei].value)
                     if tempo != tempo_changes[-1].tempo:
                         tempo_changes.append(TempoChange(tempo, current_tick))
                 elif token.split("_")[0] == "TimeSig":
