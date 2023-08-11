@@ -89,7 +89,7 @@ class Octuple(MIDITokenizer):
         tokens = []
         for track in midi.instruments:
             if track.program in self.config.programs:
-                tokens += self.track_to_tokens(track)
+                tokens += self._track_to_tokens(track)
 
         tokens.sort(
             key=lambda x: (x[0].time, x[0].desc, x[0].value)
@@ -101,7 +101,7 @@ class Octuple(MIDITokenizer):
 
         return TokSequence(tokens=tokens)
 
-    def track_to_tokens(self, track: Instrument) -> List[List[Union[Event, str]]]:
+    def _track_to_tokens(self, track: Instrument) -> List[List[Union[Event, str]]]:
         r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens (:class:`miditok.TokSequence`).
         A time step is a list of tokens where:
             (list index: token type)
@@ -356,23 +356,6 @@ class Octuple(MIDITokenizer):
             Path(output_path).mkdir(parents=True, exist_ok=True)
             midi.dump(output_path)
         return midi
-
-    def tokens_to_track(
-        self,
-        tokens: TokSequence,
-        time_division: Optional[int] = TIME_DIVISION,
-        program: Optional[Tuple[int, bool]] = (0, False),
-    ) -> Tuple[Instrument, List[TempoChange]]:
-        r"""NOT RELEVANT / IMPLEMENTED FOR OCTUPLE
-        Use tokens_to_midi instead
-
-        :param tokens: sequence of tokens to convert. Can be either a Tensor (PyTorch and Tensorflow are supported),
-                a numpy array, a Python list or a TokSequence.
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create)
-        :param program: the MIDI program of the produced track and if it drum, (default (0, False), piano)
-        :return: the miditoolkit instrument object and tempo changes
-        """
-        pass
 
     def _create_base_vocabulary(self) -> List[List[str]]:
         r"""Creates the vocabulary, as a list of string tokens.

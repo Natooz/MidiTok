@@ -112,7 +112,7 @@ class MuMIDI(MIDITokenizer):
         note_tokens = []
         for track in midi.instruments:
             if track.program in self.config.programs:
-                note_tokens += self.track_to_tokens(track)
+                note_tokens += self._track_to_tokens(track)
 
         note_tokens.sort(
             key=lambda x: (x[0].time, x[0].desc)
@@ -199,7 +199,7 @@ class MuMIDI(MIDITokenizer):
 
         return TokSequence(tokens=tokens)
 
-    def track_to_tokens(self, track: Instrument) -> List[List[Union[Event, str]]]:
+    def _track_to_tokens(self, track: Instrument) -> List[List[Union[Event, str]]]:
         r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens (:class:`miditok.TokSequence`).
         For each note, it creates a time step as a list of tokens where (list index: token type):
         * 0: Pitch (as an Event object for sorting purpose afterwards)
@@ -366,7 +366,7 @@ class MuMIDI(MIDITokenizer):
             midi.dump(output_path)
         return midi
 
-    def tokens_to_track(
+    def _tokens_to_track(
         self,
         tokens: TokSequence,
         time_division: Optional[int] = TIME_DIVISION,

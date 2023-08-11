@@ -192,14 +192,6 @@ class REMI(MIDITokenizer):
         # So sorting needed
         return all_events
 
-    def tokens_to_track(  # TODO delete abstract method ? make private ? actually implement it ?
-        self,
-        tokens: TokSequence,
-        time_division: Optional[int] = TIME_DIVISION,
-        program: Optional[Tuple[int, bool]] = (0, False),
-    ) -> Tuple[Instrument, List[TempoChange]]:
-        pass
-
     @_in_as_seq()
     def tokens_to_midi(
         self,

@@ -52,12 +52,12 @@ class CPWord(MIDITokenizer):
         # Convert each track to tokens
         tokens = []
         for track in midi.instruments:
-            tokens.append(self.track_to_tokens(track))
+            tokens.append(self._track_to_tokens(track))
             self.complete_sequence(tokens[-1])
         return tokens
 
     @_out_as_complete_seq
-    def track_to_tokens(self, track: Instrument) -> TokSequence:
+    def _track_to_tokens(self, track: Instrument) -> TokSequence:
         r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens (:class:`miditok.TokSequence`).
 
         :param track: MIDI track to convert
@@ -293,7 +293,7 @@ class CPWord(MIDITokenizer):
 
         return cp_token_template
 
-    def tokens_to_track(
+    def _tokens_to_track(
         self,
         tokens: TokSequence,
         time_division: Optional[int] = TIME_DIVISION,

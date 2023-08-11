@@ -489,10 +489,16 @@ class MIDITokenizer(ABC):
                 :class:`miditok.TokSequence` objects.
         """
         need_to_sort_note_events = any(
-            [self.config.use_chords, self.config.use_tempos, self.config.use_time_signatures]
+            [
+                self.config.use_chords,
+                self.config.use_tempos,
+                self.config.use_time_signatures,
+            ]
         )
         if self.one_token_stream:
-            need_to_sort_note_events = need_to_sort_note_events or len(midi.instruments) > 1
+            need_to_sort_note_events = (
+                need_to_sort_note_events or len(midi.instruments) > 1
+            )
 
         # Create events list
         all_events = []
@@ -507,7 +513,7 @@ class MIDITokenizer(ABC):
         else:
             for i in range(len(all_events)):
                 all_events[i] += global_events
-        
+
         # Adds note tokens
         for ti, track in enumerate(midi.instruments):
             note_events = self._create_track_events(track)
@@ -531,7 +537,7 @@ class MIDITokenizer(ABC):
                 all_events[i] = self._add_time_events(all_events[i])
                 tok_sequence.append(TokSequence(events=all_events[i]))
                 self.complete_sequence(tok_sequence[-1])
-        
+
         return tok_sequence
 
     def _create_track_events(self, track: Instrument) -> List[Event]:
@@ -573,7 +579,12 @@ class MIDITokenizer(ABC):
                     Event(type="Program", value=program, time=note.start, desc=note.end)
                 )
             events.append(
-                Event(type=note_token_name, value=note.pitch, time=note.start, desc=note.end)
+                Event(
+                    type=note_token_name,
+                    value=note.pitch,
+                    time=note.start,
+                    desc=note.end,
+                )
             )
             events.append(
                 Event(
@@ -587,8 +598,16 @@ class MIDITokenizer(ABC):
             # Duration / NoteOff
             if self._note_on_off:
                 if self.config.use_programs:
-                    events.append(Event(type="Program", value=program, time=note.end, desc=note.end))
-                events.append(Event(type="NoteOff", value=note.pitch, time=note.end, desc=note.end))
+                    events.append(
+                        Event(
+                            type="Program", value=program, time=note.end, desc=note.end
+                        )
+                    )
+                events.append(
+                    Event(
+                        type="NoteOff", value=note.pitch, time=note.end, desc=note.end
+                    )
+                )
             else:
                 duration = note.end - note.start
                 index = np.argmin(np.abs(dur_bins - duration))
@@ -622,7 +641,7 @@ class MIDITokenizer(ABC):
                         desc=tempo_change.tempo,
                     )
                 )
-        
+
         # Add time signature tokens if specified
         if self.config.use_time_signatures:
             for time_signature_change in midi.time_signature_changes:
@@ -680,24 +699,6 @@ class MIDITokenizer(ABC):
             self.apply_bpe(tokens)
 
         return tokens
-
-    def track_to_tokens(self, track: Instrument, midi: MidiFile = None) -> TokSequence:
-        r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens (:class:`miditok.TokSequence`).
-        If you want the token sequence to contain global MIDI events (Tempo, TimeSignature),
-        # TODO adapt overrides
-
-        :param track: MIDI track to convert.
-        :param midi: the original MIDI, to add global MIDI events (tempo...) to the output sequence. (default: None)
-        :return: :class:`miditok.TokSequence` of corresponding tokens.
-        """
-        events = []
-        if midi is not None:
-            events = self._create_midi_events(midi)
-        events += self._create_track_events(track)
-        events = self._add_time_events(events)
-        tok_seq = TokSequence(events=events)
-        self.complete_sequence(tok_seq)
-        return tok_seq
 
     def complete_sequence(self, seq: TokSequence):
         r"""Completes (inplace) a :class:`miditok.TokSequence` object by converting its attributes.
@@ -812,9 +813,11 @@ class MIDITokenizer(ABC):
         output_path: Optional[str] = None,
         time_division: Optional[int] = TIME_DIVISION,
     ) -> MidiFile:
-        r"""Converts multiple sequences of tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
-        **NOTE:** With `CPWord` or other tokenization that processes tracks
-        independently, only the tempo changes of the first track in tokens will be used.
+        r"""Detokenize one or multiple sequences of tokens into a MIDI file.
+        You can give the tokens sequences either as :class:`miditok.TokSequence` objects, lists of integers,
+        numpy arrays or PyTorch / Tensorflow tensors.
+        **NOTE:** With `CPWord` and `OctupleMono`,
+        only the tempo changes of the first track in tokens will be used.
 
         :param tokens: tokens to convert. Can be either a list of :class:`miditok.TokSequence`,
                 a Tensor (PyTorch and Tensorflow are supported), a numpy array or a Python list of ints.
@@ -830,11 +833,13 @@ class MIDITokenizer(ABC):
         #    tokens = [tokens]
         for i, track_tokens in enumerate(tokens):
             if programs is not None:
-                track, tempo_changes = self.tokens_to_track(
+                track, tempo_changes = self._tokens_to_track(
                     track_tokens, time_division, programs[i]
                 )
             else:
-                track, tempo_changes = self.tokens_to_track(track_tokens, time_division)
+                track, tempo_changes = self._tokens_to_track(
+                    track_tokens, time_division
+                )
             midi.instruments.append(track)
             if i == 0:  # only keep tempo changes of the first track
                 midi.tempo_changes = tempo_changes
@@ -852,8 +857,7 @@ class MIDITokenizer(ABC):
             midi.dump(output_path)
         return midi
 
-    @abstractmethod
-    def tokens_to_track(
+    def _tokens_to_track(
         self,
         tokens: TokSequence,
         time_division: Optional[int] = TIME_DIVISION,

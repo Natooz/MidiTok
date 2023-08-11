@@ -12,7 +12,7 @@ from ..constants import (
     TIME_SIGNATURE,
     MMM_DENSITY_BINS_MAX,
 )
-from ..midi_tokenizer import MIDITokenizer, _in_as_seq, _out_as_complete_seq
+from ..midi_tokenizer import MIDITokenizer, _in_as_seq
 from ..utils import detect_chords
 
 
@@ -66,7 +66,7 @@ class MMM(MIDITokenizer):
                 dtype=np.intc,
             )
 
-    def track_to_tokens(self, track: Instrument) -> List[Event]:
+    def _track_to_tokens(self, track: Instrument) -> List[Event]:
         r"""Converts a track (miditoolkit.Instrument object) into a sequence of Event (:class:`miditok.Event`).
 
         :param track: MIDI track to convert
@@ -214,23 +214,6 @@ class MMM(MIDITokenizer):
         ]
         return events
 
-    def tokens_to_track(
-        self,
-        tokens: TokSequence,
-        time_division: Optional[int] = TIME_DIVISION,
-        program: Optional[Tuple[int, bool]] = (0, False),
-    ) -> None:
-        r"""NOT RELEVANT / IMPLEMENTED FOR MMM, use tokens_to_midi instead
-
-        :param tokens: sequence of tokens to convert. Can be either a Tensor (PyTorch and Tensorflow are supported),
-                a numpy array, a Python list or a TokSequence.
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create)
-        :param program: the MIDI program of the produced track and if it drums, (default (0, False), piano)
-        :return: None
-        """
-        pass
-
-    @_out_as_complete_seq
     def _midi_to_tokens(self, midi: MidiFile, *args, **kwargs) -> TokSequence:
         r"""Converts a preprocessed MIDI object to a sequence of tokens.
         Tokenization treating all tracks as a single token sequence might
@@ -242,7 +225,7 @@ class MMM(MIDITokenizer):
         # Convert each track to tokens
         events = []
         for track in midi.instruments:
-            events += self.track_to_tokens(track)
+            events += self._track_to_tokens(track)
 
         tok_seq = TokSequence(events=events)
         self.complete_sequence(tok_seq)
