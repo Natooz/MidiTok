@@ -1,7 +1,7 @@
 from typing import List, Tuple, Dict, Optional, Union, Any
 
 import numpy as np
-from miditoolkit import Instrument, Note, TempoChange
+from miditoolkit import MidiFile, Instrument, Note, TempoChange
 
 from ..midi_tokenizer import MIDITokenizer, _in_as_seq, _out_as_complete_seq
 from ..classes import TokSequence, Event
@@ -47,6 +47,14 @@ class CPWord(MIDITokenizer):
             type_: idx for idx, type_ in enumerate(token_types)
         }  # used for data augmentation
         self.vocab_types_idx["Bar"] = 1  # same as position
+
+    def _midi_to_tokens(self, midi: MidiFile, *args, **kwargs) -> List[TokSequence]:
+        # Convert each track to tokens
+        tokens = []
+        for track in midi.instruments:
+            tokens.append(self.track_to_tokens(track))
+            self.complete_sequence(tokens[-1])
+        return tokens
 
     @_out_as_complete_seq
     def track_to_tokens(self, track: Instrument) -> TokSequence:

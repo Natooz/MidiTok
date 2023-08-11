@@ -26,14 +26,10 @@ class REMIPlus(REMI):
     """
 
     def _tweak_config_before_creating_voc(self):
+        super()._tweak_config_before_creating_voc()
         self.config.use_programs = True
         self.config.use_time_signatures = True
         self.one_token_stream = True
-
-        # In case the tokenizer has been created without specifying any config or params file path
-        if "max_bar_embedding" not in self.config.additional_params:
-            # If used, this attribute might increase over tokenizations, if the tokenizer encounter longer MIDIs
-            self.config.additional_params["max_bar_embedding"] = None
 
 
 __all__ = [

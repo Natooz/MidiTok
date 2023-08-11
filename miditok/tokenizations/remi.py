@@ -12,7 +12,6 @@ from ..constants import (
     TIME_SIGNATURE,
 )
 from ..midi_tokenizer import MIDITokenizer, _in_as_seq
-from ..utils import detect_chords
 
 
 class REMI(MIDITokenizer):
@@ -65,67 +64,7 @@ class REMI(MIDITokenizer):
             # If used, this attribute might increase over tokenizations, if the tokenizer encounter longer MIDIs
             self.config.additional_params["max_bar_embedding"] = None
 
-    def __notes_to_events(self, track: Instrument) -> List[Event]:
-        r"""Converts notes of a track (``miditoolkit.Instrument``) into a sequence of `Event` objects.
-
-        :param track: MIDI track to convert
-        :return: sequence of corresponding Events
-        """
-        # Make sure the notes are sorted first by their onset (start) times, second by pitch
-        # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
-        dur_bins = self._durations_ticks[self._current_midi_metadata["time_division"]]
-        program = track.program if not track.is_drum else -1
-        events = []
-
-        # Add chords
-        if self.config.use_chords and not track.is_drum:
-            chords = detect_chords(
-                track.notes,
-                self._current_midi_metadata["time_division"],
-                chord_maps=self.config.chord_maps,
-                specify_root_note=self.config.chord_tokens_with_root_note,
-                beat_res=self._first_beat_res,
-                unknown_chords_nb_notes_range=self.config.chord_unknown,
-            )
-            for chord in chords:
-                if self.config.use_programs:
-                    events.append(
-                        Event("Program", track.program, chord.time, "ProgramChord")
-                    )
-                events.append(chord)
-
-        # Creates the Note On, Note Off and Velocity events
-        for n, note in enumerate(track.notes):
-            # Note On / Velocity / Duration
-            if self.config.use_programs:
-                events.append(
-                    Event(type="Program", value=program, time=note.start, desc=note.end)
-                )
-            events.append(
-                Event(type="Pitch", value=note.pitch, time=note.start, desc=note.end)
-            )
-            events.append(
-                Event(
-                    type="Velocity",
-                    value=note.velocity,
-                    time=note.start,
-                    desc=f"{note.velocity}",
-                )
-            )
-            duration = note.end - note.start
-            index = np.argmin(np.abs(dur_bins - duration))
-            events.append(
-                Event(
-                    type="Duration",
-                    value=".".join(map(str, self.durations[index])),
-                    time=note.start,
-                    desc=f"{duration} ticks",
-                )
-            )
-
-        return events
-
-    def __add_time_note_events(self, events: List[Event]) -> List[Event]:
+    def _add_time_events(self, events: List[Event]) -> List[Event]:
         r"""
         Takes a sequence of note events (containing optionally Chord, Tempo and TimeSignature tokens),
         and insert (not inplace) time tokens (TimeShift, Rest) to complete the sequence.
@@ -253,90 +192,13 @@ class REMI(MIDITokenizer):
         # So sorting needed
         return all_events
 
-    def tokens_to_track(
+    def tokens_to_track(  # TODO delete abstract method ? make private ? actually implement it ?
         self,
         tokens: TokSequence,
         time_division: Optional[int] = TIME_DIVISION,
         program: Optional[Tuple[int, bool]] = (0, False),
     ) -> Tuple[Instrument, List[TempoChange]]:
         pass
-
-    def track_to_tokens(self, track: Instrument) -> TokSequence:
-        pass
-
-    def _midi_to_tokens(
-        self, midi: MidiFile, *args, **kwargs
-    ) -> Union[TokSequence, List[TokSequence]]:
-        r"""Converts a preprocessed MIDI object to a sequence of tokens.
-
-        :param midi: the MIDI objet to convert.
-        :return: a :class:`miditok.TokSequence` if `tokenizer.one_token_stream` is true, else a list of
-                :class:`miditok.TokSequence` objects.
-        """
-        # Convert each track to tokens
-        all_events = []
-        if not self.one_token_stream:
-            for i in range(len(midi.instruments)):
-                all_events.append([])
-
-        # Adds tempo events if specified
-        if self.config.use_tempos:
-            tempo_events = []
-            for tempo_change in midi.tempo_changes:
-                tempo_events.append(
-                    Event(
-                        type="Tempo",
-                        value=tempo_change.tempo,
-                        time=tempo_change.time,
-                        desc=tempo_change.tempo,
-                    )
-                )
-            if self.one_token_stream:
-                all_events += tempo_events
-            else:
-                for i in range(len(all_events)):
-                    all_events[i] += tempo_events
-
-        # Add time signature tokens if specified
-        if self.config.use_time_signatures:
-            time_sig_events = []
-            for time_signature_change in midi.time_signature_changes:
-                time_sig_events.append(
-                    Event(
-                        type="TimeSig",
-                        value=f"{time_signature_change.numerator}/{time_signature_change.denominator}",
-                        time=time_signature_change.time,
-                    )
-                )
-            if self.one_token_stream:
-                all_events += time_sig_events
-            else:
-                for i in range(len(all_events)):
-                    all_events[i] += time_sig_events
-
-        # Adds note tokens
-        for ti, track in enumerate(midi.instruments):
-            note_events = self.__notes_to_events(track)
-            if self.one_token_stream:
-                all_events += note_events
-            else:
-                all_events[ti] += note_events
-
-        # Add time events
-        if self.one_token_stream:
-            all_events.sort(key=lambda x: x.time)
-            all_events = self.__add_time_note_events(all_events)
-            tok_sequence = TokSequence(events=all_events)
-            self.complete_sequence(tok_sequence)
-        else:
-            tok_sequence = []
-            for i in range(len(all_events)):
-                all_events[i].sort(key=lambda x: x.time)
-                all_events[i] = self.__add_time_note_events(all_events[i])
-                tok_sequence.append(TokSequence(events=all_events[i]))
-                self.complete_sequence(tok_sequence[-1])
-
-        return tok_sequence
 
     @_in_as_seq()
     def tokens_to_midi(

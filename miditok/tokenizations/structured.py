@@ -37,8 +37,9 @@ class Structured(MIDITokenizer):
         if self.config.use_programs:
             self.one_token_stream = True
 
-    def __notes_to_events(self, track: Instrument) -> List[Event]:
-        r"""Converts notes of a track (``miditoolkit.Instrument``) into a sequence of `Event` objects.
+    def _create_track_events(self, track: Instrument) -> List[Event]:
+        r"""Extract the tokens / events of individual tracks: `Pitch`, `Velocity`, `Duration`, `NoteOn`, `NoteOff` and
+        optionally `Chord`, from a track (``miditoolkit.Instrument``).
 
         :param track: MIDI track to convert
         :return: sequence of corresponding Events
@@ -97,7 +98,7 @@ class Structured(MIDITokenizer):
 
         return events
 
-    def __add_time_note_events(self, events: List[Event]) -> List[Event]:
+    def _add_time_events(self, events: List[Event]) -> List[Event]:
         r"""
         Takes a sequence of note events (containing optionally Chord, Tempo and TimeSignature tokens),
         and insert (not inplace) time tokens (TimeShift, Rest) to complete the sequence.
@@ -136,6 +137,8 @@ class Structured(MIDITokenizer):
         self, midi: MidiFile, *args, **kwargs
     ) -> Union[TokSequence, List[TokSequence]]:
         r"""Converts a preprocessed MIDI object to a sequence of tokens.
+        We override the parent method to handle the "non-program" case where `TimeShift` events have already been
+        added by `_notes_to_events`.
 
         :param midi: the MIDI objet to convert.
         :return: a :class:`miditok.TokSequence` if `tokenizer.one_token_stream` is true, else a list of
@@ -146,7 +149,7 @@ class Structured(MIDITokenizer):
 
         # Adds note tokens
         for track in midi.instruments:
-            note_events = self.__notes_to_events(track)
+            note_events = self._create_track_events(track)
             if self.one_token_stream:
                 all_events += note_events
             else:
@@ -154,8 +157,9 @@ class Structured(MIDITokenizer):
 
         # Add time events
         if self.one_token_stream:
-            all_events.sort(key=lambda x: x.time)
-            all_events = self.__add_time_note_events(all_events)
+            if len(midi.instruments) > 1:
+                all_events.sort(key=lambda x: x.time)
+            all_events = self._add_time_events(all_events)
             tok_sequence = TokSequence(events=all_events)
             self.complete_sequence(tok_sequence)
         else:
@@ -173,9 +177,6 @@ class Structured(MIDITokenizer):
         time_division: Optional[int] = TIME_DIVISION,
         program: Optional[Tuple[int, bool]] = (0, False),
     ) -> Tuple[Instrument, List[TempoChange]]:
-        pass
-
-    def track_to_tokens(self, track: Instrument) -> TokSequence:
         pass
 
     @_in_as_seq()
