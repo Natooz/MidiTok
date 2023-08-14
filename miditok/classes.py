@@ -183,7 +183,8 @@ class TokenizerConfig:
     :param nb_tempos: number of tempos "bins" to use. (default: 32)
     :param tempo_range: range of minimum and maximum tempos within which the bins fall. (default: (40, 250))
     :param log_tempos: will use log scaled tempo values instead of linearly scaled. (default: False)
-    :param time_signature_range: range as a tuple (max_beat_res, nb_notes). (default: (8, 2))
+    :param time_signature_range: range as a dictionary {denom_i: [num_i1, ..., num_in] / (min_num_i, max_num_i)}.
+            (default: {4: [4]})
     :param programs: sequence of MIDI programs to use. Note that `-1` is used and reserved for drums tracks.
             (default: from -1 to 127 included)
     :param **kwargs: additional parameters that will be saved in `config.additional_params`.
@@ -207,7 +208,7 @@ class TokenizerConfig:
         nb_tempos: int = NB_TEMPOS,
         tempo_range: Tuple[int, int] = TEMPO_RANGE,
         log_tempos: bool = LOG_TEMPOS,
-        time_signature_range: Tuple[int, int] = TIME_SIGNATURE_RANGE,
+        time_signature_range: Dict[int, Union[List[int], Tuple[int, int]]] = TIME_SIGNATURE_RANGE,
         programs: Sequence[int] = PROGRAMS,
         **kwargs,
     ):
@@ -240,7 +241,10 @@ class TokenizerConfig:
         self.log_tempos: bool = log_tempos
 
         # Time signature params
-        self.time_signature_range: Tuple[int, int] = time_signature_range
+        self.time_signature_range: Dict[int, List[int]] = {
+            beat_res: list(range(beats[0], beats[1] + 1)) if isinstance(beats, tuple) else beats
+            for beat_res, beats in time_signature_range.items()
+        }
 
         # Programs
         self.programs: Sequence[int] = programs
@@ -323,6 +327,11 @@ class TokenizerConfig:
         dict_config["beat_res"] = {
             tuple(map(int, beat_range.split("_"))): res
             for beat_range, res in dict_config["beat_res"].items()
+        }
+
+        dict_config["time_signature_range"] = {
+            int(res): beat_range
+            for res, beat_range in dict_config["time_signature_range"].items()
         }
 
         return cls.from_dict(dict_config)

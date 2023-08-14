@@ -1,3 +1,4 @@
+from math import ceil
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -72,11 +73,10 @@ class REMI(MIDITokenizer):
         :param events: note events to complete.
         :return: the same events, with time events inserted.
         """
-        ticks_per_sample = self._current_midi_metadata["time_division"] / max(
-            self.config.beat_res.values()
-        )
+        time_division = self._current_midi_metadata["time_division"]
+        ticks_per_sample = time_division / max(self.config.beat_res.values())
         min_rest = (
-            self._current_midi_metadata["time_division"] * self.rests[0][0]
+            time_division * self.rests[0][0]
             + ticks_per_sample * self.rests[0][1]
             if self.config.use_rests
             else 0
@@ -88,14 +88,14 @@ class REMI(MIDITokenizer):
         previous_tick = -1
         previous_note_end = 0
         current_time_sig = TIME_SIGNATURE
-        ticks_per_bar = (
-            self._current_midi_metadata["time_division"] * current_time_sig[0]
+        ticks_per_bar = self._compute_ticks_per_bar(
+            TimeSignature(*current_time_sig, 0), time_division
         )
         for e, event in enumerate(events):
             if event.type == "TimeSig":
                 current_time_sig = list(map(int, event.value.split("/")))
-                ticks_per_bar = (
-                    self._current_midi_metadata["time_division"] * current_time_sig[0]
+                ticks_per_bar = self._compute_ticks_per_bar(
+                    TimeSignature(*current_time_sig, event.time), time_division
                 )
             if event.time != previous_tick:
                 # (Rest)
@@ -107,7 +107,7 @@ class REMI(MIDITokenizer):
                     previous_tick = previous_note_end
                     rest_beat, rest_pos = divmod(
                         event.time - previous_tick,
-                        self._current_midi_metadata["time_division"],
+                        time_division,
                     )
                     rest_beat = min(rest_beat, max([r[0] for r in self.rests]))
                     rest_pos = round(rest_pos / ticks_per_sample)
@@ -122,7 +122,7 @@ class REMI(MIDITokenizer):
                             )
                         )
                         previous_tick += (
-                            rest_beat * self._current_midi_metadata["time_division"]
+                            rest_beat * time_division
                         )
 
                     while rest_pos >= self.rests[0][1]:
@@ -226,7 +226,7 @@ class REMI(MIDITokenizer):
         instruments: Dict[int, Instrument] = {}
         tempo_changes = [TempoChange(TEMPO, -1)]
         time_signature_changes = [TimeSignature(*TIME_SIGNATURE, 0)]
-        ticks_per_bar = time_division * TIME_SIGNATURE[0]  # init
+        ticks_per_bar = self._compute_ticks_per_bar(time_signature_changes[0], time_division)  # init
 
         current_tick = 0
         current_bar = -1
@@ -311,9 +311,7 @@ class REMI(MIDITokenizer):
                         time_signature_changes.append(
                             TimeSignature(num, den, current_tick)
                         )
-                        ticks_per_bar = (
-                            self._current_midi_metadata["time_division"] * num
-                        )
+                        ticks_per_bar = self._compute_ticks_per_bar(time_signature_changes[-1], time_division)
         if len(tempo_changes) > 1:
             del tempo_changes[0]  # delete mocked tempo change
         tempo_changes[0].time = 0
@@ -371,7 +369,8 @@ class REMI(MIDITokenizer):
         ]
 
         # POSITION
-        nb_positions = max(self.config.beat_res.values()) * 4  # 4/4 time signature
+        max_nb_beats = max(map(lambda ts: ceil(4 * ts[0] / ts[1]), self.time_signatures))
+        nb_positions = max(self.config.beat_res.values()) * max_nb_beats
         vocab += [f"Position_{i}" for i in range(nb_positions)]
 
         # CHORD

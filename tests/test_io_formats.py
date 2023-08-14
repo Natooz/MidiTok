@@ -32,7 +32,7 @@ TOKENIZER_PARAMS = {
     ),  # very high value to cover every possible rest in the test files
     "nb_tempos": 32,
     "tempo_range": (40, 250),
-    "time_signature_range": (16, 2),
+    "time_signature_range": {4: [4]},
 }
 
 

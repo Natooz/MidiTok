@@ -52,7 +52,7 @@ TOKENIZER_PARAMS = {
     "nb_tempos": 32,
     "tempo_range": (40, 250),
     "log_tempos": False,
-    "time_signature_range": (16, 2),
+    "time_signature_range": {4: [3, 4]},
 }
 
 

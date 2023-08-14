@@ -410,7 +410,8 @@ class MuMIDI(MIDITokenizer):
             for i in range(*self.config.additional_params["drum_pitch_range"])
         ]
         vocab[0] += ["Bar_None"]  # new bar token
-        nb_positions = max(self.config.beat_res.values()) * 4  # 4/* time signature
+        max_nb_beats = max(map(lambda ts: ceil(4 * ts[0] / ts[1]), self.time_signatures))
+        nb_positions = max(self.config.beat_res.values()) * max_nb_beats
         vocab[0] += [f"Position_{i}" for i in range(nb_positions)]
         vocab[0] += [f"Program_{program}" for program in self.config.programs]
 

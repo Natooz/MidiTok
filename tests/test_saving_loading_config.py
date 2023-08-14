@@ -17,7 +17,7 @@ ADDITIONAL_TOKENS_TEST = {
     "rest_range": (4, 16),
     "nb_tempos": 32,
     "tempo_range": (40, 250),
-    "time_signature_range": (16, 2),
+    "time_signature_range": {4: [4]},
 }
 tokenizations = [
     "MIDILike",

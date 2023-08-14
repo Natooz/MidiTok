@@ -160,10 +160,7 @@ class MMM(MIDITokenizer):
         # Time events
         events.sort(key=lambda x: (x.time, self._order(x)))
         time_sig_change = self._current_midi_metadata["time_sig_changes"][0]
-        first_time_sig = self._reduce_time_signature(
-            time_sig_change.numerator, time_sig_change.denominator
-        )
-        ticks_per_bar = time_division * first_time_sig[0]
+        ticks_per_bar = self._compute_ticks_per_bar(time_sig_change, time_division)
         previous_tick = 0
         current_bar = 0
         for ei in range(len(events)):
@@ -263,7 +260,7 @@ class MMM(MIDITokenizer):
         time_signature_changes = [
             TimeSignature(*TIME_SIGNATURE, 0)
         ]  # mock the first time signature change to optimize below
-        ticks_per_bar = time_division * TIME_SIGNATURE[0]  # init
+        ticks_per_bar = self._compute_ticks_per_bar(time_signature_changes[0], time_division)  # init
 
         current_tick = 0
         current_bar = -1
@@ -314,6 +311,7 @@ class MMM(MIDITokenizer):
                     and den != current_time_signature.denominator
                 ):
                     time_signature_changes.append(TimeSignature(num, den, current_tick))
+                    # ticks_per_bar = self._compute_ticks_per_bar(time_signature_changes[-1], time_division)
             elif tok_type == "Pitch":
                 try:
                     if (
