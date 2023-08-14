@@ -148,6 +148,8 @@ class MIDILike(MIDITokenizer):
                 previous_note_end = max(previous_note_end, events[e + 2].desc)
             elif event.type in ["NoteOn", "Program"]:
                 previous_note_end = max(previous_note_end, event.desc)
+            elif event.type == "Tempo":
+                previous_note_end = max(previous_note_end, event.time)
             elif event.type == "Chord" and e + 1 < len(events):
                 # Next event is either a NoteOn or Program with the end info
                 previous_note_end = max(previous_note_end, events[e + 1].desc)
@@ -309,8 +311,9 @@ class MIDILike(MIDITokenizer):
                     # If your encoding include tempo tokens, each Position token should be followed by
                     # a tempo token, but if it is not the case this method will skip this step
                     tempo = float(token.split("_")[1])
-                    if tempo != tempo_changes[-1].tempo:
+                    if current_tick != tempo_changes[-1].time:
                         tempo_changes.append(TempoChange(tempo, current_tick))
+                    previous_note_end = max(previous_note_end, current_tick)
                 elif token.split("_")[0] == "TimeSig":
                     num, den = self._parse_token_time_signature(token.split("_")[1])
                     current_time_signature = time_signature_changes[-1]

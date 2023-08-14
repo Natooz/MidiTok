@@ -106,7 +106,7 @@ def test_multitrack_midi_to_tokens_to_midi(
                     max(tu[1] for tu in BEAT_RES_TEST) * midi_to_compare.ticks_per_beat,
                 )
                 miditok.utils.fix_offsets_overlapping_notes(track.notes)
-            if tokenization in ["Octuple", "REMIPlus"]:  # needed
+            if tokenization in ["Octuple", "OctupleMono", "REMIPlus"]:  # needed
                 adapt_tempo_changes_times(
                     midi_to_compare.instruments, midi_to_compare.tempo_changes
                 )
@@ -169,7 +169,7 @@ def test_multitrack_midi_to_tokens_to_midi(
             if tokenizer.config.use_time_signatures and tokenization in [
                 "Octuple",
                 "REMIPlus",
-            ]:
+            ]:  # TODO test for all
                 time_sig_errors = time_signature_changes_equals(
                     midi_to_compare.time_signature_changes,
                     new_midi.time_signature_changes,

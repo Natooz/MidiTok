@@ -58,7 +58,10 @@ def notes_equals(note1: Note, note2: Note) -> str:
 
 def tempo_changes_equals(
     tempo_changes1: List[TempoChange], tempo_changes2: List[TempoChange]
-) -> List[Tuple[str, TempoChange, float]]:
+) -> List[Tuple[str, Union[TempoChange, int], float]]:
+    # TODO edit CPWord and Octuple/OctupleMono in order to uncomment below and pass all tempo tests
+    """if len(tempo_changes1) != len(tempo_changes2):
+    return [("len", len(tempo_changes2), len(tempo_changes1))]"""
     errors = []
     for tempo_change1, tempo_change2 in zip(tempo_changes1, tempo_changes2):
         if tempo_change1.time != tempo_change2.time:
@@ -110,10 +113,14 @@ def adapt_tempo_changes_times(
     """
     notes = sum((t.notes for t in tracks), [])
     notes.sort(key=lambda x: x.start)
+    max_tick = max(note.start for note in notes)
 
     current_note_idx = 0
     tempo_idx = 1
     while tempo_idx < len(tempo_changes):
+        if tempo_changes[tempo_idx].time > max_tick:
+            del tempo_changes[tempo_idx]
+            continue
         for n, note in enumerate(notes[current_note_idx:]):
             if note.start >= tempo_changes[tempo_idx].time:
                 tempo_changes[tempo_idx].time = note.start

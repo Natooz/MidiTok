@@ -423,7 +423,7 @@ class MIDITokenizer(ABC):
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed).
         """
         ticks_per_sample = int(time_division / max(self.config.beat_res.values()))
-        prev_tempo = -1
+        prev_tempo = TempoChange(-1, -1)
         i = 0
         while i < len(tempos):
             # Quantize tempo value
@@ -432,7 +432,7 @@ class MIDITokenizer(ABC):
             ]
             if (
                 self.config.delete_equal_successive_tempo_changes
-                and tempos[i].tempo == prev_tempo
+                and tempos[i].tempo == prev_tempo.tempo
             ):
                 del tempos[i]
                 continue
@@ -440,7 +440,14 @@ class MIDITokenizer(ABC):
             tempos[i].time += (
                 -rest if rest <= ticks_per_sample / 2 else ticks_per_sample - rest
             )
-            prev_tempo = tempos[i].tempo
+
+            # If the current tempo is now at the same time as the previous one, we delete the previous
+            if tempos[i].time == prev_tempo.time:
+                prev_tempo = tempos[i]
+                del tempos[i - 1]
+                continue
+
+            prev_tempo = tempos[i]
             i += 1
 
     def _quantize_time_signatures(
@@ -456,19 +463,17 @@ class MIDITokenizer(ABC):
         ticks_per_bar = MIDITokenizer._compute_ticks_per_bar(
             time_sigs[0], time_division
         )
-        current_bar = 0
         previous_tick = 0  # first time signature change is always at tick 0
         prev_ts = time_sigs[0]
         i = 1
         while i < len(time_sigs):
             time_sig = time_sigs[i]
 
-            if (
-                self.config.delete_equal_successive_time_sig_changes
-                and (time_sig.numerator, time_sig.denominator)
-                == (prev_ts.numerator, prev_ts.denominator)
-                or time_sig.time == previous_tick
-            ):
+            # TODO handle same tick after preprocess --> check this works
+            if self.config.delete_equal_successive_time_sig_changes and (
+                time_sig.numerator,
+                time_sig.denominator,
+            ) == (prev_ts.numerator, prev_ts.denominator):
                 del time_sigs[i]
                 continue
 
@@ -484,7 +489,13 @@ class MIDITokenizer(ABC):
             ticks_per_bar = MIDITokenizer._compute_ticks_per_bar(
                 time_sig, time_division
             )
-            current_bar += bar_offset
+
+            # If the current time signature is now at the same time as the previous one, we delete the previous
+            if time_sig.time == previous_tick:
+                previous_tick = time_sig.time
+                del time_sigs[i - 1]
+                continue
+
             previous_tick = time_sig.time
             prev_ts = time_sig
             i += 1

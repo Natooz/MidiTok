@@ -44,6 +44,8 @@ TOKENIZER_PARAMS = {
     "chord_maps": miditok.constants.CHORD_MAPS,
     "chord_tokens_with_root_note": True,  # Tokens will look as "Chord_C:maj"
     "chord_unknown": False,
+    "delete_equal_successive_time_sig_changes": True,
+    "delete_equal_successive_tempo_changes": True,
 }
 
 

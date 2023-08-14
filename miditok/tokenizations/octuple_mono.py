@@ -31,6 +31,7 @@ class OctupleMono(MIDITokenizer):
         self.config.use_chords = False
         self.config.use_rests = False
         self.config.use_programs = False
+        self.config.delete_equal_successive_tempo_changes = True
 
         # used in place of positional encoding
         # This attribute might increase over tokenizations, if the tokenizer encounter longer MIDIs

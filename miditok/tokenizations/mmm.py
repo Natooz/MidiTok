@@ -26,6 +26,8 @@ class MMM(MIDITokenizer):
     strategy of the [original paper](https://arxiv.org/abs/2008.06048). The reason being that ``NoteOff`` tokens perform
     poorer for generation with causal models.
 
+    **Note:** When decoding tokens with tempos, only the tempos of the first track will be decoded.
+
     :param tokenizer_config: the tokenizer's configuration, as a :class:`miditok.classes.TokenizerConfig` object.
     :param density_bins_max: tuple specifying the number of density bins, and the maximum density in
             notes per beat to consider. (default: (10, 20))
@@ -267,6 +269,8 @@ class MMM(MIDITokenizer):
         current_tick = 0
         current_bar = -1
         previous_note_end = 0  # unused (rest)
+        first_program = None
+        current_program = -2
         for ti, token in enumerate(tokens):
             tok_type, tok_val = token.split("_")
             if tok_type == "Program":
@@ -280,6 +284,8 @@ class MMM(MIDITokenizer):
                         else MIDI_INSTRUMENTS[current_program]["name"],
                     )
                 )
+                if first_program is None:
+                    first_program = current_program
                 current_tick = 0
                 current_bar = -1
                 previous_note_end = 0
@@ -299,11 +305,13 @@ class MMM(MIDITokenizer):
                     # as this Position token occurs before any Bar token
                     current_bar = 0
                 current_tick += self._token_duration_to_ticks(tok_val, time_division)
-            elif tok_type == "Tempo":
+            elif (
+                first_program is None or current_program == first_program
+            ) and tok_type == "Tempo":
                 # If the tokenizer includes tempo tokens, each Position token should be followed by
                 # a tempo token, but if it is not the case this method will skip this step
                 tempo = float(token.split("_")[1])
-                if tempo != tempo_changes[-1].tempo:
+                if current_tick != tempo_changes[-1].time:
                     tempo_changes.append(TempoChange(tempo, current_tick))
             elif tok_type == "TimeSig":
                 num, den = self._parse_token_time_signature(token.split("_")[1])
@@ -446,6 +454,8 @@ class MMM(MIDITokenizer):
             dic["TimeShift"] += ["Tempo"]
             if self.config.use_time_signatures:
                 dic["TimeSig"] += ["Tempo"]
+            if self.config.use_chords:
+                dic["Tempo"] += ["Chord"]
 
         dic["Fill"] = list(dic.keys())
 
@@ -510,6 +520,7 @@ class MMM(MIDITokenizer):
             current_pitches.append(pitch_val)
 
         for i, token in enumerate(tokens[1:]):
+            # err_tokens = tokens[i - 4 : i + 4]  # uncomment for debug
             event_type, event_value = token.split("_")[0], token.split("_")[1]
 
             # Good token type

@@ -354,8 +354,12 @@ class CPWord(MIDITokenizer):
                     )
                     if self.config.use_tempos:
                         tempo = float(compound_token[-1].split("_")[1])
-                        if tempo != tempo_changes[-1].tempo:
+                        if (
+                            tempo != tempo_changes[-1].tempo
+                            and current_tick != tempo_changes[-1].time
+                        ):
                             tempo_changes.append(TempoChange(tempo, current_tick))
+                        previous_note_end = max(previous_note_end, current_tick)
                 elif (
                     self.config.use_rests
                     and compound_token[self.vocab_types_idx["Rest"]].split("_")[1]

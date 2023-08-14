@@ -45,6 +45,7 @@ class Octuple(MIDITokenizer):
         self.config.use_chords = False
         self.config.use_rests = False
         self.one_token_stream = True
+        self.config.delete_equal_successive_tempo_changes = True
 
         # used in place of positional encoding
         # This attribute might increase over tokenizations, if the tokenizer encounter longer MIDIs
@@ -349,6 +350,13 @@ class Octuple(MIDITokenizer):
                     )
                 )
             midi.instruments[-1].notes = notes
+
+        midi.max_tick = max(
+            [
+                max([note.end for note in track.notes]) if len(track.notes) > 0 else 0
+                for track in midi.instruments
+            ]
+        )
 
         # Write MIDI file
         if output_path:
