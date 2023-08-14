@@ -1174,9 +1174,10 @@ class MIDITokenizer(ABC):
         :param midi: MIDI file
         :return: boolean indicating whether MIDI file could be processed by the Encoding
         """
-        for time_sig in midi.time_signature_changes:
-            if (time_sig.numerator, time_sig.denominator) not in self.time_signatures:
-                return False
+        if self.config.use_time_signatures:
+            for time_sig in midi.time_signature_changes:
+                if (time_sig.numerator, time_sig.denominator) not in self.time_signatures:
+                    return False
         return True
 
     def learn_bpe(
