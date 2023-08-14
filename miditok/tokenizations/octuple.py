@@ -208,10 +208,14 @@ class Octuple(MIDITokenizer):
                                 time_sig_change.time - current_time_sig_tick
                             ) // ticks_per_bar
                             current_time_sig_tick = time_sig_change.time
-                            ticks_per_bar = self._compute_ticks_per_bar(current_time_sig, time_division)
+                            ticks_per_bar = self._compute_ticks_per_bar(
+                                current_time_sig, time_division
+                            )
                         elif time_sig_change.time > note.start:
                             break  # this time signature change is beyond the current time step, we break the loop
-                token.append(f"TimeSig_{current_time_sig.numerator}/{current_time_sig.denominator}")
+                token.append(
+                    f"TimeSig_{current_time_sig.numerator}/{current_time_sig.denominator}"
+                )
 
             tokens.append(token)
 
@@ -380,7 +384,9 @@ class Octuple(MIDITokenizer):
         vocab[3] += [f"Program_{i}" for i in self.config.programs]
 
         # POSITION
-        max_nb_beats = max(map(lambda ts: ceil(4 * ts[0] / ts[1]), self.time_signatures))
+        max_nb_beats = max(
+            map(lambda ts: ceil(4 * ts[0] / ts[1]), self.time_signatures)
+        )
         nb_positions = max(self.config.beat_res.values()) * max_nb_beats
         vocab[4] += [f"Position_{i}" for i in range(nb_positions)]
 

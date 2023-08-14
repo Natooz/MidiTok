@@ -260,7 +260,9 @@ class MMM(MIDITokenizer):
         time_signature_changes = [
             TimeSignature(*TIME_SIGNATURE, 0)
         ]  # mock the first time signature change to optimize below
-        ticks_per_bar = self._compute_ticks_per_bar(time_signature_changes[0], time_division)  # init
+        ticks_per_bar = self._compute_ticks_per_bar(
+            time_signature_changes[0], time_division
+        )  # init
 
         current_tick = 0
         current_bar = -1

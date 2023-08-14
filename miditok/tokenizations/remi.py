@@ -76,8 +76,7 @@ class REMI(MIDITokenizer):
         time_division = self._current_midi_metadata["time_division"]
         ticks_per_sample = time_division / max(self.config.beat_res.values())
         min_rest = (
-            time_division * self.rests[0][0]
-            + ticks_per_sample * self.rests[0][1]
+            time_division * self.rests[0][0] + ticks_per_sample * self.rests[0][1]
             if self.config.use_rests
             else 0
         )
@@ -121,9 +120,7 @@ class REMI(MIDITokenizer):
                                 desc=f"{rest_beat}.0",
                             )
                         )
-                        previous_tick += (
-                            rest_beat * time_division
-                        )
+                        previous_tick += rest_beat * time_division
 
                     while rest_pos >= self.rests[0][1]:
                         rest_pos_temp = min(
@@ -226,7 +223,9 @@ class REMI(MIDITokenizer):
         instruments: Dict[int, Instrument] = {}
         tempo_changes = [TempoChange(TEMPO, -1)]
         time_signature_changes = [TimeSignature(*TIME_SIGNATURE, 0)]
-        ticks_per_bar = self._compute_ticks_per_bar(time_signature_changes[0], time_division)  # init
+        ticks_per_bar = self._compute_ticks_per_bar(
+            time_signature_changes[0], time_division
+        )  # init
 
         current_tick = 0
         current_bar = -1
@@ -311,7 +310,9 @@ class REMI(MIDITokenizer):
                         time_signature_changes.append(
                             TimeSignature(num, den, current_tick)
                         )
-                        ticks_per_bar = self._compute_ticks_per_bar(time_signature_changes[-1], time_division)
+                        ticks_per_bar = self._compute_ticks_per_bar(
+                            time_signature_changes[-1], time_division
+                        )
         if len(tempo_changes) > 1:
             del tempo_changes[0]  # delete mocked tempo change
         tempo_changes[0].time = 0
@@ -369,7 +370,9 @@ class REMI(MIDITokenizer):
         ]
 
         # POSITION
-        max_nb_beats = max(map(lambda ts: ceil(4 * ts[0] / ts[1]), self.time_signatures))
+        max_nb_beats = max(
+            map(lambda ts: ceil(4 * ts[0] / ts[1]), self.time_signatures)
+        )
         nb_positions = max(self.config.beat_res.values()) * max_nb_beats
         vocab += [f"Position_{i}" for i in range(nb_positions)]
 

@@ -430,7 +430,10 @@ class MIDITokenizer(ABC):
             tempos[i].tempo = self.tempos[
                 np.argmin(np.abs(self.tempos - tempos[i].tempo))
             ]
-            if tempos[i].tempo == prev_tempo:
+            if (
+                self.config.delete_equal_successive_tempo_changes
+                and tempos[i].tempo == prev_tempo
+            ):
                 del tempos[i]
                 continue
             rest = tempos[i].time % ticks_per_sample
@@ -440,8 +443,9 @@ class MIDITokenizer(ABC):
             prev_tempo = tempos[i].tempo
             i += 1
 
-    @staticmethod
-    def _quantize_time_signatures(time_sigs: List[TimeSignature], time_division: int):
+    def _quantize_time_signatures(
+        self, time_sigs: List[TimeSignature], time_division: int
+    ):
         r"""Quantize the time signature changes, delayed to the next bar.
         See MIDI 1.0 Detailed specifications, pages 54 - 56, for more information on
         delayed time signature messages.
@@ -449,18 +453,22 @@ class MIDITokenizer(ABC):
         :param time_sigs: time signature changes to quantize.
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed).
         """
-        ticks_per_bar = MIDITokenizer._compute_ticks_per_bar(time_sigs[0], time_division)
+        ticks_per_bar = MIDITokenizer._compute_ticks_per_bar(
+            time_sigs[0], time_division
+        )
         current_bar = 0
         previous_tick = 0  # first time signature change is always at tick 0
-        prev_time_sig = time_sigs[0]
+        prev_ts = time_sigs[0]
         i = 1
         while i < len(time_sigs):
             time_sig = time_sigs[i]
 
-            if (time_sig.numerator, time_sig.denominator) == (
-                prev_time_sig.numerator,
-                prev_time_sig.denominator,
-            ) or time_sig.time == previous_tick:
+            if (
+                self.config.delete_equal_successive_time_sig_changes
+                and (time_sig.numerator, time_sig.denominator)
+                == (prev_ts.numerator, prev_ts.denominator)
+                or time_sig.time == previous_tick
+            ):
                 del time_sigs[i]
                 continue
 
@@ -473,10 +481,12 @@ class MIDITokenizer(ABC):
                 time_sig.time = previous_tick + bar_offset * ticks_per_bar
 
             # Update values
-            ticks_per_bar = MIDITokenizer._compute_ticks_per_bar(time_sig, time_division)
+            ticks_per_bar = MIDITokenizer._compute_ticks_per_bar(
+                time_sig, time_division
+            )
             current_bar += bar_offset
             previous_tick = time_sig.time
-            prev_time_sig = time_sig
+            prev_ts = time_sig
             i += 1
 
     def _midi_to_tokens(self, midi: MidiFile, *args, **kwargs) -> List[TokSequence]:
@@ -1141,8 +1151,9 @@ class MIDITokenizer(ABC):
 
         time_signatures = []
         for beat_res, beats in time_signature_range.items():
-            assert beat_res > 0 and math.log2(beat_res).is_integer(), \
-                f"The beat resolution ({beat_res}) in time signature must be a power of 2"
+            assert (
+                beat_res > 0 and math.log2(beat_res).is_integer()
+            ), f"The beat resolution ({beat_res}) in time signature must be a power of 2"
 
             time_signatures.extend([(nb_beats, beat_res) for nb_beats in beats])
 
@@ -1176,7 +1187,10 @@ class MIDITokenizer(ABC):
         """
         if self.config.use_time_signatures:
             for time_sig in midi.time_signature_changes:
-                if (time_sig.numerator, time_sig.denominator) not in self.time_signatures:
+                if (
+                    time_sig.numerator,
+                    time_sig.denominator,
+                ) not in self.time_signatures:
                     return False
         return True
 
@@ -1743,10 +1757,7 @@ class MIDITokenizer(ABC):
                         for beat_range, res in value.items()
                     }
                 elif key == "time_signature_range":
-                    value = {
-                        int(res): beat_range
-                        for res, beat_range in value.items()
-                    }
+                    value = {int(res): beat_range for res, beat_range in value.items()}
                 # Convert old attribute from < v2.1.0 to new for TokenizerConfig
                 elif key in old_add_tokens_attr:
                     key = old_add_tokens_attr[key]
