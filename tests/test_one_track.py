@@ -40,7 +40,7 @@ TOKENIZER_PARAMS = {
     "nb_tempos": 32,
     "tempo_range": (40, 250),
     "log_tempos": True,
-    "time_signature_range": (16, 2),
+    "time_signature_range": {4: [4]},
     "chord_maps": miditok.constants.CHORD_MAPS,
     "chord_tokens_with_root_note": True,  # Tokens will look as "Chord_C:maj"
     "chord_unknown": False,

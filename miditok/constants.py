@@ -64,7 +64,7 @@ TEMPO_RANGE = (40, 250)  # (min_tempo, max_tempo)
 LOG_TEMPOS = False  # log or linear scale tempos
 
 # Time signature params
-TIME_SIGNATURE_RANGE = (8, 2)
+TIME_SIGNATURE_RANGE = {4: [4]}  # {denom_i: [num_i1, ..., num_in] / (min_num_i, max_num_i)}
 
 # Programs
 PROGRAMS = list(range(-1, 128))

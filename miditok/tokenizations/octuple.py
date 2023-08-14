@@ -1,6 +1,6 @@
 from math import ceil
 from pathlib import Path
-from typing import List, Tuple, Dict, Optional, Union, Any
+from typing import List, Dict, Optional, Union, Any
 
 import numpy as np
 from miditoolkit import MidiFile, Instrument, Note, TempoChange, TimeSignature
@@ -134,13 +134,10 @@ class Octuple(MIDITokenizer):
         current_time_sig_idx = 0
         current_time_sig_tick = 0
         current_time_sig_bar = 0
-        time_sig_change = self._current_midi_metadata["time_sig_changes"][
+        current_time_sig = self._current_midi_metadata["time_sig_changes"][
             current_time_sig_idx
         ]
-        current_time_sig = self._reduce_time_signature(
-            time_sig_change.numerator, time_sig_change.denominator
-        )
-        ticks_per_bar = time_division * current_time_sig[0]
+        ticks_per_bar = self._compute_ticks_per_bar(current_time_sig, time_division)
 
         for note in track.notes:
             # Positions and bars
@@ -205,18 +202,16 @@ class Octuple(MIDITokenizer):
                     ][current_time_sig_idx + 1 :]:
                         # If this time signature change happened before the current moment
                         if time_sig_change.time <= note.start:
-                            current_time_sig = self._reduce_time_signature(
-                                time_sig_change.numerator, time_sig_change.denominator
-                            )
+                            current_time_sig = time_sig_change
                             current_time_sig_idx += 1  # update time signature value (might not change) and index
                             current_time_sig_bar += (
                                 time_sig_change.time - current_time_sig_tick
                             ) // ticks_per_bar
                             current_time_sig_tick = time_sig_change.time
-                            ticks_per_bar = time_division * current_time_sig[0]
+                            ticks_per_bar = self._compute_ticks_per_bar(current_time_sig, time_division)
                         elif time_sig_change.time > note.start:
                             break  # this time signature change is beyond the current time step, we break the loop
-                token.append(f"TimeSig_{current_time_sig[0]}/{current_time_sig[1]}")
+                token.append(f"TimeSig_{current_time_sig.numerator}/{current_time_sig.denominator}")
 
             tokens.append(token)
 
@@ -273,8 +268,9 @@ class Octuple(MIDITokenizer):
                     )
                     break
 
-        ticks_per_bar = time_division * time_sig[0]
-        time_sig_changes = [TimeSignature(*time_sig, 0)]
+        time_sig = TimeSignature(*time_sig, 0)
+        ticks_per_bar = self._compute_ticks_per_bar(time_sig, time_division)
+        time_sig_changes = [time_sig]
 
         current_time_sig_tick = 0
         current_time_sig_bar = 0
@@ -326,10 +322,9 @@ class Octuple(MIDITokenizer):
                         current_bar - current_time_sig_bar
                     ) * ticks_per_bar
                     current_time_sig_bar = current_bar
-                    ticks_per_bar = time_division * time_sig[0]
-                    time_sig_changes.append(
-                        TimeSignature(*time_sig, current_time_sig_tick)
-                    )
+                    time_sig = TimeSignature(*time_sig, current_time_sig_tick)
+                    ticks_per_bar = self._compute_ticks_per_bar(time_sig, time_division)
+                    time_sig_changes.append(time_sig)
 
         # Tempos
         midi.tempo_changes = tempo_changes
@@ -385,7 +380,8 @@ class Octuple(MIDITokenizer):
         vocab[3] += [f"Program_{i}" for i in self.config.programs]
 
         # POSITION
-        nb_positions = max(self.config.beat_res.values()) * 4  # 4/4 time signature
+        max_nb_beats = max(map(lambda ts: ceil(4 * ts[0] / ts[1]), self.time_signatures))
+        nb_positions = max(self.config.beat_res.values()) * max_nb_beats
         vocab[4] += [f"Position_{i}" for i in range(nb_positions)]
 
         # BAR (positional encoding)

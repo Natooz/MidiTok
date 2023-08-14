@@ -27,6 +27,7 @@ from .data_augmentation import data_augmentation_dataset
 from .constants import (
     TIME_DIVISION,
     CURRENT_VERSION_PACKAGE,
+    TIME_SIGNATURE,
     CHR_ID_START,
     PITCH_CLASSES,
     UNKNOWN_CHORD_PREFIX,
@@ -240,7 +241,7 @@ class MIDITokenizer(ABC):
             self.rests = self.__create_rests()
 
         # Time Signatures
-        self.time_signatures = []
+        self.time_signatures = [TIME_SIGNATURE]
         if self.config.use_time_signatures:
             self.time_signatures = self.__create_time_signatures()
 
@@ -362,7 +363,7 @@ class MIDITokenizer(ABC):
 
         if len(midi.time_signature_changes) == 0:  # can sometimes happen
             midi.time_signature_changes.append(
-                TimeSignature(4, 4, 0)
+                TimeSignature(*TIME_SIGNATURE, 0)
             )  # 4/4 by default in this case
         if self.config.use_time_signatures:
             self._quantize_time_signatures(
@@ -448,7 +449,7 @@ class MIDITokenizer(ABC):
         :param time_sigs: time signature changes to quantize.
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed).
         """
-        ticks_per_bar = time_division * time_sigs[0].numerator
+        ticks_per_bar = MIDITokenizer._compute_ticks_per_bar(time_sigs[0], time_division)
         current_bar = 0
         previous_tick = 0  # first time signature change is always at tick 0
         prev_time_sig = time_sigs[0]
@@ -472,7 +473,7 @@ class MIDITokenizer(ABC):
                 time_sig.time = previous_tick + bar_offset * ticks_per_bar
 
             # Update values
-            ticks_per_bar = time_division * time_sig.numerator
+            ticks_per_bar = MIDITokenizer._compute_ticks_per_bar(time_sig, time_division)
             current_bar += bar_offset
             previous_tick = time_sig.time
             prev_time_sig = time_sig
@@ -1136,54 +1137,26 @@ class MIDITokenizer(ABC):
 
         :return: the time signatures.
         """
-        max_beat_res, nb_notes = self.config.time_signature_range
-        assert (
-            max_beat_res > 0 and math.log2(max_beat_res).is_integer()
-        ), "The beat resolution in time signature must be a power of 2"
+        time_signature_range = self.config.time_signature_range
 
         time_signatures = []
-        for i in range(0, int(math.log2(max_beat_res)) + 1):  # 1 ~ max_beat_res
-            for j in range(1, ((2**i) * nb_notes) + 1):
-                time_signatures.append((j, 2**i))
+        for beat_res, beats in time_signature_range.items():
+            assert beat_res > 0 and math.log2(beat_res).is_integer(), \
+                f"The beat resolution ({beat_res}) in time signature must be a power of 2"
+
+            time_signatures.extend([(nb_beats, beat_res) for nb_beats in beats])
+
         return time_signatures
 
-    def _reduce_time_signature(
-        self, numerator: int, denominator: int
-    ) -> Tuple[int, int]:
-        r"""Reduces and decomposes a time signature into one of the valid vocabulary time signatures.
-        If time signature's denominator (beat resolution) is larger than max_beat_res,
-        the denominator and numerator are reduced to max_beat_res if possible.
-        If time signature's numerator (bar length in beats) is larger than nb_notes * denominator,
-        the numerator is replaced with its GCD not larger than nb_notes * denominator.
+    @staticmethod
+    def _compute_ticks_per_bar(time_sig: TimeSignature, time_division: int):
+        r"""Computes time resolution of one bar in ticks.
 
-        Example: (10, 4), max_beat_res of 8, and nb_notes of 2 will convert the signature into (5, 4).
-
-        :param numerator: time signature's numerator (bar length in beats).
-        :param denominator: time signature's denominator (beat resolution).
-        :return: the numerator and denominator of a reduced and decomposed time signature.
+        :param time_sig: time signature object
+        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
+        :return: MIDI bar resolution, in ticks/bar
         """
-        max_beat_res, nb_notes = self.config.time_signature_range
-
-        # reduction (when denominator exceed max_beat_res)
-        while (
-            denominator > max_beat_res and denominator % 2 == 0 and numerator % 2 == 0
-        ):
-            denominator //= 2
-            numerator //= 2
-
-        assert denominator <= max_beat_res, (
-            f"Unsupported time signature ({numerator}/{denominator}), "
-            f"beat resolution is irreducible to maximum beat resolution {max_beat_res}"
-        )
-
-        # decomposition (when length of a bar exceed max_nb_beats_per_bar)
-        while numerator > nb_notes * denominator:
-            for i in range(2, numerator + 1):
-                if numerator % i == 0:
-                    numerator //= i
-                    break
-
-        return numerator, denominator
+        return int(time_division * 4 * time_sig.numerator / time_sig.denominator)
 
     @staticmethod
     def _parse_token_time_signature(token_time_sig: str) -> Tuple[int, int]:
@@ -1195,6 +1168,16 @@ class MIDITokenizer(ABC):
         """
         numerator, denominator = map(int, token_time_sig.split("/"))
         return numerator, denominator
+
+    def validate_midi_time_signatures(self, midi: MidiFile) -> bool:
+        r"""Checks if MIDI files contains only time signatures supported by the encoding.
+        :param midi: MIDI file
+        :return: boolean indicating whether MIDI file could be processed by the Encoding
+        """
+        for time_sig in midi.time_signature_changes:
+            if (time_sig.numerator, time_sig.denominator) not in self.time_signatures:
+                return False
+        return True
 
     def learn_bpe(
         self,
@@ -1509,6 +1492,10 @@ class MIDITokenizer(ABC):
                 if not validation_fn(midi):
                     continue
 
+            # Checks if MIDI contains supported time signatures
+            if not self.validate_midi_time_signatures(midi):
+                continue
+
             # Tokenizing the MIDI, without BPE here as this will be done at the end (as we might perform data aug)
             tokens = self(midi, apply_bpe_if_possible=False)
 
@@ -1743,12 +1730,21 @@ class MIDITokenizer(ABC):
                     tuple(map(int, beat_range.split("_"))): res
                     for beat_range, res in value["beat_res"].items()
                 }
+                value["time_signature_range"] = {
+                    int(res): beat_range
+                    for res, beat_range in value["time_signature_range"].items()
+                }
                 value = TokenizerConfig.from_dict(value)
             elif key in config_attributes:
                 if key == "beat_res":
                     value = {
                         tuple(map(int, beat_range.split("_"))): res
                         for beat_range, res in value.items()
+                    }
+                elif key == "time_signature_range":
+                    value = {
+                        int(res): beat_range
+                        for res, beat_range in value.items()
                     }
                 # Convert old attribute from < v2.1.0 to new for TokenizerConfig
                 elif key in old_add_tokens_attr:
