@@ -24,6 +24,8 @@ class TSD(MIDITokenizer):
     **Note:** as `TSD` uses *TimeShifts* events to move the time from note to
     note, it can be unsuited for tracks with pauses longer than the maximum `TimeShift` value. In such cases, the
     maximum *TimeShift* value will be used.
+    **Note:** When decoding multiple token sequences (of multiple tracks), i.e. when `config.use_programs` is False,
+    only the tempos and time signatures of the first sequence will be decoded for the whole MIDI.
     """
 
     def _tweak_config_before_creating_voc(self):
@@ -234,14 +236,15 @@ class TSD(MIDITokenizer):
                     # If your encoding include tempo tokens, each Position token should be followed by
                     # a tempo token, but if it is not the case this method will skip this step
                     tempo = float(token.split("_")[1])
-                    if current_tick != tempo_changes[-1].time:
+                    if si == 0 and current_tick != tempo_changes[-1].time:
                         tempo_changes.append(TempoChange(tempo, current_tick))
                     previous_note_end = max(previous_note_end, current_tick)
                 elif token.split("_")[0] == "TimeSig":
                     num, den = self._parse_token_time_signature(token.split("_")[1])
                     current_time_signature = time_signature_changes[-1]
                     if (
-                        num != current_time_signature.numerator
+                        si == 0
+                        and num != current_time_signature.numerator
                         and den != current_time_signature.denominator
                     ):
                         time_signature_changes.append(

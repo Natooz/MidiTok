@@ -66,7 +66,7 @@ DELETE_EQUAL_SUCCESSIVE_TEMPO_CHANGES = False
 
 # Time signature params
 # {denom_i: [num_i1, ..., num_in] / (min_num_i, max_num_i)}
-TIME_SIGNATURE_RANGE = {4: [4]}
+TIME_SIGNATURE_RANGE = {8: [3, 12, 6], 4: [5, 6, 3, 2, 1, 4]}
 
 # Programs
 PROGRAMS = list(range(-1, 128))

@@ -31,6 +31,8 @@ class MIDILike(MIDITokenizer):
     played when a second one is also played, the offset time of the first will be set to the onset time of the second.
     This is done to prevent unwanted duration alterations that could happen in such case, as the `NoteOff` token
     associated to the first note will also end the second one.
+    **Note:** When decoding multiple token sequences (of multiple tracks), i.e. when `config.use_programs` is False,
+    only the tempos and time signatures of the first sequence will be decoded for the whole MIDI.
     """
 
     def _tweak_config_before_creating_voc(self):
@@ -311,14 +313,15 @@ class MIDILike(MIDITokenizer):
                     # If your encoding include tempo tokens, each Position token should be followed by
                     # a tempo token, but if it is not the case this method will skip this step
                     tempo = float(token.split("_")[1])
-                    if current_tick != tempo_changes[-1].time:
+                    if si == 0 and current_tick != tempo_changes[-1].time:
                         tempo_changes.append(TempoChange(tempo, current_tick))
                     previous_note_end = max(previous_note_end, current_tick)
-                elif token.split("_")[0] == "TimeSig":
+                elif si == 0 and token.split("_")[0] == "TimeSig":
                     num, den = self._parse_token_time_signature(token.split("_")[1])
                     current_time_signature = time_signature_changes[-1]
                     if (
-                        num != current_time_signature.numerator
+                        si == 0
+                        and num != current_time_signature.numerator
                         and den != current_time_signature.denominator
                     ):
                         time_signature_changes.append(

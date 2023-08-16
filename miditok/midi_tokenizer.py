@@ -469,7 +469,6 @@ class MIDITokenizer(ABC):
         while i < len(time_sigs):
             time_sig = time_sigs[i]
 
-            # TODO handle same tick after preprocess --> check this works
             if self.config.delete_equal_successive_time_sig_changes and (
                 time_sig.numerator,
                 time_sig.denominator,
@@ -500,7 +499,7 @@ class MIDITokenizer(ABC):
             prev_ts = time_sig
             i += 1
 
-    def _midi_to_tokens(self, midi: MidiFile, *args, **kwargs) -> List[TokSequence]:
+    def _midi_to_tokens(self, midi: MidiFile, *args, **kwargs) -> Union[TokSequence, List[TokSequence]]:
         r"""Converts a preprocessed MIDI object to a sequence of tokens.
         The workflow of this method is as follows: the events (Pitch, Velocity, Tempo, TimeSignature...) are
         gathered into a list, then the time events are added. If `one_token_stream` is true, all events of all tracks
@@ -733,7 +732,7 @@ class MIDITokenizer(ABC):
         """
         if seq.tokens is None:
             if seq.events is not None:
-                seq.tokens = [str(event) for event in seq.events]
+                seq.tokens = self._events_to_tokens(seq.events)
             elif seq.ids is not None:
                 seq.tokens = self._ids_to_tokens(seq.ids)
             elif seq.bytes is not None:
@@ -789,6 +788,27 @@ class MIDITokenizer(ABC):
         for id_ in ids:
             event_str = self[id_]
             tokens.append(event_str if as_str else Event(*event_str.split("_")))
+        return tokens
+
+    @staticmethod
+    def _events_to_tokens(events: List[Union[Event, List[Event]]]) -> List[Union[str, List[str]]]:
+        r"""Converts a sequence of Events to their associated tokens (str).
+
+        :param events: sequence of Events to convert.
+        :return: the sequence of corresponding tokens (str).
+        """
+        tokens = []
+        if isinstance(events[0], list):  # multiple vocabularies
+            for (
+                multi_event
+            ) in events:  # cannot use recursion here because of the vocabulary type id
+                multi_token = []
+                for i, event in enumerate(multi_event):
+                    multi_token.append(str(event))
+                tokens.append(multi_token)
+            return tokens
+
+        tokens = [str(event) for event in events]
         return tokens
 
     def _ids_to_bytes(

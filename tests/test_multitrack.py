@@ -30,6 +30,7 @@ from .tests_utils import (
     reduce_note_durations,
     adapt_tempo_changes_times,
     time_signature_changes_equals,
+    remove_equal_successive_tempos,
 )
 
 # Special beat res for test, up to 16 beats so the duration and time-shift values are
@@ -66,16 +67,11 @@ def test_multitrack_midi_to_tokens_to_midi(
 
     """
     files = list(Path(data_path).glob("**/*.mid"))
-    at_least_one_error = False
+    has_errors = False
 
     for i, file_path in enumerate(tqdm(files, desc="Testing multitrack")):
         # Reads the MIDI
-        try:
-            midi = MidiFile(Path(file_path))
-        except (
-            Exception
-        ):  # ValueError, OSError, FileNotFoundError, IOError, EOFError, mido.KeySignatureError
-            continue
+        midi = MidiFile(Path(file_path))
         if midi.ticks_per_beat % max(BEAT_RES_TEST.values()) != 0:
             continue
         has_errors = False
@@ -87,9 +83,8 @@ def test_multitrack_midi_to_tokens_to_midi(
             )
 
             # Process the MIDI
-            midi_to_compare = deepcopy(
-                midi
-            )  # midi notes / tempos / time signature quantized with the line above
+            # midi notes / tempos / time signature quantized with the line above
+            midi_to_compare = deepcopy(midi)
             for track in midi_to_compare.instruments:
                 if track.is_drum:
                     track.program = (
@@ -105,11 +100,16 @@ def test_multitrack_midi_to_tokens_to_midi(
                     track.notes,
                     max(tu[1] for tu in BEAT_RES_TEST) * midi_to_compare.ticks_per_beat,
                 )
-                miditok.utils.fix_offsets_overlapping_notes(track.notes)
-            if tokenization in ["Octuple", "OctupleMono", "REMIPlus"]:  # needed
+                if tokenization in ["MIDILike"]:
+                    miditok.utils.fix_offsets_overlapping_notes(track.notes)
+            # For Octuple, as tempo is only carried at notes times, we need to adapt their times for comparison
+            if tokenization in ["Octuple"]:
                 adapt_tempo_changes_times(
                     midi_to_compare.instruments, midi_to_compare.tempo_changes
                 )
+            # When the tokenizer only decoded tempo changes different from the last tempo val
+            if tokenization in ["CPWord"]:
+                remove_equal_successive_tempos(midi_to_compare.tempo_changes)
 
             # MIDI -> Tokens -> MIDI
             midi_to_compare.instruments.sort(
@@ -149,7 +149,6 @@ def test_multitrack_midi_to_tokens_to_midi(
                     f"MIDI {i} - {file_path} failed to encode/decode NOTES with "
                     f"{tokenization} ({sum(len(t[2]) for t in errors)} errors)"
                 )
-                # return False
 
             # Checks tempos
             if (
@@ -166,10 +165,7 @@ def test_multitrack_midi_to_tokens_to_midi(
                     )
 
             # Checks time signatures
-            if tokenizer.config.use_time_signatures and tokenization in [
-                "Octuple",
-                "REMIPlus",
-            ]:  # TODO test for all
+            if tokenizer.config.use_time_signatures:
                 time_sig_errors = time_signature_changes_equals(
                     midi_to_compare.time_signature_changes,
                     new_midi.time_signature_changes,
@@ -182,7 +178,7 @@ def test_multitrack_midi_to_tokens_to_midi(
                     )
 
             if has_errors:
-                at_least_one_error = True
+                has_errors = True
                 if saving_erroneous_midis:
                     new_midi.dump(
                         Path(
@@ -198,7 +194,7 @@ def test_multitrack_midi_to_tokens_to_midi(
                             f"{file_path.stem}_{tokenization}_original.mid",
                         )
                     )
-    assert not at_least_one_error
+    assert not has_errors
 
 
 if __name__ == "__main__":

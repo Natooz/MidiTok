@@ -1,13 +1,13 @@
 from math import ceil
 from typing import List, Tuple, Dict, Optional, Union, Any
+from pathlib import Path
 
 import numpy as np
-from miditoolkit import MidiFile, Instrument, Note, TempoChange
+from miditoolkit import MidiFile, Instrument, Note, TempoChange, TimeSignature
 
-from ..midi_tokenizer import MIDITokenizer, _in_as_seq, _out_as_complete_seq
+from ..midi_tokenizer import MIDITokenizer, _in_as_seq
 from ..classes import TokSequence, Event
-from ..utils import detect_chords
-from ..constants import TIME_DIVISION, TEMPO, MIDI_INSTRUMENTS
+from ..constants import TIME_DIVISION, TEMPO, MIDI_INSTRUMENTS, TIME_SIGNATURE
 
 
 class CPWord(MIDITokenizer):
@@ -31,16 +31,18 @@ class CPWord(MIDITokenizer):
     (one per token type). This means that the training requires to add multiple losses.
     For generation, the decoding implies sample from several distributions, which can be
     very delicate. Hence, we do not recommend this tokenization for generation with small models.
+    **Note:** When decoding multiple token sequences (of multiple tracks), i.e. when `config.use_programs` is False,
+    only the tempos and time signatures of the first sequence will be decoded for the whole MIDI.
     """
 
     def _tweak_config_before_creating_voc(self):
-        self.config.use_time_signatures = False
         token_types = ["Family", "Position", "Pitch", "Velocity", "Duration"]
         for add_tok_attr, add_token in [
             ("use_programs", "Program"),
             ("use_chords", "Chord"),
             ("use_rests", "Rest"),
             ("use_tempos", "Tempo"),
+            ("use_time_signatures", "TimeSig"),
         ]:
             if getattr(self.config, add_tok_attr):
                 token_types.append(add_token)
@@ -48,79 +50,72 @@ class CPWord(MIDITokenizer):
             type_: idx for idx, type_ in enumerate(token_types)
         }  # used for data augmentation
         self.vocab_types_idx["Bar"] = 1  # same as position
+        if self.config.use_programs:
+            self.one_token_stream = True
 
-    def _midi_to_tokens(self, midi: MidiFile, *args, **kwargs) -> List[TokSequence]:
-        # Convert each track to tokens
-        tokens = []
-        for track in midi.instruments:
-            tokens.append(self._track_to_tokens(track))
-            self.complete_sequence(tokens[-1])
-        return tokens
+    def _add_time_events(self, events: List[Event]) -> List[List[Event]]:
+        r"""
+        Takes a sequence of note events (containing optionally Chord, Tempo and TimeSignature tokens),
+        and insert (not inplace) time tokens (TimeShift, Rest) to complete the sequence.
 
-    @_out_as_complete_seq
-    def _track_to_tokens(self, track: Instrument) -> TokSequence:
-        r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens (:class:`miditok.TokSequence`).
-
-        :param track: MIDI track to convert
-        :return: :class:`miditok.TokSequence` of corresponding tokens.
+        :param events: note events to complete.
+        :return: the same events, with time events inserted.
         """
-        # Make sure the notes are sorted first by their onset (start) times, second by pitch
-        # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
-        ticks_per_sample = self._current_midi_metadata["time_division"] / max(
-            self.config.beat_res.values()
-        )
-        ticks_per_bar = self._current_midi_metadata["time_division"] * 4
-        dur_bins = self._durations_ticks[self._current_midi_metadata["time_division"]]
+        time_division = self._current_midi_metadata["time_division"]
+        ticks_per_sample = time_division / max(self.config.beat_res.values())
         min_rest = (
-            self._current_midi_metadata["time_division"] * self.rests[0][0]
-            + ticks_per_sample * self.rests[0][1]
+            time_division * self.rests[0][0] + ticks_per_sample * self.rests[0][1]
             if self.config.use_rests
             else 0
         )
-        tokens: List[List[Union[str, Event]]] = []  # list of lists of tokens
 
-        # Creates tokens
-        previous_tick = -1
-        previous_note_end = (
-            track.notes[0].start + 1
-        )  # so that no rest is created before the first note
+        # Add time events
+        all_events = []
         current_bar = -1
-        current_tempo_idx = 0
-        current_tempo = self._current_midi_metadata["tempo_changes"][
-            current_tempo_idx
-        ].tempo
-        for note in track.notes:
-            # Bar / Position / (Tempo) / (Rest)
-            if note.start != previous_tick:
+        previous_tick = -1
+        previous_note_end = 0
+        current_time_sig = TIME_SIGNATURE
+        current_tempo = TEMPO
+        current_program = None
+        ticks_per_bar = self._compute_ticks_per_bar(
+            TimeSignature(*current_time_sig, 0), time_division
+        )
+        for e, event in enumerate(events):
+            if event.type == "TimeSig":
+                current_time_sig = list(map(int, event.value.split("/")))
+                ticks_per_bar = self._compute_ticks_per_bar(
+                    TimeSignature(*current_time_sig, event.time), time_division
+                )
+            elif event.type == "Tempo":
+                current_tempo = event.value
+            elif event.type == "Program":
+                current_program = event.value
+            if event.time != previous_tick:
                 # (Rest)
                 if (
-                    self.config.use_rests
-                    and note.start > previous_note_end
-                    and note.start - previous_note_end >= min_rest
+                    event.type in ["Pitch", "Chord", "Tempo", "TimeSig"]
+                    and self.config.use_rests
+                    and event.time - previous_note_end >= min_rest
                 ):
                     previous_tick = previous_note_end
                     rest_beat, rest_pos = divmod(
-                        note.start - previous_tick,
-                        self._current_midi_metadata["time_division"],
+                        event.time - previous_tick,
+                        time_division,
                     )
                     rest_beat = min(rest_beat, max([r[0] for r in self.rests]))
                     rest_pos = round(rest_pos / ticks_per_sample)
 
                     if rest_beat > 0:
-                        tokens.append(
-                            self.__create_cp_token(
-                                previous_note_end, rest=f"{rest_beat}.0", desc="Rest"
-                            )
+                        all_events.append(
+                            self.__create_cp_token(previous_note_end, rest=f"{rest_beat}.0", desc="Rest")
                         )
-                        previous_tick += (
-                            rest_beat * self._current_midi_metadata["time_division"]
-                        )
+                        previous_tick += rest_beat * time_division
 
                     while rest_pos >= self.rests[0][1]:
                         rest_pos_temp = min(
                             [r[1] for r in self.rests], key=lambda x: abs(x - rest_pos)
                         )
-                        tokens.append(
+                        all_events.append(
                             self.__create_cp_token(
                                 previous_note_end,
                                 rest=f"0.{rest_pos_temp}",
@@ -132,93 +127,49 @@ class CPWord(MIDITokenizer):
 
                     current_bar = previous_tick // ticks_per_bar
 
-                # (Tempo)
-                if self.config.use_tempos:
-                    # If the current tempo is not the last one
-                    if current_tempo_idx + 1 < len(
-                        self._current_midi_metadata["tempo_changes"]
-                    ):
-                        # Will loop over incoming tempo changes
-                        for tempo_change in self._current_midi_metadata[
-                            "tempo_changes"
-                        ][current_tempo_idx + 1 :]:
-                            # If this tempo change happened before the current moment
-                            if tempo_change.time <= note.start:
-                                current_tempo = tempo_change.tempo
-                                current_tempo_idx += (
-                                    1  # update tempo value (might not change) and index
-                                )
-                            elif tempo_change.time > note.start:
-                                break  # this tempo change is beyond the current time step, we break the loop
-
                 # Bar
-                nb_new_bars = note.start // ticks_per_bar - current_bar
+                nb_new_bars = event.time // ticks_per_bar - current_bar
                 for i in range(nb_new_bars):
-                    tokens.append(
-                        self.__create_cp_token(
-                            (current_bar + i + 1) * ticks_per_bar, bar=True, desc="Bar"
-                        )
+                    if self.config.use_time_signatures:
+                        time_sig_arg = f"{current_time_sig[0]}/{current_time_sig[1]}"
+                    else:
+                        time_sig_arg = None
+                    all_events.append(
+                        self.__create_cp_token((current_bar + i + 1) * ticks_per_bar, bar=True, desc="Bar",
+                                               time_signature=time_sig_arg)
                     )
                 current_bar += nb_new_bars
 
                 # Position
-                pos_index = int((note.start % ticks_per_bar) / ticks_per_sample)
-                tokens.append(
+                pos_index = int((event.time % ticks_per_bar) / ticks_per_sample)
+                all_events.append(
                     self.__create_cp_token(
-                        int(note.start),
+                        event.time,
                         pos=pos_index,
                         tempo=current_tempo if self.config.use_tempos else None,
                         desc="Position",
                     )
                 )
-                previous_tick = note.start
 
-            # Note
-            duration = note.end - note.start
-            dur_index = np.argmin(np.abs(dur_bins - duration))
-            dur_value = ".".join(map(str, self.durations[dur_index]))
-            tokens.append(
-                self.__create_cp_token(
-                    int(note.start),
-                    pitch=note.pitch,
-                    vel=note.velocity,
-                    dur=dur_value,
-                    desc=f"{duration} ticks",
+                previous_tick = event.time
+
+            # Convert event to CP Event
+            # Update max offset time of the notes encountered
+            if event.type == "Pitch" and e + 2 < len(events):
+                all_events.append(
+                    self.__create_cp_token(
+                        event.time,
+                        pitch=event.value,
+                        vel=events[e + 1].value,
+                        dur=events[e + 2].value,
+                        program=current_program,
+                    )
                 )
-            )
-            previous_note_end = max(previous_note_end, note.end)
+                previous_note_end = max(previous_note_end, event.desc)
+            elif event.type == "Tempo":
+                previous_note_end = max(previous_note_end, event.time)
 
-        tokens.sort(key=lambda x: x[0].time)
-
-        # Adds chord tokens if specified
-        if self.config.use_chords and not track.is_drum:
-            chord_events = detect_chords(
-                track.notes,
-                self._current_midi_metadata["time_division"],
-                chord_maps=self.config.chord_maps,
-                specify_root_note=self.config.chord_tokens_with_root_note,
-                beat_res=self._first_beat_res,
-                unknown_chords_nb_notes_range=self.config.chord_unknown,
-            )
-            count = 0
-            for chord_event in chord_events:
-                for e, cp_token in enumerate(tokens[count:]):
-                    if (
-                        cp_token[0].time == chord_event.time
-                        and cp_token[0].desc == "Position"
-                    ):
-                        cp_token[self.vocab_types_idx["Chord"]] = self[
-                            self.vocab_types_idx["Chord"], f"Chord_{chord_event.value}"
-                        ]
-                        count = e
-                        break
-
-        # Convert the first element of each compound token from Event to int
-        for cp_token in tokens:
-            cp_token[0] = str(cp_token[0])
-
-        tokens: List[List[str]] = tokens  # just to prevent IDE type warning
-        return TokSequence(tokens=tokens)
+        return all_events
 
     def __create_cp_token(
         self,
@@ -231,9 +182,10 @@ class CPWord(MIDITokenizer):
         chord: str = None,
         rest: str = None,
         tempo: float = None,
+        time_signature: str = None,
         program: int = None,
         desc: str = "",
-    ) -> List[Union[Event, str]]:
+    ) -> List[Event]:
         r"""Create a CP Word token, with the following structure:
             (index. Token type)
             0. Family
@@ -245,6 +197,7 @@ class CPWord(MIDITokenizer):
             (6. Chord) optional, chords occurring with position tokens
             (7. Rest) optional, rest acting as a TimeShift token
             (8. Tempo) optional, occurring with position tokens
+            (9. TimeSig) optional, occurring with bar tokens
         NOTE: the first Family token (first in list) will be given as an Event object to keep track
         of time easily so that other method can sort CP tokens afterwards.
 
@@ -261,126 +214,195 @@ class CPWord(MIDITokenizer):
         :param desc: an optional argument for debug and used to spot position tokens in track_to_tokens
         :return: The compound token as a list of integers
         """
-        cp_token_template = [
+        def create_event(type_: str, value) -> Event:
+            return Event(type=type_, value=value, time=time, desc=desc)
+
+        cp_token = [
             Event(type="Family", value="Metric", time=time, desc=desc),
-            "Ignore_None",
-            "Ignore_None",
-            "Ignore_None",
-            "Ignore_None",
+            Event(type="Ignore", value="None", time=time, desc=desc),
+            Event(type="Ignore", value="None", time=time, desc=desc),
+            Event(type="Ignore", value="None", time=time, desc=desc),
+            Event(type="Ignore", value="None", time=time, desc=desc),
         ]
-        for add_tok_attr in ["use_programs", "use_chords", "use_rests", "use_tempos"]:
+        for add_tok_attr in ["use_programs", "use_chords", "use_rests", "use_tempos", "use_time_signatures"]:
             if getattr(self.config, add_tok_attr):
-                cp_token_template.append("Ignore_None")
+                cp_token.append(create_event("Ignore", "None"))
 
         if bar:
-            cp_token_template[1] = "Bar_None"
+            cp_token[1] = create_event("Bar", "None")
+            if time_signature is not None:
+                cp_token[self.vocab_types_idx["TimeSig"]] = create_event("TimeSig", time_signature)
         elif pos is not None:
-            cp_token_template[1] = f"Position_{pos}"
+            cp_token[1] = create_event("Position", pos)
             if chord is not None:
-                cp_token_template[self.vocab_types_idx["Chord"]] = f"Chord_{chord}"
+                cp_token[self.vocab_types_idx["Chord"]] = create_event("Chord", chord)
             if tempo is not None:
-                cp_token_template[self.vocab_types_idx["Tempo"]] = f"Tempo_{tempo}"
+                cp_token[self.vocab_types_idx["Tempo"]] = create_event("Tempo", tempo)
         elif rest is not None:
-            cp_token_template[self.vocab_types_idx["Rest"]] = f"Rest_{rest}"
+            cp_token[self.vocab_types_idx["Rest"]] = create_event("Rest", rest)
         elif pitch is not None:
-            cp_token_template[0].value = "Note"
-            cp_token_template[2] = f"Pitch_{pitch}"
-            cp_token_template[3] = f"Velocity_{vel}"
-            cp_token_template[4] = f"Duration_{dur}"
+            cp_token[0].value = "Note"
+            cp_token[2] = create_event("Pitch", pitch)
+            cp_token[3] = create_event("Velocity", vel)
+            cp_token[4] = create_event("Duration", dur)
             if program is not None:
-                cp_token_template[
+                cp_token[
                     self.vocab_types_idx["Program"]
-                ] = f"Program_{program}"
+                ] = create_event("Program", program)
 
-        return cp_token_template
+        return cp_token
 
-    def _tokens_to_track(
+    @_in_as_seq()
+    def tokens_to_midi(
         self,
-        tokens: TokSequence,
-        time_division: Optional[int] = TIME_DIVISION,
-        program: Optional[Tuple[int, bool]] = (0, False),
-    ) -> Tuple[Instrument, List[TempoChange]]:
-        r"""Converts a sequence of tokens into a track object
-
-        :param tokens: sequence of tokens to convert. Can be either a Tensor (PyTorch and Tensorflow are supported),
-                a numpy array, a Python list or a TokSequence.
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create)
-        :param program: the MIDI program of the produced track and if it drum, (default (0, False), piano)
-        :return: the miditoolkit instrument object and tempo changes
+        tokens: Union[
+            Union[TokSequence, List, np.ndarray, Any],
+            List[Union[TokSequence, List, np.ndarray, Any]],
+        ],
+        programs: Optional[List[Tuple[int, bool]]] = None,
+        output_path: Optional[str] = None,
+        time_division: int = TIME_DIVISION,
+    ) -> MidiFile:
+        r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
+    
+        :param tokens: tokens to convert. Can be either a list of :class:`miditok.TokSequence`,
+        :param programs: programs of the tracks. If none is given, will default to piano, program 0. (default: None)
+        :param output_path: path to save the file. (default: None)
+        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create).
+        :return: the midi object (:class:`miditoolkit.MidiFile`).
         """
+        # Unsqueeze tokens in case of one_token_stream
+        if self.one_token_stream:  # ie single token seq
+            tokens = [tokens]
+        for i in range(len(tokens)):
+            tokens[i] = tokens[i].tokens
+        midi = MidiFile(ticks_per_beat=time_division)
         assert (
             time_division % max(self.config.beat_res.values()) == 0
         ), f"Invalid time division, please give one divisible by {max(self.config.beat_res.values())}"
-
         ticks_per_sample = time_division // max(self.config.beat_res.values())
-        ticks_per_bar = time_division * 4
-        name = "Drums" if program[1] else MIDI_INSTRUMENTS[program[0]]["name"]
-        instrument = Instrument(program[0], is_drum=program[1], name=name)
-        tempo_changes = [
-            TempoChange(TEMPO, -1)
-        ]  # mock the first tempo change to optimize below
-
+    
+        # RESULTS
+        instruments: Dict[int, Instrument] = {}
+        tempo_changes = [TempoChange(TEMPO, -1)]
+        time_signature_changes = [TimeSignature(*TIME_SIGNATURE, 0)]
+        ticks_per_bar = self._compute_ticks_per_bar(
+            time_signature_changes[0], time_division
+        )  # init
+    
         current_tick = 0
         current_bar = -1
+        current_program = 0
         previous_note_end = 0
-        for compound_token in tokens.tokens:
-            token_family = compound_token[0].split("_")[1]
-            if token_family == "Note":
-                if any(tok.split("_")[1] == "None" for tok in compound_token[2:5]):
-                    continue
-                pitch = int(compound_token[2].split("_")[1])
-                vel = int(compound_token[3].split("_")[1])
-                duration = self._token_duration_to_ticks(
-                    compound_token[4].split("_")[1], time_division
-                )
-                instrument.notes.append(
-                    Note(vel, pitch, current_tick, current_tick + duration)
-                )
-                previous_note_end = max(previous_note_end, current_tick + duration)
-            elif token_family == "Metric":
-                if compound_token[1].split("_")[0] == "Bar":
-                    current_bar += 1
-                    current_tick = current_bar * ticks_per_bar
-                elif (
-                    compound_token[1].split("_")[0] == "Position"
-                ):  # i.e. its a position
-                    if current_bar == -1:
-                        current_bar = (
-                            0  # as this Position token occurs before any Bar token
+        for si, seq in enumerate(tokens):
+            # Set track / sequence program if needed
+            if not self.one_token_stream:
+                current_tick = 0
+                current_bar = -1
+                ticks_per_bar = self._compute_ticks_per_bar(time_signature_changes[0], time_division)
+                previous_note_end = 0
+                if programs is not None:
+                    current_program = -1 if programs[si][1] else programs[si][0]
+    
+            # Decode tokens
+            for ti, compound_token in enumerate(seq):
+                token_family = compound_token[0].split("_")[1]
+                if token_family == "Note":
+                    if any(tok.split("_")[1] == "None" for tok in compound_token[2:5]):
+                        continue
+                    pitch = int(compound_token[2].split("_")[1])
+                    vel = int(compound_token[3].split("_")[1])
+                    duration = self._token_duration_to_ticks(
+                        compound_token[4].split("_")[1], time_division
+                    )
+                    if self.config.use_programs:
+                        current_program = int(compound_token[5].split("_")[1])
+                    if current_program not in instruments.keys():
+                        instruments[current_program] = Instrument(
+                            program=0 if current_program == -1 else current_program,
+                            is_drum=current_program == -1,
+                            name="Drums"
+                            if current_program == -1
+                            else MIDI_INSTRUMENTS[current_program]["name"],
                         )
-                    current_tick = (
-                        current_bar * ticks_per_bar
-                        + int(compound_token[1].split("_")[1]) * ticks_per_sample
+                    instruments[current_program].notes.append(
+                        Note(vel, pitch, current_tick, current_tick + duration)
                     )
-                    if self.config.use_tempos:
-                        tempo = float(compound_token[-1].split("_")[1])
-                        if (
-                            tempo != tempo_changes[-1].tempo
-                            and current_tick != tempo_changes[-1].time
-                        ):
-                            tempo_changes.append(TempoChange(tempo, current_tick))
-                        previous_note_end = max(previous_note_end, current_tick)
-                elif (
-                    self.config.use_rests
-                    and compound_token[self.vocab_types_idx["Rest"]].split("_")[1]
-                    != "None"
-                ):
-                    if (
-                        current_tick < previous_note_end
-                    ):  # if in case successive rest happen
-                        current_tick = previous_note_end
-                    beat, pos = map(
-                        int,
-                        compound_token[self.vocab_types_idx["Rest"]]
-                        .split("_")[1]
-                        .split("."),
-                    )
-                    current_tick += beat * time_division + pos * ticks_per_sample
-                    current_bar = current_tick // ticks_per_bar
+                    previous_note_end = max(previous_note_end, current_tick + duration)
+
+                elif token_family == "Metric":
+                    bar_pos = compound_token[1].split("_")[0]
+                    if bar_pos == "Bar":
+                        current_bar += 1
+                        current_tick = current_bar * ticks_per_bar
+                        # Add new TS only if different from the last one
+                        if self.config.use_time_signatures and si == 0:
+                            num, den = self._parse_token_time_signature(
+                                compound_token[self.vocab_types_idx["TimeSig"]].split("_")[1]
+                            )
+                            if (
+                                num != time_signature_changes[-1].numerator
+                                and den != time_signature_changes[-1].denominator
+                            ):
+                                time_sig = TimeSignature(num, den, current_tick)
+                                if si == 0:
+                                    time_signature_changes.append(time_sig)
+                                ticks_per_bar = self._compute_ticks_per_bar(
+                                    time_sig, time_division
+                                )
+                    elif bar_pos == "Position":  # i.e. its a position
+                        if current_bar == -1:
+                            # in case this Position token comes before any Bar token
+                            current_bar = 0
+                        current_tick = (
+                                current_bar * ticks_per_bar
+                                + int(compound_token[1].split("_")[1]) * ticks_per_sample
+                        )
+                        # Add new tempo change only if different from the last one
+                        if self.config.use_tempos and si == 0:
+                            tempo = float(compound_token[self.vocab_types_idx["Tempo"]].split("_")[1])
+                            if si == 0 and tempo != tempo_changes[-1].tempo and current_tick != tempo_changes[-1].time:
+                                tempo_changes.append(TempoChange(tempo, current_tick))
+                            previous_note_end = max(previous_note_end, current_tick)
+                    elif (
+                            self.config.use_rests
+                            and compound_token[self.vocab_types_idx["Rest"]].split("_")[1]
+                            != "None"
+                    ):
+                        if current_tick < previous_note_end:
+                            # if in case successive rest happen
+                            current_tick = previous_note_end
+                        beat, pos = map(
+                            int,
+                            compound_token[self.vocab_types_idx["Rest"]]
+                            .split("_")[1]
+                            .split("."),
+                            )
+                        current_tick += beat * time_division + pos * ticks_per_sample
+                        current_bar = current_tick // ticks_per_bar
+
         if len(tempo_changes) > 1:
-            del tempo_changes[0]
+            del tempo_changes[0]  # delete mocked tempo change
         tempo_changes[0].time = 0
-        return instrument, tempo_changes
+        if len(time_signature_changes) > 1:
+            del time_signature_changes[0]  # delete mocked time signature change
+        time_signature_changes[0].time = 0
+
+        # create MidiFile
+        midi.instruments = list(instruments.values())
+        midi.tempo_changes = tempo_changes
+        midi.time_signature_changes = time_signature_changes
+        midi.max_tick = max(
+            [
+                max([note.end for note in track.notes]) if len(track.notes) > 0 else 0
+                for track in midi.instruments
+            ]
+        )
+        # Write MIDI file
+        if output_path:
+            Path(output_path).mkdir(parents=True, exist_ok=True)
+            midi.dump(output_path)
+        return midi
 
     def _create_base_vocabulary(self) -> List[List[str]]:
         r"""Creates the vocabulary, as a list of string tokens.
@@ -444,6 +466,10 @@ class CPWord(MIDITokenizer):
         if self.config.use_tempos:
             vocab += [["Ignore_None"] + [f"Tempo_{i}" for i in self.tempos]]
 
+        # TIME_SIGNATURE
+        if self.config.use_time_signatures:
+            vocab += [["Ignore_None"] + [f"TimeSig_{i[0]}/{i[1]}" for i in self.time_signatures]]
+
         return vocab
 
     def _create_token_types_graph(self) -> Dict[str, List[str]]:
@@ -472,6 +498,13 @@ class CPWord(MIDITokenizer):
         if self.config.use_rests:
             dic["Rest"] = ["Rest", "Position", "Bar"]
             dic["Pitch"] += ["Rest"]
+
+        if self.config.use_tempos:
+            # Because a tempo change can happen at any moment
+            dic["Position"] += ["Position", "Bar"]
+            if self.config.use_rests:
+                dic["Position"].append("Rest")
+                dic["Rest"].append("Position")
 
         for key in dic:
             dic[key].append("Ignore")
@@ -519,7 +552,8 @@ class CPWord(MIDITokenizer):
         err = 0
         previous_type = cp_token_type(tokens[0])[0]
         current_pos = -1
-        current_pitches = []
+        program = 0
+        current_pitches = {p: [] for p in self.config.programs}
 
         for token in tokens[1:]:
             token_type, token_value = cp_token_type(token)
@@ -527,18 +561,20 @@ class CPWord(MIDITokenizer):
             if token_type in self.tokens_types_graph[previous_type]:
                 if token_type == "Bar":  # reset
                     current_pos = -1
-                    current_pitches = []
+                    current_pitches = {p: [] for p in self.config.programs}
                 elif token_type == "Pitch":
-                    if int(token_value) in current_pitches:
+                    if self.config.use_programs:
+                        program = int(self[5, token[5]].split("_")[1])
+                    if int(token_value) in current_pitches[program]:
                         err += 1  # pitch already played at current position
                     else:
-                        current_pitches.append(int(token_value))
+                        current_pitches[program].append(int(token_value))
                 elif token_type == "Position":
                     if int(token_value) <= current_pos and previous_type != "Rest":
                         err += 1  # token position value <= to the current position
                     else:
                         current_pos = int(token_value)
-                        current_pitches = []
+                        current_pitches = {p: [] for p in self.config.programs}
             # Bad token type
             else:
                 err += 1
