@@ -6,7 +6,7 @@ import numpy as np
 from miditoolkit import MidiFile, Instrument, Note, TempoChange
 
 from ..midi_tokenizer import MIDITokenizer, _in_as_seq, _out_as_complete_seq
-from ..classes import TokSequence, Event, TokenizerConfig
+from ..classes import TokSequence, Event
 from ..utils import detect_chords
 from ..constants import (
     TIME_DIVISION,
@@ -37,37 +37,24 @@ class MuMIDI(MIDITokenizer):
     For generation, the decoding implies sample from several distributions, which can be
     very delicate. Hence, we do not recommend this tokenization for generation with small models.
 
+    **Add a `drum_pitch_range` entry mapping to a tuple of values to restrict the range of drum pitches to use.**
+
     **Notes:**
         * Tokens are first sorted by time, then track, then pitch values.
         * Tracks with the same *Program* will be merged.
-
-    :param tokenizer_config: the tokenizer's configuration, as a :class:`miditok.classes.TokenizerConfig` object.
-    :param drum_pitch_range: range of used MIDI pitches for drums exclusively
-    :param params: path to a tokenizer config file. This will override other arguments and
-            load the tokenizer based on the config file. This is particularly useful if the
-            tokenizer learned Byte Pair Encoding. (default: None)
     """
-
-    def __init__(
-        self,
-        tokenizer_config: TokenizerConfig = None,
-        drum_pitch_range: Tuple[int, int] = DRUM_PITCH_RANGE,
-        params: Union[str, Path] = None,
-    ):
-        if tokenizer_config is not None:
-            if "drum_pitch_range" not in tokenizer_config.additional_params:
-                tokenizer_config.additional_params[
-                    "drum_pitch_range"
-                ] = drum_pitch_range
-            if "max_bar_embedding" not in tokenizer_config.additional_params:
-                # this attribute might increase over tokenizations, if the tokenizer encounter longer MIDIs
-                tokenizer_config.additional_params["max_bar_embedding"] = 60
-        super().__init__(tokenizer_config, True, params=params)
-
     def _tweak_config_before_creating_voc(self):
         self.config.use_rests = False
         self.config.use_time_signatures = False
-        # self.one_token_stream = True
+        self.one_token_stream = True
+
+        if "drum_pitch_range" not in self.config.additional_params:
+            self.config.additional_params[
+                "drum_pitch_range"
+            ] = DRUM_PITCH_RANGE
+        if "max_bar_embedding" not in self.config.additional_params:
+            # this attribute might increase over tokenizations, if the tokenizer encounter longer MIDIs
+            self.config.additional_params["max_bar_embedding"] = 60
 
         self.vocab_types_idx = {
             "Pitch": 0,

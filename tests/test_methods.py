@@ -83,6 +83,7 @@ def test_convert_tensors():
 def test_data_augmentation():
     data_path = Path("./tests/Multitrack_MIDIs")
     original_midi_paths = list(data_path.glob("**/*.mid"))
+    ALL_TOKENIZATIONS.remove("MuMIDI")  # not compatible
 
     for tokenization in ALL_TOKENIZATIONS:
         print(f"TESTING WITH {tokenization}")
