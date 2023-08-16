@@ -6,6 +6,7 @@ If all went well the tokenizer should be identical.
 """
 
 import miditok
+from .tests_utils import ALL_TOKENIZATIONS
 
 
 ADDITIONAL_TOKENS_TEST = {
@@ -19,21 +20,10 @@ ADDITIONAL_TOKENS_TEST = {
     "tempo_range": (40, 250),
     "time_signature_range": {4: [4]},
 }
-tokenizations = [
-    "MIDILike",
-    "TSD",
-    "Structured",
-    "REMI",
-    "REMIPlus",
-    "CPWord",
-    "Octuple",
-    "OctupleMono",
-    "MuMIDI",
-]
 
 
 def test_saving_loading_tokenizer_config():
-    for tokenization in tokenizations:
+    for tokenization in ALL_TOKENIZATIONS:
         config1 = miditok.TokenizerConfig()
         config1.save_to_json(f"./tests/configs/tok_conf_{tokenization}.json")
 
@@ -51,7 +41,7 @@ def test_saving_loading_tokenizer():
     If all went well the tokenizer should be identical.
     """
 
-    for tokenization in tokenizations:
+    for tokenization in ALL_TOKENIZATIONS:
         tokenizer_config = miditok.TokenizerConfig(**ADDITIONAL_TOKENS_TEST)
         tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
             tokenizer_config=tokenizer_config

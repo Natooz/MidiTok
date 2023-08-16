@@ -62,72 +62,10 @@ Additional tokens
 MidiTok offers to include additional tokens on music information. You can specify them in the ``tokenizer_config`` argument (:class:`miditok.TokenizerConfig`) when creating a tokenizer. The :class:`miditok.TokenizerConfig` documentations specifically details the role of each of them, and their associated parameters.
 Cells with ❕ markers means the additional token is implemented by default and not optionnal.
 
-.. list-table:: Compatibility table of tokenizations and additional tokens.
+.. csv-table:: Compatibility table of tokenizations and additional tokens.
+   :file: additional_tokens_table.csv
    :header-rows: 1
 
-   * - Token type
-     - :ref:`REMI`
-     - :ref:`REMIPlus`
-     - :ref:`MIDI-Like`
-     - :ref:`TSD`
-     - :ref:`Structured`
-     - :ref:`CPWord`
-     - :ref:`Octuple`
-     - :ref:`MuMIDI`
-     - :ref:`MMM`
-   * - Chord
-     - ✅
-     - ✅
-     - ✅
-     - ✅
-     - ✅
-     - ❌
-     - ❌
-     - ✅
-     - ✅
-   * - Rest
-     - ✅
-     - ✅
-     - ✅
-     - ✅
-     - ✅
-     - ❌
-     - ❌
-     - ❌
-     - ❌
-   * - Tempo
-     - ✅
-     - ✅
-     - ✅
-     - ✅
-     - ✅
-     - ❌
-     - ✅
-     - ✅
-     - ✅
-   * - Program
-     - ✅¹
-     - ✅¹
-     - ✅¹
-     - ✅¹
-     - ✅¹
-     - ✅²
-     - ✅❕
-     - ✅❕
-     - ✅❕
-   * - Time signature
-     - ✅
-     - ✅
-     - ✅
-     - ✅
-     - ❌
-     - ❌
-     - ✅
-     - ❌
-     - ✅
-
-**¹** the tokenizer will add `Program` tokens before each `Pitch` / `NoteOn` token, and will treat all the tracks of a MIDI as a single sequence of tokens.
-**²** unimplemented, the tokenizer's vocabulary will contain the `Program` tokens, but it will not use it.
 
 Special tokens
 ------------------------
@@ -148,7 +86,7 @@ Tokens & TokSequence input / output format
 
 Depending on the tokenizer at use, the **format** of the tokens returned by the ``midi_to_tokens`` method may vary, as well as the expected format for the ``tokens_to_midi`` method. The format is given by the ``tokenizer.io_format` property. For any tokenizer, the format is the same for both methods.
 
-The format is deduced from the ``is_multi_voc`` and ``one_token_stream`` tokenizer properties. In short: **one_token_stream** being True means that the tokenizer will convert a MIDI file into a single stream of tokens for all instrument tracks, otherwise it will convert each track to a distinct token stream; **is_mult_voc** being True means that each token stream is a list of lists of tokens, of shape ``(T,C)`` for T time steps and C subtokens per time step.
+The format is deduced from the ``is_multi_voc`` and ``one_token_stream`` tokenizer properties. **one_token_stream** being True means that the tokenizer will convert a MIDI file into a single stream of tokens for all instrument tracks, otherwise it will convert each track to a distinct token sequence. **is_mult_voc** being True means that each token stream is a list of lists of tokens, of shape ``(T,C)`` for T time steps and C subtokens per time step.
 
 This results in four situations, where I is the number of tracks, T is the number of tokens (or time steps) and C the number of subtokens per time step:
 
@@ -163,7 +101,7 @@ Some tokenizer examples to illustrate:
 
 * **TSD** without ``config.use_programs`` will not have multiple vocabularies and will treat each MIDI track as a unique stream of tokens, hence it will convert MIDI files to a list of ``TokSequence`` objects, ``(I,T)`` format.
 * **TSD** with ``config.use_programs`` being True will convert all MIDI tracks to a single stream of tokens, hence one ``TokSequence`` object, ``(T)`` format.
-* **CPWord** is a multi-voc tokenizer and treats each MIDI track as a distinct stream of tokens, hence it will convert MIDI files to a list of ``TokSequence`` objects with ``(I,T,C)`` format.
+* **CPWord** is a multi-voc tokenizer, without ``config.use_programs`` it will treat each MIDI track as a distinct stream of tokens, hence it will convert MIDI files to a list of ``TokSequence`` objects with the ``(I,T,C)`` format.
 * **Octuple** is a multi-voc tokenizer and converts all MIDI track to a single stream of tokens, hence it will convert MIDI files to a ``TokSequence`` object, ``(T,C)`` format.
 
 

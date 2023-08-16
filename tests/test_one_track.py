@@ -13,6 +13,7 @@ NOTE: encoded tracks has to be compared with the quantized original track.
 from copy import deepcopy
 from pathlib import Path, PurePath
 from typing import Union
+from time import time
 
 import miditok
 from miditoolkit import MidiFile, Marker
@@ -63,6 +64,7 @@ def test_one_track_midi_to_tokens_to_midi(
     """
     files = list(Path(data_path).glob("**/*.mid"))
     at_least_one_error = False
+    t0 = time()
 
     for i, file_path in enumerate(tqdm(files, desc="Testing One Track")):
         # Reads the midi
@@ -179,6 +181,8 @@ def test_one_track_midi_to_tokens_to_midi(
                 midi.instruments += tracks
                 midi.dump(PurePath("tests", "test_results", file_path.name))
 
+    ttotal = time() - t0
+    print(f"Took {ttotal:.2f} seconds")
     assert not at_least_one_error
 
 

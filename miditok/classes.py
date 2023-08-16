@@ -166,8 +166,8 @@ class TokenizerConfig:
             add more TimeSignatureChange objects. (default: False)
     :param use_programs: will use ``Program`` tokens, if the tokenizer is compatible.
             Used to specify an instrument / MIDI program. The :ref:`Octuple`, :ref:`MMM` and :ref:`MuMIDI` tokenizers
-            use natively `Program` tokens, this option is always enabled. :ref:`TSD`, :ref:`REMI`, :ref:`REMIPlus`,
-            :ref:`MIDILike` and :ref:`Structured` will add `Program` tokens before each `Pitch` / `NoteOn` token to
+            use natively `Program` tokens, this option is always enabled. :ref:`TSD`, :ref:`REMI`, :ref:`MIDILike`,
+            :ref:`Structured` and :ref:`CPWord` will add `Program` tokens before each `Pitch` / `NoteOn` token to
             indicate its associated instrument and will treat all the tracks of a MIDI as a single sequence of tokens.
             :ref:`CPWord`, :ref:`Octuple` and :ref:`MuMIDI` add a `Program` tokens with the stacks of `Pitch`,
             `Velocity` and `Duration` tokens. (default: False)

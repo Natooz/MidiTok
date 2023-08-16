@@ -17,6 +17,7 @@ from torch import (
 from tensorflow import Tensor as tfTensor, convert_to_tensor
 
 import miditok
+from .tests_utils import ALL_TOKENIZATIONS
 
 
 def test_convert_tensors():
@@ -81,19 +82,9 @@ def test_convert_tensors():
 
 def test_data_augmentation():
     data_path = Path("./tests/Multitrack_MIDIs")
-    tokenizations = [
-        "TSD",
-        "MIDILike",
-        "REMI",
-        "REMIPlus",
-        "Structured",
-        "CPWord",
-        "Octuple",
-        "OctupleMono",
-    ]
     original_midi_paths = list(data_path.glob("**/*.mid"))
 
-    for tokenization in tokenizations:
+    for tokenization in ALL_TOKENIZATIONS:
         print(f"TESTING WITH {tokenization}")
         tokenizer = getattr(miditok, tokenization)()
         midi_aug_path = Path("tests", "Multitrack_MIDIs_aug", tokenization)
