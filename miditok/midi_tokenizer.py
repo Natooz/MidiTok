@@ -499,7 +499,9 @@ class MIDITokenizer(ABC):
             prev_ts = time_sig
             i += 1
 
-    def _midi_to_tokens(self, midi: MidiFile, *args, **kwargs) -> Union[TokSequence, List[TokSequence]]:
+    def _midi_to_tokens(
+        self, midi: MidiFile, *args, **kwargs
+    ) -> Union[TokSequence, List[TokSequence]]:
         r"""Converts a preprocessed MIDI object to a sequence of tokens.
         The workflow of this method is as follows: the events (Pitch, Velocity, Tempo, TimeSignature...) are
         gathered into a list, then the time events are added. If `one_token_stream` is true, all events of all tracks
@@ -791,7 +793,9 @@ class MIDITokenizer(ABC):
         return tokens
 
     @staticmethod
-    def _events_to_tokens(events: List[Union[Event, List[Event]]]) -> List[Union[str, List[str]]]:
+    def _events_to_tokens(
+        events: List[Union[Event, List[Event]]]
+    ) -> List[Union[str, List[str]]]:
         r"""Converts a sequence of Events to their associated tokens (str).
 
         :param events: sequence of Events to convert.

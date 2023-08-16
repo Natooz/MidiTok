@@ -135,13 +135,18 @@ class Octuple(MIDITokenizer):
                     new_event.append(Event(type="Tempo", value=current_tempo))
                 if self.config.use_time_signatures:
                     new_event.append(
-                        Event(type="TimeSig", value=f"{current_time_sig[0]}/{current_time_sig[1]}")
+                        Event(
+                            type="TimeSig",
+                            value=f"{current_time_sig[0]}/{current_time_sig[1]}",
+                        )
                     )
                 all_events.append(new_event)
 
         return all_events
 
-    def _midi_to_tokens(self, midi: MidiFile, *args, **kwargs) -> Union[TokSequence, List[TokSequence]]:
+    def _midi_to_tokens(
+        self, midi: MidiFile, *args, **kwargs
+    ) -> Union[TokSequence, List[TokSequence]]:
         r"""Converts a preprocessed MIDI object to a sequence of tokens.
         The workflow of this method is as follows: the events (Pitch, Velocity, Tempo, TimeSignature...) are
         gathered into a list, then the time events are added. If `one_token_stream` is true, all events of all tracks
@@ -199,7 +204,7 @@ class Octuple(MIDITokenizer):
             time_division % max(self.config.beat_res.values()) == 0
         ), f"Invalid time division, please give one divisible by {max(self.config.beat_res.values())}"
         ticks_per_sample = time_division // max(self.config.beat_res.values())
-    
+
         # RESULTS
         instruments: Dict[int, Instrument] = {}
         tempo_changes = [TempoChange(TEMPO, -1)]
@@ -215,28 +220,37 @@ class Octuple(MIDITokenizer):
             # Set track / sequence program if needed
             if not self.one_token_stream:
                 current_tick = 0
-                ticks_per_bar = self._compute_ticks_per_bar(time_signature_changes[0], time_division)
+                ticks_per_bar = self._compute_ticks_per_bar(
+                    time_signature_changes[0], time_division
+                )
                 if programs is not None:
                     current_program = -1 if programs[si][1] else programs[si][0]
-    
+
             # Decode tokens
             for time_step in seq:
                 nb_tok_to_check = 6 if self.config.use_programs else 5
-                if any(tok.split("_")[1] == "None" for tok in time_step[:nb_tok_to_check]):
+                if any(
+                    tok.split("_")[1] == "None" for tok in time_step[:nb_tok_to_check]
+                ):
                     continue  # Either padding, mask: error of prediction or end of sequence anyway
-            
+
                 # Note attributes
                 pitch = int(time_step[0].split("_")[1])
                 vel = int(time_step[1].split("_")[1])
-                duration = self._token_duration_to_ticks(time_step[2].split("_")[1], time_division)
+                duration = self._token_duration_to_ticks(
+                    time_step[2].split("_")[1], time_division
+                )
                 if self.config.use_programs:
                     current_program = int(time_step[5].split("_")[1])
 
                 # Time values
                 event_pos = int(time_step[3].split("_")[1])
                 event_bar = int(time_step[4].split("_")[1])
-                current_tick = (current_tick_from_ts_time + (event_bar - current_bar_from_ts_time) * ticks_per_bar
-                                + event_pos * ticks_per_sample)
+                current_tick = (
+                    current_tick_from_ts_time
+                    + (event_bar - current_bar_from_ts_time) * ticks_per_bar
+                    + event_pos * ticks_per_sample
+                )
 
                 # Append the created note
                 if current_program not in instruments.keys():
@@ -252,13 +266,23 @@ class Octuple(MIDITokenizer):
                 )
 
                 # Tempo, adds a TempoChange if necessary
-                if si == 0 and self.config.use_tempos and time_step[self.vocab_types_idx["Tempo"]].split("_")[1] != "None":
-                    tempo = float(time_step[self.vocab_types_idx["Tempo"]].split("_")[1])
+                if (
+                    si == 0
+                    and self.config.use_tempos
+                    and time_step[self.vocab_types_idx["Tempo"]].split("_")[1] != "None"
+                ):
+                    tempo = float(
+                        time_step[self.vocab_types_idx["Tempo"]].split("_")[1]
+                    )
                     if tempo != tempo_changes[-1].tempo:
                         tempo_changes.append(TempoChange(tempo, current_tick))
-            
+
                 # Time Signature, adds a TimeSignatureChange if necessary
-                if self.config.use_time_signatures and time_step[self.vocab_types_idx["TimeSig"]].split("_")[1] != "None":
+                if (
+                    self.config.use_time_signatures
+                    and time_step[self.vocab_types_idx["TimeSig"]].split("_")[1]
+                    != "None"
+                ):
                     num, den = self._parse_token_time_signature(
                         time_step[self.vocab_types_idx["TimeSig"]].split("_")[1]
                     )
@@ -271,7 +295,9 @@ class Octuple(MIDITokenizer):
                             time_signature_changes.append(time_sig)
                         current_bar_from_ts_time = event_bar
                         current_tick_from_ts_time = current_tick
-                        ticks_per_bar = self._compute_ticks_per_bar(time_sig, time_division)
+                        ticks_per_bar = self._compute_ticks_per_bar(
+                            time_sig, time_division
+                        )
 
         if len(tempo_changes) > 1:
             del tempo_changes[0]  # delete mocked tempo change
@@ -279,7 +305,7 @@ class Octuple(MIDITokenizer):
         if len(time_signature_changes) > 1:
             del time_signature_changes[0]  # delete mocked time signature change
         time_signature_changes[0].time = 0
-    
+
         # create MidiFile
         midi.instruments = list(instruments.values())
         midi.tempo_changes = tempo_changes

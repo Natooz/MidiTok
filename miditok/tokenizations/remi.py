@@ -237,7 +237,9 @@ class REMI(MIDITokenizer):
             if not self.one_token_stream:
                 current_tick = 0
                 current_bar = -1
-                ticks_per_bar = self._compute_ticks_per_bar(time_signature_changes[0], time_division)
+                ticks_per_bar = self._compute_ticks_per_bar(
+                    time_signature_changes[0], time_division
+                )
                 previous_note_end = 0
                 if programs is not None:
                     current_program = -1 if programs[si][1] else programs[si][0]
