@@ -31,30 +31,27 @@ The most basic and useful methods are summarized here. And [here](colab-notebook
 
 ```python
 from miditok import REMI, TokenizerConfig
-from miditok.utils import get_midi_programs
 from miditoolkit import MidiFile
 from pathlib import Path
 
-# Creating the tokenizer's configuration, read the doc to explore other parameters
-config = TokenizerConfig(nb_velocities=16, use_chords=True)
-
-# Creates the tokenizer and loads a MIDI
+# Creating a multitrack tokenizer configuration, read the doc to explore other parameters
+config = TokenizerConfig(nb_velocities=16, use_chords=True, use_programs=True)
 tokenizer = REMI(config)
+
+# Loads a midi, converts to tokens, and back to a MIDI
 midi = MidiFile('path/to/your_midi.mid')
+tokens = tokenizer(midi)  # calling the tokenizer will automatically detect MIDIs, paths and tokens
+converted_back_midi = tokenizer(tokens)  # PyTorch / Tensorflow / Numpy tensors supported
 
-# Converts MIDI to tokens, and back to a MIDI
-tokens = tokenizer(midi)  # calling it will automatically detect MIDIs, paths and tokens before the conversion
-converted_back_midi = tokenizer(tokens, get_midi_programs(midi))  # PyTorch / Tensorflow / Numpy tensors supported
-
-# Converts MIDI files to tokens saved as JSON files
+# Tokenize a whole dataset and save it at Json files
 midi_paths = list(Path("path", "to", "dataset").glob("**/*.mid"))
 data_augmentation_offsets = [2, 1, 1]  # data augmentation on 2 pitch octaves, 1 velocity and 1 duration values
 tokenizer.tokenize_midi_dataset(midi_paths, Path("path", "to", "tokens_noBPE"),
                                 data_augment_offsets=data_augmentation_offsets)
 
-# Constructs the vocabulary with BPE, from the tokenized files
+# Constructs the vocabulary with BPE, from the token files
 tokenizer.learn_bpe(
-    vocab_size=500,
+    vocab_size=10000,
     tokens_paths=list(Path("path", "to", "tokens_noBPE").glob("**/*.json")),
     start_from_empty_voc=False,
 )
@@ -62,7 +59,7 @@ tokenizer.learn_bpe(
 # Saving our tokenizer, to retrieve it back later with the load_params method
 tokenizer.save_params(Path("path", "to", "save", "tokenizer.json"))
 
-# Converts the tokenized musics into tokens with BPE
+# Applies BPE to the previous tokens
 tokenizer.apply_bpe_to_dataset(Path('path', 'to', 'tokens_noBPE'), Path('path', 'to', 'tokens_BPE'))
 ```
 

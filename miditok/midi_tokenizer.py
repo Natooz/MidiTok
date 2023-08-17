@@ -1440,7 +1440,7 @@ class MIDITokenizer(ABC):
                 if out_path is not None
                 else path
             )
-            self.save_tokens(seq, out_, sample["programs"])
+            self.save_tokens(seq, out_, sample["programs"] if "programs" in sample else None)
 
     def _are_ids_bpe_encoded(self, ids: Union[List[int], np.ndarray]) -> bool:
         r"""A small check telling if a sequence of ids are encoded with BPE.
@@ -1484,7 +1484,7 @@ class MIDITokenizer(ABC):
         validation_fn: Callable[[MidiFile], bool] = None,
         data_augment_offsets=None,
         apply_bpe: bool = True,
-        save_programs: bool = True,
+        save_programs: bool = None,
         logging: bool = True,
     ):
         r"""Converts a dataset / list of MIDI files, into their token version and save them as json files
@@ -1504,15 +1504,18 @@ class MIDITokenizer(ABC):
             miditok.data_augmentation.data_augmentation_dataset method. Has to be given as a list / tuple
             of offsets pitch octaves, velocities, durations, and finally their directions (up/down). (default: None)
         :param apply_bpe: will apply BPE on the dataset to save, if the vocabulary was learned with. (default: True)
-        :param save_programs: will also save the programs of the tracks of the MIDI. Note that this option is
-            probably unnecessary when using a multitrack tokenizer, as the Program information is present within the
-            tokens, and that the tracks having the same programs are likely to have been merged. (default: True)
+        :param save_programs: will save the programs of the tracks of the MIDI as an entry in the Json file.
+            That this option is probably unnecessary when using a multitrack tokenizer (`config.use_programs`), as the
+            Program information is present within the tokens, and that the tracks having the same programs are likely
+            to have been merged. (default: False if `config.use_programs`, else True)
         :param logging: logs progress bar.
         """
         out_dir = Path(out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
         # Saves the tokenizer so that it can be reloaded
         self.save_params(out_dir / tokenizer_config_file_name)
+        if save_programs is None:
+            save_programs = not self.config.use_programs
 
         for midi_path in (
             tqdm(
@@ -1674,14 +1677,10 @@ class MIDITokenizer(ABC):
             kwargs["ids_bpe_encoded"] = ids_bpe_encoded
 
         with open(path, "w") as outfile:
-            json.dump(
-                {
-                    "ids": ids,
-                    "programs": programs if programs is not None else [],
-                    **kwargs,
-                },
-                outfile,
-            )
+            dic = {"ids": ids}
+            if programs is not None:
+                dic["programs"] = programs
+            json.dump(dic, outfile)
 
     @staticmethod
     def load_tokens(path: Union[str, Path]) -> Union[List[Any], Dict]:

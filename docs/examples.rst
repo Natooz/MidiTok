@@ -10,7 +10,6 @@ A basic example showing how to create a tokenizer, with a selection of custom pa
 ..  code-block:: python
 
     from miditok import REMI, TokenizerConfig  # here we choose to use REMI
-    from miditok.utils import get_midi_programs
 
     # Our parameters
     TOKENIZER_PARAMS = {
@@ -28,7 +27,7 @@ A basic example showing how to create a tokenizer, with a selection of custom pa
     }
     config = TokenizerConfig(**TOKENIZER_PARAMS)
 
-    # Creates the tokenizer and loads a MIDI
+    # Creates the tokenizer
     tokenizer = REMI(config)
 
 MIDI - Tokens conversion
@@ -38,17 +37,14 @@ Here we convert a MIDI to tokens, and the other way around.
 
 ..  code-block:: python
 
-    from miditok.utils import get_midi_programs
     from miditoolkit import MidiFile
 
     # Tokenize a MIDI file
-    midi_path = "path/to/your_midi.mid"
-    midi = MidiFile(midi_path)
-    tokens = tokenizer(midi_path)  # automatically detects MidiFile, paths or tokens before converting them
+    midi = MidiFile("path/to/your_midi.mid")
+    tokens = tokenizer(midi_path)  # automatically detects MidiFile, paths
 
     # Convert to MIDI and save it
-    programs = get_midi_programs(midi)
-    generated_midi = tokenizer(tokens, programs=programs)  # MidiTok can handle PyTorch / Tensorflow Tensors
+    generated_midi = tokenizer(tokens)  # MidiTok can handle PyTorch / Tensorflow Tensors
     generated_midi.dump('path/to/save/file.mid')  # could have been done above by giving the path argument
 
 Tokenize a dataset
@@ -93,6 +89,6 @@ Finally, we learn :ref:`Byte Pair Encoding (BPE)` on the tokenized dataset, and 
         out_dir=Path('path', 'to', 'tokens_BPE'),
     )
 
-    # Converts the tokenized musics into tokens with BPE
+    # Applies BPE to the previous tokens
     tokenizer.apply_bpe_to_dataset(Path('path', 'to', 'tokens_noBPE'), Path('path', 'to', 'tokens_BPE'))
 

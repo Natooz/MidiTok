@@ -47,6 +47,7 @@ class MuMIDI(MIDITokenizer):
     def _tweak_config_before_creating_voc(self):
         self.config.use_rests = False
         self.config.use_time_signatures = False
+        self.config.use_programs = True
         self.one_token_stream = True
 
         if "drum_pitch_range" not in self.config.additional_params:
