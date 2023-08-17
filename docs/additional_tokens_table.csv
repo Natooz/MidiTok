@@ -1,0 +1,9 @@
+﻿Tokenization,Tempo,Time signature,Chord,Rest
+MIDILike,✅,✅,✅,✅
+REMI,✅,✅,✅,✅
+TSD,✅,✅,✅,✅
+Structured,❌,❌,❌,❌
+CPWord,✅,✅,✅,✅
+Octuple,✅,✅,❌,❌
+MuMIDI,✅,❌,✅,❌
+MMM,✅,✅,✅,❌

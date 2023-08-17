@@ -85,13 +85,6 @@ Octuple
     :noindex:
     :show-inheritance:
 
-Octuple Mono
-------------------------
-
-.. autoclass:: miditok.OctupleMono
-    :noindex:
-    :show-inheritance:
-
 MuMIDI
 ------------------------
 

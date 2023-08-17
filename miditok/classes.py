@@ -26,7 +26,9 @@ from .constants import (
     NB_TEMPOS,
     TEMPO_RANGE,
     LOG_TEMPOS,
+    DELETE_EQUAL_SUCCESSIVE_TEMPO_CHANGES,
     TIME_SIGNATURE_RANGE,
+    DELETE_EQUAL_SUCCESSIVE_TIME_SIG_CHANGES,
     PROGRAMS,
     CURRENT_VERSION_PACKAGE,
 )
@@ -164,8 +166,8 @@ class TokenizerConfig:
             add more TimeSignatureChange objects. (default: False)
     :param use_programs: will use ``Program`` tokens, if the tokenizer is compatible.
             Used to specify an instrument / MIDI program. The :ref:`Octuple`, :ref:`MMM` and :ref:`MuMIDI` tokenizers
-            use natively `Program` tokens, this option is always enabled. :ref:`TSD`, :ref:`REMI`, :ref:`REMIPlus`,
-            :ref:`MIDILike` and :ref:`Structured` will add `Program` tokens before each `Pitch` / `NoteOn` token to
+            use natively `Program` tokens, this option is always enabled. :ref:`TSD`, :ref:`REMI`, :ref:`MIDILike`,
+            :ref:`Structured` and :ref:`CPWord` will add `Program` tokens before each `Pitch` / `NoteOn` token to
             indicate its associated instrument and will treat all the tracks of a MIDI as a single sequence of tokens.
             :ref:`CPWord`, :ref:`Octuple` and :ref:`MuMIDI` add a `Program` tokens with the stacks of `Pitch`,
             `Velocity` and `Duration` tokens. (default: False)
@@ -183,8 +185,25 @@ class TokenizerConfig:
     :param nb_tempos: number of tempos "bins" to use. (default: 32)
     :param tempo_range: range of minimum and maximum tempos within which the bins fall. (default: (40, 250))
     :param log_tempos: will use log scaled tempo values instead of linearly scaled. (default: False)
+    :param delete_equal_successive_tempo_changes: setting this option True will delete identical successive tempo
+            changes when preprocessing a MIDI file after loading it. For examples, if a MIDI has two tempo changes
+            for tempo 120 at tick 1000 and the next one is for tempo 121 at tick 1200, during preprocessing the tempo
+            values are likely to be downsampled and become identical (120 or 121). If that's the case, the second
+            tempo change will be deleted and not tokenized. This parameter doesn't apply for tokenizations that natively
+            inject the tempo information at recurrent timings (e.g. Octuple). For others, note that setting it True
+            might reduce the number of `Tempo` tokens and in turn the recurrence of this information. Leave it False if
+            you want to have recurrent `Tempo` tokens, that you might inject yourself by adding `TempoChange` objects to
+            your MIDIs. (default: False)
     :param time_signature_range: range as a dictionary {denom_i: [num_i1, ..., num_in] / (min_num_i, max_num_i)}.
             (default: {4: [4]})
+    :param delete_equal_successive_time_sig_changes: setting this option True will delete identical successive time
+            signature changes when preprocessing a MIDI file after loading it. For examples, if a MIDI has two time
+            signature changes for 4/4 at tick 1000 and the next one is also 4/4 at tick 1200, the second time signature
+            change will be deleted and not tokenized. This parameter doesn't apply for tokenizations that natively
+            inject the time signature information at recurrent timings (e.g. Octuple). For others, note that setting it
+            True might reduce the number of `TimeSig` tokens and in turn the recurrence of this information. Leave it
+            False if you want to have recurrent `TimeSig` tokens, that you might inject yourself by adding
+            `TimeSignatureChange` objects to your MIDIs. (default: False)
     :param programs: sequence of MIDI programs to use. Note that `-1` is used and reserved for drums tracks.
             (default: from -1 to 127 included)
     :param **kwargs: additional parameters that will be saved in `config.additional_params`.
@@ -208,7 +227,11 @@ class TokenizerConfig:
         nb_tempos: int = NB_TEMPOS,
         tempo_range: Tuple[int, int] = TEMPO_RANGE,
         log_tempos: bool = LOG_TEMPOS,
-        time_signature_range: Dict[int, Union[List[int], Tuple[int, int]]] = TIME_SIGNATURE_RANGE,
+        delete_equal_successive_tempo_changes: bool = DELETE_EQUAL_SUCCESSIVE_TEMPO_CHANGES,
+        time_signature_range: Dict[
+            int, Union[List[int], Tuple[int, int]]
+        ] = TIME_SIGNATURE_RANGE,
+        delete_equal_successive_time_sig_changes: bool = DELETE_EQUAL_SUCCESSIVE_TIME_SIG_CHANGES,
         programs: Sequence[int] = PROGRAMS,
         **kwargs,
     ):
@@ -239,12 +262,20 @@ class TokenizerConfig:
         self.nb_tempos: int = nb_tempos  # nb of tempo bins for additional tempo tokens, quantized like velocities
         self.tempo_range: Tuple[int, int] = tempo_range  # (min_tempo, max_tempo)
         self.log_tempos: bool = log_tempos
+        self.delete_equal_successive_tempo_changes = (
+            delete_equal_successive_tempo_changes
+        )
 
         # Time signature params
         self.time_signature_range: Dict[int, List[int]] = {
-            beat_res: list(range(beats[0], beats[1] + 1)) if isinstance(beats, tuple) else beats
+            beat_res: list(range(beats[0], beats[1] + 1))
+            if isinstance(beats, tuple)
+            else beats
             for beat_res, beats in time_signature_range.items()
         }
+        self.delete_equal_successive_time_sig_changes = (
+            delete_equal_successive_time_sig_changes
+        )
 
         # Programs
         self.programs: Sequence[int] = programs

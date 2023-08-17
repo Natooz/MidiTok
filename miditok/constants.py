@@ -62,9 +62,11 @@ UNKNOWN_CHORD_PREFIX = "ukn"  # only used in methods
 NB_TEMPOS = 32
 TEMPO_RANGE = (40, 250)  # (min_tempo, max_tempo)
 LOG_TEMPOS = False  # log or linear scale tempos
+DELETE_EQUAL_SUCCESSIVE_TEMPO_CHANGES = False
 
 # Time signature params
-TIME_SIGNATURE_RANGE = {4: [4]}  # {denom_i: [num_i1, ..., num_in] / (min_num_i, max_num_i)}
+# {denom_i: [num_i1, ..., num_in] / (min_num_i, max_num_i)}
+TIME_SIGNATURE_RANGE = {8: [3, 12, 6], 4: [5, 6, 3, 2, 1, 4]}
 
 # Programs
 PROGRAMS = list(range(-1, 128))
@@ -80,6 +82,7 @@ MMM_DENSITY_BINS_MAX = (10, 20)
 TIME_DIVISION = 384  # 384 and 480 are convenient as divisible by 4, 8, 12, 16, 24, 32
 TEMPO = 120
 TIME_SIGNATURE = (4, 4)
+DELETE_EQUAL_SUCCESSIVE_TIME_SIG_CHANGES = False
 
 # Used with chords
 PITCH_CLASSES = [

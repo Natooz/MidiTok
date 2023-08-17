@@ -29,10 +29,12 @@ class REMI(MIDITokenizer):
     `FIGARO (Rütte et al.) <https://arxiv.org/abs/2201.10936>`, which handle multiple instruments by
     adding `Program` tokens before the `Pitch` ones.
 
-    **NOTE:** in the original paper, the tempo information is represented as the succession
+    **Note:** in the original paper, the tempo information is represented as the succession
     of two token types: a *TempoClass* indicating if the tempo is fast or slow, and a
     *TempoValue* indicating its value. MidiTok only uses one *Tempo* token for its value
     (see :ref:`Additional tokens`).
+    **Note:** When decoding multiple token sequences (of multiple tracks), i.e. when `config.use_programs` is False,
+    only the tempos and time signatures of the first sequence will be decoded for the whole MIDI.
 
     :param tokenizer_config: the tokenizer's configuration, as a :class:`miditok.classes.TokenizerConfig` object.
     :param max_bar_embedding: Maximum number of bars ("Bar_0", "Bar_1",...,"Bar_{num_bars-1}").
@@ -76,8 +78,7 @@ class REMI(MIDITokenizer):
         time_division = self._current_midi_metadata["time_division"]
         ticks_per_sample = time_division / max(self.config.beat_res.values())
         min_rest = (
-            time_division * self.rests[0][0]
-            + ticks_per_sample * self.rests[0][1]
+            time_division * self.rests[0][0] + ticks_per_sample * self.rests[0][1]
             if self.config.use_rests
             else 0
         )
@@ -121,9 +122,7 @@ class REMI(MIDITokenizer):
                                 desc=f"{rest_beat}.0",
                             )
                         )
-                        previous_tick += (
-                            rest_beat * time_division
-                        )
+                        previous_tick += rest_beat * time_division
 
                     while rest_pos >= self.rests[0][1]:
                         rest_pos_temp = min(
@@ -189,7 +188,6 @@ class REMI(MIDITokenizer):
             elif event.type == "Tempo":
                 previous_note_end = max(previous_note_end, event.time)
 
-        # So sorting needed
         return all_events
 
     @_in_as_seq()
@@ -226,7 +224,9 @@ class REMI(MIDITokenizer):
         instruments: Dict[int, Instrument] = {}
         tempo_changes = [TempoChange(TEMPO, -1)]
         time_signature_changes = [TimeSignature(*TIME_SIGNATURE, 0)]
-        ticks_per_bar = self._compute_ticks_per_bar(time_signature_changes[0], time_division)  # init
+        ticks_per_bar = self._compute_ticks_per_bar(
+            time_signature_changes[0], time_division
+        )  # init
 
         current_tick = 0
         current_bar = -1
@@ -237,6 +237,9 @@ class REMI(MIDITokenizer):
             if not self.one_token_stream:
                 current_tick = 0
                 current_bar = -1
+                ticks_per_bar = self._compute_ticks_per_bar(
+                    time_signature_changes[0], time_division
+                )
                 previous_note_end = 0
                 if programs is not None:
                     current_program = -1 if programs[si][1] else programs[si][0]
@@ -300,18 +303,21 @@ class REMI(MIDITokenizer):
                     # If your encoding include tempo tokens, each Position token should be followed by
                     # a tempo token, but if it is not the case this method will skip this step
                     tempo = float(token.split("_")[1])
-                    if tempo != tempo_changes[-1].tempo:
+                    if si == 0 and current_tick != tempo_changes[-1].time:
                         tempo_changes.append(TempoChange(tempo, current_tick))
+                    previous_note_end = max(previous_note_end, current_tick)
                 elif token.split("_")[0] == "TimeSig":
                     num, den = self._parse_token_time_signature(token.split("_")[1])
                     if (
                         num != time_signature_changes[-1].numerator
                         and den != time_signature_changes[-1].denominator
                     ):
-                        time_signature_changes.append(
-                            TimeSignature(num, den, current_tick)
+                        time_sig = TimeSignature(num, den, current_tick)
+                        if si == 0:
+                            time_signature_changes.append(time_sig)
+                        ticks_per_bar = self._compute_ticks_per_bar(
+                            time_sig, time_division
                         )
-                        ticks_per_bar = self._compute_ticks_per_bar(time_signature_changes[-1], time_division)
         if len(tempo_changes) > 1:
             del tempo_changes[0]  # delete mocked tempo change
         tempo_changes[0].time = 0
@@ -369,7 +375,9 @@ class REMI(MIDITokenizer):
         ]
 
         # POSITION
-        max_nb_beats = max(map(lambda ts: ceil(4 * ts[0] / ts[1]), self.time_signatures))
+        max_nb_beats = max(
+            map(lambda ts: ceil(4 * ts[0] / ts[1]), self.time_signatures)
+        )
         nb_positions = max(self.config.beat_res.values()) * max_nb_beats
         vocab += [f"Position_{i}" for i in range(nb_positions)]
 

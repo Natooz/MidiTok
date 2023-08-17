@@ -1,10 +1,10 @@
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union, cast
+from typing import Any, Dict, List, Optional, Union, cast
 
 import numpy as np
 from miditoolkit import Instrument, MidiFile, Note, TempoChange, TimeSignature
 
-from ..classes import Event, TokSequence, TokenizerConfig
+from ..classes import Event, TokSequence
 from ..constants import (
     MIDI_INSTRUMENTS,
     TEMPO,
@@ -26,31 +26,19 @@ class MMM(MIDITokenizer):
     strategy of the [original paper](https://arxiv.org/abs/2008.06048). The reason being that ``NoteOff`` tokens perform
     poorer for generation with causal models.
 
-    :param tokenizer_config: the tokenizer's configuration, as a :class:`miditok.classes.TokenizerConfig` object.
-    :param density_bins_max: tuple specifying the number of density bins, and the maximum density in
-            notes per beat to consider. (default: (10, 20))
-    :param params: path to a tokenizer config file. This will override other arguments and
-            load the tokenizer based on the config file. This is particularly useful if the
-            tokenizer learned Byte Pair Encoding. (default: None)
+    **Add a `density_bins_max` entry in the config, mapping to a tuple specifying the number of density bins, and the
+    maximum density in notes per beat to consider. (default: (10, 20))**
+
+    **Note:** When decoding tokens with tempos, only the tempos of the first track will be decoded.
     """
 
-    def __init__(
-        self,
-        tokenizer_config: TokenizerConfig = None,
-        density_bins_max: Tuple[int, int] = MMM_DENSITY_BINS_MAX,
-        params: Optional[Union[str, Path]] = None,
-    ):
-        if (
-            tokenizer_config is not None
-            and "density_bins_max" not in tokenizer_config.additional_params
-        ):
-            tokenizer_config.additional_params["density_bins_max"] = density_bins_max
-        super().__init__(tokenizer_config, True, params)
-
     def _tweak_config_before_creating_voc(self):
+        self.one_token_stream = True
         self.config.use_programs = True
         self.config.use_rests = False
         # Recreate densities here just in case density_bins_max was loaded from params (list to np array)
+        if "density_bins_max" not in self.config.additional_params:
+            self.config.additional_params["density_bins_max"] = MMM_DENSITY_BINS_MAX
         if "note_densities" in self.config.additional_params:
             if isinstance(
                 self.config.additional_params["note_densities"], (list, tuple)
@@ -260,11 +248,15 @@ class MMM(MIDITokenizer):
         time_signature_changes = [
             TimeSignature(*TIME_SIGNATURE, 0)
         ]  # mock the first time signature change to optimize below
-        ticks_per_bar = self._compute_ticks_per_bar(time_signature_changes[0], time_division)  # init
+        ticks_per_bar = self._compute_ticks_per_bar(
+            time_signature_changes[0], time_division
+        )  # init
 
         current_tick = 0
         current_bar = -1
         previous_note_end = 0  # unused (rest)
+        first_program = None
+        current_program = -2
         for ti, token in enumerate(tokens):
             tok_type, tok_val = token.split("_")
             if tok_type == "Program":
@@ -278,6 +270,8 @@ class MMM(MIDITokenizer):
                         else MIDI_INSTRUMENTS[current_program]["name"],
                     )
                 )
+                if first_program is None:
+                    first_program = current_program
                 current_tick = 0
                 current_bar = -1
                 previous_note_end = 0
@@ -297,11 +291,13 @@ class MMM(MIDITokenizer):
                     # as this Position token occurs before any Bar token
                     current_bar = 0
                 current_tick += self._token_duration_to_ticks(tok_val, time_division)
-            elif tok_type == "Tempo":
+            elif (
+                first_program is None or current_program == first_program
+            ) and tok_type == "Tempo":
                 # If the tokenizer includes tempo tokens, each Position token should be followed by
                 # a tempo token, but if it is not the case this method will skip this step
                 tempo = float(token.split("_")[1])
-                if tempo != tempo_changes[-1].tempo:
+                if current_tick != tempo_changes[-1].time:
                     tempo_changes.append(TempoChange(tempo, current_tick))
             elif tok_type == "TimeSig":
                 num, den = self._parse_token_time_signature(token.split("_")[1])
@@ -444,6 +440,8 @@ class MMM(MIDITokenizer):
             dic["TimeShift"] += ["Tempo"]
             if self.config.use_time_signatures:
                 dic["TimeSig"] += ["Tempo"]
+            if self.config.use_chords:
+                dic["Tempo"] += ["Chord"]
 
         dic["Fill"] = list(dic.keys())
 
@@ -508,6 +506,7 @@ class MMM(MIDITokenizer):
             current_pitches.append(pitch_val)
 
         for i, token in enumerate(tokens[1:]):
+            # err_tokens = tokens[i - 4 : i + 4]  # uncomment for debug
             event_type, event_value = token.split("_")[0], token.split("_")[1]
 
             # Good token type

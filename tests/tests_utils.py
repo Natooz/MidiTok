@@ -14,7 +14,6 @@ ALL_TOKENIZATIONS = [
     "REMI",
     "CPWord",
     "Octuple",
-    "OctupleMono",
     "MuMIDI",
     "MMM",
 ]
@@ -58,7 +57,9 @@ def notes_equals(note1: Note, note2: Note) -> str:
 
 def tempo_changes_equals(
     tempo_changes1: List[TempoChange], tempo_changes2: List[TempoChange]
-) -> List[Tuple[str, TempoChange, float]]:
+) -> List[Tuple[str, Union[TempoChange, int], float]]:
+    if len(tempo_changes1) != len(tempo_changes2):
+        return [("len", len(tempo_changes2), len(tempo_changes1))]
     errors = []
     for tempo_change1, tempo_change2 in zip(tempo_changes1, tempo_changes2):
         if tempo_change1.time != tempo_change2.time:
@@ -110,10 +111,14 @@ def adapt_tempo_changes_times(
     """
     notes = sum((t.notes for t in tracks), [])
     notes.sort(key=lambda x: x.start)
+    max_tick = max(note.start for note in notes)
 
     current_note_idx = 0
     tempo_idx = 1
     while tempo_idx < len(tempo_changes):
+        if tempo_changes[tempo_idx].time > max_tick:
+            del tempo_changes[tempo_idx]
+            continue
         for n, note in enumerate(notes[current_note_idx:]):
             if note.start >= tempo_changes[tempo_idx].time:
                 tempo_changes[tempo_idx].time = note.start
@@ -123,3 +128,14 @@ def adapt_tempo_changes_times(
             del tempo_changes[tempo_idx - 1]
             continue
         tempo_idx += 1
+
+
+def remove_equal_successive_tempos(tempo_changes: List[TempoChange]):
+    current_tempo = -1
+    i = 0
+    while i < len(tempo_changes):
+        if tempo_changes[i].tempo == current_tempo:
+            del tempo_changes[i]
+            continue
+        current_tempo = tempo_changes[i].tempo
+        i += 1
