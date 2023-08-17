@@ -37,7 +37,8 @@ class MuMIDI(MIDITokenizer):
     For generation, the decoding implies sample from several distributions, which can be
     very delicate. Hence, we do not recommend this tokenization for generation with small models.
 
-    **Add a `drum_pitch_range` entry mapping to a tuple of values to restrict the range of drum pitches to use.**
+    **Add a `drum_pitch_range` entry in the config, mapping to a tuple of values to restrict the range of drum pitches
+    to use.**
 
     **Notes:**
         * Tokens are first sorted by time, then track, then pitch values.

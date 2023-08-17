@@ -1,10 +1,10 @@
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union, cast
+from typing import Any, Dict, List, Optional, Union, cast
 
 import numpy as np
 from miditoolkit import Instrument, MidiFile, Note, TempoChange, TimeSignature
 
-from ..classes import Event, TokSequence, TokenizerConfig
+from ..classes import Event, TokSequence
 from ..constants import (
     MIDI_INSTRUMENTS,
     TEMPO,
@@ -26,33 +26,19 @@ class MMM(MIDITokenizer):
     strategy of the [original paper](https://arxiv.org/abs/2008.06048). The reason being that ``NoteOff`` tokens perform
     poorer for generation with causal models.
 
-    **Note:** When decoding tokens with tempos, only the tempos of the first track will be decoded.
+    **Add a `density_bins_max` entry in the config, mapping to a tuple specifying the number of density bins, and the
+    maximum density in notes per beat to consider. (default: (10, 20))**
 
-    :param tokenizer_config: the tokenizer's configuration, as a :class:`miditok.classes.TokenizerConfig` object.
-    :param density_bins_max: tuple specifying the number of density bins, and the maximum density in
-            notes per beat to consider. (default: (10, 20))
-    :param params: path to a tokenizer config file. This will override other arguments and
-            load the tokenizer based on the config file. This is particularly useful if the
-            tokenizer learned Byte Pair Encoding. (default: None)
+    **Note:** When decoding tokens with tempos, only the tempos of the first track will be decoded.
     """
 
-    def __init__(
-        self,
-        tokenizer_config: TokenizerConfig = None,
-        density_bins_max: Tuple[int, int] = MMM_DENSITY_BINS_MAX,
-        params: Optional[Union[str, Path]] = None,
-    ):
-        if (
-            tokenizer_config is not None
-            and "density_bins_max" not in tokenizer_config.additional_params
-        ):
-            tokenizer_config.additional_params["density_bins_max"] = density_bins_max
-        super().__init__(tokenizer_config, True, params)
-
     def _tweak_config_before_creating_voc(self):
+        self.one_token_stream = True
         self.config.use_programs = True
         self.config.use_rests = False
         # Recreate densities here just in case density_bins_max was loaded from params (list to np array)
+        if "density_bins_max" not in self.config.additional_params:
+            self.config.additional_params["density_bins_max"] = MMM_DENSITY_BINS_MAX
         if "note_densities" in self.config.additional_params:
             if isinstance(
                 self.config.additional_params["note_densities"], (list, tuple)
