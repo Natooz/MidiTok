@@ -70,7 +70,8 @@ def data_augmentation_dataset(
         if as_tokens:
             with open(file_path) as json_file:
                 file = json.load(json_file)
-                ids, programs = file["ids"], file["programs"]
+                ids = file["ids"]
+                programs = file["programs"] if "programs" in file else None
 
             if tokenizer.one_token_stream:
                 ids = [ids]
@@ -89,11 +90,11 @@ def data_augmentation_dataset(
             augmented_tokens: Dict[
                 Tuple[int, int, int], List[Union[int, List[int]]]
             ] = {}
-            for track, (_, is_drum) in zip(ids, programs):
+            for ti, track in enumerate(ids):
                 # we dont augment drums
-                if not tokenizer.one_token_stream and is_drum:
+                if programs is not None and programs[ti][1]:  # drums
                     continue
-                elif tokenizer.one_token_stream and all(p[1] for p in programs):
+                elif tokenizer.one_token_stream and programs is not None and all(p[1] for p in programs):
                     continue
                 corrected_offsets = deepcopy(offsets)
                 vel_dim = int(128 / len(tokenizer.velocities))
@@ -116,7 +117,7 @@ def data_augmentation_dataset(
                         augmented_tokens[aug_offsets].append(seq)
                     except KeyError:
                         augmented_tokens[aug_offsets] = [seq]
-            if not tokenizer.one_token_stream:
+            if not tokenizer.one_token_stream and programs is not None:
                 for i, (track, (_, is_drum)) in enumerate(
                     zip(ids, programs)
                 ):  # adding drums to all already augmented

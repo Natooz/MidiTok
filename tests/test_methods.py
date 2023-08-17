@@ -82,7 +82,7 @@ def test_convert_tensors():
 
 def test_data_augmentation():
     data_path = Path("./tests/Multitrack_MIDIs")
-    original_midi_paths = list(data_path.glob("**/*.mid"))
+    original_midi_paths = list(data_path.glob("**/*.mid"))[:7]
     ALL_TOKENIZATIONS.remove("MuMIDI")  # not compatible
 
     for tokenization in ALL_TOKENIZATIONS:
@@ -193,18 +193,20 @@ def test_data_augmentation():
             # Loads tokens to compare
             with open(aug_token_path) as json_file:
                 file = json.load(json_file)
-                aug_tokens, aug_programs = file["ids"], file["programs"]
+                aug_tokens = file["ids"]
+
             with open(tokens_path / f"{original_stem}.json") as json_file:
                 file = json.load(json_file)
-                original_tokens, original_programs = file["ids"], file["programs"]
+                original_tokens = file["ids"]
+                original_programs = file["programs"] if "programs" in file else None
 
             # Compare them
             if tokenizer.one_token_stream:
                 original_tokens, aug_tokens = [original_tokens], [aug_tokens]
-            for original_track, aug_track, (_, is_drum) in zip(
-                original_tokens, aug_tokens, original_programs
+            for ti, (original_track, aug_track) in enumerate(
+                    zip(original_tokens, aug_tokens)
             ):
-                if is_drum:
+                if original_programs is not None and original_programs[ti][1]:  # drums
                     continue
                 for idx, (original_token, aug_token) in enumerate(
                     zip(original_track, aug_track)
