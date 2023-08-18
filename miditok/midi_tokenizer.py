@@ -1677,7 +1677,7 @@ class MIDITokenizer(ABC):
             kwargs["ids_bpe_encoded"] = ids_bpe_encoded
 
         with open(path, "w") as outfile:
-            dic = {"ids": ids}
+            dic = {"ids": ids, **kwargs}
             if programs is not None:
                 dic["programs"] = programs
             json.dump(dic, outfile)
