@@ -18,6 +18,8 @@ from .constants import (
     USE_RESTS,
     USE_TEMPOS,
     USE_TIME_SIGNATURE,
+    USE_SUSTAIN_PEDAL,
+    USE_PITCH_BEND,
     USE_PROGRAMS,
     REST_RANGE,
     CHORD_MAPS,
@@ -28,6 +30,8 @@ from .constants import (
     LOG_TEMPOS,
     DELETE_EQUAL_SUCCESSIVE_TEMPO_CHANGES,
     TIME_SIGNATURE_RANGE,
+    SUSTAIN_PEDAL_DURATION,
+    PITCH_BEND_RANGE,
     DELETE_EQUAL_SUCCESSIVE_TIME_SIG_CHANGES,
     PROGRAMS,
     CURRENT_VERSION_PACKAGE,
@@ -164,6 +168,10 @@ class TokenizerConfig:
             :ref:`MIDILike` will only represent time signature changes (MIDI messages) as they come. If you want more
             "recalls" of the current time signature within your token sequences, you can preprocess you MIDI file to
             add more TimeSignatureChange objects. (default: False)
+    :param use_sustain_pedal: will use `Pedal` tokens to represent the sustain pedal events. In multitrack setting,
+            The value of each Pedal token will be equal to the program of the track. (default: False)
+    :param use_pitch_bend: will use `PitchBend` tokens. In multitrack setting, a `Program` token will be added before
+            each `PitchBend` token. (default: False)
     :param use_programs: will use ``Program`` tokens, if the tokenizer is compatible.
             Used to specify an instrument / MIDI program. The :ref:`Octuple`, :ref:`MMM` and :ref:`MuMIDI` tokenizers
             use natively `Program` tokens, this option is always enabled. :ref:`TSD`, :ref:`REMI`, :ref:`MIDILike`,
@@ -195,7 +203,14 @@ class TokenizerConfig:
             you want to have recurrent `Tempo` tokens, that you might inject yourself by adding `TempoChange` objects to
             your MIDIs. (default: False)
     :param time_signature_range: range as a dictionary {denom_i: [num_i1, ..., num_in] / (min_num_i, max_num_i)}.
-            (default: {4: [4]})
+            (default: {8: [3, 12, 6], 4: [5, 6, 3, 2, 1, 4]})
+    :param sustain_pedal_duration: by default, the tokenizer will use `PedalOff` tokens to mark the offset times of
+            pedals. By setting this parameter True, it will instead use `Duration` tokens to explicitly express their
+            durations. If you use this parameter, make sure to configure `beat_res` to cover the durations you expect.
+            (default: False)
+    :param pitch_bend_range: range of the pitch bend to consider, to be given as a tuple with the form
+            `(lowest_value, highest_value, nb_of_values)`. There will be `nb_of_values` tokens equally spaced between
+             `lowest_value` and `highest_value`. (default: (-8192, 8191, 32))
     :param delete_equal_successive_time_sig_changes: setting this option True will delete identical successive time
             signature changes when preprocessing a MIDI file after loading it. For examples, if a MIDI has two time
             signature changes for 4/4 at tick 1000 and the next one is also 4/4 at tick 1200, the second time signature
@@ -219,6 +234,8 @@ class TokenizerConfig:
         use_rests: bool = USE_RESTS,
         use_tempos: bool = USE_TEMPOS,
         use_time_signatures: bool = USE_TIME_SIGNATURE,
+        use_sustain_pedal: bool = USE_SUSTAIN_PEDAL,
+        use_pitch_bend: bool = USE_PITCH_BEND,
         use_programs: bool = USE_PROGRAMS,
         rest_range: Sequence = REST_RANGE,
         chord_maps: Dict[str, Tuple] = CHORD_MAPS,
@@ -231,6 +248,8 @@ class TokenizerConfig:
         time_signature_range: Dict[
             int, Union[List[int], Tuple[int, int]]
         ] = TIME_SIGNATURE_RANGE,
+        sustain_pedal_duration: bool = SUSTAIN_PEDAL_DURATION,
+        pitch_bend_range: Tuple[int, int, int] = PITCH_BEND_RANGE,
         delete_equal_successive_time_sig_changes: bool = DELETE_EQUAL_SUCCESSIVE_TIME_SIG_CHANGES,
         programs: Sequence[int] = PROGRAMS,
         **kwargs,
@@ -246,6 +265,8 @@ class TokenizerConfig:
         self.use_rests: bool = use_rests
         self.use_tempos: bool = use_tempos
         self.use_time_signatures: bool = use_time_signatures
+        self.use_sustain_pedal: bool = use_sustain_pedal
+        self.use_pitch_bend: bool = use_pitch_bend
         self.use_programs: bool = use_programs
 
         # Rest params
@@ -276,6 +297,12 @@ class TokenizerConfig:
         self.delete_equal_successive_time_sig_changes = (
             delete_equal_successive_time_sig_changes
         )
+
+        # Sustain pedal params
+        self.sustain_pedal_duration = sustain_pedal_duration
+
+        # Pitch bend params
+        self.pitch_bend_range = pitch_bend_range
 
         # Programs
         self.programs: Sequence[int] = programs

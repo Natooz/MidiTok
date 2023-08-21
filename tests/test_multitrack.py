@@ -24,7 +24,7 @@ import miditok
 from miditoolkit import MidiFile, Marker
 from tqdm import tqdm
 
-from .tests_utils import (
+from tests_utils import (
     ALL_TOKENIZATIONS,
     midis_equals,
     tempo_changes_equals,
@@ -37,7 +37,7 @@ from .tests_utils import (
 # Special beat res for test, up to 16 beats so the duration and time-shift values are
 # long enough for MIDI-Like and Structured encodings, and with a single beat resolution
 BEAT_RES_TEST = {(0, 16): 8}
-TOKENIZER_PARAMS = {
+TOKENIZER_PARAMS = {  # TODO add pedal / pitch bend when good to test
     "beat_res": BEAT_RES_TEST,
     "use_chords": True,
     "use_rests": True,  # tempo decode fails when False for MIDILike because beat_res range is too short
@@ -178,6 +178,10 @@ def test_multitrack_midi_to_tokens_to_midi(
                         f"MIDI {i} - {file_path} failed to encode/decode TIME SIGNATURE changes with "
                         f"{tokenization} ({len(time_sig_errors)} errors)"
                     )
+
+            # TODO check pedals
+            # TODO check pitch bend
+            # TODO check control changes
 
             if has_errors:
                 has_errors = True

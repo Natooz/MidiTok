@@ -16,10 +16,10 @@ from typing import Union
 from time import time
 
 import miditok
-from miditoolkit import MidiFile, Marker
+from miditoolkit import MidiFile, Marker, PitchBend, Pedal
 from tqdm import tqdm
 
-from .tests_utils import (
+from tests_utils import (
     ALL_TOKENIZATIONS,
     track_equals,
     tempo_changes_equals,
@@ -31,7 +31,7 @@ from .tests_utils import (
 # Special beat res for test, up to 64 beats so the duration and time-shift values are
 # long enough for MIDI-Like and Structured encodings, and with a single beat resolution
 BEAT_RES_TEST = {(0, 64): 8}
-TOKENIZER_PARAMS = {
+TOKENIZER_PARAMS = {  # TODO add pedal / pitch bend when good to test
     "beat_res": BEAT_RES_TEST,
     "use_chords": False,  # set false to speed up tests as it takes some time on maestro MIDIs
     "use_rests": True,
@@ -170,6 +170,10 @@ def test_one_track_midi_to_tokens_to_midi(
                         f"MIDI {i} - {file_path} failed to encode/decode TIME SIGNATURE changes with "
                         f"{tokenization} ({len(time_sig_errors)} errors)"
                     )
+
+            # TODO check pedals
+            # TODO check pitch bend
+            # TODO check control changes
 
         if has_errors:
             at_least_one_error = True

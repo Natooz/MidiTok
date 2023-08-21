@@ -1,5 +1,6 @@
 """
 MIDI encoding base class and methods
+TODO update additional tokens table in docs
 """
 from abc import ABC, abstractmethod
 import math
@@ -244,6 +245,11 @@ class MIDITokenizer(ABC):
         self.time_signatures = [TIME_SIGNATURE]
         if self.config.use_time_signatures:
             self.time_signatures = self.__create_time_signatures()
+
+        # Pitch bends
+        self.pitch_bends = np.zeros(1)
+        if self.config.use_pitch_bend:
+            self.pitch_bends = self.__create_pitch_bends()
 
         # Vocabulary and token types graph
         if (
@@ -499,7 +505,11 @@ class MIDITokenizer(ABC):
             prev_ts = time_sig
             i += 1
 
-    def _midi_to_tokens(
+    # TODO quantize sustain pedal onsets / offsets or durations
+    # TODO quantize pitch bend values and onsets
+    # TODO call the methods todo above
+
+    def _midi_to_tokens(  # edit overrides to add pedal / pitch bend
         self, midi: MidiFile, *args, **kwargs
     ) -> Union[TokSequence, List[TokSequence]]:
         r"""Converts a preprocessed MIDI object to a sequence of tokens.
@@ -593,6 +603,32 @@ class MIDITokenizer(ABC):
                         Event("Program", track.program, chord.time, "ProgramChord")
                     )
                 events.append(chord)
+
+        # Add sustain pedal
+        if self.config.use_sustain_pedal:
+            for pedal in track.pedals:
+                # If not using programs, the default value is 0
+                program = track.program if self.config.use_programs else 0
+                events.append(
+                    Event("Pedal", program, pedal.time)
+                )
+                # PedalOff or Duration
+                if self.config.sustain_pedal_duration:
+                    index = np.argmin(np.abs(dur_bins - pedal.duration))
+                    events.append(Event("Duration", ".".join(map(str, self.durations[index])), pedal.time))
+                else:
+                    events.append(Event("PedalOff", pedal.end))
+
+        # Add pitch bend
+        if self.config.use_pitch_bend:
+            for pitch_bend in track.pitch_bends:
+                if self.config.use_programs:
+                    events.append(Event("Program", track.program, pitch_bend.time, "ProgramPitchBend"))
+                events.append(
+                    Event("PitchBend", pitch_bend.pitch, pitch_bend.time)
+                )
+
+        # TODO add control changes
 
         # Creates the Note On, Note Off and Velocity events
         for n, note in enumerate(track.notes):
@@ -956,6 +992,38 @@ class MIDITokenizer(ABC):
             for tok in vocab:
                 self.add_to_vocab(tok)
 
+    def _add_additional_tokens_to_vocab_list(self, vocab: List[str]):  # TODO call this method in non-multi-voc tokeniz
+        # CHORD
+        if self.config.use_chords:
+            vocab += self._create_chords_tokens()
+
+        # REST
+        if self.config.use_rests:
+            vocab += [f'Rest_{".".join(map(str, rest))}' for rest in self.rests]
+
+        # TEMPO
+        if self.config.use_tempos:
+            vocab += [f"Tempo_{i}" for i in self.tempos]
+
+        # PROGRAM
+        if self.config.use_programs:
+            vocab += [f"Program_{program}" for program in self.config.programs]
+
+        # TIME SIGNATURE
+        if self.config.use_time_signatures:
+            vocab += [f"TimeSig_{i[0]}/{i[1]}" for i in self.time_signatures]
+
+        # PEDAL
+        if self.config.use_sustain_pedal:
+            if self.config.use_programs:
+                vocab += [f"Pedal_{program}" for program in self.config.programs]
+            else:
+                vocab.append("Pedal_0")
+
+        # PITCH BEND
+        if self.config.use_pitch_bend:
+            vocab += [f"PitchBend_{pitch_bend}" for pitch_bend in self.pitch_bends]
+    
     def _update_token_types_indexes(self):
         r"""Updates the _token_types_indexes attribute according to _event_to_token."""
 
@@ -1193,6 +1261,13 @@ class MIDITokenizer(ABC):
             time_signatures.extend([(nb_beats, beat_res) for nb_beats in beats])
 
         return time_signatures
+
+    def __create_pitch_bends(self) -> np.ndarray:
+        r"""Creates the pitch bend values, as numpy array, using `self.config.pitch_bend_range`.
+
+        :return: the pitch bend values.
+        """
+        return np.linspace(*self.config.pitch_bend_range, dtype=np.int32)
 
     @staticmethod
     def _compute_ticks_per_bar(time_sig: TimeSignature, time_division: int):
