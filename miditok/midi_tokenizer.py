@@ -11,7 +11,7 @@ from typing import List, Tuple, Dict, Union, Callable, Iterable, Optional, Any, 
 
 import numpy as np
 from tqdm import tqdm
-from miditoolkit import MidiFile, Instrument, Note, TempoChange, TimeSignature
+from miditoolkit import MidiFile, Instrument, Note, TempoChange, TimeSignature, Pedal, PitchBend
 from tokenizers import Tokenizer as TokenizerFast
 from tokenizers.models import BPE
 from tokenizers.trainers import BpeTrainer
@@ -356,6 +356,13 @@ class MIDITokenizer(ABC):
             if len(midi.instruments[t].notes) == 0:
                 del midi.instruments[t]
                 continue
+
+            # Quantize sustain pedal and pitch bend
+            if self.config.use_sustain_pedal:
+                self._quantize_sustain_pedals(midi.instruments[t].pedals, midi.ticks_per_beat)
+            if self.config.use_pitch_bend:
+                self._quantize_pitch_bends(midi.instruments[t].pitch_bends, midi.ticks_per_beat)
+            # TODO quantize control changes
             t += 1
 
         # Recalculate max_tick is this could have changed after notes quantization
@@ -505,9 +512,43 @@ class MIDITokenizer(ABC):
             prev_ts = time_sig
             i += 1
 
-    # TODO quantize sustain pedal onsets / offsets or durations
-    # TODO quantize pitch bend values and onsets
-    # TODO call the methods todo above
+    def _quantize_sustain_pedals(self, pedals: List[Pedal], time_division: int):
+        r"""Quantize the sustain pedal events from a track. Their onset and offset times will be adjusted
+        according to the beat resolution of the tokenizer.
+
+        :param pedals: sustain pedal events.
+        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed).
+        """
+        ticks_per_sample = int(time_division / max(self.config.beat_res.values()))
+        for pedal in pedals:
+            start_offset = pedal.start % ticks_per_sample
+            end_offset = pedal.end % ticks_per_sample
+            pedal.start += (
+                -start_offset
+                if start_offset <= ticks_per_sample / 2
+                else ticks_per_sample - start_offset
+            )
+            pedal.end += (
+                -end_offset if end_offset <= ticks_per_sample / 2 else ticks_per_sample - end_offset
+            )
+            pedal.duration = pedal.end - pedal.start
+
+    def _quantize_pitch_bends(self, pitch_bends: List[PitchBend], time_division: int):
+        r"""Quantize the pitch bend events from a track. Their onset and offset times will be adjusted
+        according to the beat resolution of the tokenizer.
+
+        :param pitch_bends: pitch bend events.
+        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed).
+        """
+        ticks_per_sample = int(time_division / max(self.config.beat_res.values()))
+        for pitch_bend in pitch_bends:
+            start_offset = pitch_bend.time % ticks_per_sample
+            pitch_bend.time += (
+                -start_offset
+                if start_offset <= ticks_per_sample / 2
+                else ticks_per_sample - start_offset
+            )
+            pitch_bend.pitch = self.pitch_bends[np.argmin(np.abs(self.pitch_bends - pitch_bend.pitch))]
 
     def _midi_to_tokens(  # edit overrides to add pedal / pitch bend
         self, midi: MidiFile, *args, **kwargs
@@ -992,7 +1033,7 @@ class MIDITokenizer(ABC):
             for tok in vocab:
                 self.add_to_vocab(tok)
 
-    def _add_additional_tokens_to_vocab_list(self, vocab: List[str]):  # TODO call this method in non-multi-voc tokeniz
+    def _add_additional_tokens_to_vocab_list(self, vocab: List[str]):
         # CHORD
         if self.config.use_chords:
             vocab += self._create_chords_tokens()

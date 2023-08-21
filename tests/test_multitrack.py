@@ -24,7 +24,7 @@ import miditok
 from miditoolkit import MidiFile, Marker
 from tqdm import tqdm
 
-from tests_utils import (
+from .tests_utils import (
     ALL_TOKENIZATIONS,
     midis_equals,
     tempo_changes_equals,

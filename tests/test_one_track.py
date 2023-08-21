@@ -16,10 +16,10 @@ from typing import Union
 from time import time
 
 import miditok
-from miditoolkit import MidiFile, Marker, PitchBend, Pedal
+from miditoolkit import MidiFile, Marker
 from tqdm import tqdm
 
-from tests_utils import (
+from .tests_utils import (
     ALL_TOKENIZATIONS,
     track_equals,
     tempo_changes_equals,

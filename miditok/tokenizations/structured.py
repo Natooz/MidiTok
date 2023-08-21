@@ -34,6 +34,8 @@ class Structured(MIDITokenizer):
         self.config.use_rests = False
         self.config.use_tempos = False
         self.config.use_time_signatures = False
+        self.config.use_sustain_pedal = False
+        self.config.use_pitch_bend = False
         if self.config.use_programs:
             self.one_token_stream = True
 

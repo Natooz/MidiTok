@@ -381,25 +381,8 @@ class REMI(MIDITokenizer):
         nb_positions = max(self.config.beat_res.values()) * max_nb_beats
         vocab += [f"Position_{i}" for i in range(nb_positions)]
 
-        # CHORD
-        if self.config.use_chords:
-            vocab += self._create_chords_tokens()
-
-        # REST
-        if self.config.use_rests:
-            vocab += [f'Rest_{".".join(map(str, rest))}' for rest in self.rests]
-
-        # TEMPO
-        if self.config.use_tempos:
-            vocab += [f"Tempo_{i}" for i in self.tempos]
-
-        # PROGRAM
-        if self.config.use_programs:
-            vocab += [f"Program_{program}" for program in self.config.programs]
-
-        # TIME SIGNATURE
-        if self.config.use_time_signatures:
-            vocab += [f"TimeSig_{i[0]}/{i[1]}" for i in self.time_signatures]
+        # Add additional tokens
+        self._add_additional_tokens_to_vocab_list(vocab)
 
         return vocab
 

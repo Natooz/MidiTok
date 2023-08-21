@@ -36,6 +36,8 @@ class CPWord(MIDITokenizer):
     """
 
     def _tweak_config_before_creating_voc(self):
+        self.config.use_sustain_pedal = False
+        self.config.use_pitch_bend = False
         token_types = ["Family", "Position", "Pitch", "Velocity", "Duration"]
         for add_tok_attr, add_token in [
             ("use_programs", "Program"),
