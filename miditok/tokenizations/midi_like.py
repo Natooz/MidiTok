@@ -2,7 +2,7 @@ from typing import List, Tuple, Dict, Optional, Union, Any
 from pathlib import Path
 
 import numpy as np
-from miditoolkit import MidiFile, Instrument, Note, TempoChange, TimeSignature
+from miditoolkit import MidiFile, Instrument, Note, TempoChange, TimeSignature, Pedal, PitchBend
 
 from ..midi_tokenizer import MIDITokenizer, _in_as_seq
 from ..classes import TokSequence, Event
@@ -70,7 +70,6 @@ class MIDILike(MIDITokenizer):
                 if (
                     self.config.use_rests
                     and event.time - previous_note_end >= min_rest
-                    and event.type in ["Program", "NoteOn", "Chord", "Tempo"]
                 ):
                     # untouched tick value to the order is not messed after sorting
                     # in case of tempo change, we need to take its time as reference
@@ -141,20 +140,10 @@ class MIDILike(MIDITokenizer):
             all_events.append(event)
 
             # Update max offset time of the notes encountered
-            if (
-                event.type == "Program"
-                and event.desc == "ProgramChord"
-                and e + 2 < len(events)
-            ):
-                # Next second event is a Program with the end info
-                previous_note_end = max(previous_note_end, events[e + 2].desc)
-            elif event.type in ["NoteOn", "Program"]:
+            if event.type in ["NoteOn"]:
                 previous_note_end = max(previous_note_end, event.desc)
-            elif event.type == "Tempo":
+            elif event.type in ["Program", "Tempo", "Pedal", "PedalOff", "PitchBend", "Chord"]:
                 previous_note_end = max(previous_note_end, event.time)
-            elif event.type == "Chord" and e + 1 < len(events):
-                # Next event is either a NoteOn or Program with the end info
-                previous_note_end = max(previous_note_end, events[e + 1].desc)
 
         return all_events
 
@@ -215,6 +204,15 @@ class MIDILike(MIDITokenizer):
         instruments: Dict[int, Instrument] = {}
         tempo_changes = [TempoChange(TEMPO, -1)]
         time_signature_changes = [TimeSignature(*TIME_SIGNATURE, 0)]
+        active_pedals = {}
+
+        def check_inst(prog: int):
+            if prog not in instruments.keys():
+                instruments[prog] = Instrument(
+                    program=prog,
+                    is_drum=prog == -1,
+                    name="Drums" if prog == -1 else MIDI_INSTRUMENTS[prog]["name"],
+                )
 
         current_tick = 0
         current_program = 0
@@ -229,18 +227,19 @@ class MIDILike(MIDITokenizer):
 
             # Decode tokens
             for ti, token in enumerate(seq):
-                if token.split("_")[0] == "TimeShift":
+                tok_type, tok_val = token.split("_")
+                if tok_type == "TimeShift":
                     current_tick += self._token_duration_to_ticks(
-                        token.split("_")[1], time_division
+                        tok_val, time_division
                     )
-                elif token.split("_")[0] == "Rest":
+                elif tok_type == "Rest":
                     beat, pos = map(int, seq[ti].split("_")[1].split("."))
                     if (
                         current_tick < previous_note_end
                     ):  # if in case successive rest happen
                         current_tick = previous_note_end
                     current_tick += beat * time_division + pos * ticks_per_sample
-                elif token.split("_")[0] == "NoteOn":
+                elif tok_type == "NoteOn":
                     try:
                         if seq[ti + 1].split("_")[0] == "Velocity":
                             pitch = int(seq[ti].split("_")[1])
@@ -283,16 +282,7 @@ class MIDILike(MIDITokenizer):
                             if duration == 0 and default_duration is not None:
                                 duration = default_duration
                             if duration != 0:
-                                if current_program not in instruments.keys():
-                                    instruments[current_program] = Instrument(
-                                        program=0
-                                        if current_program == -1
-                                        else current_program,
-                                        is_drum=current_program == -1,
-                                        name="Drums"
-                                        if current_program == -1
-                                        else MIDI_INSTRUMENTS[current_program]["name"],
-                                    )
+                                check_inst(current_program)
                                 instruments[current_program].notes.append(
                                     Note(
                                         vel,
@@ -307,17 +297,17 @@ class MIDILike(MIDITokenizer):
                     except IndexError:
                         continue
 
-                elif token.split("_")[0] == "Program":
-                    current_program = int(token.split("_")[1])
-                elif token.split("_")[0] == "Tempo":
+                elif tok_type == "Program":
+                    current_program = int(tok_val)
+                elif tok_type == "Tempo":
                     # If your encoding include tempo tokens, each Position token should be followed by
                     # a tempo token, but if it is not the case this method will skip this step
-                    tempo = float(token.split("_")[1])
+                    tempo = float(tok_val)
                     if si == 0 and current_tick != tempo_changes[-1].time:
                         tempo_changes.append(TempoChange(tempo, current_tick))
                     previous_note_end = max(previous_note_end, current_tick)
-                elif si == 0 and token.split("_")[0] == "TimeSig":
-                    num, den = self._parse_token_time_signature(token.split("_")[1])
+                elif si == 0 and tok_type == "TimeSig":
+                    num, den = self._parse_token_time_signature(tok_val)
                     current_time_signature = time_signature_changes[-1]
                     if (
                         si == 0
@@ -327,6 +317,27 @@ class MIDILike(MIDITokenizer):
                         time_signature_changes.append(
                             TimeSignature(num, den, current_tick)
                         )
+                elif tok_type == "Pedal":
+                    pedal_prog = int(tok_val) if self.config.use_programs else current_program
+                    if self.config.sustain_pedal_duration and ti + 1 < len(seq):
+                        if seq[ti + 1].split("_")[0] == "Duration":
+                            duration = self._token_duration_to_ticks(seq[ti + 1].split("_")[1], time_division)
+                            # Add instrument if it doesn't exist, can happen for the first tokens
+                            check_inst(pedal_prog)
+                            instruments[pedal_prog].pedals.append(Pedal(current_tick, current_tick + duration))
+                    else:
+                        if pedal_prog not in active_pedals:
+                            active_pedals[pedal_prog] = current_tick
+                elif tok_type == "PedalOff":
+                    pedal_prog = int(tok_val) if self.config.use_programs else current_program
+                    if pedal_prog in active_pedals:
+                        check_inst(pedal_prog)
+                        instruments[pedal_prog].pedals.append(Pedal(active_pedals[pedal_prog], current_tick))
+                        del active_pedals[pedal_prog]
+                elif tok_type == "PitchBend":
+                    if current_program not in instruments.keys():
+                        check_inst(current_program)
+                    instruments[current_program].pitch_bends.append(PitchBend(int(tok_val), current_tick))
         if len(tempo_changes) > 1:
             del tempo_changes[0]  # delete mocked tempo change
         tempo_changes[0].time = 0
@@ -336,6 +347,9 @@ class MIDILike(MIDITokenizer):
 
         # create MidiFile
         midi.instruments = list(instruments.values())
+        for instrument in midi.instruments:
+            if instrument.program == -1:
+                instrument.program = 0
         midi.tempo_changes = tempo_changes
         midi.time_signature_changes = time_signature_changes
         midi.max_tick = max(
@@ -377,25 +391,12 @@ class MIDILike(MIDITokenizer):
             f'TimeShift_{".".join(map(str, duration))}' for duration in self.durations
         ]
 
-        # CHORD
-        if self.config.use_chords:
-            vocab += self._create_chords_tokens()
+        # Add additional tokens
+        self._add_additional_tokens_to_vocab_list(vocab)
 
-        # REST
-        if self.config.use_rests:
-            vocab += [f'Rest_{".".join(map(str, rest))}' for rest in self.rests]
-
-        # TEMPO
-        if self.config.use_tempos:
-            vocab += [f"Tempo_{i}" for i in self.tempos]
-
-        # PROGRAM
-        if self.config.use_programs:
-            vocab += [f"Program_{program}" for program in self.config.programs]
-
-        # TIME SIGNATURE
-        if self.config.use_time_signatures:
-            vocab += [f"TimeSig_{i[0]}/{i[1]}" for i in self.time_signatures]
+        # Add durations if needed
+        if self.config.use_sustain_pedals and self.config.sustain_pedal_duration:
+            vocab += [f'Duration_{".".join(map(str, duration))}' for duration in self.durations]
 
         return vocab
 
@@ -408,20 +409,27 @@ class MIDILike(MIDITokenizer):
         :return: the token types transitions dictionary
         """
         dic = dict()
-
         dic["NoteOn"] = ["Velocity"]
-        dic["Velocity"] = ["NoteOn", "TimeShift"]
-        dic["TimeShift"] = ["NoteOff", "NoteOn"]
-        dic["NoteOff"] = ["NoteOff", "NoteOn", "TimeShift"]
+
+        if self.config.use_programs:
+            first_note_token_type = "Program"
+            dic["Program"] = ["NoteOn", "NoteOff"]
+        else:
+            first_note_token_type = "NoteOn"
+        dic["Velocity"] = [first_note_token_type, "TimeShift"]
+        dic["NoteOff"] = ["NoteOff", first_note_token_type, "TimeShift"]
+        dic["TimeShift"] = ["NoteOff", first_note_token_type]
 
         if self.config.use_chords:
-            dic["Chord"] = ["NoteOn"]
+            dic["Chord"] = [first_note_token_type]
             dic["TimeShift"] += ["Chord"]
             dic["NoteOff"] += ["Chord"]
+            if self.config.use_programs:
+                dic["Program"].append("Chord")
 
         if self.config.use_tempos:
             dic["TimeShift"] += ["Tempo"]
-            dic["Tempo"] = ["NoteOn", "TimeShift"]
+            dic["Tempo"] = [first_note_token_type, "TimeShift"]
             if self.config.use_chords:
                 dic["Tempo"] += ["Chord"]
             if self.config.use_rests:
@@ -429,7 +437,7 @@ class MIDILike(MIDITokenizer):
 
         if self.config.use_time_signatures:
             dic["TimeShift"] += ["TimeSig"]
-            dic["TimeSig"] = ["NoteOn", "TimeShift"]
+            dic["TimeSig"] = [first_note_token_type, "TimeShift"]
             if self.config.use_chords:
                 dic["TimeSig"] += ["Chord"]
             if self.config.use_rests:
@@ -437,34 +445,74 @@ class MIDILike(MIDITokenizer):
             if self.config.use_tempos:
                 dic["Tempo"].append("TimeSig")
 
+        if self.config.use_sustain_pedals:
+            dic["TimeShift"].append("Pedal")
+            if self.config.sustain_pedal_duration:
+                dic["Pedal"] = ["Duration"]
+                dic["Duration"] = [first_note_token_type, "NoteOff", "TimeShift"]
+            else:
+                dic["PedalOff"] = ["Pedal", "PedalOff", first_note_token_type, "NoteOff", "TimeShift"]
+                dic["Pedal"] = ["Pedal", first_note_token_type, "NoteOff", "TimeShift"]
+                dic["TimeShift"].append("PedalOff")
+            if self.config.use_chords:
+                dic["Pedal"].append("Chord")
+                if not self.config.sustain_pedal_duration:
+                    dic["PedalOff"].append("Chord")
+                    dic["Chord"].append("PedalOff")
+            if self.config.use_rests:
+                dic["Pedal"].append("Rest")
+                if not self.config.sustain_pedal_duration:
+                    dic["PedalOff"].append("Rest")
+            if self.config.use_tempos:
+                dic["Tempo"].append("Pedal")
+                if not self.config.sustain_pedal_duration:
+                    dic["Tempo"].append("PedalOff")
+            if self.config.use_time_signatures:
+                dic["TimeSig"].append("Pedal")
+                if not self.config.sustain_pedal_duration:
+                    dic["TimeSig"].append("PedalOff")
+
+        if self.config.use_pitch_bends:
+            # As a Program token will precede PitchBend otherwise
+            # Else no need to add Program as its already in
+            dic["PitchBend"] = [first_note_token_type, "NoteOff", "TimeShift"]
+            if not self.config.use_programs:
+                dic["TimeShift"].append("PitchBend")
+                if self.config.use_tempos:
+                    dic["Tempo"].append("PitchBend")
+                if self.config.use_time_signatures:
+                    dic["TimeSig"].append("PitchBend")
+                if self.config.use_sustain_pedals:
+                    dic["Pedal"].append("PitchBend")
+                    if self.config.sustain_pedal_duration:
+                        dic["Duration"].append("PitchBend")
+                    else:
+                        dic["PedalOff"].append("PitchBend")
+            else:
+                dic["Program"].append("PitchBend")
+            if self.config.use_chords:
+                dic["PitchBend"].append("Chord")
+            if self.config.use_rests:
+                dic["PitchBend"].append("Rest")
+
         if self.config.use_rests:
-            dic["Rest"] = ["Rest", "NoteOn", "TimeShift"]
+            dic["Rest"] = ["Rest", first_note_token_type, "TimeShift"]
+            dic["NoteOff"] += ["Rest"]
             if self.config.use_chords:
                 dic["Rest"] += ["Chord"]
-            dic["NoteOff"] += ["Rest"]
             if self.config.use_tempos:
                 dic["Rest"].append("Tempo")
-                dic["Tempo"].append("Rest")
-
-        if self.config.use_programs:
-            dic["Program"] = ["NoteOn", "NoteOff"]
-            dic["Velocity"] = ["Program", "TimeShift"]
-            dic["TimeShift"].append("Program")
-            dic["TimeShift"].remove("NoteOn")
-            dic["NoteOff"].append("Program")
-            dic["NoteOff"].remove("NoteOn")
-            if self.config.use_chords:
-                dic["Program"].append("Chord")
-                dic["Chord"] = ["Program"]
-            if self.config.use_tempos:
-                dic["Tempo"].append("Program")
-                dic["Tempo"].remove("NoteOn")
             if self.config.use_time_signatures:
-                dic["TimeSig"].append("Program")
-                dic["TimeSig"].remove("NoteOn")
-            if self.config.use_rests:
-                dic["Rest"].append("Program")
-                dic["Rest"].remove("NoteOn")
+                dic["Rest"].append("TimeSig")
+            if self.config.use_sustain_pedals:
+                dic["Rest"].append("Pedal")
+                if self.config.sustain_pedal_duration:
+                    dic["Duration"].append("Rest")
+                else:
+                    dic["Rest"].append("PedalOff")
+                    dic["PedalOff"].append("Rest")
+            if self.config.use_pitch_bends:
+                dic["Rest"].append("PitchBend")
 
         return dic
 
@@ -508,6 +556,7 @@ class MIDILike(MIDITokenizer):
         )
 
         for i in range(1, len(events)):
+            # err_tokens = events[i - 4: i + 4]  # uncomment for debug
             # Good token type
             if events[i].type in self.tokens_types_graph[events[i - 1].type]:
                 if events[i].type == "NoteOn":
@@ -544,10 +593,10 @@ class MIDILike(MIDITokenizer):
                     else:
                         current_pitches[noff_program].remove(int(events[i].value))
                 elif events[i].type == "Program" and i + 1 < len(events):
-                    if events[i + 1].type == "NoteOn":
-                        current_program = int(events[i].value)
-                    else:
+                    if events[i + 1].type == "NoteOff":
                         noff_program = int(events[i].value)
+                    else:
+                        current_program = int(events[i].value)
                 elif events[i].type in ["TimeShift", "Rest"]:
                     current_pitches_tick = {p: [] for p in self.config.programs}
 

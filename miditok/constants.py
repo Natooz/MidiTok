@@ -26,6 +26,8 @@ USE_CHORDS = False
 USE_RESTS = False
 USE_TEMPOS = False
 USE_TIME_SIGNATURE = False
+USE_SUSTAIN_PEDALS = False
+USE_PITCH_BENDS = False
 USE_PROGRAMS = False
 
 # rest params, (/min_rest, max_rest_in_BEAT)
@@ -67,6 +69,13 @@ DELETE_EQUAL_SUCCESSIVE_TEMPO_CHANGES = False
 # Time signature params
 # {denom_i: [num_i1, ..., num_in] / (min_num_i, max_num_i)}
 TIME_SIGNATURE_RANGE = {8: [3, 12, 6], 4: [5, 6, 3, 2, 1, 4]}
+
+# Sustain pedal params
+SUSTAIN_PEDAL_DURATION = False
+
+# Pitch bend params
+# 32, so there will be no pitch bend 0 by default
+PITCH_BEND_RANGE = (-8192, 8191, 32)
 
 # Programs
 PROGRAMS = list(range(-1, 128))

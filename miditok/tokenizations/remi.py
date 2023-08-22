@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
-from miditoolkit import Instrument, MidiFile, Note, TempoChange, TimeSignature
+from miditoolkit import Instrument, MidiFile, Note, TempoChange, TimeSignature, Pedal, PitchBend
 
 from ..classes import Event, TokSequence, TokenizerConfig
 from ..constants import (
@@ -101,8 +101,7 @@ class REMI(MIDITokenizer):
             if event.time != previous_tick:
                 # (Rest)
                 if (
-                    event.type in ["Pitch", "Chord", "Tempo", "TimeSig"]
-                    and self.config.use_rests
+                    self.config.use_rests
                     and event.time - previous_note_end >= min_rest
                 ):
                     previous_tick = previous_note_end
@@ -185,7 +184,7 @@ class REMI(MIDITokenizer):
             # Update max offset time of the notes encountered
             if event.type == "Pitch":
                 previous_note_end = max(previous_note_end, event.desc)
-            elif event.type == "Tempo":
+            elif event.type in ["Program", "Tempo", "Pedal", "PedalOff", "PitchBend", "Chord"]:
                 previous_note_end = max(previous_note_end, event.time)
 
         return all_events
@@ -224,9 +223,18 @@ class REMI(MIDITokenizer):
         instruments: Dict[int, Instrument] = {}
         tempo_changes = [TempoChange(TEMPO, -1)]
         time_signature_changes = [TimeSignature(*TIME_SIGNATURE, 0)]
+        active_pedals = {}
         ticks_per_bar = self._compute_ticks_per_bar(
             time_signature_changes[0], time_division
         )  # init
+
+        def check_inst(prog: int):
+            if prog not in instruments.keys():
+                instruments[prog] = Instrument(
+                    program=0 if prog == -1 else prog,
+                    is_drum=prog == -1,
+                    name="Drums" if prog == -1 else MIDI_INSTRUMENTS[prog]["name"],
+                )
 
         current_tick = 0
         current_bar = -1
@@ -246,10 +254,11 @@ class REMI(MIDITokenizer):
 
             # Decode tokens
             for ti, token in enumerate(seq):
-                if token.split("_")[0] == "Bar":
+                tok_type, tok_val = token.split("_")
+                if tok_type == "Bar":
                     current_bar += 1
                     current_tick = current_bar * ticks_per_bar
-                elif token.split("_")[0] == "Rest":
+                elif tok_type == "Rest":
                     beat, pos = map(int, seq[ti].split("_")[1].split("."))
                     if (
                         current_tick < previous_note_end
@@ -257,16 +266,16 @@ class REMI(MIDITokenizer):
                         current_tick = previous_note_end
                     current_tick += beat * time_division + pos * ticks_per_sample
                     current_bar = current_tick // ticks_per_bar
-                elif token.split("_")[0] == "Position":
+                elif tok_type == "Position":
                     if current_bar == -1:
                         current_bar = (
                             0  # as this Position token occurs before any Bar token
                         )
                     current_tick = (
                         current_bar * ticks_per_bar
-                        + int(token.split("_")[1]) * ticks_per_sample
+                        + int(tok_val) * ticks_per_sample
                     )
-                elif token.split("_")[0] == "Pitch":
+                elif tok_type == "Pitch":
                     try:
                         if (
                             seq[ti + 1].split("_")[0] == "Velocity"
@@ -297,17 +306,17 @@ class REMI(MIDITokenizer):
                         IndexError
                     ):  # A well constituted sequence should not raise an exception
                         pass  # However with generated sequences this can happen, or if the sequence isn't finished
-                elif token.split("_")[0] == "Program":
-                    current_program = int(token.split("_")[1])
-                elif token.split("_")[0] == "Tempo":
+                elif tok_type == "Program":
+                    current_program = int(tok_val)
+                elif tok_type == "Tempo":
                     # If your encoding include tempo tokens, each Position token should be followed by
                     # a tempo token, but if it is not the case this method will skip this step
-                    tempo = float(token.split("_")[1])
+                    tempo = float(tok_val)
                     if si == 0 and current_tick != tempo_changes[-1].time:
                         tempo_changes.append(TempoChange(tempo, current_tick))
                     previous_note_end = max(previous_note_end, current_tick)
-                elif token.split("_")[0] == "TimeSig":
-                    num, den = self._parse_token_time_signature(token.split("_")[1])
+                elif tok_type == "TimeSig":
+                    num, den = self._parse_token_time_signature(tok_val)
                     if (
                         num != time_signature_changes[-1].numerator
                         and den != time_signature_changes[-1].denominator
@@ -318,6 +327,27 @@ class REMI(MIDITokenizer):
                         ticks_per_bar = self._compute_ticks_per_bar(
                             time_sig, time_division
                         )
+                elif tok_type == "Pedal":
+                    pedal_prog = int(tok_val) if self.config.use_programs else current_program
+                    if self.config.sustain_pedal_duration and ti + 1 < len(seq):
+                        if seq[ti + 1].split("_")[0] == "Duration":
+                            duration = self._token_duration_to_ticks(seq[ti + 1].split("_")[1], time_division)
+                            # Add instrument if it doesn't exist, can happen for the first tokens
+                            check_inst(pedal_prog)
+                            instruments[pedal_prog].pedals.append(Pedal(current_tick, current_tick + duration))
+                    else:
+                        if pedal_prog not in active_pedals:
+                            active_pedals[pedal_prog] = current_tick
+                elif tok_type == "PedalOff":
+                    pedal_prog = int(tok_val) if self.config.use_programs else current_program
+                    if pedal_prog in active_pedals:
+                        check_inst(pedal_prog)
+                        instruments[pedal_prog].pedals.append(Pedal(active_pedals[pedal_prog], current_tick))
+                        del active_pedals[pedal_prog]
+                elif tok_type == "PitchBend":
+                    if current_program not in instruments.keys():
+                        check_inst(current_program)
+                    instruments[current_program].pitch_bends.append(PitchBend(int(tok_val), current_tick))
         if len(tempo_changes) > 1:
             del tempo_changes[0]  # delete mocked tempo change
         tempo_changes[0].time = 0
@@ -327,6 +357,10 @@ class REMI(MIDITokenizer):
 
         # create MidiFile
         midi.instruments = list(instruments.values())
+        for instrument in midi.instruments:
+            if instrument.program == -1:
+                instrument.program = 0
+                instrument.is_drum = True
         midi.tempo_changes = tempo_changes
         midi.time_signature_changes = time_signature_changes
         midi.max_tick = max(
@@ -381,25 +415,8 @@ class REMI(MIDITokenizer):
         nb_positions = max(self.config.beat_res.values()) * max_nb_beats
         vocab += [f"Position_{i}" for i in range(nb_positions)]
 
-        # CHORD
-        if self.config.use_chords:
-            vocab += self._create_chords_tokens()
-
-        # REST
-        if self.config.use_rests:
-            vocab += [f'Rest_{".".join(map(str, rest))}' for rest in self.rests]
-
-        # TEMPO
-        if self.config.use_tempos:
-            vocab += [f"Tempo_{i}" for i in self.tempos]
-
-        # PROGRAM
-        if self.config.use_programs:
-            vocab += [f"Program_{program}" for program in self.config.programs]
-
-        # TIME SIGNATURE
-        if self.config.use_time_signatures:
-            vocab += [f"TimeSig_{i[0]}/{i[1]}" for i in self.time_signatures]
+        # Add additional tokens
+        self._add_additional_tokens_to_vocab_list(vocab)
 
         return vocab
 
@@ -411,45 +428,108 @@ class REMI(MIDITokenizer):
         """
         dic: Dict[str, List[str]] = dict()
 
-        dic["Bar"] = ["Position", "Bar"]
-        dic["Position"] = ["Pitch"]
+        if self.config.use_programs:
+            first_note_token_type = "Program"
+            dic["Program"] = ["Pitch"]
+        else:
+            first_note_token_type = "Pitch"
         dic["Pitch"] = ["Velocity"]
         dic["Velocity"] = ["Duration"]
-        dic["Duration"] = ["Pitch", "Position", "Bar"]
+        dic["Duration"] = [first_note_token_type, "Position", "Bar"]
+        dic["Bar"] = ["Position", "Bar"]
+        dic["Position"] = [first_note_token_type]
+
+        if self.config.use_chords:
+            dic["Chord"] = [first_note_token_type]
+            dic["Position"] += ["Chord"]
+            if self.config.use_programs:
+                dic["Program"].append("Chord")
+
+        if self.config.use_tempos:
+            dic["Position"] += ["Tempo"]
+            dic["Tempo"] = [first_note_token_type, "Position", "Bar"]
+            if self.config.use_chords:
+                dic["Tempo"] += ["Chord"]
+            if self.config.use_rests:
+                dic["Tempo"].append("Rest")  # only for first token
 
         if self.config.use_time_signatures:
             dic["Bar"] = ["TimeSig"]
-            dic["TimeSig"] = ["Position", "Bar"]
+            dic["TimeSig"] = [first_note_token_type, "Position", "Bar"]
+            if self.config.use_chords:
+                dic["TimeSig"] += ["Chord"]
+            if self.config.use_rests:
+                dic["TimeSig"].append("Rest")  # only for first token
+            if self.config.use_tempos:
+                dic["Tempo"].append("TimeSig")
 
-        if self.config.use_chords:
-            dic["Chord"] = ["Pitch"]
-            dic["Position"] += ["Chord"]
-
-        if self.config.use_tempos:
-            dic["Tempo"] = ["Bar", "Position"]
-            if self.config.use_programs:
-                dic["Tempo"].append("Program")
+        if self.config.use_sustain_pedals:
+            dic["Position"].append("Pedal")
+            if self.config.sustain_pedal_duration:
+                dic["Pedal"] = ["Duration"]
+                dic["Duration"] = [first_note_token_type, "Position", "Bar"]
             else:
-                dic["Tempo"].append("Pitch")
-            dic["Position"] += ["Tempo"]
-            dic["Bar"] += ["Tempo"]
+                dic["PedalOff"] = ["Pedal", "PedalOff", first_note_token_type, "Position", "Bar"]
+                dic["Pedal"] = ["Pedal", first_note_token_type, "Position", "Bar"]
+                dic["Position"].append("PedalOff")
+            if self.config.use_chords:
+                dic["Pedal"].append("Chord")
+                if not self.config.sustain_pedal_duration:
+                    dic["PedalOff"].append("Chord")
+                    dic["Chord"].append("PedalOff")
+            if self.config.use_rests:
+                dic["Pedal"].append("Rest")
+                if not self.config.sustain_pedal_duration:
+                    dic["PedalOff"].append("Rest")
+            if self.config.use_tempos:
+                dic["Tempo"].append("Pedal")
+                if not self.config.sustain_pedal_duration:
+                    dic["Tempo"].append("PedalOff")
             if self.config.use_time_signatures:
-                dic["TimeSig"].append("Tempo")
+                dic["TimeSig"].append("Pedal")
+                if not self.config.sustain_pedal_duration:
+                    dic["TimeSig"].append("PedalOff")
+
+        if self.config.use_pitch_bends:
+            # As a Program token will precede PitchBend otherwise
+            # Else no need to add Program as its already in
+            dic["PitchBend"] = [first_note_token_type, "Position", "Bar"]
+            if not self.config.use_programs:
+                dic["Position"].append("PitchBend")
+                if self.config.use_tempos:
+                    dic["Tempo"].append("PitchBend")
+                if self.config.use_time_signatures:
+                    dic["TimeSig"].append("PitchBend")
+                if self.config.use_sustain_pedals:
+                    dic["Pedal"].append("PitchBend")
+                    if self.config.sustain_pedal_duration:
+                        dic["Duration"].append("PitchBend")
+                    else:
+                        dic["PedalOff"].append("PitchBend")
+            else:
+                dic["Program"].append("PitchBend")
+            if self.config.use_chords:
+                dic["PitchBend"].append("Chord")
+            if self.config.use_rests:
+                dic["PitchBend"].append("Rest")
 
         if self.config.use_rests:
-            dic["Rest"] = ["Rest", "Position", "Bar"]
-            dic["Duration"] += ["Rest"]
-            if self.config.use_time_signatures:
-                dic["TimeSig"].append("Rest")
+            dic["Rest"] = ["Rest", first_note_token_type, "Position", "Bar"]
+            dic["Duration"].append("Rest")
+            if self.config.use_chords:
+                dic["Rest"] += ["Chord"]
             if self.config.use_tempos:
-                dic["Tempo"].append("Rest")
-
-        if self.config.use_programs:
-            dic["Program"] = ["Pitch", "Chord"]
-            dic["Chord"] = ["Program"]
-            dic["Position"].remove("Pitch")
-            dic["Position"].append("Program")
-            dic["Duration"].remove("Pitch")
-            dic["Duration"].append("Program")
+                dic["Rest"].append("Tempo")
+            if self.config.use_time_signatures:
+                dic["Rest"].append("TimeSig")
+            if self.config.use_sustain_pedals:
+                dic["Rest"].append("Pedal")
+                if self.config.sustain_pedal_duration:
+                    dic["Duration"].append("Rest")
+                else:
+                    dic["Rest"].append("PedalOff")
+                    dic["PedalOff"].append("Rest")
+            if self.config.use_pitch_bends:
+                dic["Rest"].append("PitchBend")
 
         return dic

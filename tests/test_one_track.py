@@ -23,8 +23,11 @@ from .tests_utils import (
     ALL_TOKENIZATIONS,
     track_equals,
     tempo_changes_equals,
+    pedal_equals,
+    pitch_bend_equals,
     time_signature_changes_equals,
     adapt_tempo_changes_times,
+    adjust_pedal_durations,
     remove_equal_successive_tempos,
 )
 
@@ -37,6 +40,8 @@ TOKENIZER_PARAMS = {
     "use_rests": True,
     "use_tempos": True,
     "use_time_signatures": True,
+    "use_sustain_pedals": True,
+    "use_pitch_bends": True,
     "use_programs": False,
     "rest_range": (4, 16),
     "nb_tempos": 32,
@@ -48,6 +53,7 @@ TOKENIZER_PARAMS = {
     "chord_unknown": False,
     "delete_equal_successive_time_sig_changes": True,
     "delete_equal_successive_tempo_changes": True,
+    "sustain_pedal_duration": True,
 }
 
 
@@ -104,6 +110,10 @@ def test_one_track_midi_to_tokens_to_midi(
             # When the tokenizer only decoded tempo changes different from the last tempo val
             if tokenization in ["CPWord"]:
                 remove_equal_successive_tempos(midi_to_compare.tempo_changes)
+            # Adjust pedal ends to the maximum possible value
+            if tokenizer.config.use_sustain_pedals:
+                for track in midi_to_compare.instruments:
+                    adjust_pedal_durations(track.pedals, tokenizer, midi.ticks_per_beat)
 
             # printing the tokenizer shouldn't fail
             _ = str(tokenizer)
@@ -170,6 +180,28 @@ def test_one_track_midi_to_tokens_to_midi(
                         f"MIDI {i} - {file_path} failed to encode/decode TIME SIGNATURE changes with "
                         f"{tokenization} ({len(time_sig_errors)} errors)"
                     )
+
+            # Checks pedals
+            if tokenizer.config.use_sustain_pedals:
+                pedal_errors = pedal_equals(midi_to_compare, new_midi)
+                if any(len(err) > 0 for err in pedal_errors):
+                    has_errors = True
+                    print(
+                        f"MIDI {i} - {file_path} failed to encode/decode PEDALS with "
+                        f"{tokenization} ({sum(len(err) for err in pedal_errors)} errors)"
+                    )
+
+            # Checks pitch bends
+            if tokenizer.config.use_pitch_bends:
+                pitch_bend_errors = pitch_bend_equals(midi_to_compare, new_midi)
+                if any(len(err) > 0 for err in pitch_bend_errors):
+                    has_errors = True
+                    print(
+                        f"MIDI {i} - {file_path} failed to encode/decode PITCH BENDS with "
+                        f"{tokenization} ({sum(len(err) for err in pitch_bend_errors)} errors)"
+                    )
+
+            # TODO check control changes
 
         if has_errors:
             at_least_one_error = True

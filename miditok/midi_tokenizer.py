@@ -10,7 +10,15 @@ from typing import List, Tuple, Dict, Union, Callable, Iterable, Optional, Any, 
 
 import numpy as np
 from tqdm import tqdm
-from miditoolkit import MidiFile, Instrument, Note, TempoChange, TimeSignature
+from miditoolkit import (
+    MidiFile,
+    Instrument,
+    Note,
+    TempoChange,
+    TimeSignature,
+    Pedal,
+    PitchBend,
+)
 from tokenizers import Tokenizer as TokenizerFast
 from tokenizers.models import BPE
 from tokenizers.trainers import BpeTrainer
@@ -245,6 +253,11 @@ class MIDITokenizer(ABC):
         if self.config.use_time_signatures:
             self.time_signatures = self.__create_time_signatures()
 
+        # Pitch bends
+        self.pitch_bends = np.zeros(1)
+        if self.config.use_pitch_bends:
+            self.pitch_bends = self.__create_pitch_bends()
+
         # Vocabulary and token types graph
         if (
             len(self.vocab) == 0
@@ -350,6 +363,17 @@ class MIDITokenizer(ABC):
             if len(midi.instruments[t].notes) == 0:
                 del midi.instruments[t]
                 continue
+
+            # Quantize sustain pedal and pitch bend
+            if self.config.use_sustain_pedals:
+                self._quantize_sustain_pedals(
+                    midi.instruments[t].pedals, midi.ticks_per_beat
+                )
+            if self.config.use_pitch_bends:
+                self._quantize_pitch_bends(
+                    midi.instruments[t].pitch_bends, midi.ticks_per_beat
+                )
+            # TODO quantize control changes
             t += 1
 
         # Recalculate max_tick is this could have changed after notes quantization
@@ -499,7 +523,51 @@ class MIDITokenizer(ABC):
             prev_ts = time_sig
             i += 1
 
-    def _midi_to_tokens(
+    def _quantize_sustain_pedals(self, pedals: List[Pedal], time_division: int):
+        r"""Quantize the sustain pedal events from a track. Their onset and offset times will be adjusted
+        according to the beat resolution of the tokenizer.
+
+        :param pedals: sustain pedal events.
+        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed).
+        """
+        ticks_per_sample = int(time_division / max(self.config.beat_res.values()))
+        for pedal in pedals:
+            start_offset = pedal.start % ticks_per_sample
+            end_offset = pedal.end % ticks_per_sample
+            pedal.start += (
+                -start_offset
+                if start_offset <= ticks_per_sample / 2
+                else ticks_per_sample - start_offset
+            )
+            pedal.end += (
+                -end_offset
+                if end_offset <= ticks_per_sample / 2
+                else ticks_per_sample - end_offset
+            )
+            if pedal.start == pedal.end:
+                pedal.end += ticks_per_sample
+            pedal.duration = pedal.end - pedal.start
+
+    def _quantize_pitch_bends(self, pitch_bends: List[PitchBend], time_division: int):
+        r"""Quantize the pitch bend events from a track. Their onset and offset times will be adjusted
+        according to the beat resolution of the tokenizer.
+
+        :param pitch_bends: pitch bend events.
+        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed).
+        """
+        ticks_per_sample = int(time_division / max(self.config.beat_res.values()))
+        for pitch_bend in pitch_bends:
+            start_offset = pitch_bend.time % ticks_per_sample
+            pitch_bend.time += (
+                -start_offset
+                if start_offset <= ticks_per_sample / 2
+                else ticks_per_sample - start_offset
+            )
+            pitch_bend.pitch = self.pitch_bends[
+                np.argmin(np.abs(self.pitch_bends - pitch_bend.pitch))
+            ]
+
+    def _midi_to_tokens(  # edit overrides to add pedal / pitch bend
         self, midi: MidiFile, *args, **kwargs
     ) -> Union[TokSequence, List[TokSequence]]:
         r"""Converts a preprocessed MIDI object to a sequence of tokens.
@@ -548,7 +616,11 @@ class MIDITokenizer(ABC):
         # Add time events
         if self.one_token_stream:
             if need_to_sort_note_events:
-                all_events.sort(key=lambda x: x.time)
+                if (self.config.use_sustain_pedals or self.config.use_pitch_bends) and len(midi.instruments) > 1:
+                    # We also sort by token type here so that they all come in the same order
+                    all_events.sort(key=lambda x: (x.time, self.__order(x)))
+                else:
+                    all_events.sort(key=lambda x: x.time)
             all_events = self._add_time_events(all_events)
             tok_sequence = TokSequence(events=all_events)
             self.complete_sequence(tok_sequence)
@@ -562,6 +634,24 @@ class MIDITokenizer(ABC):
                 self.complete_sequence(tok_sequence[-1])
 
         return tok_sequence
+
+    @staticmethod
+    def __order(event: Event) -> int:
+        # Global MIDI tokens first
+        if event.type in ["Tempo", "TimeSig"]:
+            return 0
+        # Track effects then
+        elif event.type in ["Pedal", "PedalOff"]:
+            return 1
+        elif event.type == "Program" and event.desc == "ProgramPitchBend":
+            return 2
+        elif event.type == "PitchBend":
+            return 2
+        elif event.type == "ControlChange":
+            return 3
+        # Track notes then
+        else:
+            return 10
 
     def _create_track_events(self, track: Instrument) -> List[Event]:
         r"""Extract the tokens / events of individual tracks: `Pitch`, `Velocity`, `Duration`, `NoteOn`, `NoteOff` and
@@ -593,6 +683,40 @@ class MIDITokenizer(ABC):
                         Event("Program", track.program, chord.time, "ProgramChord")
                     )
                 events.append(chord)
+
+        # Add sustain pedal
+        if self.config.use_sustain_pedals:
+            for pedal in track.pedals:
+                # If not using programs, the default value is 0
+                events.append(Event("Pedal", program if self.config.use_programs else 0, pedal.start))
+                # PedalOff or Duration
+                if self.config.sustain_pedal_duration:
+                    index = np.argmin(np.abs(dur_bins - pedal.duration))
+                    events.append(
+                        Event(
+                            "Duration",
+                            ".".join(map(str, self.durations[index])),
+                            pedal.start,
+                        )
+                    )
+                else:
+                    events.append(Event("PedalOff", program, pedal.end))
+
+        # Add pitch bend
+        if self.config.use_pitch_bends:
+            for pitch_bend in track.pitch_bends:
+                if self.config.use_programs:
+                    events.append(
+                        Event(
+                            "Program",
+                            program,
+                            pitch_bend.time,
+                            "ProgramPitchBend",
+                        )
+                    )
+                events.append(Event("PitchBend", pitch_bend.pitch, pitch_bend.time))
+
+        # TODO add control changes
 
         # Creates the Note On, Note Off and Velocity events
         for n, note in enumerate(track.notes):
@@ -956,6 +1080,42 @@ class MIDITokenizer(ABC):
             for tok in vocab:
                 self.add_to_vocab(tok)
 
+    def _add_additional_tokens_to_vocab_list(self, vocab: List[str]):
+        # CHORD
+        if self.config.use_chords:
+            vocab += self._create_chords_tokens()
+
+        # REST
+        if self.config.use_rests:
+            vocab += [f'Rest_{".".join(map(str, rest))}' for rest in self.rests]
+
+        # TEMPO
+        if self.config.use_tempos:
+            vocab += [f"Tempo_{i}" for i in self.tempos]
+
+        # PROGRAM
+        if self.config.use_programs:
+            vocab += [f"Program_{program}" for program in self.config.programs]
+
+        # TIME SIGNATURE
+        if self.config.use_time_signatures:
+            vocab += [f"TimeSig_{i[0]}/{i[1]}" for i in self.time_signatures]
+
+        # PEDAL
+        if self.config.use_sustain_pedals:
+            if self.config.use_programs:
+                vocab += [f"Pedal_{program}" for program in self.config.programs]
+                if not self.config.sustain_pedal_duration:
+                    vocab += [f"PedalOff_{program}" for program in self.config.programs]
+            else:
+                vocab.append("Pedal_0")
+                if not self.config.sustain_pedal_duration:
+                    vocab.append("PedalOff_0")
+
+        # PITCH BEND
+        if self.config.use_pitch_bends:
+            vocab += [f"PitchBend_{pitch_bend}" for pitch_bend in self.pitch_bends]
+
     def _update_token_types_indexes(self):
         r"""Updates the _token_types_indexes attribute according to _event_to_token."""
 
@@ -1193,6 +1353,13 @@ class MIDITokenizer(ABC):
             time_signatures.extend([(nb_beats, beat_res) for nb_beats in beats])
 
         return time_signatures
+
+    def __create_pitch_bends(self) -> np.ndarray:
+        r"""Creates the pitch bend values, as numpy array, using `self.config.pitch_bend_range`.
+
+        :return: the pitch bend values.
+        """
+        return np.linspace(*self.config.pitch_bend_range, dtype=np.int32)
 
     @staticmethod
     def _compute_ticks_per_bar(time_sig: TimeSignature, time_division: int):
@@ -1440,7 +1607,9 @@ class MIDITokenizer(ABC):
                 if out_path is not None
                 else path
             )
-            self.save_tokens(seq, out_, sample["programs"] if "programs" in sample else None)
+            self.save_tokens(
+                seq, out_, sample["programs"] if "programs" in sample else None
+            )
 
     def _are_ids_bpe_encoded(self, ids: Union[List[int], np.ndarray]) -> bool:
         r"""A small check telling if a sequence of ids are encoded with BPE.
@@ -1610,7 +1779,7 @@ class MIDITokenizer(ABC):
             current_pos = int(tokens[0].split("_")[1])
 
         for ti, token in enumerate(tokens[1:]):
-            # err_tokens = tokens[ti - 4: ti + 4]  # uncomment for debug
+            # err_tokens = tokens[ti - 4 : ti + 4]  # uncomment for debug
             event_type, event_value = token.split("_")[0], token.split("_")[1]
 
             # Good token type

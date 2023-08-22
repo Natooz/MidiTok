@@ -21,13 +21,15 @@ from typing import Union
 from time import time
 
 import miditok
-from miditoolkit import MidiFile, Marker
+from miditoolkit import MidiFile, Marker, Pedal
 from tqdm import tqdm
 
 from .tests_utils import (
     ALL_TOKENIZATIONS,
     midis_equals,
     tempo_changes_equals,
+    pedal_equals,
+    pitch_bend_equals,
     reduce_note_durations,
     adapt_tempo_changes_times,
     time_signature_changes_equals,
@@ -43,6 +45,8 @@ TOKENIZER_PARAMS = {
     "use_rests": True,  # tempo decode fails when False for MIDILike because beat_res range is too short
     "use_tempos": True,
     "use_time_signatures": True,
+    "use_sustain_pedals": True,
+    "use_pitch_bends": True,
     "use_programs": True,
     "chord_maps": miditok.constants.CHORD_MAPS,
     "chord_tokens_with_root_note": True,  # Tokens will look as "Chord_C:maj"
@@ -55,6 +59,7 @@ TOKENIZER_PARAMS = {
     "tempo_range": (40, 250),
     "log_tempos": False,
     "time_signature_range": {4: [3, 4]},
+    "sustain_pedal_duration": False,
 }
 
 
@@ -77,6 +82,9 @@ def test_multitrack_midi_to_tokens_to_midi(
         if midi.ticks_per_beat % max(BEAT_RES_TEST.values()) != 0:
             continue
         has_errors = False
+        # add pedal messages
+        for ti in range(max(3, len(midi.instruments))):
+            midi.instruments[ti].pedals = [Pedal(start, start + 200) for start in [100, 600, 1800, 2200]]
 
         for tokenization in ALL_TOKENIZATIONS:
             tokenizer_config = miditok.TokenizerConfig(**TOKENIZER_PARAMS)
@@ -148,8 +156,8 @@ def test_multitrack_midi_to_tokens_to_midi(
                                 )
                             )
                 print(
-                    f"MIDI {i} - {file_path} failed to encode/decode NOTES with "
-                    f"{tokenization} ({sum(len(t[2]) for t in errors)} errors)"
+                    f"MIDI {i} - {file_path} / {tokenization} failed to encode/decode NOTES"
+                    f"({sum(len(t[2]) for t in errors)} errors)"
                 )
 
             # Checks tempos
@@ -162,8 +170,8 @@ def test_multitrack_midi_to_tokens_to_midi(
                 if len(tempo_errors) > 0:
                     has_errors = True
                     print(
-                        f"MIDI {i} - {file_path} failed to encode/decode TEMPO changes with "
-                        f"{tokenization} ({len(tempo_errors)} errors)"
+                        f"MIDI {i} - {file_path} / {tokenization} failed to encode/decode TEMPO changes"
+                        f"({len(tempo_errors)} errors)"
                     )
 
             # Checks time signatures
@@ -175,9 +183,31 @@ def test_multitrack_midi_to_tokens_to_midi(
                 if len(time_sig_errors) > 0:
                     has_errors = True
                     print(
-                        f"MIDI {i} - {file_path} failed to encode/decode TIME SIGNATURE changes with "
-                        f"{tokenization} ({len(time_sig_errors)} errors)"
+                        f"MIDI {i} - {file_path} / {tokenization} failed to encode/decode TIME SIGNATURE changes"
+                        f"({len(time_sig_errors)} errors)"
                     )
+
+            # Checks pedals
+            if tokenizer.config.use_sustain_pedals:
+                pedal_errors = pedal_equals(midi_to_compare, new_midi)
+                if any(len(err) > 0 for err in pedal_errors):
+                    has_errors = True
+                    print(
+                        f"MIDI {i} - {file_path} / {tokenization} failed to encode/decode PEDALS"
+                        f"({sum(len(err) for err in pedal_errors)} errors)"
+                    )
+
+            # Checks pitch bends
+            if tokenizer.config.use_pitch_bends:
+                pitch_bend_errors = pitch_bend_equals(midi_to_compare, new_midi)
+                if any(len(err) > 0 for err in pitch_bend_errors):
+                    has_errors = True
+                    print(
+                        f"MIDI {i} - {file_path} / {tokenization} failed to encode/decode PITCH BENDS"
+                        f"({sum(len(err) for err in pitch_bend_errors)} errors)"
+                    )
+
+            # TODO check control changes
 
             if has_errors:
                 has_errors = True

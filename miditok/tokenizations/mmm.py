@@ -36,6 +36,8 @@ class MMM(MIDITokenizer):
         self.one_token_stream = True
         self.config.use_programs = True
         self.config.use_rests = False
+        self.config.use_sustain_pedals = False
+        self.config.use_pitch_bends = False
         # Recreate densities here just in case density_bins_max was loaded from params (list to np array)
         if "density_bins_max" not in self.config.additional_params:
             self.config.additional_params["density_bins_max"] = MMM_DENSITY_BINS_MAX
@@ -391,20 +393,8 @@ class MMM(MIDITokenizer):
             f"NoteDensity_{i}" for i in self.config.additional_params["note_densities"]
         ]
 
-        # TIME SIGNATURE
-        if self.config.use_time_signatures:
-            vocab += [f"TimeSig_{i[0]}/{i[1]}" for i in self.time_signatures]
-
-        # CHORD
-        if self.config.use_chords:
-            vocab += self._create_chords_tokens()
-
-        # TEMPO
-        if self.config.use_tempos:
-            vocab += [f"Tempo_{i}" for i in self.tempos]
-
-        # PROGRAM
-        vocab += [f"Program_{program}" for program in self.config.programs]
+        # Add additional tokens (handles Programs too)
+        self._add_additional_tokens_to_vocab_list(vocab)
 
         return vocab
 
