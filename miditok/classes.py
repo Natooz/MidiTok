@@ -18,8 +18,8 @@ from .constants import (
     USE_RESTS,
     USE_TEMPOS,
     USE_TIME_SIGNATURE,
-    USE_SUSTAIN_PEDAL,
-    USE_PITCH_BEND,
+    USE_SUSTAIN_PEDALS,
+    USE_PITCH_BENDS,
     USE_PROGRAMS,
     REST_RANGE,
     CHORD_MAPS,
@@ -168,9 +168,9 @@ class TokenizerConfig:
             :ref:`MIDILike` will only represent time signature changes (MIDI messages) as they come. If you want more
             "recalls" of the current time signature within your token sequences, you can preprocess you MIDI file to
             add more TimeSignatureChange objects. (default: False)
-    :param use_sustain_pedal: will use `Pedal` tokens to represent the sustain pedal events. In multitrack setting,
+    :param use_sustain_pedals: will use `Pedal` tokens to represent the sustain pedal events. In multitrack setting,
             The value of each Pedal token will be equal to the program of the track. (default: False)
-    :param use_pitch_bend: will use `PitchBend` tokens. In multitrack setting, a `Program` token will be added before
+    :param use_pitch_bends: will use `PitchBend` tokens. In multitrack setting, a `Program` token will be added before
             each `PitchBend` token. (default: False)
     :param use_programs: will use ``Program`` tokens, if the tokenizer is compatible.
             Used to specify an instrument / MIDI program. The :ref:`Octuple`, :ref:`MMM` and :ref:`MuMIDI` tokenizers
@@ -234,8 +234,8 @@ class TokenizerConfig:
         use_rests: bool = USE_RESTS,
         use_tempos: bool = USE_TEMPOS,
         use_time_signatures: bool = USE_TIME_SIGNATURE,
-        use_sustain_pedal: bool = USE_SUSTAIN_PEDAL,
-        use_pitch_bend: bool = USE_PITCH_BEND,
+        use_sustain_pedals: bool = USE_SUSTAIN_PEDALS,
+        use_pitch_bends: bool = USE_PITCH_BENDS,
         use_programs: bool = USE_PROGRAMS,
         rest_range: Sequence = REST_RANGE,
         chord_maps: Dict[str, Tuple] = CHORD_MAPS,
@@ -265,8 +265,8 @@ class TokenizerConfig:
         self.use_rests: bool = use_rests
         self.use_tempos: bool = use_tempos
         self.use_time_signatures: bool = use_time_signatures
-        self.use_sustain_pedal: bool = use_sustain_pedal
-        self.use_pitch_bend: bool = use_pitch_bend
+        self.use_sustain_pedals: bool = use_sustain_pedals
+        self.use_pitch_bends: bool = use_pitch_bends
         self.use_programs: bool = use_programs
 
         # Rest params

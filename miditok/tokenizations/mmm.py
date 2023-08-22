@@ -36,8 +36,8 @@ class MMM(MIDITokenizer):
         self.one_token_stream = True
         self.config.use_programs = True
         self.config.use_rests = False
-        self.config.use_sustain_pedal = False
-        self.config.use_pitch_bend = False
+        self.config.use_sustain_pedals = False
+        self.config.use_pitch_bends = False
         # Recreate densities here just in case density_bins_max was loaded from params (list to np array)
         if "density_bins_max" not in self.config.additional_params:
             self.config.additional_params["density_bins_max"] = MMM_DENSITY_BINS_MAX

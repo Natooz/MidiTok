@@ -26,8 +26,8 @@ USE_CHORDS = False
 USE_RESTS = False
 USE_TEMPOS = False
 USE_TIME_SIGNATURE = False
-USE_SUSTAIN_PEDAL = False
-USE_PITCH_BEND = False
+USE_SUSTAIN_PEDALS = False
+USE_PITCH_BENDS = False
 USE_PROGRAMS = False
 
 # rest params, (/min_rest, max_rest_in_BEAT)

@@ -1,6 +1,5 @@
 """
 MIDI encoding base class and methods
-TODO update additional tokens table in docs
 """
 from abc import ABC, abstractmethod
 import math
@@ -11,7 +10,15 @@ from typing import List, Tuple, Dict, Union, Callable, Iterable, Optional, Any, 
 
 import numpy as np
 from tqdm import tqdm
-from miditoolkit import MidiFile, Instrument, Note, TempoChange, TimeSignature, Pedal, PitchBend
+from miditoolkit import (
+    MidiFile,
+    Instrument,
+    Note,
+    TempoChange,
+    TimeSignature,
+    Pedal,
+    PitchBend,
+)
 from tokenizers import Tokenizer as TokenizerFast
 from tokenizers.models import BPE
 from tokenizers.trainers import BpeTrainer
@@ -248,7 +255,7 @@ class MIDITokenizer(ABC):
 
         # Pitch bends
         self.pitch_bends = np.zeros(1)
-        if self.config.use_pitch_bend:
+        if self.config.use_pitch_bends:
             self.pitch_bends = self.__create_pitch_bends()
 
         # Vocabulary and token types graph
@@ -358,10 +365,14 @@ class MIDITokenizer(ABC):
                 continue
 
             # Quantize sustain pedal and pitch bend
-            if self.config.use_sustain_pedal:
-                self._quantize_sustain_pedals(midi.instruments[t].pedals, midi.ticks_per_beat)
-            if self.config.use_pitch_bend:
-                self._quantize_pitch_bends(midi.instruments[t].pitch_bends, midi.ticks_per_beat)
+            if self.config.use_sustain_pedals:
+                self._quantize_sustain_pedals(
+                    midi.instruments[t].pedals, midi.ticks_per_beat
+                )
+            if self.config.use_pitch_bends:
+                self._quantize_pitch_bends(
+                    midi.instruments[t].pitch_bends, midi.ticks_per_beat
+                )
             # TODO quantize control changes
             t += 1
 
@@ -529,8 +540,12 @@ class MIDITokenizer(ABC):
                 else ticks_per_sample - start_offset
             )
             pedal.end += (
-                -end_offset if end_offset <= ticks_per_sample / 2 else ticks_per_sample - end_offset
+                -end_offset
+                if end_offset <= ticks_per_sample / 2
+                else ticks_per_sample - end_offset
             )
+            if pedal.start == pedal.end:
+                pedal.end += ticks_per_sample
             pedal.duration = pedal.end - pedal.start
 
     def _quantize_pitch_bends(self, pitch_bends: List[PitchBend], time_division: int):
@@ -548,7 +563,9 @@ class MIDITokenizer(ABC):
                 if start_offset <= ticks_per_sample / 2
                 else ticks_per_sample - start_offset
             )
-            pitch_bend.pitch = self.pitch_bends[np.argmin(np.abs(self.pitch_bends - pitch_bend.pitch))]
+            pitch_bend.pitch = self.pitch_bends[
+                np.argmin(np.abs(self.pitch_bends - pitch_bend.pitch))
+            ]
 
     def _midi_to_tokens(  # edit overrides to add pedal / pitch bend
         self, midi: MidiFile, *args, **kwargs
@@ -599,7 +616,11 @@ class MIDITokenizer(ABC):
         # Add time events
         if self.one_token_stream:
             if need_to_sort_note_events:
-                all_events.sort(key=lambda x: x.time)
+                if (self.config.use_sustain_pedals or self.config.use_pitch_bends) and len(midi.instruments) > 1:
+                    # We also sort by token type here so that they all come in the same order
+                    all_events.sort(key=lambda x: (x.time, self.__order(x)))
+                else:
+                    all_events.sort(key=lambda x: x.time)
             all_events = self._add_time_events(all_events)
             tok_sequence = TokSequence(events=all_events)
             self.complete_sequence(tok_sequence)
@@ -613,6 +634,24 @@ class MIDITokenizer(ABC):
                 self.complete_sequence(tok_sequence[-1])
 
         return tok_sequence
+
+    @staticmethod
+    def __order(event: Event) -> int:
+        # Global MIDI tokens first
+        if event.type in ["Tempo", "TimeSig"]:
+            return 0
+        # Track effects then
+        elif event.type in ["Pedal", "PedalOff"]:
+            return 1
+        elif event.type == "Program" and event.desc == "ProgramPitchBend":
+            return 2
+        elif event.type == "PitchBend":
+            return 2
+        elif event.type == "ControlChange":
+            return 3
+        # Track notes then
+        else:
+            return 10
 
     def _create_track_events(self, track: Instrument) -> List[Event]:
         r"""Extract the tokens / events of individual tracks: `Pitch`, `Velocity`, `Duration`, `NoteOn`, `NoteOff` and
@@ -646,28 +685,36 @@ class MIDITokenizer(ABC):
                 events.append(chord)
 
         # Add sustain pedal
-        if self.config.use_sustain_pedal:
+        if self.config.use_sustain_pedals:
             for pedal in track.pedals:
                 # If not using programs, the default value is 0
-                program = track.program if self.config.use_programs else 0
-                events.append(
-                    Event("Pedal", program, pedal.time)
-                )
+                events.append(Event("Pedal", program if self.config.use_programs else 0, pedal.start))
                 # PedalOff or Duration
                 if self.config.sustain_pedal_duration:
                     index = np.argmin(np.abs(dur_bins - pedal.duration))
-                    events.append(Event("Duration", ".".join(map(str, self.durations[index])), pedal.time))
+                    events.append(
+                        Event(
+                            "Duration",
+                            ".".join(map(str, self.durations[index])),
+                            pedal.start,
+                        )
+                    )
                 else:
-                    events.append(Event("PedalOff", pedal.end))
+                    events.append(Event("PedalOff", program, pedal.end))
 
         # Add pitch bend
-        if self.config.use_pitch_bend:
+        if self.config.use_pitch_bends:
             for pitch_bend in track.pitch_bends:
                 if self.config.use_programs:
-                    events.append(Event("Program", track.program, pitch_bend.time, "ProgramPitchBend"))
-                events.append(
-                    Event("PitchBend", pitch_bend.pitch, pitch_bend.time)
-                )
+                    events.append(
+                        Event(
+                            "Program",
+                            program,
+                            pitch_bend.time,
+                            "ProgramPitchBend",
+                        )
+                    )
+                events.append(Event("PitchBend", pitch_bend.pitch, pitch_bend.time))
 
         # TODO add control changes
 
@@ -1055,16 +1102,20 @@ class MIDITokenizer(ABC):
             vocab += [f"TimeSig_{i[0]}/{i[1]}" for i in self.time_signatures]
 
         # PEDAL
-        if self.config.use_sustain_pedal:
+        if self.config.use_sustain_pedals:
             if self.config.use_programs:
                 vocab += [f"Pedal_{program}" for program in self.config.programs]
+                if not self.config.sustain_pedal_duration:
+                    vocab += [f"PedalOff_{program}" for program in self.config.programs]
             else:
                 vocab.append("Pedal_0")
+                if not self.config.sustain_pedal_duration:
+                    vocab.append("PedalOff_0")
 
         # PITCH BEND
-        if self.config.use_pitch_bend:
+        if self.config.use_pitch_bends:
             vocab += [f"PitchBend_{pitch_bend}" for pitch_bend in self.pitch_bends]
-    
+
     def _update_token_types_indexes(self):
         r"""Updates the _token_types_indexes attribute according to _event_to_token."""
 
@@ -1556,7 +1607,9 @@ class MIDITokenizer(ABC):
                 if out_path is not None
                 else path
             )
-            self.save_tokens(seq, out_, sample["programs"] if "programs" in sample else None)
+            self.save_tokens(
+                seq, out_, sample["programs"] if "programs" in sample else None
+            )
 
     def _are_ids_bpe_encoded(self, ids: Union[List[int], np.ndarray]) -> bool:
         r"""A small check telling if a sequence of ids are encoded with BPE.
@@ -1726,7 +1779,7 @@ class MIDITokenizer(ABC):
             current_pos = int(tokens[0].split("_")[1])
 
         for ti, token in enumerate(tokens[1:]):
-            # err_tokens = tokens[ti - 4: ti + 4]  # uncomment for debug
+            # err_tokens = tokens[ti - 4 : ti + 4]  # uncomment for debug
             event_type, event_value = token.split("_")[0], token.split("_")[1]
 
             # Good token type

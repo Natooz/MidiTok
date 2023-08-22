@@ -47,8 +47,8 @@ class MuMIDI(MIDITokenizer):
     def _tweak_config_before_creating_voc(self):
         self.config.use_rests = False
         self.config.use_time_signatures = False
-        self.config.use_sustain_pedal = False
-        self.config.use_pitch_bend = False
+        self.config.use_sustain_pedals = False
+        self.config.use_pitch_bends = False
         self.config.use_programs = True
         self.one_token_stream = True
 

@@ -4,7 +4,10 @@
 
 from typing import Tuple, List, Union
 
-from miditoolkit import MidiFile, Instrument, Note, TempoChange, TimeSignature
+from miditoolkit import MidiFile, Instrument, Note, TempoChange, TimeSignature, Pedal, PitchBend
+import numpy as np
+
+from miditok import MIDITokenizer
 
 
 ALL_TOKENIZATIONS = [
@@ -85,6 +88,40 @@ def time_signature_changes_equals(
     return errors
 
 
+def pedal_equals(
+    midi1: MidiFile, midi2: MidiFile
+) -> List[List[Tuple[str, Union[Pedal, int], float]]]:
+    errors = []
+    for inst1, inst2 in zip(midi1.instruments, midi2.instruments):
+        if len(inst1.pedals) != len(inst2.pedals):
+            errors.append([("len", len(inst1.pedals), len(inst2.pedals))])
+            continue
+        errors.append([])
+        for pedal1, pedal2 in zip(inst1.pedals, inst2.pedals):
+            if pedal1.start != pedal2.start:
+                errors[-1].append(("start", pedal1, pedal2.start))
+            elif pedal1.end != pedal2.end:
+                errors[-1].append(("end", pedal1, pedal2.end))
+    return errors
+
+
+def pitch_bend_equals(
+    midi1: MidiFile, midi2: MidiFile
+) -> List[List[Tuple[str, Union[PitchBend, int], float]]]:
+    errors = []
+    for inst1, inst2 in zip(midi1.instruments, midi2.instruments):
+        if len(inst1.pitch_bends) != len(inst2.pitch_bends):
+            errors.append([("len", len(inst1.pitch_bends), len(inst2.pitch_bends))])
+            continue
+        errors.append([])
+        for pitch_bend1, pitch_bend2 in zip(inst1.pitch_bends, inst2.pitch_bends):
+            if pitch_bend1.time != pitch_bend2.time:
+                errors[-1].append(("time", pitch_bend1, pitch_bend2.time))
+            elif pitch_bend1.pitch != pitch_bend2.pitch:
+                errors[-1].append(("pitch", pitch_bend1, pitch_bend2.pitch))
+    return errors
+
+
 def reduce_note_durations(notes: List[Note], max_note_duration: int):
     r"""Reduce the durations of too long notes.
     Each tokenization can only represent a limited duration value.
@@ -128,6 +165,21 @@ def adapt_tempo_changes_times(
             del tempo_changes[tempo_idx - 1]
             continue
         tempo_idx += 1
+
+
+def adjust_pedal_durations(pedals: List[Pedal], tokenizer: MIDITokenizer, time_division: int):
+    durations_in_tick = np.array(
+        [
+            (beat * res + pos) * time_division // res
+            for beat, pos, res in tokenizer.durations
+        ]
+    )
+    for pedal in pedals:
+        dur_index = np.argmin(np.abs(durations_in_tick - pedal.duration))
+        beat, pos, res = tokenizer.durations[dur_index]
+        dur_index_in_tick = (beat * res + pos) * time_division // res
+        pedal.end = pedal.start + dur_index_in_tick
+        pedal.duration = pedal.end - pedal.start
 
 
 def remove_equal_successive_tempos(tempo_changes: List[TempoChange]):
