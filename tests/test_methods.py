@@ -204,7 +204,7 @@ def test_data_augmentation():
             if tokenizer.one_token_stream:
                 original_tokens, aug_tokens = [original_tokens], [aug_tokens]
             for ti, (original_track, aug_track) in enumerate(
-                    zip(original_tokens, aug_tokens)
+                zip(original_tokens, aug_tokens)
             ):
                 if original_programs is not None and original_programs[ti][1]:  # drums
                     continue

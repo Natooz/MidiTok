@@ -84,7 +84,9 @@ def test_multitrack_midi_to_tokens_to_midi(
         has_errors = False
         # add pedal messages
         for ti in range(max(3, len(midi.instruments))):
-            midi.instruments[ti].pedals = [Pedal(start, start + 200) for start in [100, 600, 1800, 2200]]
+            midi.instruments[ti].pedals = [
+                Pedal(start, start + 200) for start in [100, 600, 1800, 2200]
+            ]
 
         for tokenization in ALL_TOKENIZATIONS:
             tokenizer_config = miditok.TokenizerConfig(**TOKENIZER_PARAMS)

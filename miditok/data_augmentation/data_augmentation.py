@@ -94,7 +94,11 @@ def data_augmentation_dataset(
                 # we dont augment drums
                 if programs is not None and programs[ti][1]:  # drums
                     continue
-                elif tokenizer.one_token_stream and programs is not None and all(p[1] for p in programs):
+                elif (
+                    tokenizer.one_token_stream
+                    and programs is not None
+                    and all(p[1] for p in programs)
+                ):
                     continue
                 corrected_offsets = deepcopy(offsets)
                 vel_dim = int(128 / len(tokenizer.velocities))

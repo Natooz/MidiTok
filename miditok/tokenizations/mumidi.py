@@ -44,6 +44,7 @@ class MuMIDI(MIDITokenizer):
         * Tokens are first sorted by time, then track, then pitch values.
         * Tracks with the same *Program* will be merged.
     """
+
     def _tweak_config_before_creating_voc(self):
         self.config.use_rests = False
         self.config.use_time_signatures = False
@@ -53,9 +54,7 @@ class MuMIDI(MIDITokenizer):
         self.one_token_stream = True
 
         if "drum_pitch_range" not in self.config.additional_params:
-            self.config.additional_params[
-                "drum_pitch_range"
-            ] = DRUM_PITCH_RANGE
+            self.config.additional_params["drum_pitch_range"] = DRUM_PITCH_RANGE
         if "max_bar_embedding" not in self.config.additional_params:
             # this attribute might increase over tokenizations, if the tokenizer encounter longer MIDIs
             self.config.additional_params["max_bar_embedding"] = 60

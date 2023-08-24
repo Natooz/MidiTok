@@ -616,7 +616,9 @@ class MIDITokenizer(ABC):
         # Add time events
         if self.one_token_stream:
             if need_to_sort_note_events:
-                if (self.config.use_sustain_pedals or self.config.use_pitch_bends) and len(midi.instruments) > 1:
+                if (
+                    self.config.use_sustain_pedals or self.config.use_pitch_bends
+                ) and len(midi.instruments) > 1:
                     # We also sort by token type here so that they all come in the same order
                     all_events.sort(key=lambda x: (x.time, self.__order(x)))
                 else:
@@ -688,7 +690,11 @@ class MIDITokenizer(ABC):
         if self.config.use_sustain_pedals:
             for pedal in track.pedals:
                 # If not using programs, the default value is 0
-                events.append(Event("Pedal", program if self.config.use_programs else 0, pedal.start))
+                events.append(
+                    Event(
+                        "Pedal", program if self.config.use_programs else 0, pedal.start
+                    )
+                )
                 # PedalOff or Duration
                 if self.config.sustain_pedal_duration:
                     index = np.argmin(np.abs(dur_bins - pedal.duration))

@@ -4,7 +4,15 @@
 
 from typing import Tuple, List, Union
 
-from miditoolkit import MidiFile, Instrument, Note, TempoChange, TimeSignature, Pedal, PitchBend
+from miditoolkit import (
+    MidiFile,
+    Instrument,
+    Note,
+    TempoChange,
+    TimeSignature,
+    Pedal,
+    PitchBend,
+)
 import numpy as np
 
 from miditok import MIDITokenizer
@@ -167,7 +175,9 @@ def adapt_tempo_changes_times(
         tempo_idx += 1
 
 
-def adjust_pedal_durations(pedals: List[Pedal], tokenizer: MIDITokenizer, time_division: int):
+def adjust_pedal_durations(
+    pedals: List[Pedal], tokenizer: MIDITokenizer, time_division: int
+):
     durations_in_tick = np.array(
         [
             (beat * res + pos) * time_division // res
