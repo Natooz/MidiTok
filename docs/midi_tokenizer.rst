@@ -1,5 +1,5 @@
 =================
-Basics
+Bases
 =================
 
 This page features the bases of MidiTok, of how tokenizers work.
@@ -60,7 +60,6 @@ Additional tokens
 ------------------------
 
 MidiTok offers to include additional tokens on music information. You can specify them in the ``tokenizer_config`` argument (:class:`miditok.TokenizerConfig`) when creating a tokenizer. The :class:`miditok.TokenizerConfig` documentations specifically details the role of each of them, and their associated parameters.
-Cells with ❕ markers means the additional token is implemented by default and not optionnal.
 
 .. csv-table:: Compatibility table of tokenizations and additional tokens.
    :file: additional_tokens_table.csv
