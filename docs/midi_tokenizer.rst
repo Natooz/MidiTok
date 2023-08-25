@@ -156,9 +156,3 @@ To load a tokenizer from saved parameters, just use the ``params`` argument when
 ..  code-block:: python
 
     tokenizer = REMI(params=Path("to", "params.json"))
-
-Limitations
-------------------------
-
-Some tokenizations using Bar tokens (:ref:`REMI`, :ref:`CPWord` and :ref:`MuMIDI`) only considers a 4/x time signature for now. This means that each bar is considered covering 4 beats.
-:ref:`REMIPlus` and :ref:`Octuple` supports it.
