@@ -579,18 +579,6 @@ class MIDITokenizer(ABC):
         :return: a :class:`miditok.TokSequence` if `tokenizer.one_token_stream` is true, else a list of
                 :class:`miditok.TokSequence` objects.
         """
-        need_to_sort_note_events = any(
-            [
-                self.config.use_chords,
-                self.config.use_tempos,
-                self.config.use_time_signatures,
-            ]
-        )
-        if self.one_token_stream:
-            need_to_sort_note_events = (
-                need_to_sort_note_events or len(midi.instruments) > 1
-            )
-
         # Create events list
         all_events = []
         if not self.one_token_stream:
@@ -615,22 +603,20 @@ class MIDITokenizer(ABC):
 
         # Add time events
         if self.one_token_stream:
-            if need_to_sort_note_events:
-                if (
-                    self.config.use_sustain_pedals or self.config.use_pitch_bends
-                ) and len(midi.instruments) > 1:
-                    # We also sort by token type here so that they all come in the same order
-                    all_events.sort(key=lambda x: (x.time, self.__order(x)))
-                else:
-                    all_events.sort(key=lambda x: x.time)
+            if (
+                self.config.use_sustain_pedals or self.config.use_pitch_bends
+            ) and len(midi.instruments) > 1:
+                # We also sort by token type here so that they all come in the same order
+                all_events.sort(key=lambda x: (x.time, self.__order(x)))
+            else:
+                all_events.sort(key=lambda x: x.time)
             all_events = self._add_time_events(all_events)
             tok_sequence = TokSequence(events=all_events)
             self.complete_sequence(tok_sequence)
         else:
             tok_sequence = []
             for i in range(len(all_events)):
-                if need_to_sort_note_events:
-                    all_events[i].sort(key=lambda x: x.time)
+                all_events[i].sort(key=lambda x: x.time)
                 all_events[i] = self._add_time_events(all_events[i])
                 tok_sequence.append(TokSequence(events=all_events[i]))
                 self.complete_sequence(tok_sequence[-1])
