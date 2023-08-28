@@ -79,6 +79,7 @@ class TSD(MIDITokenizer):
                     rest_pos = round(rest_pos / ticks_per_sample)
                     previous_tick = rest_tick
 
+                    # TODO recursive / succesive rests
                     if rest_beat > 0:
                         all_events.append(
                             Event(

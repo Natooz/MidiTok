@@ -51,7 +51,7 @@ class MuMIDI(MIDITokenizer):
         self.config.use_sustain_pedals = False
         self.config.use_pitch_bends = False
         self.config.use_programs = True
-        self.one_token_stream = True
+        self.config.one_token_stream_for_programs = True
 
         if "drum_pitch_range" not in self.config.additional_params:
             self.config.additional_params["drum_pitch_range"] = DRUM_PITCH_RANGE

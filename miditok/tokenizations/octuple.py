@@ -48,8 +48,6 @@ class Octuple(MIDITokenizer):
         self.config.use_rests = False
         self.config.use_sustain_pedals = False
         self.config.use_pitch_bends = False
-        if self.config.use_programs:
-            self.one_token_stream = True
         self.config.delete_equal_successive_tempo_changes = True
 
         # used in place of positional encoding

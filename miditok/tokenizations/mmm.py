@@ -33,7 +33,7 @@ class MMM(MIDITokenizer):
     """
 
     def _tweak_config_before_creating_voc(self):
-        self.one_token_stream = True
+        self.config.one_token_stream_for_programs = True
         self.config.use_programs = True
         self.config.use_rests = False
         self.config.use_sustain_pedals = False

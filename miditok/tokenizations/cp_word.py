@@ -52,8 +52,6 @@ class CPWord(MIDITokenizer):
             type_: idx for idx, type_ in enumerate(token_types)
         }  # used for data augmentation
         self.vocab_types_idx["Bar"] = 1  # same as position
-        if self.config.use_programs:
-            self.one_token_stream = True
 
     def _add_time_events(self, events: List[Event]) -> List[List[Event]]:
         r"""

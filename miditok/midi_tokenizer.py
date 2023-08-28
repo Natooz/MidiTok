@@ -170,10 +170,6 @@ class MIDITokenizer(ABC):
     r"""MIDI tokenizer base class, containing common methods and attributes for all tokenizers.
 
     :param tokenizer_config: the tokenizer's configuration, as a :class:`miditok.classes.TokenizerConfig` object.
-    :param one_token_stream: give True if the tokenizer handle all the tracks of a MIDI as a single sequence of tokens.
-            Tokens will be saved as a single sequence. This applies to representations that natively handle
-            multiple tracks such as Octuple or REMIPlus, resulting in a single "stream" of tokens per MIDI.
-            This attribute will be saved in config files of the tokenizer. (default: False)
     :param params: path to a tokenizer config file. This will override other arguments and
             load the tokenizer based on the config file. This is particularly useful if the
             tokenizer learned Byte Pair Encoding. (default: None)
@@ -182,7 +178,6 @@ class MIDITokenizer(ABC):
     def __init__(
         self,
         tokenizer_config: TokenizerConfig = None,
-        one_token_stream: bool = False,
         params: Union[str, Path] = None,
     ):
         # Initialize params
@@ -202,6 +197,9 @@ class MIDITokenizer(ABC):
         self._bpe_model = None
         # Used in _notes_to_events, especially MIDILike
         self._note_on_off = False
+        # Determines how the tokenizer will handle multiple tracks: either each track as a single indepandant token
+        # stream (False), or all the tracks as a single token stream (True).
+        self.one_token_stream = False
 
         # Loading params, or initializing them from args
         if params is not None:
@@ -217,11 +215,14 @@ class MIDITokenizer(ABC):
             assert (
                 0 < self.config.nb_velocities < 128
             ), "You must specify a nb_velocities between 1 and 127 (included)"
-            self.one_token_stream = one_token_stream
 
         # Tweak the tokenizer's configuration and / or attributes before creating the vocabulary
         # This method is intended to be overridden by inheriting tokenizer classes
         self._tweak_config_before_creating_voc()
+
+        # Set one_token_stream mode according to the config params
+        if self.config.use_programs:
+            self.one_token_stream = self.config.one_token_stream_for_programs
 
         # Init duration and velocity values
         self.durations = self.__create_durations_tuples()

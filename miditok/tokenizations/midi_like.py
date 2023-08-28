@@ -45,8 +45,6 @@ class MIDILike(MIDITokenizer):
 
     def _tweak_config_before_creating_voc(self):
         self._note_on_off = True
-        if self.config.use_programs:
-            self.one_token_stream = True
 
     def _add_time_events(self, events: List[Event]) -> List[Event]:
         r"""
@@ -87,6 +85,7 @@ class MIDILike(MIDITokenizer):
                     rest_pos = round(rest_pos / ticks_per_sample)
                     previous_tick = rest_tick
 
+                    # TODO recursive / succesive rests
                     if rest_beat > 0:
                         all_events.append(
                             Event(

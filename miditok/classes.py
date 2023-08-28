@@ -34,6 +34,7 @@ from .constants import (
     PITCH_BEND_RANGE,
     DELETE_EQUAL_SUCCESSIVE_TIME_SIG_CHANGES,
     PROGRAMS,
+    ONE_TOKEN_STREAM_FOR_PROGRAMS,
     CURRENT_VERSION_PACKAGE,
 )
 
@@ -221,6 +222,11 @@ class TokenizerConfig:
             `TimeSignatureChange` objects to your MIDIs. (default: False)
     :param programs: sequence of MIDI programs to use. Note that `-1` is used and reserved for drums tracks.
             (default: from -1 to 127 included)
+    :param one_token_stream_for_programs: when using programs (`use_programs`), this parameters will make the tokenizer
+            treat all the tracks of a MIDI as a single stream of tokens. A `Program` token will prepend each `Pitch`,
+            `NoteOn` and `NoteOff` tokens to indicate their associated program / instrument. Note that this parameter is
+            always set to True for `MuMIDI` and `MMM`. Setting it to False will make the tokenizer not use `Programs`,
+             but will allow to still have `Program` tokens in the vocabulary. (default: True)
     :param **kwargs: additional parameters that will be saved in `config.additional_params`.
     """
 
@@ -252,6 +258,7 @@ class TokenizerConfig:
         pitch_bend_range: Tuple[int, int, int] = PITCH_BEND_RANGE,
         delete_equal_successive_time_sig_changes: bool = DELETE_EQUAL_SUCCESSIVE_TIME_SIG_CHANGES,
         programs: Sequence[int] = PROGRAMS,
+        one_token_stream_for_programs: bool = ONE_TOKEN_STREAM_FOR_PROGRAMS,
         **kwargs,
     ):
         # Global parameters
@@ -306,6 +313,7 @@ class TokenizerConfig:
 
         # Programs
         self.programs: Sequence[int] = programs
+        self.one_token_stream_for_programs = one_token_stream_for_programs
 
         # Additional params
         self.additional_params = kwargs

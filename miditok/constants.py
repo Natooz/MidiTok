@@ -79,6 +79,7 @@ PITCH_BEND_RANGE = (-8192, 8191, 32)
 
 # Programs
 PROGRAMS = list(range(-1, 128))
+ONE_TOKEN_STREAM_FOR_PROGRAMS = True
 
 
 # Tokenizers specific parameters
