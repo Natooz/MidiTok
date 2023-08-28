@@ -124,15 +124,15 @@ class TSD(MIDITokenizer):
                 # Time shift
                 else:
                     time_shift = event.time - previous_tick
-                    index = np.argmin(np.abs(dur_bins - time_shift))
-                    all_events.append(
-                        Event(
-                            type="TimeShift",
-                            value=".".join(map(str, self.durations[index])),
-                            time=previous_tick,
-                            desc=f"{time_shift} ticks",
+                    for dur_value, tick_offset in zip(*self._ticks_to_duration_tokens(time_shift)):
+                        all_events.append(
+                            Event(
+                                type="TimeShift",
+                                value=".".join(map(str, dur_value)),
+                                time=previous_tick + tick_offset,
+                                desc=f"{time_shift} ticks",
+                            )
                         )
-                    )
                 previous_tick = event.time
 
             all_events.append(event)

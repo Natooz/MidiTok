@@ -10,7 +10,7 @@ from pathlib import Path
 import miditok
 from miditoolkit import MidiFile
 
-from .tests_utils import ALL_TOKENIZATIONS, midis_equals, reduce_note_durations
+from .tests_utils import ALL_TOKENIZATIONS, midis_equals
 
 
 # Very large beat resolution range so that it covers all cases as some tracks
@@ -42,17 +42,7 @@ def encode_decode_and_check(tokenizer: miditok.MIDITokenizer, midi: MidiFile):
     for track in midi_to_compare.instruments:
         if track.is_drum:
             track.program = 0  # need to be done before sorting tracks per program
-    # Sort and merge tracks if needed
     # MIDI produced with one_token_stream contains tracks with different orders
-    if tokenizer.one_token_stream:
-        miditok.utils.merge_same_program_tracks(midi_to_compare.instruments)
-    # reduce the duration of notes to long
-    for track in midi_to_compare.instruments:
-        reduce_note_durations(
-            track.notes,
-            max(tu[1] for tu in BEAT_RES_TEST) * midi_to_compare.ticks_per_beat,
-        )
-        miditok.utils.remove_duplicated_notes(track.notes)
     midi_to_compare.instruments.sort(
         key=lambda x: (x.program, x.is_drum)
     )  # sort tracks

@@ -352,15 +352,12 @@ class MIDITokenizer(ABC):
 
         t = 0
         while t < len(midi.instruments):
-            self._quantize_notes(
-                midi.instruments[t].notes, midi.ticks_per_beat
-            )  # quantize notes attributes
-            midi.instruments[t].notes.sort(
-                key=lambda x: (x.start, x.pitch, x.end)
-            )  # sort notes
-            remove_duplicated_notes(
-                midi.instruments[t].notes
-            )  # remove possible duplicated notes
+            # quantize notes attributes
+            self._quantize_notes(midi.instruments[t].notes, midi.ticks_per_beat)
+            # sort notes
+            midi.instruments[t].notes.sort(key=lambda x: (x.start, x.pitch, x.end))
+            # remove possible duplicated notes
+            remove_duplicated_notes(midi.instruments[t].notes)
             if len(midi.instruments[t].notes) == 0:
                 del midi.instruments[t]
                 continue
@@ -399,12 +396,15 @@ class MIDITokenizer(ABC):
         r"""Quantize the notes attributes: their pitch, velocity, start and end values.
         It shifts the notes so that they start at times that match the time resolution
         (e.g. 16 samples per bar).
+        Note durations will be clipped to the maximum duration that can be handled by the tokenizer. This is done
+        to prevent having incorrect offset values when computing rests.
         Notes with pitches outside of self.pitch_range will be deleted.
 
         :param notes: notes to quantize.
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed).
         """
         ticks_per_sample = int(time_division / max(self.config.beat_res.values()))
+        max_duration_ticks = max(tu[1] for tu in self.config.beat_res) * time_division
         i = 0
         pitches = range(*self.config.pitch_range)
         while i < len(notes):
@@ -412,26 +412,25 @@ class MIDITokenizer(ABC):
                 del notes[i]
                 continue
             start_offset = notes[i].start % ticks_per_sample
-            end_offset = notes[i].end % ticks_per_sample
             notes[i].start += (
                 -start_offset
                 if start_offset <= ticks_per_sample / 2
                 else ticks_per_sample - start_offset
             )
-            notes[i].end += (
-                -end_offset
-                if end_offset <= ticks_per_sample / 2
-                else ticks_per_sample - end_offset
-            )
-
-            if (
-                notes[i].start == notes[i].end
-            ):  # if this happens to often, consider using a higher beat resolution
-                notes[
-                    i
-                ].end += (
-                    ticks_per_sample  # like 8 samples per beat or 24 samples per bar
+            if notes[i].end - notes[i].start > max_duration_ticks:
+                notes[i].end = notes[i].start + max_duration_ticks
+            else:
+                end_offset = notes[i].end % ticks_per_sample
+                notes[i].end += (
+                    -end_offset
+                    if end_offset <= ticks_per_sample / 2
+                    else ticks_per_sample - end_offset
                 )
+
+                # if this happens to often, consider using a higher beat resolution
+                # like 8 samples per beat or 24 samples per bar
+                if notes[i].start == notes[i].end:
+                    notes[i].end += ticks_per_sample
 
             notes[i].velocity = int(
                 self.velocities[
@@ -1278,7 +1277,7 @@ class MIDITokenizer(ABC):
         return durations
 
     @staticmethod
-    def _token_duration_to_ticks(token_duration: str, time_division: int) -> int:
+    def _token_duration_to_ticks(token_duration: Union[str, Tuple[int, int, int]], time_division: int) -> int:
         r"""Converts a *Duration* token value of the form x.x.x, for beat.position.resolution,
         in ticks. Can also be used for *TimeShift* tokens.
 
@@ -1286,8 +1285,39 @@ class MIDITokenizer(ABC):
         :param time_division: time division.
         :return: the duration / time-shift in ticks.
         """
-        beat, pos, res = map(int, token_duration.split("."))
+        if isinstance(token_duration, str):
+            token_duration = map(int, token_duration.split("."))
+        beat, pos, res = token_duration
         return (beat * res + pos) * time_division // res
+
+    def _ticks_to_duration_tokens(
+            self,
+            duration: int,
+            time_division: int = None
+    ) -> Tuple[List[Tuple[int, int, int]], List[int]]:
+        r"""Converts a duration in ticks into a sequence of `Duration` / `TimeShift` values.
+
+        :param duration: duration in tick to convert.
+        :param time_division: time division of the MIDI being parsed. If none is given, the method will use
+            `self._current_midi_metadata["time_division"]`. (default: None)
+        :return: list of associated token values, and the list of the elapsed offset in tick for each of these values.
+        """
+        if time_division is None:
+            time_division = self._current_midi_metadata["time_division"]
+        dur_bins = self._durations_ticks[time_division]
+
+        offset_times = [0]
+        values = []
+        while duration > 0:
+            index = np.argmin(np.abs(dur_bins - duration))
+            val = self.durations[index]
+            values.append(val)
+            val_ticks = self._token_duration_to_ticks(val, time_division)
+            duration -= val_ticks
+            offset_times.append(offset_times[-1] + val_ticks)
+        del offset_times[-1]
+
+        return values, offset_times
 
     def __create_rests(self) -> List[Tuple]:
         r"""Creates the possible rests in beat / position units, as tuple of the form:

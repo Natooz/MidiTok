@@ -30,14 +30,11 @@ from .tests_utils import (
     tempo_changes_equals,
     pedal_equals,
     pitch_bend_equals,
-    reduce_note_durations,
     adapt_tempo_changes_times,
     time_signature_changes_equals,
     remove_equal_successive_tempos,
 )
 
-# Special beat res for test, up to 16 beats so the duration and time-shift values are
-# long enough for MIDI-Like and Structured encodings, and with a single beat resolution
 BEAT_RES_TEST = {(0, 16): 8}
 TOKENIZER_PARAMS = {
     "beat_res": BEAT_RES_TEST,
@@ -51,10 +48,7 @@ TOKENIZER_PARAMS = {
     "chord_maps": miditok.constants.CHORD_MAPS,
     "chord_tokens_with_root_note": True,  # Tokens will look as "Chord_C:maj"
     "chord_unknown": (3, 6),
-    "rest_range": (
-        4,
-        512,
-    ),  # very high value to cover every possible rest in the test files
+    "rest_range": (4, 512),  # TODO reduce val when successive rests
     "nb_tempos": 32,
     "tempo_range": (40, 250),
     "log_tempos": False,
@@ -107,13 +101,6 @@ def test_multitrack_midi_to_tokens_to_midi(
             # MIDI produced with one_token_stream contains tracks with different orders
             # This step is also performed in preprocess_midi, but we need to call it here for the assertions below
             tokenizer.preprocess_midi(midi_to_compare)
-            for track in midi_to_compare.instruments:
-                reduce_note_durations(
-                    track.notes,
-                    max(tu[1] for tu in BEAT_RES_TEST) * midi_to_compare.ticks_per_beat,
-                )
-                if tokenization in ["MIDILike"]:
-                    miditok.utils.fix_offsets_overlapping_notes(track.notes)
             # For Octuple, as tempo is only carried at notes times, we need to adapt their times for comparison
             if tokenization in ["Octuple"]:
                 adapt_tempo_changes_times(
