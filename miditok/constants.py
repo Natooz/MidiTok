@@ -2,7 +2,7 @@
 
 """
 
-CURRENT_VERSION_PACKAGE = "2.1.4"  # used when saving the config of a tokenizer
+CURRENT_VERSION_PACKAGE = "2.1.5"  # used when saving the config of a tokenizer
 
 MIDI_FILES_EXTENSIONS = [".mid", ".midi", ".MID", ".MIDI"]
 
@@ -30,8 +30,8 @@ USE_SUSTAIN_PEDALS = False
 USE_PITCH_BENDS = False
 USE_PROGRAMS = False
 
-# rest params, (/min_rest, max_rest_in_BEAT)
-REST_RANGE = (2, 8)
+# Rest params
+BEAT_RES_REST = {(0, 1): 8, (1, 2): 4, (2, 12): 2}
 
 # Chord params
 # "chord_unknown" specifies the range of number of notes that can form "unknown" chords (that do not fit
@@ -79,6 +79,7 @@ PITCH_BEND_RANGE = (-8192, 8191, 32)
 
 # Programs
 PROGRAMS = list(range(-1, 128))
+ONE_TOKEN_STREAM_FOR_PROGRAMS = True
 
 
 # Tokenizers specific parameters

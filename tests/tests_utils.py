@@ -130,19 +130,6 @@ def pitch_bend_equals(
     return errors
 
 
-def reduce_note_durations(notes: List[Note], max_note_duration: int):
-    r"""Reduce the durations of too long notes.
-    Each tokenization can only represent a limited duration value.
-    This method ensure the notes durations do not exceed the maximum value.
-
-    :param notes: notes to analyze
-    :param max_note_duration: the maximum duration value, in ticks
-    """
-    for note in notes:
-        if note.end - note.start > max_note_duration:
-            note.end = note.start + max_note_duration
-
-
 def adapt_tempo_changes_times(
     tracks: List[Instrument], tempo_changes: List[TempoChange]
 ):

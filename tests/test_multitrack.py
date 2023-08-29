@@ -1,18 +1,6 @@
 #!/usr/bin/python3 python
 
-""" Multitrack test file
-This test method will encode every track of a MIDI file.
-These file contains tracks with long empty sections with no notes. Hence encodings
-in which time is based on time-shift tokens (MIDI-like, Structured) will probably
-not be suited for these files.
-
-Structured and MIDI-Like are then not tested here.
-You can still manage to make them work and pass the test be using a vocabulary
-with large duration / time-shift values, but this is probably not suited for real
-case situations.
-
-NOTE: encoded tracks has to be compared with the quantized original track.
-
+"""Multitrack test file
 """
 
 from copy import deepcopy
@@ -30,14 +18,11 @@ from .tests_utils import (
     tempo_changes_equals,
     pedal_equals,
     pitch_bend_equals,
-    reduce_note_durations,
     adapt_tempo_changes_times,
     time_signature_changes_equals,
     remove_equal_successive_tempos,
 )
 
-# Special beat res for test, up to 16 beats so the duration and time-shift values are
-# long enough for MIDI-Like and Structured encodings, and with a single beat resolution
 BEAT_RES_TEST = {(0, 16): 8}
 TOKENIZER_PARAMS = {
     "beat_res": BEAT_RES_TEST,
@@ -51,10 +36,7 @@ TOKENIZER_PARAMS = {
     "chord_maps": miditok.constants.CHORD_MAPS,
     "chord_tokens_with_root_note": True,  # Tokens will look as "Chord_C:maj"
     "chord_unknown": (3, 6),
-    "rest_range": (
-        4,
-        512,
-    ),  # very high value to cover every possible rest in the test files
+    "beat_res_rest": {(0, 2): 4, (2, 12): 2},
     "nb_tempos": 32,
     "tempo_range": (40, 250),
     "log_tempos": False,
@@ -107,13 +89,6 @@ def test_multitrack_midi_to_tokens_to_midi(
             # MIDI produced with one_token_stream contains tracks with different orders
             # This step is also performed in preprocess_midi, but we need to call it here for the assertions below
             tokenizer.preprocess_midi(midi_to_compare)
-            for track in midi_to_compare.instruments:
-                reduce_note_durations(
-                    track.notes,
-                    max(tu[1] for tu in BEAT_RES_TEST) * midi_to_compare.ticks_per_beat,
-                )
-                if tokenization in ["MIDILike"]:
-                    miditok.utils.fix_offsets_overlapping_notes(track.notes)
             # For Octuple, as tempo is only carried at notes times, we need to adapt their times for comparison
             if tokenization in ["Octuple"]:
                 adapt_tempo_changes_times(
@@ -158,7 +133,7 @@ def test_multitrack_midi_to_tokens_to_midi(
                                 )
                             )
                 print(
-                    f"MIDI {i} - {file_path} / {tokenization} failed to encode/decode NOTES"
+                    f"MIDI {i} - {file_path.stem} / {tokenization} failed to encode/decode NOTES"
                     f"({sum(len(t[2]) for t in errors)} errors)"
                 )
 
@@ -172,7 +147,7 @@ def test_multitrack_midi_to_tokens_to_midi(
                 if len(tempo_errors) > 0:
                     has_errors = True
                     print(
-                        f"MIDI {i} - {file_path} / {tokenization} failed to encode/decode TEMPO changes"
+                        f"MIDI {i} - {file_path.stem} / {tokenization} failed to encode/decode TEMPO changes"
                         f"({len(tempo_errors)} errors)"
                     )
 
@@ -185,7 +160,7 @@ def test_multitrack_midi_to_tokens_to_midi(
                 if len(time_sig_errors) > 0:
                     has_errors = True
                     print(
-                        f"MIDI {i} - {file_path} / {tokenization} failed to encode/decode TIME SIGNATURE changes"
+                        f"MIDI {i} - {file_path.stem} / {tokenization} failed to encode/decode TIME SIGNATURE changes"
                         f"({len(time_sig_errors)} errors)"
                     )
 
@@ -195,7 +170,7 @@ def test_multitrack_midi_to_tokens_to_midi(
                 if any(len(err) > 0 for err in pedal_errors):
                     has_errors = True
                     print(
-                        f"MIDI {i} - {file_path} / {tokenization} failed to encode/decode PEDALS"
+                        f"MIDI {i} - {file_path.stem} / {tokenization} failed to encode/decode PEDALS"
                         f"({sum(len(err) for err in pedal_errors)} errors)"
                     )
 
@@ -205,7 +180,7 @@ def test_multitrack_midi_to_tokens_to_midi(
                 if any(len(err) > 0 for err in pitch_bend_errors):
                     has_errors = True
                     print(
-                        f"MIDI {i} - {file_path} / {tokenization} failed to encode/decode PITCH BENDS"
+                        f"MIDI {i} - {file_path.stem} / {tokenization} failed to encode/decode PITCH BENDS"
                         f"({sum(len(err) for err in pitch_bend_errors)} errors)"
                     )
 

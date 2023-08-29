@@ -1,13 +1,6 @@
 #!/usr/bin/python3 python
 
 """One track test file
-This test method is to be used with MIDI files of one track (like the maestro dataset).
-It is mostly useful to measure the performance of encodings where time is based on
-time shifts tokens, as these files usually don't contain tracks with very long pauses,
-i.e. long duration / time-shift values probably out of range of the tokenizer's vocabulary.
-
-NOTE: encoded tracks has to be compared with the quantized original track.
-
 """
 
 from copy import deepcopy
@@ -31,9 +24,7 @@ from .tests_utils import (
     remove_equal_successive_tempos,
 )
 
-# Special beat res for test, up to 64 beats so the duration and time-shift values are
-# long enough for MIDI-Like and Structured encodings, and with a single beat resolution
-BEAT_RES_TEST = {(0, 64): 8}
+BEAT_RES_TEST = {(0, 16): 8}
 TOKENIZER_PARAMS = {
     "beat_res": BEAT_RES_TEST,
     "use_chords": False,  # set false to speed up tests as it takes some time on maestro MIDIs
@@ -43,7 +34,7 @@ TOKENIZER_PARAMS = {
     "use_sustain_pedals": True,
     "use_pitch_bends": True,
     "use_programs": False,
-    "rest_range": (4, 16),
+    "beat_res_rest": {(0, 2): 4, (2, 12): 2},
     "nb_tempos": 32,
     "tempo_range": (40, 250),
     "log_tempos": True,
@@ -75,18 +66,19 @@ def test_one_track_midi_to_tokens_to_midi(
     for i, file_path in enumerate(tqdm(files, desc="Testing One Track")):
         # Reads the midi
         midi = MidiFile(file_path)
-        has_errors = False
         # Will store the tracks tokenized / detokenized, to be saved in case of errors
-        tracks = [deepcopy(midi.instruments[0])]
+        midi.instruments[0].name = "original not quantized"
+        tracks_with_errors = []
 
         for tokenization in ALL_TOKENIZATIONS:
-            tokenizer_config = miditok.TokenizerConfig(**TOKENIZER_PARAMS)
-            # Increase the number of rest just to cover very long pauses / rests in test examples
-            if tokenization in ["MIDILike", "TSD"]:
-                tokenizer_config.rest_range = (
-                    tokenizer_config.rest_range[0],
-                    max(t[1] for t in BEAT_RES_TEST),
-                )
+            has_errors = False
+            params = deepcopy(TOKENIZER_PARAMS)
+            # Special beat res for test, up to 64 beats so the duration and time-shift values are
+            # long enough for Structured, and with a single beat resolution
+            if tokenization == "Structured":
+                params["beat_res"] = {(0, 64): 8}
+
+            tokenizer_config = miditok.TokenizerConfig(**params)
             tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
                 tokenizer_config=tokenizer_config
             )
@@ -103,7 +95,7 @@ def test_one_track_midi_to_tokens_to_midi(
             # This step is also performed in preprocess_midi, but we need to call it here for the assertions below
             tokenizer.preprocess_midi(midi_to_compare)
             # For Octuple, as tempo is only carried at notes times, we need to adapt their times for comparison
-            if tokenization in ["Octuple", "OctupleMono"]:
+            if tokenization in ["Octuple"]:
                 adapt_tempo_changes_times(
                     midi_to_compare.instruments, midi_to_compare.tempo_changes
                 )
@@ -114,6 +106,9 @@ def test_one_track_midi_to_tokens_to_midi(
             if tokenizer.config.use_sustain_pedals:
                 for track in midi_to_compare.instruments:
                     adjust_pedal_durations(track.pedals, tokenizer, midi.ticks_per_beat)
+            # Store preprocessed track
+            if len(tracks_with_errors) == 0:
+                tracks_with_errors.append(midi_to_compare.instruments[0])
 
             # printing the tokenizer shouldn't fail
             _ = str(tokenizer)
@@ -137,6 +132,7 @@ def test_one_track_midi_to_tokens_to_midi(
                 tokens, time_division=midi_to_compare.ticks_per_beat
             )
             track = new_midi.instruments[0]
+            track.name = f"encoded with {tokenization}"
 
             # Checks its good
             errors = track_equals(midi_to_compare.instruments[0], track)
@@ -153,8 +149,6 @@ def test_one_track_midi_to_tokens_to_midi(
                 print(
                     f"MIDI {i} - {file_path} failed to encode/decode NOTES with {tokenization} ({len(errors)} errors)"
                 )
-            track.name = f"encoded with {tokenization}"
-            tracks.append(track)
 
             # Checks tempos
             if tokenizer.config.use_tempos and tokenization != "MuMIDI":
@@ -203,14 +197,17 @@ def test_one_track_midi_to_tokens_to_midi(
 
             # TODO check control changes
 
-        if has_errors:
+            # Add track to error list
+            if has_errors:
+                tracks_with_errors.append(new_midi.instruments[0])
+                tracks_with_errors[-1].name = f"encoded with {tokenization}"
+
+        # > 1 as the first one is the preprocessed
+        if len(tracks_with_errors) > 1:
             at_least_one_error = True
             if saving_erroneous_midis:
-                midi.instruments[0].name = "original quantized"
-                tracks[0].name = "original not quantized"
-
-                # Updates the MIDI and save it
-                midi.instruments += tracks
+                midi.instruments += tracks_with_errors
+                midi.instruments[1].name = "original quantized"
                 midi.dump(PurePath("tests", "test_results", file_path.name))
 
     ttotal = time() - t0

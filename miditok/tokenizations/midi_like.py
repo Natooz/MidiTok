@@ -45,8 +45,6 @@ class MIDILike(MIDITokenizer):
 
     def _tweak_config_before_creating_voc(self):
         self._note_on_off = True
-        if self.config.use_programs:
-            self.one_token_stream = True
 
     def _add_time_events(self, events: List[Event]) -> List[Event]:
         r"""
@@ -56,90 +54,50 @@ class MIDILike(MIDITokenizer):
         :param events: note events to complete.
         :return: the same events, with time events inserted.
         """
-        dur_bins = self._durations_ticks[self._current_midi_metadata["time_division"]]
-        ticks_per_sample = self._current_midi_metadata["time_division"] / max(
-            self.config.beat_res.values()
-        )
-        min_rest = (
-            self._current_midi_metadata["time_division"] * self.rests[0][0]
-            + ticks_per_sample * self.rests[0][1]
-            if self.config.use_rests
-            else 0
-        )
 
         # Add time events
         all_events = []
         previous_tick = 0
-        previous_note_end = events[0].time + 1
+        previous_note_end = 0
         for e, event in enumerate(events):
             # No time shift
             if event.time != previous_tick:
                 # (Rest)
-                if self.config.use_rests and event.time - previous_note_end >= min_rest:
-                    # untouched tick value to the order is not messed after sorting
-                    # in case of tempo change, we need to take its time as reference
-                    rest_tick = max(previous_note_end, previous_tick)
-                    rest_beat, rest_pos = divmod(
-                        event.time - rest_tick,
-                        self._current_midi_metadata["time_division"],
+                if (
+                    self.config.use_rests
+                    and event.time - previous_note_end >= self._min_rest
+                ):
+                    previous_tick = previous_note_end
+                    rest_values = self._ticks_to_duration_tokens(
+                        event.time - previous_tick, rest=True
                     )
-                    rest_beat = min(rest_beat, max([r[0] for r in self.rests]))
-                    rest_pos = round(rest_pos / ticks_per_sample)
-                    previous_tick = rest_tick
-
-                    if rest_beat > 0:
+                    for dur_value, dur_ticks in zip(*rest_values):
                         all_events.append(
                             Event(
                                 type="Rest",
-                                value=f"{rest_beat}.0",
-                                time=rest_tick,
-                                desc=f"{rest_beat}.0",
+                                value=".".join(map(str, dur_value)),
+                                time=previous_tick,
+                                desc=f"{event.time - previous_tick} ticks",
                             )
                         )
-                        previous_tick += (
-                            rest_beat * self._current_midi_metadata["time_division"]
-                        )
+                        previous_tick += dur_ticks
 
-                    while rest_pos >= self.rests[0][1]:
-                        rest_pos_temp = min(
-                            [r[1] for r in self.rests], key=lambda x: abs(x - rest_pos)
-                        )
-                        all_events.append(
-                            Event(
-                                type="Rest",
-                                value=f"0.{rest_pos_temp}",
-                                time=rest_tick,
-                                desc=f"0.{rest_pos_temp}",
-                            )
-                        )
-                        previous_tick += round(rest_pos_temp * ticks_per_sample)
-                        rest_pos -= rest_pos_temp
-
-                    # Adds an additional time shift if needed
-                    if rest_pos > 0:
-                        time_shift = round(rest_pos * ticks_per_sample)
-                        index = np.argmin(np.abs(dur_bins - time_shift))
+                # Time shift
+                # no else here as previous might have changed with rests
+                if event.time != previous_tick:
+                    time_shift = event.time - previous_tick
+                    for dur_value, dur_ticks in zip(
+                        *self._ticks_to_duration_tokens(time_shift)
+                    ):
                         all_events.append(
                             Event(
                                 type="TimeShift",
-                                value=".".join(map(str, self.durations[index])),
+                                value=".".join(map(str, dur_value)),
                                 time=previous_tick,
                                 desc=f"{time_shift} ticks",
                             )
                         )
-
-                # Time shift
-                else:
-                    time_shift = event.time - previous_tick
-                    index = np.argmin(np.abs(dur_bins - time_shift))
-                    all_events.append(
-                        Event(
-                            type="TimeShift",
-                            value=".".join(map(str, self.durations[index])),
-                            time=previous_tick,
-                            desc=f"{time_shift} ticks",
-                        )
-                    )
+                        previous_tick += dur_ticks
                 previous_tick = event.time
 
             all_events.append(event)
@@ -240,17 +198,12 @@ class MIDILike(MIDITokenizer):
             # Decode tokens
             for ti, token in enumerate(seq):
                 tok_type, tok_val = token.split("_")
-                if tok_type == "TimeShift":
+                if tok_type in ["TimeShift", "Rest"]:
+                    if tok_type == "Rest":
+                        current_tick = max(previous_note_end, current_tick)
                     current_tick += self._token_duration_to_ticks(
                         tok_val, time_division
                     )
-                elif tok_type == "Rest":
-                    beat, pos = map(int, seq[ti].split("_")[1].split("."))
-                    if (
-                        current_tick < previous_note_end
-                    ):  # if in case successive rest happen
-                        current_tick = previous_note_end
-                    current_tick += beat * time_division + pos * ticks_per_sample
                 elif tok_type == "NoteOn":
                     try:
                         if seq[ti + 1].split("_")[0] == "Velocity":

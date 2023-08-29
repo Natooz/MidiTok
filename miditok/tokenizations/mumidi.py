@@ -1,6 +1,6 @@
 from math import ceil
 from pathlib import Path
-from typing import List, Tuple, Dict, Optional, Union, Any
+from typing import List, Dict, Optional, Union, Any
 
 import numpy as np
 from miditoolkit import MidiFile, Instrument, Note, TempoChange
@@ -51,7 +51,7 @@ class MuMIDI(MIDITokenizer):
         self.config.use_sustain_pedals = False
         self.config.use_pitch_bends = False
         self.config.use_programs = True
-        self.one_token_stream = True
+        self.config.one_token_stream_for_programs = True
 
         if "drum_pitch_range" not in self.config.additional_params:
             self.config.additional_params["drum_pitch_range"] = DRUM_PITCH_RANGE
@@ -355,22 +355,6 @@ class MuMIDI(MIDITokenizer):
             Path(output_path).mkdir(parents=True, exist_ok=True)
             midi.dump(output_path)
         return midi
-
-    def _tokens_to_track(
-        self,
-        tokens: TokSequence,
-        time_division: Optional[int] = TIME_DIVISION,
-        program: Optional[Tuple[int, bool]] = (0, False),
-    ):
-        r"""Not relevant / implemented for MuMIDI. Use :py:meth:`miditok.MuMIDI.tokens_to_midi` instead.
-
-        :param tokens: sequence of tokens to convert. Can be either a Tensor (PyTorch and Tensorflow are supported),
-                a numpy array, a Python list or a TokSequence.
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create)
-        :param program: the MIDI program of the produced track and if it drum, (default (0, False), piano)
-        :return: the miditoolkit instrument object and tempo changes
-        """
-        pass
 
     def _create_base_vocabulary(self) -> List[List[str]]:
         r"""Creates the vocabulary, as a list of string tokens.

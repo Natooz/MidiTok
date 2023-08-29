@@ -10,12 +10,10 @@ from pathlib import Path
 import miditok
 from miditoolkit import MidiFile
 
-from .tests_utils import ALL_TOKENIZATIONS, midis_equals, reduce_note_durations
+from .tests_utils import ALL_TOKENIZATIONS, midis_equals
 
 
-# Very large beat resolution range so that it covers all cases as some tracks
-# may have very long pauses when the associated instrument is not playing
-BEAT_RES_TEST = {(0, 512): 8}
+BEAT_RES_TEST = {(0, 16): 8}
 TOKENIZER_PARAMS = {
     "beat_res": BEAT_RES_TEST,
     "use_chords": True,
@@ -26,10 +24,7 @@ TOKENIZER_PARAMS = {
     "chord_maps": miditok.constants.CHORD_MAPS,
     "chord_tokens_with_root_note": True,  # Tokens will look as "Chord_C:maj"
     "chord_unknown": (3, 6),
-    "rest_range": (
-        4,
-        512,
-    ),  # very high value to cover every possible rest in the test files
+    "beat_res_rest": {(0, 16): 4},
     "nb_tempos": 32,
     "tempo_range": (40, 250),
     "time_signature_range": {4: [4]},
@@ -42,17 +37,7 @@ def encode_decode_and_check(tokenizer: miditok.MIDITokenizer, midi: MidiFile):
     for track in midi_to_compare.instruments:
         if track.is_drum:
             track.program = 0  # need to be done before sorting tracks per program
-    # Sort and merge tracks if needed
     # MIDI produced with one_token_stream contains tracks with different orders
-    if tokenizer.one_token_stream:
-        miditok.utils.merge_same_program_tracks(midi_to_compare.instruments)
-    # reduce the duration of notes to long
-    for track in midi_to_compare.instruments:
-        reduce_note_durations(
-            track.notes,
-            max(tu[1] for tu in BEAT_RES_TEST) * midi_to_compare.ticks_per_beat,
-        )
-        miditok.utils.remove_duplicated_notes(track.notes)
     midi_to_compare.instruments.sort(
         key=lambda x: (x.program, x.is_drum)
     )  # sort tracks
@@ -101,7 +86,10 @@ def test_io_formats():
     midi = MidiFile(file_path)
 
     for tokenization in ALL_TOKENIZATIONS:
-        tokenizer_config = miditok.TokenizerConfig(**TOKENIZER_PARAMS)
+        params = deepcopy(TOKENIZER_PARAMS)
+        if tokenization == "Structured":
+            params["beat_res"] = {(0, 512): 8}
+        tokenizer_config = miditok.TokenizerConfig(**params)
         tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
             tokenizer_config=tokenizer_config
         )
@@ -111,8 +99,8 @@ def test_io_formats():
         )
 
         # If TSD, also test in use_programs / one_token_stream mode
-        if tokenization in ["TSD", "REMI", "MIDILike", "Structured"]:
-            tokenizer_config = miditok.TokenizerConfig(**TOKENIZER_PARAMS)
+        if tokenization in ["TSD", "REMI", "MIDILike", "Structured", "CPWord"]:
+            tokenizer_config = miditok.TokenizerConfig(**params)
             tokenizer_config.use_programs = True
             tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
                 tokenizer_config=tokenizer_config

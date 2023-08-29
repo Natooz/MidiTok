@@ -21,7 +21,7 @@ from .constants import (
     USE_SUSTAIN_PEDALS,
     USE_PITCH_BENDS,
     USE_PROGRAMS,
-    REST_RANGE,
+    BEAT_RES_REST,
     CHORD_MAPS,
     CHORD_TOKENS_WITH_ROOT_NOTE,
     CHORD_UNKNOWN,
@@ -34,6 +34,7 @@ from .constants import (
     PITCH_BEND_RANGE,
     DELETE_EQUAL_SUCCESSIVE_TIME_SIG_CHANGES,
     PROGRAMS,
+    ONE_TOKEN_STREAM_FOR_PROGRAMS,
     CURRENT_VERSION_PACKAGE,
 )
 
@@ -153,11 +154,7 @@ class TokenizerConfig:
     :param use_rests: will use ``Rest`` tokens, if the tokenizer is compatible.
             `Rest` tokens will be placed whenever a portion of time is silent, i.e. no note is being played.
             This token type is decoded as a *TimeShift* event. You can choose the minimum and maximum rests
-            values to represent with the ``rest_range`` key in the ``additional_tokens`` dictionary
-            (default is 1/2 beat to 8 beats). Note that rests shorter than one beat are only divisible by the
-            first beat resolution, e.g. a rest of 5/8th of a beat will be a succession of ``Rest_0.4`` and
-            ``Rest_0.1``, where the first number indicate the rest duration in beats and the second in
-            samples / positions. (default: False)
+            values to represent with the `beat_res_rest` parameter. (default: False)
     :param use_tempos: will use ``Tempo`` tokens, if the tokenizer is compatible.
             ``Tempo`` tokens will specify the current tempo. This allows to train a model to predict tempo changes.
             Tempo values are quantized accordingly to the ``nb_tempos`` and ``tempo_range`` entries in the
@@ -179,9 +176,11 @@ class TokenizerConfig:
             indicate its associated instrument and will treat all the tracks of a MIDI as a single sequence of tokens.
             :ref:`CPWord`, :ref:`Octuple` and :ref:`MuMIDI` add a `Program` tokens with the stacks of `Pitch`,
             `Velocity` and `Duration` tokens. (default: False)
-    :param rest_range: range of the rest to use, in beats, as a tuple (beat_division, max_rest_in_beats).
-            The beat division divides a beat to determine the minimum rest to represent.
-            The minimum rest must be divisible by 2 and lower than the first beat resolution
+    :param beat_res_rest: the beat resolution of `Rest` tokens. It follows the same data pattern as the `beat_res`
+            argument, however the maximum resolution for rests cannot be higher than the highest "global" resolution
+            (`beat_res`). Rests are considered complementary to other time tokens (`TimeShift`, `Bar` and `Position`).
+            If in a given situation, `Rest` tokens cannot represent time with the exact precision, other time times will
+            complement them. (default: `{(0, 1): 8, (1, 2): 4, (2, 12): 2}`)
     :param chord_maps: list of chord maps, to be given as a dictionary where keys are chord qualities
             (e.g. "maj") and values pitch maps as tuples of integers (e.g. (0, 4, 7)).
             You can use ``miditok.constants.CHORD_MAPS`` as an example.
@@ -221,6 +220,11 @@ class TokenizerConfig:
             `TimeSignatureChange` objects to your MIDIs. (default: False)
     :param programs: sequence of MIDI programs to use. Note that `-1` is used and reserved for drums tracks.
             (default: from -1 to 127 included)
+    :param one_token_stream_for_programs: when using programs (`use_programs`), this parameters will make the tokenizer
+            treat all the tracks of a MIDI as a single stream of tokens. A `Program` token will prepend each `Pitch`,
+            `NoteOn` and `NoteOff` tokens to indicate their associated program / instrument. Note that this parameter is
+            always set to True for `MuMIDI` and `MMM`. Setting it to False will make the tokenizer not use `Programs`,
+             but will allow to still have `Program` tokens in the vocabulary. (default: True)
     :param **kwargs: additional parameters that will be saved in `config.additional_params`.
     """
 
@@ -237,7 +241,7 @@ class TokenizerConfig:
         use_sustain_pedals: bool = USE_SUSTAIN_PEDALS,
         use_pitch_bends: bool = USE_PITCH_BENDS,
         use_programs: bool = USE_PROGRAMS,
-        rest_range: Sequence = REST_RANGE,
+        beat_res_rest: Dict[Tuple[int, int], int] = BEAT_RES_REST,
         chord_maps: Dict[str, Tuple] = CHORD_MAPS,
         chord_tokens_with_root_note: bool = CHORD_TOKENS_WITH_ROOT_NOTE,
         chord_unknown: Tuple[int, int] = CHORD_UNKNOWN,
@@ -252,6 +256,7 @@ class TokenizerConfig:
         pitch_bend_range: Tuple[int, int, int] = PITCH_BEND_RANGE,
         delete_equal_successive_time_sig_changes: bool = DELETE_EQUAL_SUCCESSIVE_TIME_SIG_CHANGES,
         programs: Sequence[int] = PROGRAMS,
+        one_token_stream_for_programs: bool = ONE_TOKEN_STREAM_FOR_PROGRAMS,
         **kwargs,
     ):
         # Global parameters
@@ -270,7 +275,7 @@ class TokenizerConfig:
         self.use_programs: bool = use_programs
 
         # Rest params
-        self.rest_range: Sequence = rest_range
+        self.beat_res_rest: Dict[Tuple[int, int], int] = beat_res_rest
 
         # Chord params
         self.chord_maps: Dict[str, Tuple] = chord_maps
@@ -306,6 +311,7 @@ class TokenizerConfig:
 
         # Programs
         self.programs: Sequence[int] = programs
+        self.one_token_stream_for_programs = one_token_stream_for_programs
 
         # Additional params
         self.additional_params = kwargs
@@ -361,9 +367,10 @@ class TokenizerConfig:
         out_path.parent.mkdir(parents=True, exist_ok=True)
 
         dict_config = self.to_dict(serialize=True)
-        dict_config["beat_res"] = {
-            f"{k1}_{k2}": v for (k1, k2), v in dict_config["beat_res"].items()
-        }
+        for beat_res_key in ["beat_res", "beat_res_rest"]:
+            dict_config[beat_res_key] = {
+                f"{k1}_{k2}": v for (k1, k2), v in dict_config[beat_res_key].items()
+            }
         dict_config["miditok_version"] = CURRENT_VERSION_PACKAGE
 
         with open(out_path, "w") as outfile:
@@ -382,10 +389,11 @@ class TokenizerConfig:
         with open(config_file_path) as param_file:
             dict_config = json.load(param_file)
 
-        dict_config["beat_res"] = {
-            tuple(map(int, beat_range.split("_"))): res
-            for beat_range, res in dict_config["beat_res"].items()
-        }
+        for beat_res_key in ["beat_res", "beat_res_rest"]:
+            dict_config[beat_res_key] = {
+                tuple(map(int, beat_range.split("_"))): res
+                for beat_range, res in dict_config[beat_res_key].items()
+            }
 
         dict_config["time_signature_range"] = {
             int(res): beat_range

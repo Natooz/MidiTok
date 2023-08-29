@@ -64,10 +64,7 @@ class REMI(MIDITokenizer):
         ):
             # If used, this attribute might increase over tokenizations, if the tokenizer encounter longer MIDIs
             tokenizer_config.additional_params["max_bar_embedding"] = max_bar_embedding
-        one_stream = (
-            tokenizer_config.use_programs if tokenizer_config is not None else False
-        )
-        super().__init__(tokenizer_config, one_stream, params)
+        super().__init__(tokenizer_config, params)
 
     def _tweak_config_before_creating_voc(self):
         # In case the tokenizer has been created without specifying any config or params file path
@@ -85,11 +82,6 @@ class REMI(MIDITokenizer):
         """
         time_division = self._current_midi_metadata["time_division"]
         ticks_per_sample = time_division / max(self.config.beat_res.values())
-        min_rest = (
-            time_division * self.rests[0][0] + ticks_per_sample * self.rests[0][1]
-            if self.config.use_rests
-            else 0
-        )
 
         # Add time events
         all_events = []
@@ -108,41 +100,24 @@ class REMI(MIDITokenizer):
                 )
             if event.time != previous_tick:
                 # (Rest)
-                if self.config.use_rests and event.time - previous_note_end >= min_rest:
+                if (
+                    self.config.use_rests
+                    and event.time - previous_note_end >= self._min_rest
+                ):
                     previous_tick = previous_note_end
-                    rest_beat, rest_pos = divmod(
-                        event.time - previous_tick,
-                        time_division,
+                    rest_values = self._ticks_to_duration_tokens(
+                        event.time - previous_tick, rest=True
                     )
-                    rest_beat = min(rest_beat, max([r[0] for r in self.rests]))
-                    rest_pos = round(rest_pos / ticks_per_sample)
-
-                    if rest_beat > 0:
+                    for dur_value, dur_ticks in zip(*rest_values):
                         all_events.append(
                             Event(
                                 type="Rest",
-                                value=f"{rest_beat}.0",
-                                time=previous_note_end,
-                                desc=f"{rest_beat}.0",
+                                value=".".join(map(str, dur_value)),
+                                time=previous_tick,
+                                desc=f"{event.time - previous_tick} ticks",
                             )
                         )
-                        previous_tick += rest_beat * time_division
-
-                    while rest_pos >= self.rests[0][1]:
-                        rest_pos_temp = min(
-                            [r[1] for r in self.rests], key=lambda x: abs(x - rest_pos)
-                        )
-                        all_events.append(
-                            Event(
-                                type="Rest",
-                                value=f"0.{rest_pos_temp}",
-                                time=previous_note_end,
-                                desc=f"0.{rest_pos_temp}",
-                            )
-                        )
-                        previous_tick += round(rest_pos_temp * ticks_per_sample)
-                        rest_pos -= rest_pos_temp
-
+                        previous_tick += dur_ticks
                     current_bar = previous_tick // ticks_per_bar
 
                 # Bar
@@ -271,12 +246,10 @@ class REMI(MIDITokenizer):
                     current_bar += 1
                     current_tick = current_bar * ticks_per_bar
                 elif tok_type == "Rest":
-                    beat, pos = map(int, seq[ti].split("_")[1].split("."))
-                    if (
-                        current_tick < previous_note_end
-                    ):  # if in case successive rest happen
-                        current_tick = previous_note_end
-                    current_tick += beat * time_division + pos * ticks_per_sample
+                    current_tick = max(previous_note_end, current_tick)
+                    current_tick += self._token_duration_to_ticks(
+                        tok_val, time_division
+                    )
                     current_bar = current_tick // ticks_per_bar
                 elif tok_type == "Position":
                     if current_bar == -1:

@@ -36,8 +36,6 @@ class Structured(MIDITokenizer):
         self.config.use_time_signatures = False
         self.config.use_sustain_pedals = False
         self.config.use_pitch_bends = False
-        if self.config.use_programs:
-            self.one_token_stream = True
 
     def _create_track_events(self, track: Instrument) -> List[Event]:
         r"""Extract the tokens / events of individual tracks: `Pitch`, `Velocity`, `Duration`, `NoteOn`, `NoteOff` and
