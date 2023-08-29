@@ -54,7 +54,6 @@ class MIDILike(MIDITokenizer):
         :param events: note events to complete.
         :return: the same events, with time events inserted.
         """
-        min_rest = self._rests_ticks[self._current_midi_metadata["time_division"]][0]
 
         # Add time events
         all_events = []
@@ -64,9 +63,14 @@ class MIDILike(MIDITokenizer):
             # No time shift
             if event.time != previous_tick:
                 # (Rest)
-                if self.config.use_rests and event.time - previous_note_end >= min_rest:
+                if (
+                    self.config.use_rests
+                    and event.time - previous_note_end >= self._min_rest
+                ):
                     previous_tick = previous_note_end
-                    rest_values = self._ticks_to_duration_tokens(event.time - previous_tick, rest=True)
+                    rest_values = self._ticks_to_duration_tokens(
+                        event.time - previous_tick, rest=True
+                    )
                     for dur_value, dur_ticks in zip(*rest_values):
                         all_events.append(
                             Event(
@@ -82,7 +86,9 @@ class MIDILike(MIDITokenizer):
                 # no else here as previous might have changed with rests
                 if event.time != previous_tick:
                     time_shift = event.time - previous_tick
-                    for dur_value, dur_ticks in zip(*self._ticks_to_duration_tokens(time_shift)):
+                    for dur_value, dur_ticks in zip(
+                        *self._ticks_to_duration_tokens(time_shift)
+                    ):
                         all_events.append(
                             Event(
                                 type="TimeShift",

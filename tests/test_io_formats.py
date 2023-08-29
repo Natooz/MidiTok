@@ -24,7 +24,7 @@ TOKENIZER_PARAMS = {
     "chord_maps": miditok.constants.CHORD_MAPS,
     "chord_tokens_with_root_note": True,  # Tokens will look as "Chord_C:maj"
     "chord_unknown": (3, 6),
-    "rest_range": {(0, 16): 4},
+    "beat_res_rest": {(0, 16): 4},
     "nb_tempos": 32,
     "tempo_range": (40, 250),
     "time_signature_range": {4: [4]},
@@ -86,7 +86,10 @@ def test_io_formats():
     midi = MidiFile(file_path)
 
     for tokenization in ALL_TOKENIZATIONS:
-        tokenizer_config = miditok.TokenizerConfig(**TOKENIZER_PARAMS)
+        params = deepcopy(TOKENIZER_PARAMS)
+        if tokenization == "Structured":
+            params["beat_res"] = {(0, 512): 8}
+        tokenizer_config = miditok.TokenizerConfig(**params)
         tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
             tokenizer_config=tokenizer_config
         )
@@ -96,8 +99,8 @@ def test_io_formats():
         )
 
         # If TSD, also test in use_programs / one_token_stream mode
-        if tokenization in ["TSD", "REMI", "MIDILike", "Structured"]:
-            tokenizer_config = miditok.TokenizerConfig(**TOKENIZER_PARAMS)
+        if tokenization in ["TSD", "REMI", "MIDILike", "Structured", "CPWord"]:
+            tokenizer_config = miditok.TokenizerConfig(**params)
             tokenizer_config.use_programs = True
             tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
                 tokenizer_config=tokenizer_config

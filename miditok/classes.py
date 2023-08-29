@@ -154,11 +154,7 @@ class TokenizerConfig:
     :param use_rests: will use ``Rest`` tokens, if the tokenizer is compatible.
             `Rest` tokens will be placed whenever a portion of time is silent, i.e. no note is being played.
             This token type is decoded as a *TimeShift* event. You can choose the minimum and maximum rests
-            values to represent with the ``rest_range`` key in the ``additional_tokens`` dictionary
-            (default is 1/2 beat to 8 beats). Note that rests shorter than one beat are only divisible by the
-            first beat resolution, e.g. a rest of 5/8th of a beat will be a succession of ``Rest_0.4`` and
-            ``Rest_0.1``, where the first number indicate the rest duration in beats and the second in
-            samples / positions. (default: False)
+            values to represent with the `beat_res_rest` parameter. (default: False)
     :param use_tempos: will use ``Tempo`` tokens, if the tokenizer is compatible.
             ``Tempo`` tokens will specify the current tempo. This allows to train a model to predict tempo changes.
             Tempo values are quantized accordingly to the ``nb_tempos`` and ``tempo_range`` entries in the
@@ -371,9 +367,10 @@ class TokenizerConfig:
         out_path.parent.mkdir(parents=True, exist_ok=True)
 
         dict_config = self.to_dict(serialize=True)
-        dict_config["beat_res"] = {
-            f"{k1}_{k2}": v for (k1, k2), v in dict_config["beat_res"].items()
-        }
+        for beat_res_key in ["beat_res", "beat_res_rest"]:
+            dict_config[beat_res_key] = {
+                f"{k1}_{k2}": v for (k1, k2), v in dict_config[beat_res_key].items()
+            }
         dict_config["miditok_version"] = CURRENT_VERSION_PACKAGE
 
         with open(out_path, "w") as outfile:
@@ -392,10 +389,11 @@ class TokenizerConfig:
         with open(config_file_path) as param_file:
             dict_config = json.load(param_file)
 
-        dict_config["beat_res"] = {
-            tuple(map(int, beat_range.split("_"))): res
-            for beat_range, res in dict_config["beat_res"].items()
-        }
+        for beat_res_key in ["beat_res", "beat_res_rest"]:
+            dict_config[beat_res_key] = {
+                tuple(map(int, beat_range.split("_"))): res
+                for beat_range, res in dict_config[beat_res_key].items()
+            }
 
         dict_config["time_signature_range"] = {
             int(res): beat_range

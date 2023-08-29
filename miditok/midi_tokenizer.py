@@ -246,9 +246,10 @@ class MIDITokenizer(ABC):
         if self.config.use_rests:
             max_rest_res = max(self.config.beat_res_rest.values())
             max_global_res = max(self.config.beat_res.values())
-            assert max_rest_res <= max_global_res, \
-                ("The maximum resolution of the rests must be inferior or equal to the maximum resolution of the"
-                 f"global beat resolution (config.beat_res). Expected <= {max_global_res}, found {max_rest_res}")
+            assert max_rest_res <= max_global_res, (
+                "The maximum resolution of the rests must be inferior or equal to the maximum resolution of the"
+                f"global beat resolution (config.beat_res). Expected <= {max_global_res}, found {max_rest_res}"
+            )
             self.rests = self.__create_rests()
 
         # Time Signatures
@@ -338,6 +339,13 @@ class MIDITokenizer(ABC):
         :return: special tokens of the tokenizer
         """
         return [self[token] for token in self.special_tokens]
+
+    @property
+    def _min_rest(self) -> int:
+        if not self.config.use_rests:
+            return 0
+        else:
+            return self._rests_ticks[self._current_midi_metadata["time_division"]][0]
 
     def preprocess_midi(self, midi: MidiFile):
         r"""Pre-process (in place) a MIDI file to quantize its time and note attributes
@@ -606,9 +614,9 @@ class MIDITokenizer(ABC):
 
         # Add time events
         if self.one_token_stream:
-            if (
-                self.config.use_sustain_pedals or self.config.use_pitch_bends
-            ) and len(midi.instruments) > 1:
+            if (self.config.use_sustain_pedals or self.config.use_pitch_bends) and len(
+                midi.instruments
+            ) > 1:
                 # We also sort by token type here so that they all come in the same order
                 all_events.sort(key=lambda x: (x.time, self.__order(x)))
             else:
@@ -1241,7 +1249,9 @@ class MIDITokenizer(ABC):
         return durations
 
     @staticmethod
-    def _token_duration_to_ticks(token_duration: Union[str, Tuple[int, int, int]], time_division: int) -> int:
+    def _token_duration_to_ticks(
+        token_duration: Union[str, Tuple[int, int, int]], time_division: int
+    ) -> int:
         r"""Converts a *Duration* token value of the form x.x.x, for beat.position.resolution,
         in ticks. Can also be used for *TimeShift* tokens.
 
@@ -1255,10 +1265,10 @@ class MIDITokenizer(ABC):
         return (beat * res + pos) * time_division // res
 
     def _ticks_to_duration_tokens(
-            self,
-            duration: int,
-            time_division: int = None,
-            rest: bool = False,
+        self,
+        duration: int,
+        time_division: int = None,
+        rest: bool = False,
     ) -> Tuple[List[Tuple[int, int, int]], List[int]]:
         r"""Converts a duration in ticks into a sequence of `Duration` / `TimeShift` values.
 
@@ -1953,10 +1963,12 @@ class MIDITokenizer(ABC):
                     int(res): beat_range
                     for res, beat_range in value["time_signature_range"].items()
                 }
-                value = TokenizerConfig.from_dict(value)
                 # Rest param < v2.1.5
                 if "rest_range" in value:
-                    value["rest_range"] = {(0, value["rest_range"][1]): value["rest_range"][0]}
+                    value["rest_range"] = {
+                        (0, value["rest_range"][1]): value["rest_range"][0]
+                    }
+                value = TokenizerConfig.from_dict(value)
             elif key in config_attributes:
                 if key == "beat_res":
                     value = {

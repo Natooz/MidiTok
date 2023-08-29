@@ -22,7 +22,7 @@ ADDITIONAL_TOKENS_TEST = {
     "Tempo": True,
     "TimeSignature": True,
     "Program": False,
-    "rest_range": (4, 16),
+    "beat_res_rest": {(0, 16): 4},
     "nb_tempos": 32,
     "tempo_range": (40, 250),
     "time_signature_range": {4: [4]},
