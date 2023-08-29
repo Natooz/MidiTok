@@ -21,7 +21,7 @@ from .constants import (
     USE_SUSTAIN_PEDALS,
     USE_PITCH_BENDS,
     USE_PROGRAMS,
-    REST_RANGE,
+    BEAT_RES_REST,
     CHORD_MAPS,
     CHORD_TOKENS_WITH_ROOT_NOTE,
     CHORD_UNKNOWN,
@@ -180,9 +180,11 @@ class TokenizerConfig:
             indicate its associated instrument and will treat all the tracks of a MIDI as a single sequence of tokens.
             :ref:`CPWord`, :ref:`Octuple` and :ref:`MuMIDI` add a `Program` tokens with the stacks of `Pitch`,
             `Velocity` and `Duration` tokens. (default: False)
-    :param rest_range: range of the rest to use, in beats, as a tuple (beat_division, max_rest_in_beats).
-            The beat division divides a beat to determine the minimum rest to represent.
-            The minimum rest must be divisible by 2 and lower than the first beat resolution
+    :param beat_res_rest: the beat resolution of `Rest` tokens. It follows the same data pattern as the `beat_res`
+            argument, however the maximum resolution for rests cannot be higher than the highest "global" resolution
+            (`beat_res`). Rests are considered complementary to other time tokens (`TimeShift`, `Bar` and `Position`).
+            If in a given situation, `Rest` tokens cannot represent time with the exact precision, other time times will
+            complement them. (default: `{(0, 1): 8, (1, 2): 4, (2, 12): 2}`)
     :param chord_maps: list of chord maps, to be given as a dictionary where keys are chord qualities
             (e.g. "maj") and values pitch maps as tuples of integers (e.g. (0, 4, 7)).
             You can use ``miditok.constants.CHORD_MAPS`` as an example.
@@ -243,7 +245,7 @@ class TokenizerConfig:
         use_sustain_pedals: bool = USE_SUSTAIN_PEDALS,
         use_pitch_bends: bool = USE_PITCH_BENDS,
         use_programs: bool = USE_PROGRAMS,
-        rest_range: Sequence = REST_RANGE,
+        beat_res_rest: Dict[Tuple[int, int], int] = BEAT_RES_REST,
         chord_maps: Dict[str, Tuple] = CHORD_MAPS,
         chord_tokens_with_root_note: bool = CHORD_TOKENS_WITH_ROOT_NOTE,
         chord_unknown: Tuple[int, int] = CHORD_UNKNOWN,
@@ -277,7 +279,7 @@ class TokenizerConfig:
         self.use_programs: bool = use_programs
 
         # Rest params
-        self.rest_range: Sequence = rest_range
+        self.beat_res_rest: Dict[Tuple[int, int], int] = beat_res_rest
 
         # Chord params
         self.chord_maps: Dict[str, Tuple] = chord_maps

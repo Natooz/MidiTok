@@ -1,13 +1,6 @@
 #!/usr/bin/python3 python
 
 """One track test file
-This test method is to be used with MIDI files of one track (like the maestro dataset).
-It is mostly useful to measure the performance of encodings where time is based on
-time shifts tokens, as these files usually don't contain tracks with very long pauses,
-i.e. long duration / time-shift values probably out of range of the tokenizer's vocabulary.
-
-NOTE: encoded tracks has to be compared with the quantized original track.
-
 """
 
 from copy import deepcopy
@@ -31,8 +24,6 @@ from .tests_utils import (
     remove_equal_successive_tempos,
 )
 
-# Special beat res for test, up to 64 beats so the duration and time-shift values are
-# long enough for MIDI-Like and Structured encodings, and with a single beat resolution
 BEAT_RES_TEST = {(0, 16): 8}
 TOKENIZER_PARAMS = {
     "beat_res": BEAT_RES_TEST,
@@ -43,7 +34,7 @@ TOKENIZER_PARAMS = {
     "use_sustain_pedals": True,
     "use_pitch_bends": True,
     "use_programs": False,
-    "rest_range": (4, 16),
+    "beat_res_rest": {(0, 2): 4, (2, 12): 2},
     "nb_tempos": 32,
     "tempo_range": (40, 250),
     "log_tempos": True,
@@ -86,8 +77,6 @@ def test_one_track_midi_to_tokens_to_midi(
             # long enough for Structured, and with a single beat resolution
             if tokenization == "Structured":
                 params["beat_res"] = {(0, 64): 8}
-            elif tokenization == "TSD":  # TODO remove when successive rests are working
-                params["rest_range"] = (4, 64)
 
             tokenizer_config = miditok.TokenizerConfig(**params)
             tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(

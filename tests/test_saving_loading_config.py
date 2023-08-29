@@ -15,7 +15,7 @@ ADDITIONAL_TOKENS_TEST = {
     "use_tempos": True,
     "use_time_signatures": True,
     "use_programs": False,
-    "rest_range": (4, 16),
+    "rest_range": {(0, 16): 4},
     "nb_tempos": 32,
     "tempo_range": (40, 250),
     "time_signature_range": {4: [4]},

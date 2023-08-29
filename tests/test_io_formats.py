@@ -13,9 +13,7 @@ from miditoolkit import MidiFile
 from .tests_utils import ALL_TOKENIZATIONS, midis_equals
 
 
-# Very large beat resolution range so that it covers all cases as some tracks
-# may have very long pauses when the associated instrument is not playing
-BEAT_RES_TEST = {(0, 512): 8}
+BEAT_RES_TEST = {(0, 16): 8}
 TOKENIZER_PARAMS = {
     "beat_res": BEAT_RES_TEST,
     "use_chords": True,
@@ -26,10 +24,7 @@ TOKENIZER_PARAMS = {
     "chord_maps": miditok.constants.CHORD_MAPS,
     "chord_tokens_with_root_note": True,  # Tokens will look as "Chord_C:maj"
     "chord_unknown": (3, 6),
-    "rest_range": (
-        4,
-        512,
-    ),  # very high value to cover every possible rest in the test files
+    "rest_range": {(0, 16): 4},
     "nb_tempos": 32,
     "tempo_range": (40, 250),
     "time_signature_range": {4: [4]},

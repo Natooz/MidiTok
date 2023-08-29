@@ -63,11 +63,7 @@ class CPWord(MIDITokenizer):
         """
         time_division = self._current_midi_metadata["time_division"]
         ticks_per_sample = time_division / max(self.config.beat_res.values())
-        min_rest = (
-            time_division * self.rests[0][0] + ticks_per_sample * self.rests[0][1]
-            if self.config.use_rests
-            else 0
-        )
+        min_rest = self._rests_ticks[self._current_midi_metadata["time_division"]][0]
 
         # Add time events
         all_events = []
@@ -92,41 +88,18 @@ class CPWord(MIDITokenizer):
                 current_program = event.value
             if event.time != previous_tick:
                 # (Rest)
-                if (
-                    event.type in ["Pitch", "Chord", "Tempo", "TimeSig"]
-                    and self.config.use_rests
-                    and event.time - previous_note_end >= min_rest
-                ):
+                if self.config.use_rests and event.time - previous_note_end >= min_rest:
                     previous_tick = previous_note_end
-                    rest_beat, rest_pos = divmod(
-                        event.time - previous_tick,
-                        time_division,
-                    )
-                    rest_beat = min(rest_beat, max([r[0] for r in self.rests]))
-                    rest_pos = round(rest_pos / ticks_per_sample)
-
-                    if rest_beat > 0:
+                    rest_values = self._ticks_to_duration_tokens(event.time - previous_tick, rest=True)
+                    for dur_value, dur_ticks in zip(*rest_values):
                         all_events.append(
                             self.__create_cp_token(
-                                previous_note_end, rest=f"{rest_beat}.0", desc="Rest"
+                                previous_tick,
+                                rest=".".join(map(str, dur_value)),
+                                desc=f"{event.time - previous_tick} ticks",
                             )
                         )
-                        previous_tick += rest_beat * time_division
-
-                    while rest_pos >= self.rests[0][1]:
-                        rest_pos_temp = min(
-                            [r[1] for r in self.rests], key=lambda x: abs(x - rest_pos)
-                        )
-                        all_events.append(
-                            self.__create_cp_token(
-                                previous_note_end,
-                                rest=f"0.{rest_pos_temp}",
-                                desc="Rest",
-                            )
-                        )
-                        previous_tick += round(rest_pos_temp * ticks_per_sample)
-                        rest_pos -= rest_pos_temp
-
+                        previous_tick += dur_ticks
                     current_bar = previous_tick // ticks_per_bar
 
                 # Bar
@@ -396,16 +369,11 @@ class CPWord(MIDITokenizer):
                         and compound_token[self.vocab_types_idx["Rest"]].split("_")[1]
                         != "None"
                     ):
-                        if current_tick < previous_note_end:
-                            # if in case successive rest happen
-                            current_tick = previous_note_end
-                        beat, pos = map(
-                            int,
-                            compound_token[self.vocab_types_idx["Rest"]]
-                            .split("_")[1]
-                            .split("."),
+                        current_tick = max(previous_note_end, current_tick)
+                        current_tick += self._token_duration_to_ticks(
+                            compound_token[self.vocab_types_idx["Rest"]].split("_")[1],
+                            time_division,
                         )
-                        current_tick += beat * time_division + pos * ticks_per_sample
                         current_bar = current_tick // ticks_per_bar
 
         if len(tempo_changes) > 1:

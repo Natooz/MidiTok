@@ -244,9 +244,11 @@ class MIDITokenizer(ABC):
         # Rests
         self.rests = []
         if self.config.use_rests:
-            assert (
-                self.config.rest_range[0] // 4 <= self._first_beat_res
-            ), "The minimum rest value must be equal or superior to the initial beat resolution"
+            max_rest_res = max(self.config.beat_res_rest.values())
+            max_global_res = max(self.config.beat_res.values())
+            assert max_rest_res <= max_global_res, \
+                ("The maximum resolution of the rests must be inferior or equal to the maximum resolution of the"
+                 f"global beat resolution (config.beat_res). Expected <= {max_global_res}, found {max_rest_res}")
             self.rests = self.__create_rests()
 
         # Time Signatures
@@ -272,6 +274,7 @@ class MIDITokenizer(ABC):
         # Keep in memory durations in ticks for seen time divisions so these values
         # are not calculated each time a MIDI is processed
         self._durations_ticks = {}
+        self._rests_ticks = {}
 
         # Holds the tempo changes, time signature, time division and key signature of a
         # MIDI (being parsed) so that methods processing tracks can access them
@@ -567,7 +570,7 @@ class MIDITokenizer(ABC):
                 np.argmin(np.abs(self.pitch_bends - pitch_bend.pitch))
             ]
 
-    def _midi_to_tokens(  # edit overrides to add pedal / pitch bend
+    def _midi_to_tokens(
         self, midi: MidiFile, *args, **kwargs
     ) -> Union[TokSequence, List[TokSequence]]:
         r"""Converts a preprocessed MIDI object to a sequence of tokens.
@@ -819,6 +822,14 @@ class MIDITokenizer(ABC):
                     for beat, pos, res in self.durations
                 ]
             )
+        if self.config.use_rests:
+            if midi.ticks_per_beat not in self._rests_ticks:
+                self._rests_ticks[midi.ticks_per_beat] = np.array(
+                    [
+                        (beat * res + pos) * midi.ticks_per_beat // res
+                        for beat, pos, res in self.rests
+                    ]
+                )
 
         # Preprocess the MIDI file
         self.preprocess_midi(midi)
@@ -978,8 +989,6 @@ class MIDITokenizer(ABC):
         r"""Detokenize one or multiple sequences of tokens into a MIDI file.
         You can give the tokens sequences either as :class:`miditok.TokSequence` objects, lists of integers,
         numpy arrays or PyTorch / Tensorflow tensors.
-        **NOTE:** With `CPWord` and `OctupleMono`,
-        only the tempo changes of the first track in tokens will be used.
 
         :param tokens: tokens to convert. Can be either a list of :class:`miditok.TokSequence`,
                 a Tensor (PyTorch and Tensorflow are supported), a numpy array or a Python list of ints.
@@ -989,51 +998,6 @@ class MIDITokenizer(ABC):
         :param output_path: path to save the file. (default: None)
         :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create).
         :return: the midi object (miditoolkit.MidiFile).
-        """
-        midi = MidiFile(ticks_per_beat=time_division)
-        # if self.one_token_stream:
-        #    tokens = [tokens]
-        for i, track_tokens in enumerate(tokens):
-            if programs is not None:
-                track, tempo_changes = self._tokens_to_track(
-                    track_tokens, time_division, programs[i]
-                )
-            else:
-                track, tempo_changes = self._tokens_to_track(
-                    track_tokens, time_division
-                )
-            midi.instruments.append(track)
-            if i == 0:  # only keep tempo changes of the first track
-                midi.tempo_changes = tempo_changes
-                midi.tempo_changes[0].time = 0
-        midi.max_tick = max(
-            [
-                max([note.end for note in track.notes]) if len(track.notes) > 0 else 0
-                for track in midi.instruments
-            ]
-        )
-
-        # Write MIDI file
-        if output_path:
-            Path(output_path).mkdir(parents=True, exist_ok=True)
-            midi.dump(output_path)
-        return midi
-
-    def _tokens_to_track(
-        self,
-        tokens: TokSequence,
-        time_division: Optional[int] = TIME_DIVISION,
-        program: Optional[Tuple[int, bool]] = (0, False),
-    ) -> Tuple[Instrument, List[TempoChange]]:
-        r"""Converts a sequence of tokens into a track object.
-        This method is unimplemented and need to be overridden by inheriting classes.
-        This method should be decorated with _in_as_complete_seq to receive any type of input.
-
-        :param tokens: tokens to convert. Can be either a :class:`miditok.TokSequence`,
-                a Tensor (PyTorch and Tensorflow are supported), a numpy array or a Python list of ints.
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create).
-        :param program: the MIDI program of the produced track and if it is drums. (default (0, False), piano)
-        :return: the miditoolkit instrument object and the possible tempo changes.
         """
         raise NotImplementedError
 
@@ -1248,7 +1212,7 @@ class MIDITokenizer(ABC):
                 for token_type in original_token_types:
                     self.tokens_types_graph[token_type].append(special_token)
 
-    def __create_durations_tuples(self) -> List[Tuple]:
+    def __create_durations_tuples(self) -> List[Tuple[int, int, int]]:
         r"""Creates the possible durations in beat / position units, as tuple of the form:
         (beat, pos, res) where beat is the number of beats, pos the number of "samples"
         and res the beat resolution considered (samples per beat).
@@ -1286,63 +1250,73 @@ class MIDITokenizer(ABC):
         :return: the duration / time-shift in ticks.
         """
         if isinstance(token_duration, str):
-            token_duration = map(int, token_duration.split("."))
+            token_duration = tuple(map(int, token_duration.split(".")))
         beat, pos, res = token_duration
         return (beat * res + pos) * time_division // res
 
     def _ticks_to_duration_tokens(
             self,
             duration: int,
-            time_division: int = None
+            time_division: int = None,
+            rest: bool = False,
     ) -> Tuple[List[Tuple[int, int, int]], List[int]]:
         r"""Converts a duration in ticks into a sequence of `Duration` / `TimeShift` values.
 
         :param duration: duration in tick to convert.
         :param time_division: time division of the MIDI being parsed. If none is given, the method will use
             `self._current_midi_metadata["time_division"]`. (default: None)
+        :param rest: the duration is a rest, hence the created tokens will be based on the `self.rests` values.
         :return: list of associated token values, and the list of the elapsed offset in tick for each of these values.
         """
         if time_division is None:
             time_division = self._current_midi_metadata["time_division"]
-        dur_bins = self._durations_ticks[time_division]
+        if rest:
+            dur_bins = self._rests_ticks[time_division]
+            dur_vals = self.rests
+        else:
+            dur_bins = self._durations_ticks[time_division]
+            dur_vals = self.durations
+        min_dur = dur_bins[0]
 
         offset_times = [0]
         values = []
-        while duration > 0:
-            index = np.argmin(np.abs(dur_bins - duration))
-            val = self.durations[index]
+        while duration >= min_dur:
+            if rest:
+                index = np.where(dur_bins - duration <= 0)[0][-1]
+            else:
+                index = np.argmin(np.abs(dur_bins - duration))
+            val = dur_vals[index]
             values.append(val)
             val_ticks = self._token_duration_to_ticks(val, time_division)
             duration -= val_ticks
-            offset_times.append(offset_times[-1] + val_ticks)
-        del offset_times[-1]
+            offset_times.append(val_ticks)
+        del offset_times[0]
 
         return values, offset_times
 
-    def __create_rests(self) -> List[Tuple]:
+    def __create_rests(self) -> List[Tuple[int, int, int]]:
         r"""Creates the possible rests in beat / position units, as tuple of the form:
-        (beat, pos) where beat is the number of beats, pos the number of "samples"
-        The rests are calculated from the value of self.config.rest_range,
-        which first value divides a beat to determine the minimum rest to represent,
-        and the second the maximum rest in beats.
-        The rests shorter than 1 beat will scale x2, as rests in music theory (semiquaver, quaver, crotchet...)
-        Note that the values of the rests in positions will be determined by the beat
-        resolution of the first range (self.beat_res)
-
-        Example: (4, 6) and a first beat resolution of 8 will give the rests:
-            [(0, 2), (0, 4), (1, 0), (2, 0), (3, 0), (4, 0), (5, 0), (6, 0)]
+        (beat, pos, res) where beat is the number of beats, pos the number of "samples"
+        and res the beat resolution considered (samples per beat).
+        It follows the same data representation than duration and time shifts.
 
         :return: the rests.
         """
-        div, max_beat = self.config.rest_range
-        assert (
-            div % 2 == 0 and div <= self._first_beat_res
-        ), f"The minimum rest must be divisible by 2 and lower than the first beat resolution ({self._first_beat_res})"
         rests = []
-        while div > 1:
-            rests.append((0, self._first_beat_res // div))
-            div //= 2
-        rests += [(i, 0) for i in range(1, max_beat + 1)]
+        for beat_range, beat_res in self.config.beat_res_rest.items():
+            rests += [
+                (beat, pos, beat_res)
+                for beat in range(*beat_range)
+                for pos in range(beat_res)
+            ]
+        rests += [
+            (
+                max(max(self.config.beat_res_rest)),
+                0,
+                self.config.beat_res_rest[max(self.config.beat_res_rest)],
+            )
+        ]  # the last one
+        del rests[0]  # removes rests of 0
         return rests
 
     def __create_tempos(self) -> np.ndarray:
@@ -1906,9 +1880,10 @@ class MIDITokenizer(ABC):
             ] = self._vocab_base_byte_to_token
 
         dict_config = self.config.to_dict(serialize=True)
-        dict_config["beat_res"] = {
-            f"{k1}_{k2}": v for (k1, k2), v in dict_config["beat_res"].items()
-        }
+        for beat_res_key in ["beat_res", "beat_res_rest"]:
+            dict_config[beat_res_key] = {
+                f"{k1}_{k2}": v for (k1, k2), v in dict_config[beat_res_key].items()
+            }
         params = {
             "config": dict_config,
             "one_token_stream": self.one_token_stream,
@@ -1967,15 +1942,21 @@ class MIDITokenizer(ABC):
                 }
                 continue
             elif key == "config":
-                value["beat_res"] = {
-                    tuple(map(int, beat_range.split("_"))): res
-                    for beat_range, res in value["beat_res"].items()
-                }
+                for beat_res_key in ["beat_res", "beat_res_rest"]:
+                    # check here for previous versions (< v2.1.5)
+                    if beat_res_key in value:
+                        value[beat_res_key] = {
+                            tuple(map(int, beat_range.split("_"))): res
+                            for beat_range, res in value[beat_res_key].items()
+                        }
                 value["time_signature_range"] = {
                     int(res): beat_range
                     for res, beat_range in value["time_signature_range"].items()
                 }
                 value = TokenizerConfig.from_dict(value)
+                # Rest param < v2.1.5
+                if "rest_range" in value:
+                    value["rest_range"] = {(0, value["rest_range"][1]): value["rest_range"][0]}
             elif key in config_attributes:
                 if key == "beat_res":
                     value = {

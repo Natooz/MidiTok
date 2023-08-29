@@ -1,18 +1,6 @@
 #!/usr/bin/python3 python
 
-""" Multitrack test file
-This test method will encode every track of a MIDI file.
-These file contains tracks with long empty sections with no notes. Hence encodings
-in which time is based on time-shift tokens (MIDI-like, Structured) will probably
-not be suited for these files.
-
-Structured and MIDI-Like are then not tested here.
-You can still manage to make them work and pass the test be using a vocabulary
-with large duration / time-shift values, but this is probably not suited for real
-case situations.
-
-NOTE: encoded tracks has to be compared with the quantized original track.
-
+"""Multitrack test file
 """
 
 from copy import deepcopy
@@ -48,7 +36,7 @@ TOKENIZER_PARAMS = {
     "chord_maps": miditok.constants.CHORD_MAPS,
     "chord_tokens_with_root_note": True,  # Tokens will look as "Chord_C:maj"
     "chord_unknown": (3, 6),
-    "rest_range": (4, 512),  # TODO reduce val when successive rests
+    "beat_res_rest": {(0, 2): 4, (2, 12): 2},
     "nb_tempos": 32,
     "tempo_range": (40, 250),
     "log_tempos": False,
@@ -145,7 +133,7 @@ def test_multitrack_midi_to_tokens_to_midi(
                                 )
                             )
                 print(
-                    f"MIDI {i} - {file_path} / {tokenization} failed to encode/decode NOTES"
+                    f"MIDI {i} - {file_path.stem} / {tokenization} failed to encode/decode NOTES"
                     f"({sum(len(t[2]) for t in errors)} errors)"
                 )
 
@@ -159,7 +147,7 @@ def test_multitrack_midi_to_tokens_to_midi(
                 if len(tempo_errors) > 0:
                     has_errors = True
                     print(
-                        f"MIDI {i} - {file_path} / {tokenization} failed to encode/decode TEMPO changes"
+                        f"MIDI {i} - {file_path.stem} / {tokenization} failed to encode/decode TEMPO changes"
                         f"({len(tempo_errors)} errors)"
                     )
 
@@ -172,7 +160,7 @@ def test_multitrack_midi_to_tokens_to_midi(
                 if len(time_sig_errors) > 0:
                     has_errors = True
                     print(
-                        f"MIDI {i} - {file_path} / {tokenization} failed to encode/decode TIME SIGNATURE changes"
+                        f"MIDI {i} - {file_path.stem} / {tokenization} failed to encode/decode TIME SIGNATURE changes"
                         f"({len(time_sig_errors)} errors)"
                     )
 
@@ -182,7 +170,7 @@ def test_multitrack_midi_to_tokens_to_midi(
                 if any(len(err) > 0 for err in pedal_errors):
                     has_errors = True
                     print(
-                        f"MIDI {i} - {file_path} / {tokenization} failed to encode/decode PEDALS"
+                        f"MIDI {i} - {file_path.stem} / {tokenization} failed to encode/decode PEDALS"
                         f"({sum(len(err) for err in pedal_errors)} errors)"
                     )
 
@@ -192,7 +180,7 @@ def test_multitrack_midi_to_tokens_to_midi(
                 if any(len(err) > 0 for err in pitch_bend_errors):
                     has_errors = True
                     print(
-                        f"MIDI {i} - {file_path} / {tokenization} failed to encode/decode PITCH BENDS"
+                        f"MIDI {i} - {file_path.stem} / {tokenization} failed to encode/decode PITCH BENDS"
                         f"({sum(len(err) for err in pitch_bend_errors)} errors)"
                     )
 
