@@ -10,5 +10,11 @@ MidiTok also provides an "all-in-one" data collator: :class:`miditok.pytorch_dat
 
 **Note:** *This module is imported only if* `torch` *is installed in your Python environment.*
 
-.. automodule:: miditok.pytorch_data
-    :members:
+.. autoclass:: miditok.pytorch_data.DatasetTok
+    :noindex:
+
+.. autoclass:: miditok.pytorch_data.DatasetJsonIO
+    :noindex:
+
+.. autoclass:: miditok.pytorch_data.DataCollator
+    :noindex:
