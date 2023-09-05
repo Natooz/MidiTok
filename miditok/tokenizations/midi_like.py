@@ -235,10 +235,7 @@ class MIDILike(MIDITokenizer):
                                         tok_val, time_division
                                     )
                                 elif tok_type == "Rest":
-                                    beat, pos = map(int, tok_val.split("."))
-                                    offset_tick += (
-                                        beat * time_division + pos * ticks_per_sample
-                                    )
+                                    offset_tick += self._token_duration_to_ticks(tok_val, time_division)
                                 if (
                                     offset_tick > max_duration
                                 ):  # will not look for Note Off beyond
@@ -392,13 +389,16 @@ class MIDILike(MIDITokenizer):
         dic["NoteOn"] = ["Velocity"]
 
         if self.config.use_programs:
-            first_note_token_type = "Program"
+            first_note_token_type = "NoteOn" if self.config.program_changes else "Program"
             dic["Program"] = ["NoteOn", "NoteOff"]
         else:
             first_note_token_type = "NoteOn"
         dic["Velocity"] = [first_note_token_type, "TimeShift"]
         dic["NoteOff"] = ["NoteOff", first_note_token_type, "TimeShift"]
         dic["TimeShift"] = ["NoteOff", first_note_token_type]
+        if self.config.program_changes:
+            for token_type in ["Velocity", "NoteOn", "NoteOff"]:
+                dic[token_type].append("Program")
 
         if self.config.use_chords:
             dic["Chord"] = [first_note_token_type]
@@ -500,6 +500,12 @@ class MIDILike(MIDITokenizer):
             if self.config.use_pitch_bends:
                 dic["Rest"].append("PitchBend")
 
+        if self.config.program_changes:
+            for token_type in ["TimeShift", "Rest", "PitchBend", "Pedal", "PedalOff", "Tempo", "TimeSig", "Chord"]:
+                if token_type in dic:
+                    dic["Program"].append(token_type)
+                    dic[token_type].append("Program")
+
         return dic
 
     @_in_as_seq(complete=False, decode_bpe=False)
@@ -546,6 +552,7 @@ class MIDILike(MIDITokenizer):
             # Good token type
             if events[i].type in self.tokens_types_graph[events[i - 1].type]:
                 if events[i].type == "NoteOn":
+                    current_program_noff = current_program
                     current_pitches[current_program].append(int(events[i].value))
                     if int(events[i].value) in current_pitches_tick[current_program]:
                         err += 1  # note already being played at current tick
@@ -558,8 +565,7 @@ class MIDILike(MIDITokenizer):
                         if events[j].type == "NoteOff" and int(events[j].value) == int(
                             events[i].value
                         ):
-                            if self.config.use_programs:
-                                if int(events[j - 1].value) == current_program:
+                            if self.config.use_programs and current_program_noff == current_program:
                                     break  # all good
                             else:
                                 break  # all good
@@ -567,6 +573,8 @@ class MIDILike(MIDITokenizer):
                             offset_sample += self._token_duration_to_ticks(
                                 events[j].value, max(self.config.beat_res.values())
                             )
+                        elif events[j].type == "Program":
+                            current_program_noff = events[j].value
 
                         if (
                             offset_sample > max_duration

@@ -36,6 +36,7 @@ from .constants import (
     PROGRAMS,
     ONE_TOKEN_STREAM_FOR_PROGRAMS,
     CURRENT_VERSION_PACKAGE,
+    PROGRAM_CHANGES,
 )
 
 
@@ -51,6 +52,7 @@ class Event:
     type: str
     value: Union[str, int]
     time: Union[int, float] = None
+    program: int = None
     desc: Any = None
 
     def __str__(self):
@@ -169,13 +171,14 @@ class TokenizerConfig:
             The value of each Pedal token will be equal to the program of the track. (default: False)
     :param use_pitch_bends: will use `PitchBend` tokens. In multitrack setting, a `Program` token will be added before
             each `PitchBend` token. (default: False)
-    :param use_programs: will use ``Program`` tokens, if the tokenizer is compatible.
-            Used to specify an instrument / MIDI program. The :ref:`Octuple`, :ref:`MMM` and :ref:`MuMIDI` tokenizers
-            use natively `Program` tokens, this option is always enabled. :ref:`TSD`, :ref:`REMI`, :ref:`MIDILike`,
-            :ref:`Structured` and :ref:`CPWord` will add `Program` tokens before each `Pitch` / `NoteOn` token to
-            indicate its associated instrument and will treat all the tracks of a MIDI as a single sequence of tokens.
+    :param use_programs: will use ``Program`` tokens to specify the instrument / MIDI program of the notes, if the
+            tokenizer is compatible (:ref:`TSD`, :ref:`REMI`, :ref:`MIDILike`, :ref:`Structured` and :ref:`CPWord`).
+            Use this parameter with the `programs`, `one_token_stream_for_programs` and `program_changes` parameters.
+            By default, it will prepend a `Program` tokens before each `Pitch` / `NoteOn` token to
+            indicate its associated instrument, and will treat all the tracks of a MIDI as a single sequence of tokens.
             :ref:`CPWord`, :ref:`Octuple` and :ref:`MuMIDI` add a `Program` tokens with the stacks of `Pitch`,
-            `Velocity` and `Duration` tokens. (default: False)
+            `Velocity` and `Duration` tokens. The :ref:`Octuple`, :ref:`MMM` and :ref:`MuMIDI` tokenizers
+            use natively `Program` tokens, this option is always enabled. (default: False)
     :param beat_res_rest: the beat resolution of `Rest` tokens. It follows the same data pattern as the `beat_res`
             argument, however the maximum resolution for rests cannot be higher than the highest "global" resolution
             (`beat_res`). Rests are considered complementary to other time tokens (`TimeShift`, `Bar` and `Position`).
@@ -225,6 +228,11 @@ class TokenizerConfig:
             `NoteOn` and `NoteOff` tokens to indicate their associated program / instrument. Note that this parameter is
             always set to True for `MuMIDI` and `MMM`. Setting it to False will make the tokenizer not use `Programs`,
              but will allow to still have `Program` tokens in the vocabulary. (default: True)
+    :param program_changes: to be used with `use_programs`. If given True, the tokenizer will place `Program`
+            tokens whenever a note is being played by an instrument different from the last one. This mimics the
+            ProgramChange MIDI messages. If given False, a `Program` token will precede each note tokens instead.
+            This parameter only apply for `REMI`, `TSD` and `MIDILike`. If you set it True while your tokenizer is not
+            int `one_token_stream` mode, a `Program` token at the beginning of each track token sequence.
     :param **kwargs: additional parameters that will be saved in `config.additional_params`.
     """
 
@@ -257,6 +265,7 @@ class TokenizerConfig:
         delete_equal_successive_time_sig_changes: bool = DELETE_EQUAL_SUCCESSIVE_TIME_SIG_CHANGES,
         programs: Sequence[int] = PROGRAMS,
         one_token_stream_for_programs: bool = ONE_TOKEN_STREAM_FOR_PROGRAMS,
+        program_changes: bool = PROGRAM_CHANGES,
         **kwargs,
     ):
         # Global parameters
@@ -312,6 +321,7 @@ class TokenizerConfig:
         # Programs
         self.programs: Sequence[int] = programs
         self.one_token_stream_for_programs = one_token_stream_for_programs
+        self.program_changes = program_changes and use_programs
 
         # Additional params
         self.additional_params = kwargs

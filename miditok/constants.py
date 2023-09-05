@@ -2,7 +2,7 @@
 
 """
 
-CURRENT_VERSION_PACKAGE = "2.1.5"  # used when saving the config of a tokenizer
+CURRENT_VERSION_PACKAGE = "2.1.6"  # used when saving the config of a tokenizer
 
 MIDI_FILES_EXTENSIONS = [".mid", ".midi", ".MID", ".MIDI"]
 
@@ -80,6 +80,7 @@ PITCH_BEND_RANGE = (-8192, 8191, 32)
 # Programs
 PROGRAMS = list(range(-1, 128))
 ONE_TOKEN_STREAM_FOR_PROGRAMS = True
+PROGRAM_CHANGES = False
 
 
 # Tokenizers specific parameters

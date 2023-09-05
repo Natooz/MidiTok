@@ -604,15 +604,16 @@ class MIDITokenizer(ABC):
             for i in range(len(all_events)):
                 all_events[i] += global_events
 
-        # Adds note tokens
+        # Adds track tokens
         for ti, track in enumerate(midi.instruments):
-            note_events = self._create_track_events(track)
+            track_events = self._create_track_events(track)
             if self.one_token_stream:
-                all_events += note_events
+                all_events += track_events
             else:
-                all_events[ti] += note_events
-
-        # Add time events
+                if self.config.program_changes:
+                    track_events.insert(0, Event("Program", track.program, 0))
+                track_events.sort(key=lambda x: x.time)
+                all_events[ti] += track_events
         if self.one_token_stream:
             if (self.config.use_sustain_pedals or self.config.use_pitch_bends) and len(
                 midi.instruments
@@ -621,13 +622,18 @@ class MIDITokenizer(ABC):
                 all_events.sort(key=lambda x: (x.time, self.__order(x)))
             else:
                 all_events.sort(key=lambda x: x.time)
+            # Add ProgramChange (named Program) tokens if requested
+            if self.config.program_changes:
+                self._add_program_change_events(all_events)
+
+        # Add time events
+        if self.one_token_stream:
             all_events = self._add_time_events(all_events)
             tok_sequence = TokSequence(events=all_events)
             self.complete_sequence(tok_sequence)
         else:
             tok_sequence = []
             for i in range(len(all_events)):
-                all_events[i].sort(key=lambda x: x.time)
                 all_events[i] = self._add_time_events(all_events[i])
                 tok_sequence.append(TokSequence(events=all_events[i]))
                 self.complete_sequence(tok_sequence[-1])
@@ -677,9 +683,9 @@ class MIDITokenizer(ABC):
                 unknown_chords_nb_notes_range=self.config.chord_unknown,
             )
             for chord in chords:
-                if self.config.use_programs:
+                if self.config.use_programs and not self.config.program_changes:
                     events.append(
-                        Event("Program", track.program, chord.time, "ProgramChord")
+                        Event("Program", track.program, chord.time, track.program, "ProgramChord")
                     )
                 events.append(chord)
 
@@ -689,7 +695,7 @@ class MIDITokenizer(ABC):
                 # If not using programs, the default value is 0
                 events.append(
                     Event(
-                        "Pedal", program if self.config.use_programs else 0, pedal.start
+                        "Pedal", program if self.config.use_programs else 0, pedal.start, track.program
                     )
                 )
                 # PedalOff or Duration
@@ -700,39 +706,42 @@ class MIDITokenizer(ABC):
                             "Duration",
                             ".".join(map(str, self.durations[index])),
                             pedal.start,
+                            track.program,
                         )
                     )
                 else:
-                    events.append(Event("PedalOff", program, pedal.end))
+                    events.append(Event("PedalOff", program, pedal.end, track.program))
 
         # Add pitch bend
         if self.config.use_pitch_bends:
             for pitch_bend in track.pitch_bends:
-                if self.config.use_programs:
+                if self.config.use_programs and not self.config.program_changes:
                     events.append(
                         Event(
                             "Program",
                             program,
                             pitch_bend.time,
+                            track.program,
                             "ProgramPitchBend",
                         )
                     )
-                events.append(Event("PitchBend", pitch_bend.pitch, pitch_bend.time))
+                events.append(Event("PitchBend", pitch_bend.pitch, pitch_bend.time, track.program))
 
         # TODO add control changes
 
         # Creates the Note On, Note Off and Velocity events
         for n, note in enumerate(track.notes):
             # Pitch / Velocity
-            if self.config.use_programs:
+            if self.config.use_programs and not self.config.program_changes:
                 events.append(
-                    Event(type="Program", value=program, time=note.start, desc=note.end)
+                    Event(type="Program", value=program, time=note.start, program=track.program, desc=note.end)
                 )
             events.append(
                 Event(
                     type=note_token_name,
                     value=note.pitch,
                     time=note.start,
+                    program=track.program,
                     desc=note.end,
                 )
             )
@@ -741,21 +750,22 @@ class MIDITokenizer(ABC):
                     type="Velocity",
                     value=note.velocity,
                     time=note.start,
+                    program=track.program,
                     desc=f"{note.velocity}",
                 )
             )
 
             # Duration / NoteOff
             if self._note_on_off:
-                if self.config.use_programs:
+                if self.config.use_programs and not self.config.program_changes:
                     events.append(
                         Event(
-                            type="Program", value=program, time=note.end, desc=note.end
+                            type="Program", value=program, time=note.end, program=track.program, desc=note.end
                         )
                     )
                 events.append(
                     Event(
-                        type="NoteOff", value=note.pitch, time=note.end, desc=note.end
+                        type="NoteOff", value=note.pitch, time=note.end, program=track.program, desc=note.end
                     )
                 )
             else:
@@ -766,11 +776,28 @@ class MIDITokenizer(ABC):
                         type="Duration",
                         value=".".join(map(str, self.durations[index])),
                         time=note.start,
+                        program=track.program,
                         desc=f"{duration} ticks",
                     )
                 )
 
         return events
+
+    @staticmethod
+    def _add_program_change_events(events: List[Event]):
+        """Adds inplace Program tokens acting as Program Changes to a list of Events.
+
+        :param events: Events to add Programs
+        """
+        previous_program = None
+        program_change_events = []
+        for ei, event in enumerate(events):
+            if event.program != previous_program and event.type not in ["Pedal", "PedalOff"]:
+                previous_program = event.program
+                program_change_events.append((ei, Event("Program", event.program, event.time)))
+
+        for idx, event in reversed(program_change_events):
+            events.insert(idx, event)
 
     def _create_midi_events(self, midi: MidiFile) -> List[Event]:
         r"""Create the *global* MIDI additional tokens: `Tempo` and `TimeSignature`.
