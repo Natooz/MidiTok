@@ -33,7 +33,7 @@ TOKENIZER_PARAMS = {
     "use_time_signatures": True,
     "use_sustain_pedals": True,
     "use_pitch_bends": True,
-    "use_programs": False,
+    "use_programs": True,
     "beat_res_rest": {(0, 2): 4, (2, 12): 2},
     "nb_tempos": 32,
     "tempo_range": (40, 250),
@@ -45,6 +45,8 @@ TOKENIZER_PARAMS = {
     "delete_equal_successive_time_sig_changes": True,
     "delete_equal_successive_tempo_changes": True,
     "sustain_pedal_duration": True,
+    "one_token_stream_for_programs": False,
+    "program_changes": True,
 }
 
 
@@ -133,6 +135,8 @@ def test_one_track_midi_to_tokens_to_midi(
             )
             track = new_midi.instruments[0]
             track.name = f"encoded with {tokenization}"
+            if tokenization == "MIDILike":
+                track.notes.sort(key=lambda x: (x.start, x.pitch, x.end))
 
             # Checks its good
             errors = track_equals(midi_to_compare.instruments[0], track)

@@ -42,6 +42,7 @@ TOKENIZER_PARAMS = {
     "log_tempos": False,
     "time_signature_range": {4: [3, 4]},
     "sustain_pedal_duration": False,
+    "program_changes": False,
 }
 
 
@@ -57,6 +58,7 @@ def test_multitrack_midi_to_tokens_to_midi(
     files = list(Path(data_path).glob("**/*.mid"))
     has_errors = False
     t0 = time()
+    # TODO test with and without program change
 
     for i, file_path in enumerate(tqdm(files, desc="Testing multitrack")):
         # Reads the MIDI
@@ -109,6 +111,9 @@ def test_multitrack_midi_to_tokens_to_midi(
                 time_division=midi_to_compare.ticks_per_beat,
             )
             new_midi.instruments.sort(key=lambda x: (x.program, x.is_drum))
+            if tokenization == "MIDILike":
+                for track in new_midi.instruments:
+                    track.notes.sort(key=lambda x: (x.start, x.pitch, x.end))
 
             # Checks types and values conformity following the rules
             tokens_types = tokenizer.tokens_errors(
