@@ -9,17 +9,13 @@ from typing import Union
 from time import time
 
 import miditok
-from miditoolkit import MidiFile, Marker, Pedal
+from miditoolkit import MidiFile, Pedal
 from tqdm import tqdm
 
 from .tests_utils import (
     ALL_TOKENIZATIONS,
-    midis_equals,
-    tempo_changes_equals,
-    pedal_equals,
-    pitch_bend_equals,
+    tokenize_check_equals,
     adapt_tempo_changes_times,
-    time_signature_changes_equals,
     remove_equal_successive_tempos,
 )
 
@@ -42,8 +38,26 @@ TOKENIZER_PARAMS = {
     "log_tempos": False,
     "time_signature_range": {4: [3, 4]},
     "sustain_pedal_duration": False,
+    "one_token_stream_for_programs": True,
     "program_changes": False,
 }
+
+# Define kwargs sets
+# The first set is empty, using the default params
+params_kwargs_sets = {tok: [{}] for tok in ALL_TOKENIZATIONS}
+programs_tokenizations = ["TSD", "REMI", "MIDILike", "Structured", "CPWord", "Octuple"]
+programs_tokenizations = ["TSD", "REMI", "MIDILike", "Structured", "CPWord"]
+for tok in programs_tokenizations:
+    params_kwargs_sets[tok].append(
+        {"one_token_stream_for_programs": False},
+    )
+for tok in ["TSD", "REMI", "MIDILike"]:
+    params_kwargs_sets[tok].append(
+        {"program_changes": True},
+    )
+# Increase the TimeShift voc for Structured as it doesn't support successive TimeShifts
+for kwargs_set in params_kwargs_sets["Structured"]:
+    kwargs_set["beat_res"] = {(0, 512): 8}
 
 
 def test_multitrack_midi_to_tokens_to_midi(
@@ -53,19 +67,16 @@ def test_multitrack_midi_to_tokens_to_midi(
     r"""Reads a few MIDI files, convert them into token sequences, convert them back to MIDI files.
     The converted back MIDI files should identical to original one, expect with note starting and ending
     times quantized, and maybe a some duplicated notes removed
-
     """
     files = list(Path(data_path).glob("**/*.mid"))
-    has_errors = False
+    at_least_one_error = False
     t0 = time()
-    # TODO test with and without program change
 
-    for i, file_path in enumerate(tqdm(files, desc="Testing multitrack")):
+    for fi, file_path in enumerate(tqdm(files, desc="Testing multitrack")):
         # Reads the MIDI
         midi = MidiFile(Path(file_path))
         if midi.ticks_per_beat % max(BEAT_RES_TEST.values()) != 0:
             continue
-        has_errors = False
         # add pedal messages
         for ti in range(max(3, len(midi.instruments))):
             midi.instruments[ti].pedals = [
@@ -73,145 +84,63 @@ def test_multitrack_midi_to_tokens_to_midi(
             ]
 
         for tokenization in ALL_TOKENIZATIONS:
-            tokenizer_config = miditok.TokenizerConfig(**TOKENIZER_PARAMS)
-            tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
-                tokenizer_config=tokenizer_config
-            )
+            for pi, params_kwargs in enumerate(params_kwargs_sets[tokenization]):
+                idx = f"{fi}_{pi}"
+                params = deepcopy(TOKENIZER_PARAMS)
+                params.update(params_kwargs)
+                tokenizer_config = miditok.TokenizerConfig(**params)
+                tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
+                    tokenizer_config=tokenizer_config
+                )
 
-            # Process the MIDI
-            # midi notes / tempos / time signature quantized with the line above
-            midi_to_compare = deepcopy(midi)
-            for track in midi_to_compare.instruments:
-                if track.is_drum:
-                    track.program = (
-                        0  # need to be done before sorting tracks per program
+                # Process the MIDI
+                # midi notes / tempos / time signature quantized with the line above
+                midi_to_compare = deepcopy(midi)
+                for track in midi_to_compare.instruments:
+                    if track.is_drum:
+                        track.program = (
+                            0  # need to be done before sorting tracks per program
+                        )
+
+                # Sort and merge tracks if needed
+                # MIDI produced with one_token_stream contains tracks with different orders
+                # This step is also performed in preprocess_midi, but we need to call it here for the assertions below
+                tokenizer.preprocess_midi(midi_to_compare)
+                # For Octuple, as tempo is only carried at notes times, we need to adapt their times for comparison
+                if tokenization in ["Octuple"]:
+                    adapt_tempo_changes_times(
+                        midi_to_compare.instruments, midi_to_compare.tempo_changes
                     )
+                # When the tokenizer only decoded tempo changes different from the last tempo val
+                if tokenization in ["CPWord"]:
+                    remove_equal_successive_tempos(midi_to_compare.tempo_changes)
 
-            # Sort and merge tracks if needed
-            # MIDI produced with one_token_stream contains tracks with different orders
-            # This step is also performed in preprocess_midi, but we need to call it here for the assertions below
-            tokenizer.preprocess_midi(midi_to_compare)
-            # For Octuple, as tempo is only carried at notes times, we need to adapt their times for comparison
-            if tokenization in ["Octuple"]:
-                adapt_tempo_changes_times(
-                    midi_to_compare.instruments, midi_to_compare.tempo_changes
-                )
-            # When the tokenizer only decoded tempo changes different from the last tempo val
-            if tokenization in ["CPWord"]:
-                remove_equal_successive_tempos(midi_to_compare.tempo_changes)
-
-            # MIDI -> Tokens -> MIDI
-            midi_to_compare.instruments.sort(
-                key=lambda x: (x.program, x.is_drum)
-            )  # sort tracks
-            tokens = tokenizer(midi_to_compare)
-            new_midi = tokenizer(
-                tokens,
-                miditok.utils.get_midi_programs(midi_to_compare),
-                time_division=midi_to_compare.ticks_per_beat,
-            )
-            new_midi.instruments.sort(key=lambda x: (x.program, x.is_drum))
-            if tokenization == "MIDILike":
-                for track in new_midi.instruments:
-                    track.notes.sort(key=lambda x: (x.start, x.pitch, x.end))
-
-            # Checks types and values conformity following the rules
-            tokens_types = tokenizer.tokens_errors(
-                tokens[0] if not tokenizer.one_token_stream else tokens
-            )
-            if tokens_types != 0.0:
-                print(
-                    f"Validation of tokens types / values successions failed with {tokenization}: {tokens_types:.2f}"
+                # MIDI -> Tokens -> MIDI
+                decoded_midi, has_errors = tokenize_check_equals(
+                    midi_to_compare, tokenizer, idx, file_path.stem
                 )
 
-            # Checks notes
-            errors = midis_equals(midi_to_compare, new_midi)
-            if len(errors) > 0:
-                has_errors = True
-                for e, track_err in enumerate(errors):
-                    if track_err[-1][0][0] != "len":
-                        for err, note, exp in track_err[-1]:
-                            new_midi.markers.append(
-                                Marker(
-                                    f"{e}: with note {err} (pitch {note.pitch})",
-                                    note.start,
-                                )
+                if has_errors:
+                    at_least_one_error = True
+                    if saving_erroneous_midis:
+                        decoded_midi.dump(
+                            Path(
+                                "tests",
+                                "test_results",
+                                f"{file_path.stem}_{tokenization}.mid",
                             )
-                print(
-                    f"MIDI {i} - {file_path.stem} / {tokenization} failed to encode/decode NOTES"
-                    f"({sum(len(t[2]) for t in errors)} errors)"
-                )
-
-            # Checks tempos
-            if (
-                tokenizer.config.use_tempos and tokenization != "MuMIDI"
-            ):  # MuMIDI doesn't decode tempos
-                tempo_errors = tempo_changes_equals(
-                    midi_to_compare.tempo_changes, new_midi.tempo_changes
-                )
-                if len(tempo_errors) > 0:
-                    has_errors = True
-                    print(
-                        f"MIDI {i} - {file_path.stem} / {tokenization} failed to encode/decode TEMPO changes"
-                        f"({len(tempo_errors)} errors)"
-                    )
-
-            # Checks time signatures
-            if tokenizer.config.use_time_signatures:
-                time_sig_errors = time_signature_changes_equals(
-                    midi_to_compare.time_signature_changes,
-                    new_midi.time_signature_changes,
-                )
-                if len(time_sig_errors) > 0:
-                    has_errors = True
-                    print(
-                        f"MIDI {i} - {file_path.stem} / {tokenization} failed to encode/decode TIME SIGNATURE changes"
-                        f"({len(time_sig_errors)} errors)"
-                    )
-
-            # Checks pedals
-            if tokenizer.config.use_sustain_pedals:
-                pedal_errors = pedal_equals(midi_to_compare, new_midi)
-                if any(len(err) > 0 for err in pedal_errors):
-                    has_errors = True
-                    print(
-                        f"MIDI {i} - {file_path.stem} / {tokenization} failed to encode/decode PEDALS"
-                        f"({sum(len(err) for err in pedal_errors)} errors)"
-                    )
-
-            # Checks pitch bends
-            if tokenizer.config.use_pitch_bends:
-                pitch_bend_errors = pitch_bend_equals(midi_to_compare, new_midi)
-                if any(len(err) > 0 for err in pitch_bend_errors):
-                    has_errors = True
-                    print(
-                        f"MIDI {i} - {file_path.stem} / {tokenization} failed to encode/decode PITCH BENDS"
-                        f"({sum(len(err) for err in pitch_bend_errors)} errors)"
-                    )
-
-            # TODO check control changes
-
-            if has_errors:
-                has_errors = True
-                if saving_erroneous_midis:
-                    new_midi.dump(
-                        Path(
-                            "tests",
-                            "test_results",
-                            f"{file_path.stem}_{tokenization}.mid",
                         )
-                    )
-                    midi_to_compare.dump(
-                        Path(
-                            "tests",
-                            "test_results",
-                            f"{file_path.stem}_{tokenization}_original.mid",
+                        midi_to_compare.dump(
+                            Path(
+                                "tests",
+                                "test_results",
+                                f"{file_path.stem}_{tokenization}_original.mid",
+                            )
                         )
-                    )
 
     ttotal = time() - t0
     print(f"Took {ttotal:.2f} seconds")
-    assert not has_errors
+    assert not at_least_one_error
 
 
 if __name__ == "__main__":

@@ -33,6 +33,13 @@ def convert_ids_tensors_to_list(ids: Any):
                 "The tokens must be given as a list of integers, np.ndarray, or PyTorch / Tensorflow tensor"
             )
         ids = ids.astype(int).tolist()
+    else:
+        # Recursively checks the content are ints (only check first item)
+        el = ids[0]
+        while isinstance(el, list):
+            el = el[0]
+        if not isinstance(el, int):
+            raise TypeError
 
     return ids
 

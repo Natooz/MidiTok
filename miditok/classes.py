@@ -85,7 +85,20 @@ class TokSequence:
     _ids_no_bpe: List[Union[int, List[int]]] = None
 
     def __len__(self) -> int:
-        return len(self.ids)
+        if self.ids is not None:
+            return len(self.ids)
+        elif self.tokens is not None:
+            return len(self.tokens)
+        elif self.events is not None:
+            return len(self.events)
+        elif self.bytes is not None:
+            return len(self.bytes)
+        elif self._ids_no_bpe is not None:
+            return len(self._ids_no_bpe)
+        else:
+            raise ValueError(
+                "This TokSequence seems to not be initialized, all its attributes are None."
+            )
 
     def __getitem__(self, item):
         if self.ids is not None:
@@ -99,7 +112,7 @@ class TokSequence:
         elif self._ids_no_bpe is not None:
             return self._ids_no_bpe[item]
         else:
-            return ValueError(
+            raise ValueError(
                 "This TokSequence seems to not be initialized, all its attributes are None."
             )
 

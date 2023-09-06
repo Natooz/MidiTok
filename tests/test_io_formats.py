@@ -20,6 +20,8 @@ TOKENIZER_PARAMS = {
     "use_rests": True,
     "use_tempos": True,
     "use_time_signatures": True,
+    "use_sustain_pedals": True,
+    "use_pitch_bends": True,
     "use_programs": False,
     "chord_maps": miditok.constants.CHORD_MAPS,
     "chord_tokens_with_root_note": True,  # Tokens will look as "Chord_C:maj"
@@ -29,6 +31,34 @@ TOKENIZER_PARAMS = {
     "tempo_range": (40, 250),
     "time_signature_range": {4: [4]},
 }
+
+programs_tokenizations = ["TSD", "REMI", "MIDILike", "Structured", "CPWord"]
+test_cases_programs = [
+    (
+        {
+            "use_programs": True,
+            "one_token_stream_for_programs": True,
+            "program_changes": False,
+        },
+        [],
+    ),
+    (
+        {
+            "use_programs": True,
+            "one_token_stream_for_programs": True,
+            "program_changes": True,
+        },
+        ["Structured", "CPWord"],
+    ),
+    (
+        {
+            "use_programs": True,
+            "one_token_stream_for_programs": False,
+            "program_changes": False,
+        },
+        ["Structured"],
+    ),
+]
 
 
 def encode_decode_and_check(tokenizer: miditok.MIDITokenizer, midi: MidiFile):
@@ -60,11 +90,10 @@ def encode_decode_and_check(tokenizer: miditok.MIDITokenizer, midi: MidiFile):
         return True
 
     # Checks its good
-    """for track1, track2 in zip(midi_to_compare.instruments, decoded_midi.instruments):
-        if len(track1.notes) != len(track2.notes):
-            at_least_one_error = True
-            break"""
     decoded_midi.instruments.sort(key=lambda x: (x.program, x.is_drum))
+    if type(tokenizer).__name__ == "MIDILike":
+        for track in decoded_midi.instruments:
+            track.notes.sort(key=lambda x: (x.start, x.pitch, x.end))
     errors = midis_equals(midi_to_compare, decoded_midi)
     if len(errors) > 0:
         print(
@@ -99,15 +128,19 @@ def test_io_formats():
         )
 
         # If TSD, also test in use_programs / one_token_stream mode
-        if tokenization in ["TSD", "REMI", "MIDILike", "Structured", "CPWord"]:
-            tokenizer_config = miditok.TokenizerConfig(**params)
-            tokenizer_config.use_programs = True
-            tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
-                tokenizer_config=tokenizer_config
-            )
-            at_least_one_error = (
-                encode_decode_and_check(tokenizer, midi) or at_least_one_error
-            )
+        if tokenization in programs_tokenizations:
+            for custom_params, excluded_tok in test_cases_programs:
+                if tokenization in excluded_tok:
+                    continue
+                params = deepcopy(TOKENIZER_PARAMS)
+                params.update(custom_params)
+                tokenizer_config = miditok.TokenizerConfig(**params)
+                tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
+                    tokenizer_config=tokenizer_config
+                )
+                at_least_one_error = (
+                    encode_decode_and_check(tokenizer, midi) or at_least_one_error
+                )
 
     assert not at_least_one_error
 

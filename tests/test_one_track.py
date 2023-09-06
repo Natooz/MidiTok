@@ -9,16 +9,12 @@ from typing import Union
 from time import time
 
 import miditok
-from miditoolkit import MidiFile, Marker
+from miditoolkit import MidiFile
 from tqdm import tqdm
 
 from .tests_utils import (
     ALL_TOKENIZATIONS,
-    track_equals,
-    tempo_changes_equals,
-    pedal_equals,
-    pitch_bend_equals,
-    time_signature_changes_equals,
+    tokenize_check_equals,
     adapt_tempo_changes_times,
     adjust_pedal_durations,
     remove_equal_successive_tempos,
@@ -115,95 +111,14 @@ def test_one_track_midi_to_tokens_to_midi(
             # printing the tokenizer shouldn't fail
             _ = str(tokenizer)
 
-            # Convert the track in tokens
-            tokens = tokenizer(midi_to_compare)
-            if not tokenizer.one_token_stream:
-                tokens = tokens[0]
-
-            # Checks types and values conformity following the rules
-            tokens_types = tokenizer.tokens_errors(tokens)
-            if tokens_types != 0.0:
-                print(
-                    f"Validation of tokens types / values successions failed with {tokenization}: {tokens_types:.2f}"
-                )
-
-            # Convert back tokens into a track object
-            if not tokenizer.one_token_stream:
-                tokens = [tokens]
-            new_midi = tokenizer.tokens_to_midi(
-                tokens, time_division=midi_to_compare.ticks_per_beat
+            # MIDI -> Tokens -> MIDI
+            decoded_midi, has_errors = tokenize_check_equals(
+                midi_to_compare, tokenizer, i, file_path.stem
             )
-            track = new_midi.instruments[0]
-            track.name = f"encoded with {tokenization}"
-            if tokenization == "MIDILike":
-                track.notes.sort(key=lambda x: (x.start, x.pitch, x.end))
-
-            # Checks its good
-            errors = track_equals(midi_to_compare.instruments[0], track)
-            if len(errors) > 0:
-                has_errors = True
-                if errors[0][0] != "len":
-                    for err, note, exp in errors:
-                        midi.markers.append(
-                            Marker(
-                                f"ERR {tokenization} with note {err} (pitch {note.pitch})",
-                                note.start,
-                            )
-                        )
-                print(
-                    f"MIDI {i} - {file_path} failed to encode/decode NOTES with {tokenization} ({len(errors)} errors)"
-                )
-
-            # Checks tempos
-            if tokenizer.config.use_tempos and tokenization != "MuMIDI":
-                tempo_errors = tempo_changes_equals(
-                    midi_to_compare.tempo_changes, new_midi.tempo_changes
-                )
-                if len(tempo_errors) > 0:
-                    has_errors = True
-                    print(
-                        f"MIDI {i} - {file_path} failed to encode/decode TEMPO changes with "
-                        f"{tokenization} ({len(tempo_errors)} errors)"
-                    )
-
-            # Checks time signatures
-            if tokenizer.config.use_time_signatures:
-                time_sig_errors = time_signature_changes_equals(
-                    midi_to_compare.time_signature_changes,
-                    new_midi.time_signature_changes,
-                )
-                if len(time_sig_errors) > 0:
-                    has_errors = True
-                    print(
-                        f"MIDI {i} - {file_path} failed to encode/decode TIME SIGNATURE changes with "
-                        f"{tokenization} ({len(time_sig_errors)} errors)"
-                    )
-
-            # Checks pedals
-            if tokenizer.config.use_sustain_pedals:
-                pedal_errors = pedal_equals(midi_to_compare, new_midi)
-                if any(len(err) > 0 for err in pedal_errors):
-                    has_errors = True
-                    print(
-                        f"MIDI {i} - {file_path} failed to encode/decode PEDALS with "
-                        f"{tokenization} ({sum(len(err) for err in pedal_errors)} errors)"
-                    )
-
-            # Checks pitch bends
-            if tokenizer.config.use_pitch_bends:
-                pitch_bend_errors = pitch_bend_equals(midi_to_compare, new_midi)
-                if any(len(err) > 0 for err in pitch_bend_errors):
-                    has_errors = True
-                    print(
-                        f"MIDI {i} - {file_path} failed to encode/decode PITCH BENDS with "
-                        f"{tokenization} ({sum(len(err) for err in pitch_bend_errors)} errors)"
-                    )
-
-            # TODO check control changes
 
             # Add track to error list
             if has_errors:
-                tracks_with_errors.append(new_midi.instruments[0])
+                tracks_with_errors.append(decoded_midi.instruments[0])
                 tracks_with_errors[-1].name = f"encoded with {tokenization}"
 
         # > 1 as the first one is the preprocessed

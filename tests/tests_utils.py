@@ -12,10 +12,11 @@ from miditoolkit import (
     TimeSignature,
     Pedal,
     PitchBend,
+    Marker,
 )
 import numpy as np
 
-from miditok import MIDITokenizer
+import miditok
 
 
 ALL_TOKENIZATIONS = [
@@ -130,6 +131,110 @@ def pitch_bend_equals(
     return errors
 
 
+def tokenize_check_equals(
+    midi: MidiFile,
+    tokenizer: miditok.MIDITokenizer,
+    file_idx: Union[int, str],
+    file_name: str,
+) -> Tuple[MidiFile, bool]:
+    has_errors = False
+    tokenization = type(tokenizer).__name__
+    midi.instruments.sort(key=lambda x: (x.program, x.is_drum))
+    # merging is performed in preprocess only in one_token_stream mode
+    # but in multi token stream, decoding will actually keep one track per program
+    if tokenizer.config.use_programs:
+        miditok.utils.merge_same_program_tracks(midi.instruments)
+
+    tokens = tokenizer(midi)
+    midi_decoded = tokenizer(
+        tokens,
+        miditok.utils.get_midi_programs(midi),
+        time_division=midi.ticks_per_beat,
+    )
+    midi_decoded.instruments.sort(key=lambda x: (x.program, x.is_drum))
+    if tokenization == "MIDILike":
+        for track in midi_decoded.instruments:
+            track.notes.sort(key=lambda x: (x.start, x.pitch, x.end))
+
+    # Checks types and values conformity following the rules
+    err_tse = tokenizer.tokens_errors(tokens)
+    if isinstance(err_tse, list):
+        err_tse = sum(err_tse)
+    if err_tse != 0.0:
+        print(
+            f"Validation of tokens types / values successions failed with {tokenization}: {err_tse:.2f}"
+        )
+
+    # Checks notes
+    errors = midis_equals(midi, midi_decoded)
+    if len(errors) > 0:
+        has_errors = True
+        for e, track_err in enumerate(errors):
+            if track_err[-1][0][0] != "len":
+                for err, note, exp in track_err[-1]:
+                    midi_decoded.markers.append(
+                        Marker(
+                            f"{e}: with note {err} (pitch {note.pitch})",
+                            note.start,
+                        )
+                    )
+        print(
+            f"MIDI {file_idx} - {file_name} / {tokenization} failed to encode/decode NOTES"
+            f"({sum(len(t[2]) for t in errors)} errors)"
+        )
+
+    # Checks tempos
+    if (
+        tokenizer.config.use_tempos and tokenization != "MuMIDI"
+    ):  # MuMIDI doesn't decode tempos
+        tempo_errors = tempo_changes_equals(
+            midi.tempo_changes, midi_decoded.tempo_changes
+        )
+        if len(tempo_errors) > 0:
+            has_errors = True
+            print(
+                f"MIDI {file_idx} - {file_name} / {tokenization} failed to encode/decode TEMPO changes"
+                f"({len(tempo_errors)} errors)"
+            )
+
+    # Checks time signatures
+    if tokenizer.config.use_time_signatures:
+        time_sig_errors = time_signature_changes_equals(
+            midi.time_signature_changes,
+            midi_decoded.time_signature_changes,
+        )
+        if len(time_sig_errors) > 0:
+            has_errors = True
+            print(
+                f"MIDI {file_idx} - {file_name} / {tokenization} failed to encode/decode TIME SIGNATURE changes"
+                f"({len(time_sig_errors)} errors)"
+            )
+
+    # Checks pedals
+    if tokenizer.config.use_sustain_pedals:
+        pedal_errors = pedal_equals(midi, midi_decoded)
+        if any(len(err) > 0 for err in pedal_errors):
+            has_errors = True
+            print(
+                f"MIDI {file_idx} - {file_name} / {tokenization} failed to encode/decode PEDALS"
+                f"({sum(len(err) for err in pedal_errors)} errors)"
+            )
+
+    # Checks pitch bends
+    if tokenizer.config.use_pitch_bends:
+        pitch_bend_errors = pitch_bend_equals(midi, midi_decoded)
+        if any(len(err) > 0 for err in pitch_bend_errors):
+            has_errors = True
+            print(
+                f"MIDI {file_idx} - {file_name} / {tokenization} failed to encode/decode PITCH BENDS"
+                f"({sum(len(err) for err in pitch_bend_errors)} errors)"
+            )
+
+    # TODO check control changes
+
+    return midi_decoded, has_errors
+
+
 def adapt_tempo_changes_times(
     tracks: List[Instrument], tempo_changes: List[TempoChange]
 ):
@@ -163,7 +268,7 @@ def adapt_tempo_changes_times(
 
 
 def adjust_pedal_durations(
-    pedals: List[Pedal], tokenizer: MIDITokenizer, time_division: int
+    pedals: List[Pedal], tokenizer: miditok.MIDITokenizer, time_division: int
 ):
     durations_in_tick = np.array(
         [

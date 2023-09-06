@@ -98,7 +98,7 @@ def convert_sequence_to_tokseq(
         for obj in arg[1]:
             kwarg = {arg[0]: obj}
             seq.append(TokSequence(**kwarg))
-            if not tokenizer.is_multi_voc:
+            if not tokenizer.is_multi_voc and seq[-1].ids is not None:
                 seq[-1].ids_bpe_encoded = tokenizer._are_ids_bpe_encoded(seq[-1].ids)
     else:  # 1 subscript, one_token_stream and no multi-voc
         kwarg = {arg[0]: arg[1]}
@@ -622,9 +622,12 @@ class MIDITokenizer(ABC):
                 all_events += track_events
             else:
                 if self.config.program_changes:
-                    track_events.insert(0, Event("Program", track.program, 0))
-                track_events.sort(key=lambda x: x.time)  # TODO order here ?
+                    # ProgramNoteOff desc to make sure it appears before Pedals and everything else
+                    track_events.insert(
+                        0, Event("Program", track.program, 0, desc="ProgramNoteOff")
+                    )
                 all_events[ti] += track_events
+                all_events[ti].sort(key=lambda x: (x.time, self.__order(x)))
         if self.one_token_stream:
             all_events.sort(key=lambda x: (x.time, self.__order(x)))
             # Add ProgramChange (named Program) tokens if requested
@@ -820,17 +823,20 @@ class MIDITokenizer(ABC):
         :param events: Events to add Programs
         """
         previous_program = None
+        previous_type = None
         program_change_events = []
         for ei, event in enumerate(events):
             if (
                 event.program is not None
                 and event.program != previous_program
                 and event.type not in ["Pedal", "PedalOff"]
+                and not (event.type == "Duration" and previous_type == "Pedal")
             ):
                 previous_program = event.program
                 program_change_events.append(
                     (ei, Event("Program", event.program, event.time))
                 )
+            previous_type = event.type
 
         for idx, event in reversed(program_change_events):
             events.insert(idx, event)
