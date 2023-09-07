@@ -33,6 +33,13 @@ def convert_ids_tensors_to_list(ids: Any):
                 "The tokens must be given as a list of integers, np.ndarray, or PyTorch / Tensorflow tensor"
             )
         ids = ids.astype(int).tolist()
+    else:
+        # Recursively checks the content are ints (only check first item)
+        el = ids[0]
+        while isinstance(el, list):
+            el = el[0]
+        if not isinstance(el, int):
+            raise TypeError
 
     return ids
 
@@ -94,6 +101,7 @@ def detect_chords(
     notes: Sequence[Note],
     time_division: int,
     chord_maps: Dict[str, Sequence[int]],
+    program: int = None,
     specify_root_note: bool = True,
     beat_res: int = 4,
     onset_offset: int = 1,
@@ -113,6 +121,8 @@ def detect_chords(
     :param chord_maps: list of chord maps, to be given as a dictionary where keys are chord qualities
             (e.g. "maj") and values pitch maps as tuples of integers (e.g. (0, 4, 7)).
             You can use ``miditok.constants.CHORD_MAPS`` as an example.
+    :param program: program of the track of the notes. Used to specify the program when creating the Event object.
+            (default: None)
     :param specify_root_note: the root note of each chord will be specified in Events / tokens.
             Tokens will look as "Chord_C:maj". (default: True)
     :param beat_res: beat resolution, i.e. nb of samples per beat (default 4).
@@ -187,6 +197,7 @@ def detect_chords(
                         type="Chord",
                         value=chord_quality,
                         time=min(chord[:, 1]),
+                        program=program,
                         desc=chord_map,
                     )
                 )

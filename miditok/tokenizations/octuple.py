@@ -49,6 +49,7 @@ class Octuple(MIDITokenizer):
         self.config.use_sustain_pedals = False
         self.config.use_pitch_bends = False
         self.config.delete_equal_successive_tempo_changes = True
+        self.config.program_changes = False
 
         # used in place of positional encoding
         # This attribute might increase over tokenizations, if the tokenizer encounter longer MIDIs
@@ -383,7 +384,9 @@ class Octuple(MIDITokenizer):
         return {}  # not relevant for Octuple
 
     @_in_as_seq()
-    def tokens_errors(self, tokens: Union[TokSequence, List, np.ndarray, Any]) -> float:
+    def tokens_errors(
+        self, tokens: Union[TokSequence, List, np.ndarray, Any]
+    ) -> Union[float, List[float]]:
         r"""Checks if a sequence of tokens is made of good token values and
         returns the error ratio (lower is better).
         The token types are always the same in Octuple so this methods only checks
@@ -395,6 +398,10 @@ class Octuple(MIDITokenizer):
         :param tokens: sequence of tokens to check
         :return: the error ratio (lower is better)
         """
+        # If list of TokSequence -> recursive
+        if isinstance(tokens, list):
+            return [self.tokens_errors(tok_seq) for tok_seq in tokens]
+
         err = 0
         current_bar = current_pos = -1
         current_pitches = {p: [] for p in self.config.programs}

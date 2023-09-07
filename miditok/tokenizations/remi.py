@@ -425,7 +425,9 @@ class REMI(MIDITokenizer):
         dic: Dict[str, List[str]] = dict()
 
         if self.config.use_programs:
-            first_note_token_type = "Program"
+            first_note_token_type = (
+                "Pitch" if self.config.program_changes else "Program"
+            )
             dic["Program"] = ["Pitch"]
         else:
             first_note_token_type = "Pitch"
@@ -434,6 +436,8 @@ class REMI(MIDITokenizer):
         dic["Duration"] = [first_note_token_type, "Position", "Bar"]
         dic["Bar"] = ["Position", "Bar"]
         dic["Position"] = [first_note_token_type]
+        if self.config.program_changes:
+            dic["Duration"].append("Program")
 
         if self.config.use_chords:
             dic["Chord"] = [first_note_token_type]
@@ -496,7 +500,9 @@ class REMI(MIDITokenizer):
             # As a Program token will precede PitchBend otherwise
             # Else no need to add Program as its already in
             dic["PitchBend"] = [first_note_token_type, "Position", "Bar"]
-            if not self.config.use_programs:
+            if self.config.use_programs:
+                dic["Program"].append("PitchBend")
+            if not self.config.programs or self.config.program_changes:
                 dic["Position"].append("PitchBend")
                 if self.config.use_tempos:
                     dic["Tempo"].append("PitchBend")
@@ -508,8 +514,6 @@ class REMI(MIDITokenizer):
                         dic["Duration"].append("PitchBend")
                     else:
                         dic["PedalOff"].append("PitchBend")
-            else:
-                dic["Program"].append("PitchBend")
             if self.config.use_chords:
                 dic["PitchBend"].append("Chord")
             if self.config.use_rests:
@@ -533,5 +537,20 @@ class REMI(MIDITokenizer):
                     dic["PedalOff"].append("Rest")
             if self.config.use_pitch_bends:
                 dic["Rest"].append("PitchBend")
+
+        if self.config.program_changes:
+            for token_type in [
+                "Position",
+                "Rest",
+                "PitchBend",
+                "Pedal",
+                "PedalOff",
+                "Tempo",
+                "TimeSig",
+                "Chord",
+            ]:
+                if token_type in dic:
+                    dic["Program"].append(token_type)
+                    dic[token_type].append("Program")
 
         return dic
