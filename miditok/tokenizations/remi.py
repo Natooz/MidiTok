@@ -537,8 +537,6 @@ class REMI(MIDITokenizer):
                     dic["PedalOff"].append("Rest")
             if self.config.use_pitch_bends:
                 dic["Rest"].append("PitchBend")
-        else:
-            dic["TimeShift"].append("TimeShift")
 
         if self.config.program_changes:
             for token_type in [
