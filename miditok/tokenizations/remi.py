@@ -158,6 +158,7 @@ class REMI(MIDITokenizer):
 
                 previous_tick = event.time
 
+            # Discard it as TimeSig tokens are placed after each Bar token
             if event.type != "TimeSig":
                 all_events.append(event)
 
@@ -270,16 +271,7 @@ class REMI(MIDITokenizer):
                             duration = self._token_duration_to_ticks(
                                 seq[ti + 2].split("_")[1], time_division
                             )
-                            if current_program not in instruments.keys():
-                                instruments[current_program] = Instrument(
-                                    program=0
-                                    if current_program == -1
-                                    else current_program,
-                                    is_drum=current_program == -1,
-                                    name="Drums"
-                                    if current_program == -1
-                                    else MIDI_INSTRUMENTS[current_program]["name"],
-                                )
+                            check_inst(current_program)
                             instruments[current_program].notes.append(
                                 Note(vel, pitch, current_tick, current_tick + duration)
                             )

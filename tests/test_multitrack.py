@@ -46,7 +46,6 @@ TOKENIZER_PARAMS = {
 # The first set is empty, using the default params
 params_kwargs_sets = {tok: [{}] for tok in ALL_TOKENIZATIONS}
 programs_tokenizations = ["TSD", "REMI", "MIDILike", "Structured", "CPWord", "Octuple"]
-programs_tokenizations = ["TSD", "REMI", "MIDILike", "Structured", "CPWord"]
 for tok in programs_tokenizations:
     params_kwargs_sets[tok].append(
         {"one_token_stream_for_programs": False},
