@@ -54,6 +54,8 @@ for tok in ["TSD", "REMI", "MIDILike"]:
     params_kwargs_sets[tok].append(
         {"program_changes": True},
     )
+# Disable tempos for Octuple with one_token_stream_for_programs, as tempos are carried by note tokens
+params_kwargs_sets["Octuple"][1]["use_tempos"] = False
 # Increase the TimeShift voc for Structured as it doesn't support successive TimeShifts
 for kwargs_set in params_kwargs_sets["Structured"]:
     kwargs_set["beat_res"] = {(0, 512): 8}

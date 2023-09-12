@@ -220,7 +220,6 @@ class Octuple(MIDITokenizer):
         for si, seq in enumerate(tokens):
             # Set track / sequence program if needed
             if not self.one_token_stream:
-                current_tick = 0
                 ticks_per_bar = self._compute_ticks_per_bar(
                     time_signature_changes[0], time_division
                 )
