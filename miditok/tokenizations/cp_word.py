@@ -303,7 +303,8 @@ class CPWord(MIDITokenizer):
             for ti, compound_token in enumerate(seq):
                 token_family = compound_token[0].split("_")[1]
                 if token_family == "Note":
-                    if any(tok.split("_")[1] == "None" for tok in compound_token[2:5]):
+                    pad_range_idx = 6 if self.config.use_programs else 5
+                    if any(tok.split("_")[1] == "None" for tok in compound_token[2:pad_range_idx]):
                         continue
                     pitch = int(compound_token[2].split("_")[1])
                     vel = int(compound_token[3].split("_")[1])
