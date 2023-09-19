@@ -15,6 +15,9 @@ from .utils import utils
 from miditok import data_augmentation
 
 
+__version__ = "2.1.6"
+
+
 class REMIPlus(REMI):
     r"""REMI+ is an extended version of :ref:`REMI` (Huang and Yang) for general
     multi-track, multi-signature symbolic music sequences, introduced in
