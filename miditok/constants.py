@@ -2,6 +2,8 @@
 
 """
 
+CURRENT_VERSION_PACKAGE = "2.1.6"  # used when saving the config of a tokenizer
+
 MIDI_FILES_EXTENSIONS = [".mid", ".midi", ".MID", ".MIDI"]
 
 # Starting id of chr() method for BPE, as the 5 (0 to 4 included) firsts are ignored by 🤗tokenize

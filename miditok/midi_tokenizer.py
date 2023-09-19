@@ -34,13 +34,13 @@ from .utils import (
 from .data_augmentation import data_augmentation_dataset
 from .constants import (
     TIME_DIVISION,
+    CURRENT_VERSION_PACKAGE,
     TIME_SIGNATURE,
     CHR_ID_START,
     PITCH_CLASSES,
     UNKNOWN_CHORD_PREFIX,
     MIDI_FILES_EXTENSIONS,
 )
-from . import __version__
 
 
 def convert_sequence_to_tokseq(
@@ -1968,7 +1968,7 @@ class MIDITokenizer(ABC):
             "one_token_stream": self.one_token_stream,
             "has_bpe": self.has_bpe,
             "tokenization": self.__class__.__name__,
-            "miditok_version": __version__,
+            "miditok_version": CURRENT_VERSION_PACKAGE,
             **additional_attributes,
         }
 
