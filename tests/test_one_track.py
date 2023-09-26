@@ -69,7 +69,6 @@ def test_one_track_midi_to_tokens_to_midi(
         tracks_with_errors = []
 
         for tokenization in ALL_TOKENIZATIONS:
-            has_errors = False
             params = deepcopy(TOKENIZER_PARAMS)
             # Special beat res for test, up to 64 beats so the duration and time-shift values are
             # long enough for Structured, and with a single beat resolution

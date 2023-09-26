@@ -92,6 +92,18 @@ class REMI(MIDITokenizer):
         ticks_per_bar = self._compute_ticks_per_bar(
             TimeSignature(*current_time_sig, 0), time_division
         )
+        # First look for a TimeSig token, if any is given at tick 0, to update current_time_sig
+        if self.config.use_time_signatures:
+            for event in events:
+                if event.type == "TimeSig":
+                    current_time_sig = list(map(int, event.value.split("/")))
+                    ticks_per_bar = self._compute_ticks_per_bar(
+                        TimeSignature(*current_time_sig, event.time), time_division
+                    )
+                    break
+                elif event.type in ["Pitch", "Velocity", "Duration", "PitchBend", "Pedal"]:
+                    break
+        # Add the time events
         for e, event in enumerate(events):
             if event.type == "TimeSig":
                 current_time_sig = list(map(int, event.value.split("/")))
