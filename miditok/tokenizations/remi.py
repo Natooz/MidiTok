@@ -113,15 +113,6 @@ class REMI(MIDITokenizer):
                     break
         # Add the time events
         for e, event in enumerate(events):
-            if event.type == "TimeSig":
-                current_time_sig = list(map(int, event.value.split("/")))
-                bar_at_last_ts_change += (
-                    event.time - tick_at_last_ts_change
-                ) // ticks_per_bar
-                tick_at_last_ts_change = event.time
-                ticks_per_bar = self._compute_ticks_per_bar(
-                    TimeSignature(*current_time_sig, event.time), time_division
-                )
             if event.time != previous_tick:
                 # (Rest)
                 if (
@@ -173,7 +164,10 @@ class REMI(MIDITokenizer):
                                 desc=0,
                             )
                         )
-                        if self.config.use_time_signatures:
+                        # Add a TimeSignature token, except for the last new Bar token if the current event is a TS
+                        if self.config.use_time_signatures and not (
+                            event.type == "TimeSig" and i + 1 == nb_new_bars
+                        ):
                             all_events.append(
                                 Event(
                                     type="TimeSig",
@@ -204,12 +198,20 @@ class REMI(MIDITokenizer):
 
                 previous_tick = event.time
 
-            # We decrease the previous tick so that a Position token is enforced for the next event
+            # Update time signature time variables, after adjusting the time (above)
             if event.type == "TimeSig":
+                current_time_sig = list(map(int, event.value.split("/")))
+                bar_at_last_ts_change += (
+                    event.time - tick_at_last_ts_change
+                ) // ticks_per_bar
+                tick_at_last_ts_change = event.time
+                ticks_per_bar = self._compute_ticks_per_bar(
+                    TimeSignature(*current_time_sig, event.time), time_division
+                )
+                # We decrease the previous tick so that a Position token is enforced for the next event
                 previous_tick -= 1
-            # Discard it as TimeSig tokens are placed after each Bar token
-            else:
-                all_events.append(event)
+
+            all_events.append(event)
 
             # Update max offset time of the notes encountered
             if event.type == "Pitch":

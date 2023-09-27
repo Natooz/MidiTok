@@ -385,7 +385,7 @@ class MMM(MIDITokenizer):
 
         if self.config.use_time_signatures:
             dic["Bar"] += ["TimeSig"]
-            dic["TimeSig"] = ["Pitch", "TimeShift"]
+            dic["TimeSig"] = ["Pitch", "TimeShift", "Bar"]
 
         if self.config.use_chords:
             dic["Chord"] = ["TimeShift", "Pitch"]

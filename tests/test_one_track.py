@@ -75,6 +75,7 @@ def test_one_track_midi_to_tokens_to_midi(
                 params["beat_res"] = {(0, 64): 8}
             elif tokenization == "Octuple":
                 params["max_bar_embedding"] = 300
+                params["use_time_signature"] = False  # because of time shifted
 
             tokenizer_config = miditok.TokenizerConfig(**params)
             tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
@@ -93,6 +94,7 @@ def test_one_track_midi_to_tokens_to_midi(
             # This step is also performed in preprocess_midi, but we need to call it here for the assertions below
             tokenizer.preprocess_midi(midi_to_compare)
             # For Octuple, as tempo is only carried at notes times, we need to adapt their times for comparison
+            # Same for CPWord which carries tempo with Position (for notes)
             if tokenization in ["Octuple", "CPWord"]:
                 adapt_tempo_changes_times(
                     midi_to_compare.instruments, midi_to_compare.tempo_changes
@@ -125,6 +127,8 @@ def test_one_track_midi_to_tokens_to_midi(
         if len(tracks_with_errors) > 1:
             at_least_one_error = True
             if saving_erroneous_midis:
+                midi.tempo_changes = midi_to_compare.tempo_changes
+                midi.time_signature_changes = midi_to_compare.time_signature_changes
                 midi.instruments += tracks_with_errors
                 midi.instruments[1].name = "original quantized"
                 midi.dump(PurePath("tests", "test_results", file_path.name))

@@ -398,7 +398,7 @@ class MIDILike(MIDITokenizer):
             if self.config.use_rests:
                 dic["TimeSig"].append("Rest")  # only for first token
             if self.config.use_tempos:
-                dic["Tempo"].append("TimeSig")
+                dic["TimeSig"].append("Tempo")
 
         if self.config.use_sustain_pedals:
             dic["TimeShift"].append("Pedal")

@@ -26,6 +26,7 @@ class CPWord(MIDITokenizer):
     * (+ Optional) Chord: chords occurring with position tokens
     * (+ Optional) Rest: rest acting as a TimeShift token
     * (+ Optional) Tempo: occurring with position tokens
+    * (+ Optional) TimeSig: occurring with bar tokens
 
     The output hidden states of the model will then be fed to several output layers
     (one per token type). This means that the training requires to add multiple losses.
@@ -115,16 +116,7 @@ class CPWord(MIDITokenizer):
                     break
         # Add the time events
         for e, event in enumerate(events):
-            if event.type == "TimeSig":
-                current_time_sig = list(map(int, event.value.split("/")))
-                bar_at_last_ts_change += (
-                    event.time - tick_at_last_ts_change
-                ) // ticks_per_bar
-                tick_at_last_ts_change = event.time
-                ticks_per_bar = self._compute_ticks_per_bar(
-                    TimeSignature(*current_time_sig, event.time), time_division
-                )
-            elif event.type == "Tempo":
+            if event.type == "Tempo":
                 current_tempo = event.value
             elif event.type == "Program":
                 current_program = event.value
@@ -167,7 +159,20 @@ class CPWord(MIDITokenizer):
                 )
                 if nb_new_bars >= 1:
                     for i in range(nb_new_bars):
+                        # Update time signature time variables before adding the last bar
                         if self.config.use_time_signatures:
+                            if event.type == "TimeSig" and i + 1 == nb_new_bars:
+                                current_time_sig = list(
+                                    map(int, event.value.split("/"))
+                                )
+                                bar_at_last_ts_change += (
+                                    event.time - tick_at_last_ts_change
+                                ) // ticks_per_bar
+                                tick_at_last_ts_change = event.time
+                                ticks_per_bar = self._compute_ticks_per_bar(
+                                    TimeSignature(*current_time_sig, event.time),
+                                    time_division,
+                                )
                             time_sig_arg = (
                                 f"{current_time_sig[0]}/{current_time_sig[1]}"
                             )
