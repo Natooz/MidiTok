@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union, cast
+from copy import deepcopy
 
 import numpy as np
 from miditoolkit import Instrument, MidiFile, Note, TempoChange, TimeSignature
@@ -13,7 +14,6 @@ from ..constants import (
     MMM_DENSITY_BINS_MAX,
 )
 from ..midi_tokenizer import MIDITokenizer, _in_as_seq
-from ..utils import detect_chords
 
 
 class MMM(MIDITokenizer):
@@ -57,112 +57,49 @@ class MMM(MIDITokenizer):
                 dtype=np.intc,
             )
 
-    def _track_to_tokens(self, track: Instrument) -> List[Event]:
-        r"""Converts a track (miditoolkit.Instrument object) into a sequence of Event (:class:`miditok.Event`).
+    def _add_time_events(self, events: List[Event]) -> List[Event]:
+        r"""
+        Takes a sequence of note events (containing optionally Chord, Tempo and TimeSignature tokens),
+        and insert (not inplace) time tokens (TimeShift, Rest) to complete the sequence.
 
-        :param track: MIDI track to convert
-        :return: :class:`miditok.TokSequence` of corresponding tokens.
+        :param events: note events to complete.
+        :return: the same events, with time events inserted.
         """
-        # Make sure the notes are sorted first by their onset (start) times, second by pitch
-        # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
         time_division = self._current_midi_metadata["time_division"]
         dur_bins = self._durations_ticks[self._current_midi_metadata["time_division"]]
-        note_density_bins = self.config.additional_params["note_densities"]
 
         # Creates first events
-        note_density = len(track.notes) / self._current_midi_metadata["max_tick"]
-        note_density = int(np.argmin(np.abs(note_density_bins - note_density)))
-        events: List[Event] = [
-            Event("Track", "Start", 0),
-            Event(
-                type="Program",
-                value=-1 if track.is_drum else track.program,
-                time=0,
-            ),
-            Event(
-                type="NoteDensity",
-                value=note_density,
-                time=0,
-            ),
-            Event(
-                type="Bar",
-                value="Start",
-                time=0,
-            ),
-        ]
-
-        # (Chord)
-        if self.config.use_chords and not track.is_drum:
-            chords = detect_chords(
-                track.notes,
-                self._current_midi_metadata["time_division"],
-                chord_maps=self.config.chord_maps,
-                specify_root_note=self.config.chord_tokens_with_root_note,
-                beat_res=self._first_beat_res,
-                unknown_chords_nb_notes_range=self.config.chord_unknown,
-            )
-            for chord in chords:
-                events.append(chord)
-
-        # (Tempo)
-        if self.config.use_tempos:
-            for tempo_change in self._current_midi_metadata["tempo_changes"]:
-                events.append(
-                    Event(
-                        type="Tempo",
-                        value=tempo_change.tempo,
-                        time=tempo_change.time,
-                        desc=tempo_change.tempo,
-                    )
-                )
-
-        # (Time signature)
-        if self.config.use_time_signatures:
-            for time_sig in self._current_midi_metadata["time_sig_changes"]:
-                events.append(
-                    Event(
-                        type="TimeSig",
-                        value=f"{time_sig.numerator}/{time_sig.denominator}",
-                        time=time_sig.time,
-                        desc=(time_sig.numerator, time_sig.denominator),
-                    )
-                )
-
-        # Note events
-        for note in track.notes:
-            duration = note.end - note.start
-            index = np.argmin(np.abs(dur_bins - duration))
-            events += [
-                Event(type="Pitch", value=note.pitch, time=note.start, desc=note.pitch),
-                Event(
-                    type="Velocity",
-                    value=note.velocity,
-                    time=note.start,
-                    desc=f"{note.velocity}",
-                ),
-                Event(
-                    type="Duration",
-                    value=".".join(map(str, self.durations[index])),
-                    time=note.start,
-                    desc=f"{duration} ticks",
-                ),
-            ]
+        all_events = [Event("Bar", "Start", 0)]
 
         # Time events
-        events.sort(key=lambda x: (x.time, self._order(x)))
         time_sig_change = self._current_midi_metadata["time_sig_changes"][0]
         ticks_per_bar = self._compute_ticks_per_bar(time_sig_change, time_division)
+        bar_at_last_ts_change = 0
         previous_tick = 0
         current_bar = 0
+        tick_at_last_ts_change = 0
         for ei in range(len(events)):
             if events[ei].type == "TimeSig":
-                ticks_per_bar = time_division * events[ei].desc[0]
+                bar_at_last_ts_change += (
+                    events[ei].time - tick_at_last_ts_change
+                ) // ticks_per_bar
+                tick_at_last_ts_change = events[ei].time
+                ticks_per_bar = self._compute_ticks_per_bar(
+                    TimeSignature(
+                        *list(map(int, events[ei].value.split("/"))), events[ei].time
+                    ),
+                    time_division,
+                )
             if events[ei].time != previous_tick:
                 # Bar
-                nb_new_bars = events[ei].time // ticks_per_bar - current_bar
+                nb_new_bars = (
+                    bar_at_last_ts_change
+                    + (events[ei].time - tick_at_last_ts_change) // ticks_per_bar
+                    - current_bar
+                )
                 if nb_new_bars > 0:
                     for i in range(nb_new_bars):
-                        events += [
+                        all_events += [
                             Event(
                                 type="Bar",
                                 value="End",
@@ -178,13 +115,17 @@ class MMM(MIDITokenizer):
                         ]
 
                     current_bar += nb_new_bars
-                    previous_tick = current_bar * ticks_per_bar
+                    tick_at_current_bar = (
+                        tick_at_last_ts_change
+                        + (current_bar - bar_at_last_ts_change) * ticks_per_bar
+                    )
+                    previous_tick = tick_at_current_bar
 
                 # TimeShift
                 if events[ei].time != previous_tick:
                     time_shift = events[ei].time - previous_tick
                     index = np.argmin(np.abs(dur_bins - time_shift))
-                    events.append(
+                    all_events.append(
                         Event(
                             type="TimeShift",
                             value=".".join(map(str, self.durations[index])),
@@ -195,12 +136,14 @@ class MMM(MIDITokenizer):
 
                 previous_tick = events[ei].time
 
-        events.sort(key=lambda x: (x.time, self._order(x)))
-        events += [
-            Event("Bar", "End", events[-1].time + 1),
-            Event("Track", "End", events[-1].time + 1),
+            # Add the event to the new list
+            all_events.append(events[ei])
+
+        all_events += [
+            Event("Bar", "End", all_events[-1].time + 1),
+            Event("Track", "End", all_events[-1].time + 1),
         ]
-        return events
+        return all_events
 
     def _midi_to_tokens(self, midi: MidiFile, *args, **kwargs) -> TokSequence:
         r"""Converts a preprocessed MIDI object to a sequence of tokens.
@@ -210,14 +153,43 @@ class MMM(MIDITokenizer):
         :param midi: the MIDI object to convert.
         :return: sequences of tokens.
         """
-        # Convert each track to tokens
-        events = []
-        for track in midi.instruments:
-            events += self._track_to_tokens(track)
+        note_density_bins = self.config.additional_params["note_densities"]
 
-        tok_seq = TokSequence(events=events)
-        self.complete_sequence(tok_seq)
-        return tok_seq
+        # Create events list
+        all_events = []
+
+        # Global events (Tempo, TimeSignature)
+        global_events = self._create_midi_events(midi)
+
+        # Adds track tokens
+        # Disable use_programs so that _create_track_events do not add Program events
+        self.config.use_programs = False
+        for ti, track in enumerate(midi.instruments):
+            note_density = len(track.notes) / self._current_midi_metadata["max_tick"]
+            note_density = int(np.argmin(np.abs(note_density_bins - note_density)))
+            all_events += [
+                Event("Track", "Start", 0),
+                Event(
+                    type="Program",
+                    value=-1 if track.is_drum else track.program,
+                    time=0,
+                ),
+                Event(
+                    type="NoteDensity",
+                    value=note_density,
+                    time=0,
+                ),
+            ]
+
+            track_events = deepcopy(global_events) + self._create_track_events(track)
+            track_events.sort(key=lambda x: x.time)
+            all_events += self._add_time_events(track_events)
+            all_events.append(Event("Track", "End", all_events[-1].time + 1))
+
+        self.config.use_programs = True
+        tok_sequence = TokSequence(events=all_events)
+        self.complete_sequence(tok_sequence)
+        return tok_sequence
 
     @_in_as_seq()
     def tokens_to_midi(
@@ -241,7 +213,6 @@ class MMM(MIDITokenizer):
             time_division % max(self.config.beat_res.values()) == 0
         ), f"Invalid time division, please give one divisible by {max(self.config.beat_res.values())}"
         tokens = cast(List[str], tokens.tokens)  # for reducing type errors
-        ticks_per_sample = time_division // max(self.config.beat_res.values())
 
         # RESULTS
         instruments: List[Instrument] = []
@@ -255,7 +226,7 @@ class MMM(MIDITokenizer):
             time_signature_changes[0], time_division
         )  # init
 
-        current_tick = 0
+        current_tick = tick_at_current_bar = 0
         current_bar = -1
         previous_note_end = 0  # unused (rest)
         first_program = None
@@ -280,15 +251,9 @@ class MMM(MIDITokenizer):
                 previous_note_end = 0
             elif token == "Bar_Start":
                 current_bar += 1
-                current_tick = current_bar * ticks_per_bar
-            elif tok_type == "Rest":
-                beat, pos = map(int, tokens[ti].split("_")[1].split("."))
-                if (
-                    current_tick < previous_note_end
-                ):  # if in case successive rest happen
-                    current_tick = previous_note_end
-                current_tick += beat * time_division + pos * ticks_per_sample
-                current_bar = current_tick // ticks_per_bar
+                if current_bar > 0:
+                    current_tick = tick_at_current_bar + ticks_per_bar
+                tick_at_current_bar = current_tick
             elif tok_type == "TimeShift":
                 if current_bar == -1:
                     # as this Position token occurs before any Bar token
@@ -310,7 +275,9 @@ class MMM(MIDITokenizer):
                     or den != current_time_signature.denominator
                 ):
                     time_signature_changes.append(TimeSignature(num, den, current_tick))
-                    # ticks_per_bar = self._compute_ticks_per_bar(time_signature_changes[-1], time_division)
+                    ticks_per_bar = self._compute_ticks_per_bar(
+                        time_signature_changes[-1], time_division
+                    )
             elif tok_type == "Pitch":
                 try:
                     if (
@@ -437,41 +404,6 @@ class MMM(MIDITokenizer):
         dic["Fill"] = list(dic.keys())
 
         return dic
-
-    @staticmethod
-    def _order(x: Event) -> int:
-        r"""Helper function to sort events in the right order.
-
-        :param x: event to get order index
-        :return: an order int
-        """
-        if x.type == "Track" and x.value == "Start":
-            return 0
-        elif x.type == "Program":
-            return 1
-        elif x.type == "NoteDensity":
-            return 2
-        # elif x.type == "Fill_Start":
-        #    return 2
-
-        elif x.type == "Bar" and x.value == "End":
-            return 3
-        elif x.type == "Bar" and x.value == "Start":
-            return 4
-        elif x.type == "TimeSig":
-            return 5
-        elif x.type == "Tempo":
-            return 6
-
-        elif x.type == "TimeShift":
-            return 8
-
-        # elif x.type == "Fill_End":
-        #    return 7
-        elif x.type == "Track" and x.value == "End":
-            return 10
-        else:  # for other types of events, the order should be handled when inserting the events in the sequence
-            return 7
 
     @_in_as_seq(complete=False, decode_bpe=False)
     def tokens_errors(

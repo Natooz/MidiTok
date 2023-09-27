@@ -297,7 +297,9 @@ class Octuple(MIDITokenizer):
                         or den != time_signature_changes[-1].denominator
                     ):
                         # tick from bar of ts change
-                        tick_at_last_ts_change += (event_bar - bar_at_last_ts_change) * ticks_per_bar
+                        tick_at_last_ts_change += (
+                            event_bar - bar_at_last_ts_change
+                        ) * ticks_per_bar
                         time_sig = TimeSignature(num, den, tick_at_last_ts_change)
                         if si == 0:
                             time_signature_changes.append(time_sig)
