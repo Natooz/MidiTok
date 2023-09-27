@@ -233,10 +233,9 @@ class MIDILike(MIDITokenizer):
                 elif si == 0 and tok_type == "TimeSig":
                     num, den = self._parse_token_time_signature(tok_val)
                     current_time_signature = time_signature_changes[-1]
-                    if (
-                        si == 0
-                        and num != current_time_signature.numerator
-                        and den != current_time_signature.denominator
+                    if si == 0 and (
+                        num != current_time_signature.numerator
+                        or den != current_time_signature.denominator
                     ):
                         time_signature_changes.append(
                             TimeSignature(num, den, current_tick)

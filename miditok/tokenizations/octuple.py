@@ -288,7 +288,7 @@ class Octuple(MIDITokenizer):
                     )
                     if (
                         num != time_signature_changes[-1].numerator
-                        and den != time_signature_changes[-1].denominator
+                        or den != time_signature_changes[-1].denominator
                     ):
                         time_sig = TimeSignature(num, den, current_tick)
                         if si == 0:

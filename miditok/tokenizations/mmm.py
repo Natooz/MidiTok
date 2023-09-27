@@ -17,14 +17,14 @@ from ..utils import detect_chords
 
 
 class MMM(MIDITokenizer):
-    r"""MMM, standing for [Multi-Track Music Machine](https://arxiv.org/abs/2008.06048), is a multitrack tokenization
+    r"""MMM, standing for `[Multi-Track Music Machine](https://arxiv.org/abs/2008.06048)`_, is a multitrack tokenization
     primarily designed for music inpainting and infilling.
     Tracks are tokenized independently and concatenated into a single token sequence.
     ``Bar_Fill`` tokens are used to specify the bars to fill (or inpaint, or rewrite), the new tokens are then
     autoregressively generated.
     Note that *this implementation represents note durations with ``Duration`` tokens* instead of the ``NoteOff``
-    strategy of the [original paper](https://arxiv.org/abs/2008.06048). The reason being that ``NoteOff`` tokens perform
-    poorer for generation with causal models.
+    strategy of the `[original paper](https://arxiv.org/abs/2008.06048)`_. The reason being that ``NoteOff`` tokens
+    perform poorer for generation with causal models.
 
     **Add a `density_bins_max` entry in the config, mapping to a tuple specifying the number of density bins, and the
     maximum density in notes per beat to consider. (default: (10, 20))**
@@ -307,7 +307,7 @@ class MMM(MIDITokenizer):
                 current_time_signature = time_signature_changes[-1]
                 if (
                     num != current_time_signature.numerator
-                    and den != current_time_signature.denominator
+                    or den != current_time_signature.denominator
                 ):
                     time_signature_changes.append(TimeSignature(num, den, current_tick))
                     # ticks_per_bar = self._compute_ticks_per_bar(time_signature_changes[-1], time_division)

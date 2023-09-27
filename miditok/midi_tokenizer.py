@@ -849,6 +849,17 @@ class MIDITokenizer(ABC):
         """
         events = []
 
+        # First adds time signature tokens if specified
+        if self.config.use_time_signatures:
+            for time_signature_change in midi.time_signature_changes:
+                events.append(
+                    Event(
+                        type="TimeSig",
+                        value=f"{time_signature_change.numerator}/{time_signature_change.denominator}",
+                        time=time_signature_change.time,
+                    )
+                )
+
         # Adds tempo events if specified
         if self.config.use_tempos:
             for tempo_change in midi.tempo_changes:
@@ -858,17 +869,6 @@ class MIDITokenizer(ABC):
                         value=tempo_change.tempo,
                         time=tempo_change.time,
                         desc=tempo_change.tempo,
-                    )
-                )
-
-        # Add time signature tokens if specified
-        if self.config.use_time_signatures:
-            for time_signature_change in midi.time_signature_changes:
-                events.append(
-                    Event(
-                        type="TimeSig",
-                        value=f"{time_signature_change.numerator}/{time_signature_change.denominator}",
-                        time=time_signature_change.time,
                     )
                 )
 
