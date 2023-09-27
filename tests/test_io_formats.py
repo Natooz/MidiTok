@@ -118,6 +118,8 @@ def test_io_formats():
         params = deepcopy(TOKENIZER_PARAMS)
         if tokenization == "Structured":
             params["beat_res"] = {(0, 512): 8}
+        elif tokenization == "Octuple":
+            params["use_time_signatures"] = False
         tokenizer_config = miditok.TokenizerConfig(**params)
         tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
             tokenizer_config=tokenizer_config

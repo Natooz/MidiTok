@@ -75,7 +75,7 @@ def test_one_track_midi_to_tokens_to_midi(
                 params["beat_res"] = {(0, 64): 8}
             elif tokenization == "Octuple":
                 params["max_bar_embedding"] = 300
-                params["use_time_signature"] = False  # because of time shifted
+                params["use_time_signatures"] = False  # because of time shifted
 
             tokenizer_config = miditok.TokenizerConfig(**params)
             tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(

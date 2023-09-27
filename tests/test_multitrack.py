@@ -56,8 +56,8 @@ for tok in ["TSD", "REMI", "MIDILike"]:
 # Disable tempos for Octuple with one_token_stream_for_programs, as tempos are carried by note tokens, and
 # time signatures for the same reasons (as time could be shifted by on or several bars)
 params_kwargs_sets["Octuple"][1]["use_tempos"] = False
-params_kwargs_sets["Octuple"][0]["use_time_signature"] = False
-params_kwargs_sets["Octuple"][1]["use_time_signature"] = False
+params_kwargs_sets["Octuple"][0]["use_time_signatures"] = False
+params_kwargs_sets["Octuple"][1]["use_time_signatures"] = False
 # Increase the TimeShift voc for Structured as it doesn't support successive TimeShifts
 for kwargs_set in params_kwargs_sets["Structured"]:
     kwargs_set["beat_res"] = {(0, 512): 8}
