@@ -9,6 +9,7 @@ from typing import Union
 from time import time
 
 import miditok
+from miditok.constants import TIME_SIGNATURE_RANGE, CHORD_MAPS
 from miditoolkit import MidiFile
 from tqdm import tqdm
 
@@ -20,6 +21,7 @@ from .tests_utils import (
     remove_equal_successive_tempos,
 )
 
+TIME_SIGNATURE_RANGE.update({2: [2, 3, 4]})
 BEAT_RES_TEST = {(0, 16): 8}
 TOKENIZER_PARAMS = {
     "beat_res": BEAT_RES_TEST,
@@ -34,7 +36,8 @@ TOKENIZER_PARAMS = {
     "nb_tempos": 32,
     "tempo_range": (40, 250),
     "log_tempos": True,
-    "chord_maps": miditok.constants.CHORD_MAPS,
+    "time_signature_range": TIME_SIGNATURE_RANGE,
+    "chord_maps": CHORD_MAPS,
     "chord_tokens_with_root_note": True,  # Tokens will look as "Chord_C:maj"
     "chord_unknown": False,
     "delete_equal_successive_time_sig_changes": True,
@@ -46,7 +49,7 @@ TOKENIZER_PARAMS = {
 
 
 def test_one_track_midi_to_tokens_to_midi(
-    data_path: Union[str, Path, PurePath] = "./tests/Maestro_MIDIs",
+    data_path: Union[str, Path, PurePath] = "./tests/One_track_MIDIs",
     saving_erroneous_midis: bool = True,
 ):
     r"""Reads a few MIDI files, convert them into token sequences, convert them back to MIDI files.
@@ -145,7 +148,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--data",
         type=str,
-        default="tests/Maestro_MIDIs",
+        default="tests/One_track_MIDIs",
         help="directory of MIDI files to use for test",
     )
     args = parser.parse_args()
