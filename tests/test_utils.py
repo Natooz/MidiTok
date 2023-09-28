@@ -20,7 +20,7 @@ from miditok.constants import CLASS_OF_INST
 
 
 def test_merge_tracks():
-    midi = MidiFile(Path("tests", "Maestro_MIDIs", "Maestro_1.mid"))
+    midi = MidiFile(Path("tests", "One_track_MIDIs", "Maestro_1.mid"))
     original_track = deepcopy(midi.instruments[0])
     midi.instruments.append(deepcopy(midi.instruments[0]))
     merge_tracks(midi.instruments)
@@ -68,7 +68,7 @@ def test_merge_same_program_tracks_and_by_class():
 def test_nb_pos():
     tokenizer = REMI()
     _ = nb_bar_pos(
-        tokenizer(Path("tests", "Maestro_MIDIs", "Maestro_1.mid"))[0].ids,
+        tokenizer(Path("tests", "One_track_MIDIs", "Maestro_1.mid"))[0].ids,
         tokenizer["Bar_None"],
         tokenizer.token_ids_of_type("Position"),
     )

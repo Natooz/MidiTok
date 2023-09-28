@@ -30,7 +30,7 @@ TOKENIZER_PARAMS = {
 
 
 def test_bpe_conversion(
-    data_path: Union[str, Path, PurePath] = "./tests/Maestro_MIDIs"
+    data_path: Union[str, Path, PurePath] = "./tests/One_track_MIDIs"
 ):
     r"""Reads a few MIDI files, convert them into token sequences, convert them back to MIDI files.
     The converted back MIDI files should identical to original one, expect with note starting and ending

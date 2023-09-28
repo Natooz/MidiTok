@@ -27,7 +27,7 @@ def test_dataset_ram():
     multitrack_midis_paths = list(Path("tests", "Multitrack_MIDIs").glob("**/*.mid"))[
         :3
     ]
-    one_track_midis_paths = list(Path("tests", "Maestro_MIDIs").glob("**/*.mid"))[:3]
+    one_track_midis_paths = list(Path("tests", "One_track_MIDIs").glob("**/*.mid"))[:3]
     tokens_os_dir = Path("tests", "multitrack_tokens_os")
 
     # MIDI + One token stream

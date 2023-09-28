@@ -38,7 +38,7 @@ def test_convert_tensors():
 """def time_data_augmentation_tokens_vs_mid():
     from time import time
     tokenizers = [miditok.TSD(), miditok.REMI()]
-    data_paths = [Path('./tests/Maestro_MIDIs'), Path('./tests/Multitrack_MIDIs')]
+    data_paths = [Path('./tests/One_track_MIDIs'), Path('./tests/Multitrack_MIDIs')]
 
     for data_path in data_paths:
         for tokenizer in tokenizers:
