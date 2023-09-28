@@ -37,6 +37,11 @@ class Octuple(MIDITokenizer):
     very delicate. Hence, we do not recommend this tokenization for generation with small models.
 
     **Notes:**
+    * As the time signature is carried simultaneously with the note tokens, if a Time Signature change occurs and that
+        the following bar do not contain any note, the time will be shifted by one or multiple bars depending on the
+        previous time signature numerator and time gap between the last and current note. Octuple cannot represent
+        time signature accurately, hence some unavoidable errors of conversion can happen. **For this reason, Octuple
+        is implemented with Time Signature but tested without.**
     * Tokens are first sorted by time, then track, then pitch values.
     * Tracks with the same *Program* will be merged.
     * When decoding multiple token sequences (of multiple tracks), i.e. when `config.use_programs` is False,
@@ -209,13 +214,19 @@ class Octuple(MIDITokenizer):
         # RESULTS
         instruments: Dict[int, Instrument] = {}
         tempo_changes = [TempoChange(TEMPO, -1)]
-        time_signature_changes = [TimeSignature(*TIME_SIGNATURE, 0)]
+        if self.config.use_time_signatures:
+            num, den = self._parse_token_time_signature(
+                tokens[0][0][self.vocab_types_idx["TimeSig"]].split("_")[1]
+            )
+            time_signature_changes = [TimeSignature(num, den, 0)]
+        else:
+            time_signature_changes = [TimeSignature(*TIME_SIGNATURE, 0)]
         ticks_per_bar = self._compute_ticks_per_bar(
             time_signature_changes[0], time_division
         )  # init
 
-        current_bar_from_ts_time = 0
-        current_tick_from_ts_time = 0
+        bar_at_last_ts_change = 0
+        tick_at_last_ts_change = 0
         current_program = 0
         for si, seq in enumerate(tokens):
             # Set track / sequence program if needed
@@ -247,8 +258,8 @@ class Octuple(MIDITokenizer):
                 event_pos = int(time_step[3].split("_")[1])
                 event_bar = int(time_step[4].split("_")[1])
                 current_tick = (
-                    current_tick_from_ts_time
-                    + (event_bar - current_bar_from_ts_time) * ticks_per_bar
+                    tick_at_last_ts_change
+                    + (event_bar - bar_at_last_ts_change) * ticks_per_bar
                     + event_pos * ticks_per_sample
                 )
 
@@ -288,13 +299,16 @@ class Octuple(MIDITokenizer):
                     )
                     if (
                         num != time_signature_changes[-1].numerator
-                        and den != time_signature_changes[-1].denominator
+                        or den != time_signature_changes[-1].denominator
                     ):
-                        time_sig = TimeSignature(num, den, current_tick)
+                        # tick from bar of ts change
+                        tick_at_last_ts_change += (
+                            event_bar - bar_at_last_ts_change
+                        ) * ticks_per_bar
+                        time_sig = TimeSignature(num, den, tick_at_last_ts_change)
                         if si == 0:
                             time_signature_changes.append(time_sig)
-                        current_bar_from_ts_time = event_bar
-                        current_tick_from_ts_time = current_tick
+                        bar_at_last_ts_change = event_bar
                         ticks_per_bar = self._compute_ticks_per_bar(
                             time_sig, time_division
                         )
@@ -302,8 +316,6 @@ class Octuple(MIDITokenizer):
         if len(tempo_changes) > 1:
             del tempo_changes[0]  # delete mocked tempo change
         tempo_changes[0].time = 0
-        if len(time_signature_changes) > 1:
-            del time_signature_changes[0]  # delete mocked time signature change
         time_signature_changes[0].time = 0
 
         # create MidiFile
@@ -376,11 +388,11 @@ class Octuple(MIDITokenizer):
     def _create_token_types_graph(self) -> Dict[str, List[str]]:
         r"""Returns a graph (as a dictionary) of the possible token
         types successions.
-        Not relevant for Octuple.
+        Not relevant for Octuple as it is not subject to token type errors.
 
         :return: the token types transitions dictionary
         """
-        return {}  # not relevant for Octuple
+        return {}
 
     @_in_as_seq()
     def tokens_errors(

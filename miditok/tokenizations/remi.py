@@ -86,8 +86,10 @@ class REMI(MIDITokenizer):
         # Add time events
         all_events = []
         current_bar = -1
+        bar_at_last_ts_change = 0
         previous_tick = -1
         previous_note_end = 0
+        tick_at_last_ts_change = tick_at_current_bar = 0
         current_time_sig = TIME_SIGNATURE
         ticks_per_bar = self._compute_ticks_per_bar(
             TimeSignature(*current_time_sig, 0), time_division
@@ -101,15 +103,16 @@ class REMI(MIDITokenizer):
                         TimeSignature(*current_time_sig, event.time), time_division
                     )
                     break
-                elif event.type in ["Pitch", "Velocity", "Duration", "PitchBend", "Pedal"]:
+                elif event.type in [
+                    "Pitch",
+                    "Velocity",
+                    "Duration",
+                    "PitchBend",
+                    "Pedal",
+                ]:
                     break
         # Add the time events
         for e, event in enumerate(events):
-            if event.type == "TimeSig":
-                current_time_sig = list(map(int, event.value.split("/")))
-                ticks_per_bar = self._compute_ticks_per_bar(
-                    TimeSignature(*current_time_sig, event.time), time_division
-                )
             if event.time != previous_tick:
                 # (Rest)
                 if (
@@ -120,6 +123,7 @@ class REMI(MIDITokenizer):
                     rest_values = self._ticks_to_duration_tokens(
                         event.time - previous_tick, rest=True
                     )
+                    # Add Rest events and increment previous_tick
                     for dur_value, dur_ticks in zip(*rest_values):
                         all_events.append(
                             Event(
@@ -130,49 +134,84 @@ class REMI(MIDITokenizer):
                             )
                         )
                         previous_tick += dur_ticks
-                    current_bar = previous_tick // ticks_per_bar
+                    # We update current_bar and tick_at_current_bar here without creating Bar tokens
+                    real_current_bar = (
+                        bar_at_last_ts_change
+                        + (previous_tick - tick_at_last_ts_change) // ticks_per_bar
+                    )
+                    if real_current_bar > current_bar:
+                        tick_at_current_bar += (
+                            real_current_bar - current_bar
+                        ) * ticks_per_bar
+                        current_bar = real_current_bar
 
                 # Bar
-                nb_new_bars = event.time // ticks_per_bar - current_bar
-                for i in range(nb_new_bars):
-                    all_events.append(
-                        Event(
-                            type="Bar",
-                            value=str(current_bar + i + 1)
-                            if self.config.additional_params["max_bar_embedding"]
-                            is not None
-                            else "None",
-                            time=(current_bar + i + 1) * ticks_per_bar,
-                            desc=0,
-                        )
-                    )
-                    if self.config.use_time_signatures:
+                nb_new_bars = (
+                    bar_at_last_ts_change
+                    + (event.time - tick_at_last_ts_change) // ticks_per_bar
+                    - current_bar
+                )
+                if nb_new_bars >= 1:
+                    for i in range(nb_new_bars):
                         all_events.append(
                             Event(
-                                type="TimeSig",
-                                value=f"{current_time_sig[0]}/{current_time_sig[1]}",
+                                type="Bar",
+                                value=str(current_bar + i + 1)
+                                if self.config.additional_params["max_bar_embedding"]
+                                is not None
+                                else "None",
                                 time=(current_bar + i + 1) * ticks_per_bar,
                                 desc=0,
                             )
                         )
-                current_bar += nb_new_bars
+                        # Add a TimeSignature token, except for the last new Bar token if the current event is a TS
+                        if self.config.use_time_signatures and not (
+                            event.type == "TimeSig" and i + 1 == nb_new_bars
+                        ):
+                            all_events.append(
+                                Event(
+                                    type="TimeSig",
+                                    value=f"{current_time_sig[0]}/{current_time_sig[1]}",
+                                    time=(current_bar + i + 1) * ticks_per_bar,
+                                    desc=0,
+                                )
+                            )
+                    current_bar += nb_new_bars
+                    tick_at_current_bar = (
+                        tick_at_last_ts_change
+                        + (current_bar - bar_at_last_ts_change) * ticks_per_bar
+                    )
 
                 # Position
-                pos_index = int((event.time % ticks_per_bar) / ticks_per_sample)
-                all_events.append(
-                    Event(
-                        type="Position",
-                        value=pos_index,
-                        time=event.time,
-                        desc=event.time,
+                if event.type != "TimeSig":
+                    pos_index = int(
+                        (event.time - tick_at_current_bar) / ticks_per_sample
                     )
-                )
+                    all_events.append(
+                        Event(
+                            type="Position",
+                            value=pos_index,
+                            time=event.time,
+                            desc=event.time,
+                        )
+                    )
 
                 previous_tick = event.time
 
-            # Discard it as TimeSig tokens are placed after each Bar token
-            if event.type != "TimeSig":
-                all_events.append(event)
+            # Update time signature time variables, after adjusting the time (above)
+            if event.type == "TimeSig":
+                current_time_sig = list(map(int, event.value.split("/")))
+                bar_at_last_ts_change += (
+                    event.time - tick_at_last_ts_change
+                ) // ticks_per_bar
+                tick_at_last_ts_change = event.time
+                ticks_per_bar = self._compute_ticks_per_bar(
+                    TimeSignature(*current_time_sig, event.time), time_division
+                )
+                # We decrease the previous tick so that a Position token is enforced for the next event
+                previous_tick -= 1
+
+            all_events.append(event)
 
             # Update max offset time of the notes encountered
             if event.type == "Pitch":
@@ -236,15 +275,17 @@ class REMI(MIDITokenizer):
                     name="Drums" if prog == -1 else MIDI_INSTRUMENTS[prog]["name"],
                 )
 
-        current_tick = 0
+        current_tick = tick_at_last_ts_change = tick_at_current_bar = 0
         current_bar = -1
+        bar_at_last_ts_change = 0
         current_program = 0
         previous_note_end = 0
         for si, seq in enumerate(tokens):
             # Set track / sequence program if needed
             if not self.one_token_stream:
-                current_tick = 0
+                current_tick = tick_at_last_ts_change = tick_at_current_bar = 0
                 current_bar = -1
+                bar_at_last_ts_change = 0
                 ticks_per_bar = self._compute_ticks_per_bar(
                     time_signature_changes[0], time_division
                 )
@@ -257,21 +298,28 @@ class REMI(MIDITokenizer):
                 tok_type, tok_val = token.split("_")
                 if tok_type == "Bar":
                     current_bar += 1
-                    current_tick = current_bar * ticks_per_bar
+                    if current_bar > 0:
+                        current_tick = tick_at_current_bar + ticks_per_bar
+                    tick_at_current_bar = current_tick
                 elif tok_type == "Rest":
                     current_tick = max(previous_note_end, current_tick)
                     current_tick += self._token_duration_to_ticks(
                         tok_val, time_division
                     )
-                    current_bar = current_tick // ticks_per_bar
+                    real_current_bar = (
+                        bar_at_last_ts_change
+                        + (current_tick - tick_at_last_ts_change) // ticks_per_bar
+                    )
+                    if real_current_bar > current_bar:
+                        tick_at_current_bar += (
+                            real_current_bar - current_bar
+                        ) * ticks_per_bar
+                        current_bar = real_current_bar
                 elif tok_type == "Position":
                     if current_bar == -1:
-                        current_bar = (
-                            0  # as this Position token occurs before any Bar token
-                        )
-                    current_tick = (
-                        current_bar * ticks_per_bar + int(tok_val) * ticks_per_sample
-                    )
+                        # as this Position token occurs before any Bar token
+                        current_bar = 0
+                    current_tick = tick_at_current_bar + int(tok_val) * ticks_per_sample
                 elif tok_type == "Pitch":
                     try:
                         if (
@@ -307,11 +355,13 @@ class REMI(MIDITokenizer):
                     num, den = self._parse_token_time_signature(tok_val)
                     if (
                         num != time_signature_changes[-1].numerator
-                        and den != time_signature_changes[-1].denominator
+                        or den != time_signature_changes[-1].denominator
                     ):
                         time_sig = TimeSignature(num, den, current_tick)
                         if si == 0:
                             time_signature_changes.append(time_sig)
+                        tick_at_last_ts_change = tick_at_current_bar  # == current_tick
+                        bar_at_last_ts_change = current_bar
                         ticks_per_bar = self._compute_ticks_per_bar(
                             time_sig, time_division
                         )

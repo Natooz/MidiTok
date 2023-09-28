@@ -36,7 +36,6 @@ TOKENIZER_PARAMS = {
     "nb_tempos": 32,
     "tempo_range": (40, 250),
     "log_tempos": False,
-    "time_signature_range": {4: [3, 4]},
     "sustain_pedal_duration": False,
     "one_token_stream_for_programs": True,
     "program_changes": False,
@@ -54,8 +53,11 @@ for tok in ["TSD", "REMI", "MIDILike"]:
     params_kwargs_sets[tok].append(
         {"program_changes": True},
     )
-# Disable tempos for Octuple with one_token_stream_for_programs, as tempos are carried by note tokens
+# Disable tempos for Octuple with one_token_stream_for_programs, as tempos are carried by note tokens, and
+# time signatures for the same reasons (as time could be shifted by on or several bars)
 params_kwargs_sets["Octuple"][1]["use_tempos"] = False
+params_kwargs_sets["Octuple"][0]["use_time_signatures"] = False
+params_kwargs_sets["Octuple"][1]["use_time_signatures"] = False
 # Increase the TimeShift voc for Structured as it doesn't support successive TimeShifts
 for kwargs_set in params_kwargs_sets["Structured"]:
     kwargs_set["beat_res"] = {(0, 512): 8}
@@ -108,7 +110,8 @@ def test_multitrack_midi_to_tokens_to_midi(
                 # This step is also performed in preprocess_midi, but we need to call it here for the assertions below
                 tokenizer.preprocess_midi(midi_to_compare)
                 # For Octuple, as tempo is only carried at notes times, we need to adapt their times for comparison
-                if tokenization in ["Octuple"]:
+                # Same for CPWord which carries tempo with Position (for notes)
+                if tokenization in ["Octuple", "CPWord"]:
                     adapt_tempo_changes_times(
                         midi_to_compare.instruments, midi_to_compare.tempo_changes
                     )
