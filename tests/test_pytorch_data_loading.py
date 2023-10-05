@@ -4,9 +4,11 @@
 Test classes and methods from the pytorch_data module.
 """
 
+from typing import Sequence
 from pathlib import Path
 
 import miditok
+from miditoolkit import MidiFile
 from torch import randint
 
 
@@ -29,8 +31,18 @@ def test_dataset_ram():
     ]
     one_track_midis_paths = list(Path("tests", "One_track_MIDIs").glob("**/*.mid"))[:3]
     tokens_os_dir = Path("tests", "multitrack_tokens_os")
+    dummy_labels = {
+        label: i for i, label in
+        enumerate(set(path.name.split("_")[0] for path in one_track_midis_paths))
+    }
 
-    # MIDI + One token stream
+    def get_labels_one_track(_: Sequence, file_path: Path) -> int:
+        return dummy_labels[file_path.name.split("_")[0]]
+
+    def get_labels_multitrack(midi: MidiFile, _: Path) -> int:
+        return len(midi.instruments)
+
+    # MIDI + One token stream + labels
     config = miditok.TokenizerConfig(use_programs=True)
     tokenizer_os = miditok.TSD(config)
     dataset_os = miditok.pytorch_data.DatasetTok(
@@ -38,17 +50,19 @@ def test_dataset_ram():
         50,
         100,
         tokenizer_os,
+        func_to_get_labels=get_labels_one_track,
     )
     for _ in dataset_os:
         pass
 
-    # MIDI + Multiple token streams
+    # MIDI + Multiple token streams + labels
     tokenizer_ms = miditok.TSD(miditok.TokenizerConfig())
     dataset_ms = miditok.pytorch_data.DatasetTok(
         multitrack_midis_paths,
         50,
         100,
         tokenizer_ms,
+        func_to_get_labels=get_labels_multitrack,
     )
     _ = dataset_ms.__repr__()
     dataset_ms.reduce_nb_samples(2)
