@@ -171,7 +171,7 @@ class DatasetTok(_DatasetABC):
     :param tokenizer: tokenizer object, to use to load MIDIs instead of tokens. (default: None)
     :param one_token_stream: give False if the token files contains multiple tracks, i.e. the first dimension of
         the value of the "ids" entry corresponds to several tracks. Otherwise, leave False. (default: True)
-    :param func_to_get_labels: a function to retrieve the label of a file. The method must take to positional
+    :param func_to_get_labels: a function to retrieve the label of a file. The method must take two positional
             arguments: the first is either a MidiFile or the tokens loaded from the json file, the second is the path
             to the file just loaded. The method must return an integer which correspond to the label id (and not the
             absolute value, e.g. if you are classifying 10 musicians, return the id from 0 to 9 included corresponding
@@ -234,6 +234,8 @@ class DatasetTok(_DatasetABC):
                 if label is not None:
                     labels += [label] * len(subseqs)
 
+        if labels is not None:
+            labels = LongTensor(labels)
         super().__init__(samples, labels, sample_key_name=sample_key_name, labels_key_name=labels_key_name)
 
 

@@ -42,6 +42,9 @@ def test_dataset_ram():
     def get_labels_multitrack(midi: MidiFile, _: Path) -> int:
         return len(midi.instruments)
 
+    def get_labels_multitrack_one_stream(tokens: Sequence, _: Path) -> int:
+        return len(tokens) // 4
+
     # MIDI + One token stream + labels
     config = miditok.TokenizerConfig(use_programs=True)
     tokenizer_os = miditok.TSD(config)
@@ -78,6 +81,7 @@ def test_dataset_ram():
         list(tokens_os_dir.glob("**/*.json")),
         50,
         100,
+        func_to_get_labels=get_labels_multitrack_one_stream,
     )
 
     assert True
