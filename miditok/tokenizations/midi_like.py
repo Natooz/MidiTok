@@ -178,14 +178,30 @@ class MIDILike(MIDITokenizer):
         time_signature_changes = [TimeSignature(*TIME_SIGNATURE, 0)]
         active_pedals = {}
         active_notes = {p: {} for p in self.config.programs}
+        current_instrument = None
 
         def check_inst(prog: int):
             if prog not in instruments.keys():
                 instruments[prog] = Instrument(
-                    program=prog,
+                    program=0 if prog == -1 else prog,
                     is_drum=prog == -1,
                     name="Drums" if prog == -1 else MIDI_INSTRUMENTS[prog]["name"],
                 )
+
+        def clear_active_notes():
+            if default_duration is not None:
+                if self.one_token_stream:
+                    for program, active_notes_ in active_notes.items():
+                        for pitch_, (onset_tick, vel_) in active_notes_.items():
+                            check_inst(program)
+                            instruments[program].notes.append(
+                                Note(vel_, pitch_, onset_tick, onset_tick + default_duration)
+                            )
+                else:
+                    for pitch_, (onset_tick, vel_) in active_notes[current_instrument.program].items():
+                        current_instrument.notes.append(
+                            Note(vel_, pitch_, onset_tick, onset_tick + default_duration)
+                        )
 
         current_tick = 0
         current_program = 0
@@ -193,8 +209,15 @@ class MIDILike(MIDITokenizer):
             # Set track / sequence program if needed
             if not self.one_token_stream:
                 current_tick = 0
+                active_pedals = {}
+                is_drum = False
                 if programs is not None:
-                    current_program = -1 if programs[si][1] else programs[si][0]
+                    current_program, is_drum = programs[si]
+                current_instrument = Instrument(
+                    program=current_program,
+                    is_drum=is_drum,
+                    name="Drums" if current_program == -1 else MIDI_INSTRUMENTS[current_program]["name"],
+                )
 
             # Decode tokens
             for ti, token in enumerate(seq):
@@ -214,10 +237,12 @@ class MIDILike(MIDITokenizer):
                                 offset_tick = note_onset_tick + default_duration
                             else:
                                 continue
-                        check_inst(current_program)
-                        instruments[current_program].notes.append(
-                            Note(vel, pitch, note_onset_tick, offset_tick)
-                        )
+                        new_note = Note(vel, pitch, note_onset_tick, offset_tick)
+                        if self.one_token_stream:
+                            check_inst(current_program)
+                            instruments[current_program].notes.append(new_note)
+                        else:
+                            current_instrument.notes.append(new_note)
                         del active_notes[current_program][pitch]
                     if tok_type == "NoteOn" and ti + 1 < len(seq):
                         vel = int(seq[ti + 1].split("_")[1])
@@ -250,10 +275,12 @@ class MIDILike(MIDITokenizer):
                                 seq[ti + 1].split("_")[1], time_division
                             )
                             # Add instrument if it doesn't exist, can happen for the first tokens
-                            check_inst(pedal_prog)
-                            instruments[pedal_prog].pedals.append(
-                                Pedal(current_tick, current_tick + duration)
-                            )
+                            new_pedal = Pedal(current_tick, current_tick + duration)
+                            if self.one_token_stream:
+                                check_inst(pedal_prog)
+                                instruments[pedal_prog].pedals.append(new_pedal)
+                            else:
+                                current_instrument.pedals.append(new_pedal)
                     else:
                         if pedal_prog not in active_pedals:
                             active_pedals[pedal_prog] = current_tick
@@ -262,25 +289,32 @@ class MIDILike(MIDITokenizer):
                         int(tok_val) if self.config.use_programs else current_program
                     )
                     if pedal_prog in active_pedals:
-                        check_inst(pedal_prog)
-                        instruments[pedal_prog].pedals.append(
-                            Pedal(active_pedals[pedal_prog], current_tick)
-                        )
+                        new_pedal = Pedal(active_pedals[pedal_prog], current_tick)
+                        if self.one_token_stream:
+                            check_inst(pedal_prog)
+                            instruments[pedal_prog].pedals.append(
+                                Pedal(active_pedals[pedal_prog], current_tick)
+                            )
+                        else:
+                            current_instrument.pedals.append(new_pedal)
                         del active_pedals[pedal_prog]
                 elif tok_type == "PitchBend":
-                    if current_program not in instruments.keys():
+                    new_pitch_bend = PitchBend(int(tok_val), current_tick)
+                    if self.one_token_stream:
                         check_inst(current_program)
-                    instruments[current_program].pitch_bends.append(
-                        PitchBend(int(tok_val), current_tick)
-                    )
+                        instruments[current_program].pitch_bends.append(new_pitch_bend)
+                    else:
+                        current_instrument.pitch_bends.append(new_pitch_bend)
+
+            # Add current_inst to midi and handle notes still active
+            if not self.one_token_stream:
+                midi.instruments.append(current_instrument)
+                clear_active_notes()
+                active_notes[current_instrument.program] = {}
+
         # Handle notes still active
-        if default_duration is not None:
-            for program, active_notes_ in active_notes.items():
-                for pitch, (onset_tick, vel) in active_notes_.items():
-                    check_inst(program)
-                    instruments[program].notes.append(
-                        Note(vel, pitch, onset_tick, onset_tick + default_duration)
-                    )
+        if self.one_token_stream:
+            clear_active_notes()
         if len(tempo_changes) > 1:
             del tempo_changes[0]  # delete mocked tempo change
         tempo_changes[0].time = 0
@@ -289,10 +323,8 @@ class MIDILike(MIDITokenizer):
         time_signature_changes[0].time = 0
 
         # create MidiFile
-        midi.instruments = list(instruments.values())
-        for instrument in midi.instruments:
-            if instrument.program == -1:
-                instrument.program = 0
+        if self.one_token_stream:
+            midi.instruments = list(instruments.values())
         midi.tempo_changes = tempo_changes
         midi.time_signature_changes = time_signature_changes
         midi.max_tick = max(

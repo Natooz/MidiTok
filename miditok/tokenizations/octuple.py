@@ -225,17 +225,32 @@ class Octuple(MIDITokenizer):
             time_signature_changes[0], time_division
         )  # init
 
+        def check_inst(prog: int):
+            if prog not in instruments.keys():
+                instruments[prog] = Instrument(
+                    program=0 if prog == -1 else prog,
+                    is_drum=prog == -1,
+                    name="Drums" if prog == -1 else MIDI_INSTRUMENTS[prog]["name"],
+                )
+
         bar_at_last_ts_change = 0
         tick_at_last_ts_change = 0
         current_program = 0
+        current_instrument = None
         for si, seq in enumerate(tokens):
             # Set track / sequence program if needed
             if not self.one_token_stream:
                 ticks_per_bar = self._compute_ticks_per_bar(
                     time_signature_changes[0], time_division
                 )
+                is_drum = False
                 if programs is not None:
-                    current_program = -1 if programs[si][1] else programs[si][0]
+                    current_program, is_drum = programs[si]
+                current_instrument = Instrument(
+                    program=current_program,
+                    is_drum=is_drum,
+                    name="Drums" if current_program == -1 else MIDI_INSTRUMENTS[current_program]["name"],
+                )
 
             # Decode tokens
             for time_step in seq:
@@ -264,17 +279,12 @@ class Octuple(MIDITokenizer):
                 )
 
                 # Append the created note
-                if current_program not in instruments.keys():
-                    instruments[current_program] = Instrument(
-                        program=0 if current_program == -1 else current_program,
-                        is_drum=current_program == -1,
-                        name="Drums"
-                        if current_program == -1
-                        else MIDI_INSTRUMENTS[current_program]["name"],
-                    )
-                instruments[current_program].notes.append(
-                    Note(vel, pitch, current_tick, current_tick + duration)
-                )
+                new_note = Note(vel, pitch, current_tick, current_tick + duration)
+                if self.one_token_stream:
+                    check_inst(current_program)
+                    instruments[current_program].notes.append(new_note)
+                else:
+                    current_instrument.notes.append(new_note)
 
                 # Tempo, adds a TempoChange if necessary
                 if (
@@ -313,13 +323,18 @@ class Octuple(MIDITokenizer):
                             time_sig, time_division
                         )
 
+            # Add current_inst to midi and handle notes still active
+            if not self.one_token_stream:
+                midi.instruments.append(current_instrument)
+
         if len(tempo_changes) > 1:
             del tempo_changes[0]  # delete mocked tempo change
         tempo_changes[0].time = 0
         time_signature_changes[0].time = 0
 
         # create MidiFile
-        midi.instruments = list(instruments.values())
+        if self.one_token_stream:
+            midi.instruments = list(instruments.values())
         midi.tempo_changes = tempo_changes
         midi.time_signature_changes = time_signature_changes
         midi.max_tick = max(

@@ -206,14 +206,29 @@ class Structured(MIDITokenizer):
         tempo_changes = [TempoChange(TEMPO, 0)]
         time_signature_changes = [TimeSignature(*TIME_SIGNATURE, 0)]
 
+        def check_inst(prog: int):
+            if prog not in instruments.keys():
+                instruments[prog] = Instrument(
+                    program=0 if prog == -1 else prog,
+                    is_drum=prog == -1,
+                    name="Drums" if prog == -1 else MIDI_INSTRUMENTS[prog]["name"],
+                )
+
         current_tick = 0
         current_program = 0
+        current_instrument = None
         for si, seq in enumerate(tokens):
             # Set track / sequence program if needed
             if not self.one_token_stream:
                 current_tick = 0
+                is_drum = False
                 if programs is not None:
-                    current_program = -1 if programs[si][1] else programs[si][0]
+                    current_program, is_drum = programs[si]
+                current_instrument = Instrument(
+                    program=current_program,
+                    is_drum=is_drum,
+                    name="Drums" if current_program == -1 else MIDI_INSTRUMENTS[current_program]["name"],
+                )
 
             # Decode tokens
             for ti, token in enumerate(seq):
@@ -232,19 +247,12 @@ class Structured(MIDITokenizer):
                             duration = self._token_duration_to_ticks(
                                 seq[ti + 2].split("_")[1], time_division
                             )
-                            if current_program not in instruments.keys():
-                                instruments[current_program] = Instrument(
-                                    program=0
-                                    if current_program == -1
-                                    else current_program,
-                                    is_drum=current_program == -1,
-                                    name="Drums"
-                                    if current_program == -1
-                                    else MIDI_INSTRUMENTS[current_program]["name"],
-                                )
-                            instruments[current_program].notes.append(
-                                Note(vel, pitch, current_tick, current_tick + duration)
-                            )
+                            new_note = Note(vel, pitch, current_tick, current_tick + duration)
+                            if self.one_token_stream:
+                                check_inst(current_program)
+                                instruments[current_program].notes.append(new_note)
+                            else:
+                                current_instrument.notes.append(new_note)
                     except (
                         IndexError
                     ):  # A well constituted sequence should not raise an exception
@@ -252,8 +260,13 @@ class Structured(MIDITokenizer):
                 elif token.split("_")[0] == "Program":
                     current_program = int(token.split("_")[1])
 
+            # Add current_inst to midi and handle notes still active
+            if not self.one_token_stream:
+                midi.instruments.append(current_instrument)
+
         # create MidiFile
-        midi.instruments = list(instruments.values())
+        if self.one_token_stream:
+            midi.instruments = list(instruments.values())
         midi.tempo_changes = tempo_changes
         midi.time_signature_changes = time_signature_changes
         midi.max_tick = max(
