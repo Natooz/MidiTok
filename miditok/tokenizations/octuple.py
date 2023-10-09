@@ -237,7 +237,8 @@ class Octuple(MIDITokenizer):
                 time_signature_changes.append(TimeSignature(num, den, 0))
             else:
                 time_signature_changes.append(TimeSignature(*TIME_SIGNATURE, 0))
-            ticks_per_bar = self._compute_ticks_per_bar(time_signature_changes[0], time_division)
+            current_time_sig = time_signature_changes[0]
+            ticks_per_bar = self._compute_ticks_per_bar(current_time_sig, time_division)
             # Set track / sequence program if needed
             if not self.one_token_stream:
                 is_drum = False
@@ -305,19 +306,19 @@ class Octuple(MIDITokenizer):
                         time_step[self.vocab_types_idx["TimeSig"]].split("_")[1]
                     )
                     if (
-                        num != time_signature_changes[-1].numerator
-                        or den != time_signature_changes[-1].denominator
+                        num != current_time_sig.numerator
+                        or den != current_time_sig.denominator
                     ):
                         # tick from bar of ts change
                         tick_at_last_ts_change += (
                             event_bar - bar_at_last_ts_change
                         ) * ticks_per_bar
-                        time_sig = TimeSignature(num, den, tick_at_last_ts_change)
+                        current_time_sig = TimeSignature(num, den, tick_at_last_ts_change)
                         if si == 0:
-                            time_signature_changes.append(time_sig)
+                            time_signature_changes.append(current_time_sig)
                         bar_at_last_ts_change = event_bar
                         ticks_per_bar = self._compute_ticks_per_bar(
-                            time_sig, time_division
+                            current_time_sig, time_division
                         )
 
             # Add current_inst to midi and handle notes still active

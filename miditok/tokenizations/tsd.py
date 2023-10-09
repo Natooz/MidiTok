@@ -101,6 +101,7 @@ class TSD(MIDITokenizer):
             elif event.type in [
                 "Program",
                 "Tempo",
+                "TimeSig",
                 "Pedal",
                 "PedalOff",
                 "PitchBend",
@@ -213,11 +214,10 @@ class TSD(MIDITokenizer):
                     tempo = float(tok_val)
                     if si == 0 and current_tick != tempo_changes[-1].time:
                         tempo_changes.append(TempoChange(tempo, current_tick))
-                    previous_note_end = max(previous_note_end, current_tick)
-                elif tok_type == "TimeSig":
+                elif si == 0 and tok_type == "TimeSig":
                     num, den = self._parse_token_time_signature(tok_val)
                     current_time_signature = time_signature_changes[-1]
-                    if si == 0 and (
+                    if (
                         num != current_time_signature.numerator
                         or den != current_time_signature.denominator
                     ):
@@ -264,6 +264,17 @@ class TSD(MIDITokenizer):
                         instruments[current_program].pitch_bends.append(new_pitch_bend)
                     else:
                         current_instrument.pitch_bends.append(new_pitch_bend)
+
+                if tok_type in [
+                    "Program",
+                    "Tempo",
+                    "TimeSig",
+                    "Pedal",
+                    "PedalOff",
+                    "PitchBend",
+                    "Chord",
+                ]:
+                    previous_note_end = max(previous_note_end, current_tick)
 
             # Add current_inst to midi and handle notes still active
             if not self.one_token_stream:
