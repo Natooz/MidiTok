@@ -219,6 +219,7 @@ class REMI(MIDITokenizer):
             elif event.type in [
                 "Program",
                 "Tempo",
+                "TimeSig",
                 "Pedal",
                 "PedalOff",
                 "PitchBend",
@@ -261,11 +262,8 @@ class REMI(MIDITokenizer):
         # RESULTS
         instruments: Dict[int, Instrument] = {}
         tempo_changes = [TempoChange(TEMPO, -1)]
-        time_signature_changes = [TimeSignature(*TIME_SIGNATURE, 0)]
+        time_signature_changes = []
         active_pedals = {}
-        ticks_per_bar = self._compute_ticks_per_bar(
-            time_signature_changes[0], time_division
-        )  # init
 
         def check_inst(prog: int):
             if prog not in instruments.keys():
@@ -282,14 +280,30 @@ class REMI(MIDITokenizer):
         current_instrument = None
         previous_note_end = 0
         for si, seq in enumerate(tokens):
+            # First look for the first time signature if needed
+            if si == 0:
+                if self.config.use_time_signatures:
+                    for token in seq:
+                        tok_type, tok_val = token.split("_")
+                        if tok_type == "TimeSig":
+                            time_signature_changes.append(TimeSignature(*list(map(int, tok_val.split("/"))), 0))
+                            break
+                        elif tok_type in [
+                            "Pitch",
+                            "Velocity",
+                            "Duration",
+                            "PitchBend",
+                            "Pedal",
+                        ]:
+                            break
+                if len(time_signature_changes) == 0:
+                    time_signature_changes.append(TimeSignature(*TIME_SIGNATURE, 0))
+            ticks_per_bar = self._compute_ticks_per_bar(time_signature_changes[0], time_division)
             # Set track / sequence program if needed
             if not self.one_token_stream:
                 current_tick = tick_at_last_ts_change = tick_at_current_bar = 0
                 current_bar = -1
                 bar_at_last_ts_change = 0
-                ticks_per_bar = self._compute_ticks_per_bar(
-                    time_signature_changes[0], time_division
-                )
                 previous_note_end = 0
                 active_pedals = {}
                 is_drum = False
@@ -423,9 +437,6 @@ class REMI(MIDITokenizer):
         if len(tempo_changes) > 1:
             del tempo_changes[0]  # delete mocked tempo change
         tempo_changes[0].time = 0
-        if len(time_signature_changes) > 1:
-            del time_signature_changes[0]  # delete mocked time signature change
-        time_signature_changes[0].time = 0
 
         # create MidiFile
         if self.one_token_stream:

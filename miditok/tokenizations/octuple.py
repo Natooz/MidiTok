@@ -214,16 +214,7 @@ class Octuple(MIDITokenizer):
         # RESULTS
         instruments: Dict[int, Instrument] = {}
         tempo_changes = [TempoChange(TEMPO, -1)]
-        if self.config.use_time_signatures:
-            num, den = self._parse_token_time_signature(
-                tokens[0][0][self.vocab_types_idx["TimeSig"]].split("_")[1]
-            )
-            time_signature_changes = [TimeSignature(num, den, 0)]
-        else:
-            time_signature_changes = [TimeSignature(*TIME_SIGNATURE, 0)]
-        ticks_per_bar = self._compute_ticks_per_bar(
-            time_signature_changes[0], time_division
-        )  # init
+        time_signature_changes = []
 
         def check_inst(prog: int):
             if prog not in instruments.keys():
@@ -238,11 +229,17 @@ class Octuple(MIDITokenizer):
         current_program = 0
         current_instrument = None
         for si, seq in enumerate(tokens):
+            # First look for the first time signature if needed
+            if si == 0 and self.config.use_time_signatures:
+                num, den = self._parse_token_time_signature(
+                    seq[0][self.vocab_types_idx["TimeSig"]].split("_")[1]
+                )
+                time_signature_changes.append(TimeSignature(num, den, 0))
+            else:
+                time_signature_changes.append(TimeSignature(*TIME_SIGNATURE, 0))
+            ticks_per_bar = self._compute_ticks_per_bar(time_signature_changes[0], time_division)
             # Set track / sequence program if needed
             if not self.one_token_stream:
-                ticks_per_bar = self._compute_ticks_per_bar(
-                    time_signature_changes[0], time_division
-                )
                 is_drum = False
                 if programs is not None:
                     current_program, is_drum = programs[si]
@@ -330,7 +327,6 @@ class Octuple(MIDITokenizer):
         if len(tempo_changes) > 1:
             del tempo_changes[0]  # delete mocked tempo change
         tempo_changes[0].time = 0
-        time_signature_changes[0].time = 0
 
         # create MidiFile
         if self.one_token_stream:

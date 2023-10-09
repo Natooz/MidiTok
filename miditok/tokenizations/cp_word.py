@@ -346,10 +346,7 @@ class CPWord(MIDITokenizer):
         # RESULTS
         instruments: Dict[int, Instrument] = {}
         tempo_changes = [TempoChange(TEMPO, -1)]
-        time_signature_changes = [TimeSignature(*TIME_SIGNATURE, 0)]
-        ticks_per_bar = self._compute_ticks_per_bar(
-            time_signature_changes[0], time_division
-        )  # init
+        time_signature_changes = []
 
         def check_inst(prog: int):
             if prog not in instruments.keys():
@@ -366,14 +363,30 @@ class CPWord(MIDITokenizer):
         current_instrument = None
         previous_note_end = 0
         for si, seq in enumerate(tokens):
+            # First look for the first time signature if needed
+            if si == 0:
+                if self.config.use_time_signatures:
+                    for compound_token in seq:
+                        token_family = compound_token[0].split("_")[1]
+                        if token_family == "Metric":
+                            bar_pos = compound_token[1].split("_")[0]
+                            if bar_pos == "Bar":
+                                num, den = self._parse_token_time_signature(
+                                    compound_token[self.vocab_types_idx["TimeSig"]].split(
+                                        "_"
+                                    )[1]
+                                )
+                                time_signature_changes.append(TimeSignature(num, den, 0))
+                        else:
+                            break
+                if len(time_signature_changes) == 0:
+                    time_signature_changes.append(TimeSignature(*TIME_SIGNATURE, 0))
+            ticks_per_bar = self._compute_ticks_per_bar(time_signature_changes[0], time_division)
             # Set track / sequence program if needed
             if not self.one_token_stream:
                 current_tick = tick_at_last_ts_change = tick_at_current_bar = 0
                 current_bar = -1
                 bar_at_last_ts_change = 0
-                ticks_per_bar = self._compute_ticks_per_bar(
-                    time_signature_changes[0], time_division
-                )
                 previous_note_end = 0
                 is_drum = False
                 if programs is not None:
@@ -486,9 +499,6 @@ class CPWord(MIDITokenizer):
         if len(tempo_changes) > 1:
             del tempo_changes[0]  # delete mocked tempo change
         tempo_changes[0].time = 0
-        if len(time_signature_changes) > 1:
-            del time_signature_changes[0]  # delete mocked time signature change
-        time_signature_changes[0].time = 0
 
         # create MidiFile
         if self.one_token_stream:

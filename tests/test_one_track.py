@@ -67,7 +67,8 @@ def test_one_track_midi_to_tokens_to_midi(
         # Reads the midi
         midi = MidiFile(file_path)
         # Will store the tracks tokenized / detokenized, to be saved in case of errors
-        midi.instruments[0].name = "original not quantized"
+        for ti, track in enumerate(midi.instruments):
+            track.name = f"original {ti} not quantized"
         tracks_with_errors = []
 
         for tokenization in ALL_TOKENIZATIONS:
@@ -111,7 +112,9 @@ def test_one_track_midi_to_tokens_to_midi(
                     adjust_pedal_durations(track.pedals, tokenizer, midi.ticks_per_beat)
             # Store preprocessed track
             if len(tracks_with_errors) == 0:
-                tracks_with_errors.append(midi_to_compare.instruments[0])
+                tracks_with_errors += midi_to_compare.instruments
+                for ti, track in enumerate(midi_to_compare.instruments):
+                    track.name = f"original {ti} quantized"
 
             # printing the tokenizer shouldn't fail
             _ = str(tokenizer)
@@ -123,17 +126,17 @@ def test_one_track_midi_to_tokens_to_midi(
 
             # Add track to error list
             if has_errors:
-                tracks_with_errors.append(decoded_midi.instruments[0])
-                tracks_with_errors[-1].name = f"encoded with {tokenization}"
+                for ti, track in enumerate(decoded_midi.instruments):
+                    track.name = f"{ti} encoded with {tokenization}"
+                tracks_with_errors += decoded_midi.instruments
 
         # > 1 as the first one is the preprocessed
-        if len(tracks_with_errors) > 1:
+        if len(tracks_with_errors) > len(midi.instruments):
             at_least_one_error = True
             if saving_erroneous_midis:
                 midi.tempo_changes = midi_to_compare.tempo_changes
                 midi.time_signature_changes = midi_to_compare.time_signature_changes
                 midi.instruments += tracks_with_errors
-                midi.instruments[1].name = "original quantized"
                 midi.dump(PurePath("tests", "test_results", file_path.name))
 
     ttotal = time() - t0
