@@ -2,7 +2,7 @@
 PyTorch `Dataset` objects, to be used with PyTorch `DataLoaders` to load and send data during training.
 """
 from pathlib import Path
-from typing import List, Union, Sequence, Any, Mapping
+from typing import List, Union, Sequence, Any, Mapping, Callable
 from abc import ABC
 from copy import deepcopy
 import json
@@ -105,6 +105,7 @@ class _DatasetABC(Dataset, ABC):
         self.labels = labels
         self.sample_key_name = sample_key_name
         self.labels_key_name = labels_key_name
+        self.__iter_count = 0
 
     def reduce_nb_samples(self, nb_samples: int):
         r"""Reduce the size of the dataset, by keeping `nb_samples` samples.
@@ -126,6 +127,17 @@ class _DatasetABC(Dataset, ABC):
 
         return item
 
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self.__iter_count >= len(self):
+            self.__iter_count = 0
+            raise StopIteration
+        else:
+            self.__iter_count += 1
+            return self[self.__iter_count - 1]
+
     def __repr__(self):
         return self.__str__()
 
@@ -135,7 +147,7 @@ class _DatasetABC(Dataset, ABC):
 
 class DatasetTok(_DatasetABC):
     r"""Basic `Dataset` loading Json files of tokenized MIDIs, or MIDI files to tokenize, and
-    store the token ids in RAM. It outputs token sequences that can be used to train generative models.
+    store the token ids in RAM. It outputs token sequences that can be used to train models.
 
     The tokens sequences being loaded will then be split into subsequences, of length
     comprise between `min_seq_len` and `max_seq_len`.
@@ -150,14 +162,24 @@ class DatasetTok(_DatasetABC):
     Note that if you directly load MIDI files, the loading can take some time as they will need to be tokenized.
     You might want to tokenize them before once with the `tokenizer.tokenize_midi_dataset()` method.
 
+    Additionally, you can use the `func_to_get_labels` argument to provide a method allowing to use labels (one label
+    per file).
+
     :param files_paths: list of paths to files to load.
     :param min_seq_len: minimum sequence length (in nb of tokens)
     :param max_seq_len: maximum sequence length (in nb of tokens)
     :param tokenizer: tokenizer object, to use to load MIDIs instead of tokens. (default: None)
     :param one_token_stream: give False if the token files contains multiple tracks, i.e. the first dimension of
         the value of the "ids" entry corresponds to several tracks. Otherwise, leave False. (default: True)
+    :param func_to_get_labels: a function to retrieve the label of a file. The method must take two positional
+            arguments: the first is either a MidiFile or the tokens loaded from the json file, the second is the path
+            to the file just loaded. The method must return an integer which correspond to the label id (and not the
+            absolute value, e.g. if you are classifying 10 musicians, return the id from 0 to 9 included corresponding
+            to the musician).
     :param sample_key_name: name of the dictionary key containing the sample data when iterating the dataset.
             (default: "input_ids")
+    :param labels_key_name: name of the dictionary key containing the labels data when iterating the dataset.
+            (default: "labels")
     """
 
     def __init__(
@@ -167,8 +189,11 @@ class DatasetTok(_DatasetABC):
         max_seq_len: int,
         tokenizer: MIDITokenizer = None,
         one_token_stream: bool = True,
+        func_to_get_labels: Callable[[Union[MidiFile, Sequence], Path], int] = None,
         sample_key_name: str = "input_ids",
+        labels_key_name: str = "labels",
     ):
+        labels = None if func_to_get_labels is None else []
         samples = []
         if tokenizer is not None:
             one_token_stream = tokenizer.one_token_stream
@@ -179,27 +204,39 @@ class DatasetTok(_DatasetABC):
             miniters=int(len(files_paths) / 20),
             maxinterval=480,
         ):
+            label = None
+            # Loading a MIDI file
             if file_path.suffix in MIDI_FILES_EXTENSIONS:
                 midi = MidiFile(file_path)
+                if func_to_get_labels is not None:
+                    label = func_to_get_labels(midi, file_path)
                 for _ in range(len(midi.instruments) - 1):
                     del midi.instruments[1]  # removes all tracks except first one
-                tokens = tokenizer.midi_to_tokens(midi)
+                tokens_ids = tokenizer.midi_to_tokens(midi)
                 if one_token_stream:
-                    tokens = tokens.ids
+                    tokens_ids = tokens_ids.ids
                 else:
-                    tokens = [seq.ids for seq in tokens]
+                    tokens_ids = [seq.ids for seq in tokens_ids]
+            # Loading json tokens
             else:
                 with open(file_path) as json_file:
-                    tokens = json.load(json_file)["ids"]
-            if one_token_stream:
-                tokens = [tokens]
+                    tokens = json.load(json_file)
+                if func_to_get_labels is not None:
+                    label = func_to_get_labels(tokens, file_path)
+                tokens_ids = tokens["ids"]
 
             # Cut tokens in samples of appropriate length
-            for seq in tokens:
+            if one_token_stream:
+                tokens_ids = [tokens_ids]
+            for seq in tokens_ids:
                 subseqs = split_seq_in_subsequences(seq, min_seq_len, max_seq_len)
                 samples += subseqs
+                if label is not None:
+                    labels += [label] * len(subseqs)
 
-        super().__init__(samples, sample_key_name=sample_key_name)
+        if labels is not None:
+            labels = LongTensor(labels)
+        super().__init__(samples, labels, sample_key_name=sample_key_name, labels_key_name=labels_key_name)
 
 
 class DatasetJsonIO(_DatasetABC):
