@@ -83,7 +83,9 @@ def tempo_changes_equals(
 
 def time_signature_changes_equals(
     time_sig_changes1: List[TimeSignature], time_sig_changes2: List[TimeSignature]
-) -> List[Tuple[str, TimeSignature, float]]:
+) -> List[Tuple[str, Union[TimeSignature, int], float]]:
+    if len(time_sig_changes1) != len(time_sig_changes2):
+        return [("len", len(time_sig_changes1), len(time_sig_changes2))]
     errors = []
     for time_sig_change1, time_sig_change2 in zip(time_sig_changes1, time_sig_changes2):
         if time_sig_change1.time != time_sig_change2.time:

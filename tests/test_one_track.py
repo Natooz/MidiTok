@@ -80,6 +80,11 @@ def test_one_track_midi_to_tokens_to_midi(
             elif tokenization == "Octuple":
                 params["max_bar_embedding"] = 300
                 params["use_time_signatures"] = False  # because of time shifted
+            elif tokenization == "CPWord":
+                # Rests and time sig can mess up with CPWord, when a Rest that is crossing new bar is followed
+                # by a new TimeSig change, as TimeSig are carried with Bar tokens (and there is None is this case)
+                if params["use_time_signatures"] and params["use_rests"]:
+                    params["use_rests"] = False
 
             tokenizer_config = miditok.TokenizerConfig(**params)
             tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
