@@ -3,7 +3,6 @@ tqdm>=4.64.0
 numpy>=1.19,<1.24
 tokenizers>=0.13.2
 torch
-tensorflow
 scipy  # needed for miditoolkit
 matplotlib  # needed for miditoolkit
 sphinx-rtd-theme
