@@ -22,6 +22,7 @@ from .tests_utils import (
 )
 
 TIME_SIGNATURE_RANGE.update({2: [2, 3, 4]})
+TIME_SIGNATURE_RANGE[4].append(8)
 BEAT_RES_TEST = {(0, 16): 8}
 TOKENIZER_PARAMS = {
     "beat_res": BEAT_RES_TEST,
@@ -66,6 +67,7 @@ def test_one_track_midi_to_tokens_to_midi(
     for i, file_path in enumerate(tqdm(files, desc="Testing One Track")):
         # Reads the midi
         midi = MidiFile(file_path)
+        # midi.instruments = [midi.instruments[0]]
         # Will store the tracks tokenized / detokenized, to be saved in case of errors
         for ti, track in enumerate(midi.instruments):
             track.name = f"original {ti} not quantized"
@@ -105,8 +107,9 @@ def test_one_track_midi_to_tokens_to_midi(
             # For Octuple, as tempo is only carried at notes times, we need to adapt their times for comparison
             # Same for CPWord which carries tempo with Position (for notes)
             if tokenization in ["Octuple", "CPWord"]:
+                # We use the first track only, as it is the one for which tempos are decoded
                 adapt_tempo_changes_times(
-                    midi_to_compare.instruments, midi_to_compare.tempo_changes
+                    [midi_to_compare.instruments[0]], midi_to_compare.tempo_changes
                 )
             # When the tokenizer only decoded tempo changes different from the last tempo val
             if tokenization in ["CPWord"]:
