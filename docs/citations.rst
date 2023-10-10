@@ -60,13 +60,18 @@ TSD (Byte Pair Encoding for Symbolic Music)
 
 ..  code-block:: bib
 
-    @misc{Fradet2023BPE-Symbolic-Music,
-        doi = {10.48550/ARXIV.2301.11975},
-        url = {https://arxiv.org/abs/2301.11975},
-        author = {Fradet, Nathan and Briot, Jean-Pierre and Chhel, Fabien and Seghrouchni, Amal El Fallah and Gutowski, Nicolas},
-        title = {Byte Pair Encoding for Symbolic Music},
-        publisher = {arXiv},
-        year = {2023},
+    @inproceedings{bpe-symbolic-music,
+        title = "Byte Pair Encoding for Symbolic Music",
+        author = "Fradet, Nathan  and
+          Gutowski, Nicolas  and
+          Chhel, Fabien  and
+          Briot, Jean-Pierre",
+        booktitle = "Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing",
+        month = dec,
+        year = "2023",
+        address = "Singapore",
+        publisher = "Association for Computational Linguistics",
+        url = "https://arxiv.org/abs/2301.11975",
     }
 
 

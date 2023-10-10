@@ -72,7 +72,10 @@ class MMM(MIDITokenizer):
         all_events = [Event("Bar", "Start", 0)]
 
         # Time events
-        time_sig_change = self._current_midi_metadata["time_sig_changes"][0]
+        if self.config.use_time_signatures and len(self._current_midi_metadata["time_sig_changes"]) > 0:
+            time_sig_change = self._current_midi_metadata["time_sig_changes"][0]
+        else:
+            time_sig_change = TimeSignature(*TIME_SIGNATURE, 0)
         ticks_per_bar = self._compute_ticks_per_bar(time_sig_change, time_division)
         bar_at_last_ts_change = 0
         previous_tick = 0

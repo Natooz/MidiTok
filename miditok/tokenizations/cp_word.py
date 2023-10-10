@@ -1,6 +1,7 @@
 from math import ceil
 from typing import List, Tuple, Dict, Optional, Union, Any
 from pathlib import Path
+import warnings
 
 import numpy as np
 from miditoolkit import MidiFile, Instrument, Note, TempoChange, TimeSignature
@@ -37,6 +38,17 @@ class CPWord(MIDITokenizer):
     """
 
     def _tweak_config_before_creating_voc(self):
+        if self.config.use_time_signatures and self.config.use_rests:
+            # NOTE: this configuration could work by adding a Bar token with the new TimeSig after the Rest, but the
+            # decoding should handle this to not add another bar. Or it could work by making Rests not crossing new
+            # bars. Rests would have a maximal value corresponding to the difference between the previous event tick
+            # and the tick of the next bar. However, in cases of long rests of more than one bar, we would have
+            # successions of Rest --> Bar --> Rest --> Bar ... tokens.
+            warnings.warn("You are using both Time Signatures and Rests with CPWord. Be aware that this configuration"
+                          "can result in altered time, as the time signature is carried by the Bar tokens, that are"
+                          "skipped during rests. To disable this warning, you can disable either Time Signatures or"
+                          "Rests. Otherwise, you can check that your data does not have time signature changes"
+                          "occurring during rests.")
         self.config.use_sustain_pedals = False
         self.config.use_pitch_bends = False
         self.config.program_changes = False
@@ -120,6 +132,7 @@ class CPWord(MIDITokenizer):
                 current_tempo = event.value
             elif event.type == "Program":
                 current_program = event.value
+                continue
             if event.time != previous_tick:
                 # (Rest)
                 if (
@@ -158,26 +171,17 @@ class CPWord(MIDITokenizer):
                     - current_bar
                 )
                 if nb_new_bars >= 1:
+                    if self.config.use_time_signatures:
+                        time_sig_arg = (
+                            f"{current_time_sig[0]}/{current_time_sig[1]}"
+                        )
+                    else:
+                        time_sig_arg = None
                     for i in range(nb_new_bars):
-                        # Update time signature time variables before adding the last bar
-                        if self.config.use_time_signatures:
-                            if event.type == "TimeSig" and i + 1 == nb_new_bars:
-                                current_time_sig = list(
-                                    map(int, event.value.split("/"))
-                                )
-                                bar_at_last_ts_change += (
-                                    event.time - tick_at_last_ts_change
-                                ) // ticks_per_bar
-                                tick_at_last_ts_change = event.time
-                                ticks_per_bar = self._compute_ticks_per_bar(
-                                    TimeSignature(*current_time_sig, event.time),
-                                    time_division,
-                                )
-                            time_sig_arg = (
-                                f"{current_time_sig[0]}/{current_time_sig[1]}"
-                            )
-                        else:
-                            time_sig_arg = None
+                        # exception when last bar and event.type == "TimeSig"
+                        if i == nb_new_bars - 1 and event.type == "TimeSig":
+                            time_sig_arg = list(map(int, event.value.split("/")))
+                            time_sig_arg = f"{time_sig_arg[0]}/{time_sig_arg[1]}"
                         all_events.append(
                             self.__create_cp_token(
                                 (current_bar + i + 1) * ticks_per_bar,
@@ -193,17 +197,32 @@ class CPWord(MIDITokenizer):
                     )
 
                 # Position
-                pos_index = int((event.time - tick_at_current_bar) / ticks_per_sample)
-                all_events.append(
-                    self.__create_cp_token(
-                        event.time,
-                        pos=pos_index,
-                        tempo=current_tempo if self.config.use_tempos else None,
-                        desc="Position",
+                if event.type != "TimeSig":
+                    pos_index = int((event.time - tick_at_current_bar) / ticks_per_sample)
+                    all_events.append(
+                        self.__create_cp_token(
+                            event.time,
+                            pos=pos_index,
+                            chord=event.value if event.type == "Chord" else None,
+                            tempo=current_tempo if self.config.use_tempos else None,
+                            desc="Position",
+                        )
                     )
-                )
 
                 previous_tick = event.time
+
+            # Update time signature time variables, after adjusting the time (above)
+            if event.type == "TimeSig":
+                current_time_sig = list(map(int, event.value.split("/")))
+                bar_at_last_ts_change += (
+                                                 event.time - tick_at_last_ts_change
+                                         ) // ticks_per_bar
+                tick_at_last_ts_change = event.time
+                ticks_per_bar = self._compute_ticks_per_bar(
+                    TimeSignature(*current_time_sig, event.time), time_division
+                )
+                # We decrease the previous tick so that a Position token is enforced for the next event
+                previous_tick -= 1
 
             # Convert event to CP Event
             # Update max offset time of the notes encountered
@@ -218,7 +237,12 @@ class CPWord(MIDITokenizer):
                     )
                 )
                 previous_note_end = max(previous_note_end, event.desc)
-            elif event.type == "Tempo":
+            elif event.type in [
+                "Program",
+                "Tempo",
+                "TimeSig",
+                "Chord",
+            ]:
                 previous_note_end = max(previous_note_end, event.time)
 
         return all_events
@@ -346,28 +370,58 @@ class CPWord(MIDITokenizer):
         # RESULTS
         instruments: Dict[int, Instrument] = {}
         tempo_changes = [TempoChange(TEMPO, -1)]
-        time_signature_changes = [TimeSignature(*TIME_SIGNATURE, 0)]
-        ticks_per_bar = self._compute_ticks_per_bar(
-            time_signature_changes[0], time_division
-        )  # init
+        time_signature_changes = []
+
+        def check_inst(prog: int):
+            if prog not in instruments.keys():
+                instruments[prog] = Instrument(
+                    program=0 if prog == -1 else prog,
+                    is_drum=prog == -1,
+                    name="Drums" if prog == -1 else MIDI_INSTRUMENTS[prog]["name"],
+                )
 
         current_tick = tick_at_last_ts_change = tick_at_current_bar = 0
         current_bar = -1
         bar_at_last_ts_change = 0
         current_program = 0
+        current_instrument = None
         previous_note_end = 0
         for si, seq in enumerate(tokens):
+            # First look for the first time signature if needed
+            if si == 0:
+                if self.config.use_time_signatures:
+                    for compound_token in seq:
+                        token_family = compound_token[0].split("_")[1]
+                        if token_family == "Metric":
+                            bar_pos = compound_token[1].split("_")[0]
+                            if bar_pos == "Bar":
+                                num, den = self._parse_token_time_signature(
+                                    compound_token[self.vocab_types_idx["TimeSig"]].split(
+                                        "_"
+                                    )[1]
+                                )
+                                time_signature_changes.append(TimeSignature(num, den, 0))
+                                break
+                        else:
+                            break
+                if len(time_signature_changes) == 0:
+                    time_signature_changes.append(TimeSignature(*TIME_SIGNATURE, 0))
+            current_time_sig = time_signature_changes[0]
+            ticks_per_bar = self._compute_ticks_per_bar(current_time_sig, time_division)
             # Set track / sequence program if needed
             if not self.one_token_stream:
                 current_tick = tick_at_last_ts_change = tick_at_current_bar = 0
                 current_bar = -1
                 bar_at_last_ts_change = 0
-                ticks_per_bar = self._compute_ticks_per_bar(
-                    time_signature_changes[0], time_division
-                )
                 previous_note_end = 0
+                is_drum = False
                 if programs is not None:
-                    current_program = -1 if programs[si][1] else programs[si][0]
+                    current_program, is_drum = programs[si]
+                current_instrument = Instrument(
+                    program=current_program,
+                    is_drum=is_drum,
+                    name="Drums" if current_program == -1 else MIDI_INSTRUMENTS[current_program]["name"],
+                )
 
             # Decode tokens
             for ti, compound_token in enumerate(seq):
@@ -386,17 +440,12 @@ class CPWord(MIDITokenizer):
                     )
                     if self.config.use_programs:
                         current_program = int(compound_token[5].split("_")[1])
-                    if current_program not in instruments.keys():
-                        instruments[current_program] = Instrument(
-                            program=0 if current_program == -1 else current_program,
-                            is_drum=current_program == -1,
-                            name="Drums"
-                            if current_program == -1
-                            else MIDI_INSTRUMENTS[current_program]["name"],
-                        )
-                    instruments[current_program].notes.append(
-                        Note(vel, pitch, current_tick, current_tick + duration)
-                    )
+                    new_note = Note(vel, pitch, current_tick, current_tick + duration)
+                    if self.one_token_stream:
+                        check_inst(current_program)
+                        instruments[current_program].notes.append(new_note)
+                    else:
+                        current_instrument.notes.append(new_note)
                     previous_note_end = max(previous_note_end, current_tick + duration)
 
                 elif token_family == "Metric":
@@ -407,25 +456,23 @@ class CPWord(MIDITokenizer):
                             current_tick = tick_at_current_bar + ticks_per_bar
                         tick_at_current_bar = current_tick
                         # Add new TS only if different from the last one
-                        if self.config.use_time_signatures and si == 0:
+                        if self.config.use_time_signatures:
                             num, den = self._parse_token_time_signature(
                                 compound_token[self.vocab_types_idx["TimeSig"]].split(
                                     "_"
                                 )[1]
                             )
                             if (
-                                num != time_signature_changes[-1].numerator
-                                or den != time_signature_changes[-1].denominator
+                                num != current_time_sig.numerator
+                                or den != current_time_sig.denominator
                             ):
-                                time_sig = TimeSignature(num, den, current_tick)
+                                current_time_sig = TimeSignature(num, den, current_tick)
                                 if si == 0:
-                                    time_signature_changes.append(time_sig)
-                                tick_at_last_ts_change = (
-                                    tick_at_current_bar  # == current_tick
-                                )
+                                    time_signature_changes.append(current_time_sig)
+                                tick_at_last_ts_change = tick_at_current_bar
                                 bar_at_last_ts_change = current_bar
                                 ticks_per_bar = self._compute_ticks_per_bar(
-                                    time_sig, time_division
+                                    current_time_sig, time_division
                                 )
                     elif bar_pos == "Position":  # i.e. its a position
                         if current_bar == -1:
@@ -443,12 +490,10 @@ class CPWord(MIDITokenizer):
                                 )[1]
                             )
                             if (
-                                si == 0
-                                and tempo != tempo_changes[-1].tempo
+                                tempo != tempo_changes[-1].tempo
                                 and current_tick != tempo_changes[-1].time
                             ):
                                 tempo_changes.append(TempoChange(tempo, current_tick))
-                            previous_note_end = max(previous_note_end, current_tick)
                     elif (
                         self.config.use_rests
                         and compound_token[self.vocab_types_idx["Rest"]].split("_")[1]
@@ -469,15 +514,19 @@ class CPWord(MIDITokenizer):
                             ) * ticks_per_bar
                             current_bar = real_current_bar
 
+                    previous_note_end = max(previous_note_end, current_tick)
+
+            # Add current_inst to midi and handle notes still active
+            if not self.one_token_stream:
+                midi.instruments.append(current_instrument)
+
         if len(tempo_changes) > 1:
             del tempo_changes[0]  # delete mocked tempo change
         tempo_changes[0].time = 0
-        if len(time_signature_changes) > 1:
-            del time_signature_changes[0]  # delete mocked time signature change
-        time_signature_changes[0].time = 0
 
         # create MidiFile
-        midi.instruments = list(instruments.values())
+        if self.one_token_stream:
+            midi.instruments = list(instruments.values())
         midi.tempo_changes = tempo_changes
         midi.time_signature_changes = time_signature_changes
         midi.max_tick = max(

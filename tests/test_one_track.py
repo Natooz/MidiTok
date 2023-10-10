@@ -22,6 +22,7 @@ from .tests_utils import (
 )
 
 TIME_SIGNATURE_RANGE.update({2: [2, 3, 4]})
+TIME_SIGNATURE_RANGE[4].append(8)
 BEAT_RES_TEST = {(0, 16): 8}
 TOKENIZER_PARAMS = {
     "beat_res": BEAT_RES_TEST,
@@ -31,7 +32,7 @@ TOKENIZER_PARAMS = {
     "use_time_signatures": True,
     "use_sustain_pedals": True,
     "use_pitch_bends": True,
-    "use_programs": True,
+    "use_programs": False,
     "beat_res_rest": {(0, 2): 4, (2, 12): 2},
     "nb_tempos": 32,
     "tempo_range": (40, 250),
@@ -66,8 +67,10 @@ def test_one_track_midi_to_tokens_to_midi(
     for i, file_path in enumerate(tqdm(files, desc="Testing One Track")):
         # Reads the midi
         midi = MidiFile(file_path)
+        # midi.instruments = [midi.instruments[0]]
         # Will store the tracks tokenized / detokenized, to be saved in case of errors
-        midi.instruments[0].name = "original not quantized"
+        for ti, track in enumerate(midi.instruments):
+            track.name = f"original {ti} not quantized"
         tracks_with_errors = []
 
         for tokenization in ALL_TOKENIZATIONS:
@@ -79,6 +82,11 @@ def test_one_track_midi_to_tokens_to_midi(
             elif tokenization == "Octuple":
                 params["max_bar_embedding"] = 300
                 params["use_time_signatures"] = False  # because of time shifted
+            elif tokenization == "CPWord":
+                # Rests and time sig can mess up with CPWord, when a Rest that is crossing new bar is followed
+                # by a new TimeSig change, as TimeSig are carried with Bar tokens (and there is None is this case)
+                if params["use_time_signatures"] and params["use_rests"]:
+                    params["use_rests"] = False
 
             tokenizer_config = miditok.TokenizerConfig(**params)
             tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
@@ -99,8 +107,9 @@ def test_one_track_midi_to_tokens_to_midi(
             # For Octuple, as tempo is only carried at notes times, we need to adapt their times for comparison
             # Same for CPWord which carries tempo with Position (for notes)
             if tokenization in ["Octuple", "CPWord"]:
+                # We use the first track only, as it is the one for which tempos are decoded
                 adapt_tempo_changes_times(
-                    midi_to_compare.instruments, midi_to_compare.tempo_changes
+                    [midi_to_compare.instruments[0]], midi_to_compare.tempo_changes
                 )
             # When the tokenizer only decoded tempo changes different from the last tempo val
             if tokenization in ["CPWord"]:
@@ -111,7 +120,9 @@ def test_one_track_midi_to_tokens_to_midi(
                     adjust_pedal_durations(track.pedals, tokenizer, midi.ticks_per_beat)
             # Store preprocessed track
             if len(tracks_with_errors) == 0:
-                tracks_with_errors.append(midi_to_compare.instruments[0])
+                tracks_with_errors += midi_to_compare.instruments
+                for ti, track in enumerate(midi_to_compare.instruments):
+                    track.name = f"original {ti} quantized"
 
             # printing the tokenizer shouldn't fail
             _ = str(tokenizer)
@@ -123,17 +134,17 @@ def test_one_track_midi_to_tokens_to_midi(
 
             # Add track to error list
             if has_errors:
-                tracks_with_errors.append(decoded_midi.instruments[0])
-                tracks_with_errors[-1].name = f"encoded with {tokenization}"
+                for ti, track in enumerate(decoded_midi.instruments):
+                    track.name = f"{ti} encoded with {tokenization}"
+                tracks_with_errors += decoded_midi.instruments
 
         # > 1 as the first one is the preprocessed
-        if len(tracks_with_errors) > 1:
+        if len(tracks_with_errors) > len(midi.instruments):
             at_least_one_error = True
             if saving_erroneous_midis:
                 midi.tempo_changes = midi_to_compare.tempo_changes
                 midi.time_signature_changes = midi_to_compare.time_signature_changes
                 midi.instruments += tracks_with_errors
-                midi.instruments[1].name = "original quantized"
                 midi.dump(PurePath("tests", "test_results", file_path.name))
 
     ttotal = time() - t0

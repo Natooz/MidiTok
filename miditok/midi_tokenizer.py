@@ -1872,7 +1872,9 @@ class MIDITokenizer(ABC):
                     else:
                         current_pitches[current_program].append(pitch_val)
                 elif event_type == "Position":
-                    if int(event_value) <= current_pos and previous_type != "Rest":
+                    # With time signatures, it can happen that Rest -> TimeSig -> Position
+                    if (int(event_value) <= current_pos and previous_type != "Rest" and
+                            not (previous_type == "TimeSig" and tokens[ti-1].split("_")[0] == "Rest")):
                         err_time += 1  # token position value <= to the current position
                     current_pos = int(event_value)
                     current_pitches = {p: [] for p in self.config.programs}

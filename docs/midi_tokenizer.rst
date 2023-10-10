@@ -65,6 +65,8 @@ MidiTok offers to include additional tokens on music information. You can specif
    :file: additional_tokens_table.csv
    :header-rows: 1
 
+¹: using both time signatures and rests with `CPWord` might result in time alterations, as the time signature is carried by the Bar tokens which are skipped during period of rests.
+
 
 Special tokens
 ------------------------
