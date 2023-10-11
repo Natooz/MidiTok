@@ -140,6 +140,7 @@ def data_augmentation_dataset(
                         if offset != 0
                     ]
                 )
+                # TODO reproduce file tree if out_path
                 saving_path = (
                     file_path.parent if out_path is None else out_path
                 ) / f"{file_path.stem}{suffix}.json"
