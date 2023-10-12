@@ -72,7 +72,10 @@ class MMM(MIDITokenizer):
         all_events = [Event("Bar", "Start", 0)]
 
         # Time events
-        if self.config.use_time_signatures and len(self._current_midi_metadata["time_sig_changes"]) > 0:
+        if (
+            self.config.use_time_signatures
+            and len(self._current_midi_metadata["time_sig_changes"]) > 0
+        ):
             time_sig_change = self._current_midi_metadata["time_sig_changes"][0]
         else:
             time_sig_change = TimeSignature(*TIME_SIGNATURE, 0)

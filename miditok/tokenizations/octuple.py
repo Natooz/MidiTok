@@ -247,7 +247,9 @@ class Octuple(MIDITokenizer):
                 current_instrument = Instrument(
                     program=current_program,
                     is_drum=is_drum,
-                    name="Drums" if current_program == -1 else MIDI_INSTRUMENTS[current_program]["name"],
+                    name="Drums"
+                    if current_program == -1
+                    else MIDI_INSTRUMENTS[current_program]["name"],
                 )
 
             # Decode tokens
@@ -313,7 +315,9 @@ class Octuple(MIDITokenizer):
                         tick_at_last_ts_change += (
                             event_bar - bar_at_last_ts_change
                         ) * ticks_per_bar
-                        current_time_sig = TimeSignature(num, den, tick_at_last_ts_change)
+                        current_time_sig = TimeSignature(
+                            num, den, tick_at_last_ts_change
+                        )
                         if si == 0:
                             time_signature_changes.append(current_time_sig)
                         bar_at_last_ts_change = event_bar

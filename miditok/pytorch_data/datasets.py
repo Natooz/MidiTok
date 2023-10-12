@@ -236,7 +236,12 @@ class DatasetTok(_DatasetABC):
 
         if labels is not None:
             labels = LongTensor(labels)
-        super().__init__(samples, labels, sample_key_name=sample_key_name, labels_key_name=labels_key_name)
+        super().__init__(
+            samples,
+            labels,
+            sample_key_name=sample_key_name,
+            labels_key_name=labels_key_name,
+        )
 
 
 class DatasetJsonIO(_DatasetABC):

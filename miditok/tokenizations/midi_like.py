@@ -195,12 +195,21 @@ class MIDILike(MIDITokenizer):
                         for pitch_, (onset_tick, vel_) in active_notes_.items():
                             check_inst(program)
                             instruments[program].notes.append(
-                                Note(vel_, pitch_, onset_tick, onset_tick + default_duration)
+                                Note(
+                                    vel_,
+                                    pitch_,
+                                    onset_tick,
+                                    onset_tick + default_duration,
+                                )
                             )
                 else:
-                    for pitch_, (onset_tick, vel_) in active_notes[current_instrument.program].items():
+                    for pitch_, (onset_tick, vel_) in active_notes[
+                        current_instrument.program
+                    ].items():
                         current_instrument.notes.append(
-                            Note(vel_, pitch_, onset_tick, onset_tick + default_duration)
+                            Note(
+                                vel_, pitch_, onset_tick, onset_tick + default_duration
+                            )
                         )
 
         current_tick = 0
@@ -216,7 +225,9 @@ class MIDILike(MIDITokenizer):
                 current_instrument = Instrument(
                     program=current_program,
                     is_drum=is_drum,
-                    name="Drums" if current_program == -1 else MIDI_INSTRUMENTS[current_program]["name"],
+                    name="Drums"
+                    if current_program == -1
+                    else MIDI_INSTRUMENTS[current_program]["name"],
                 )
 
             # Decode tokens

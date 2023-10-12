@@ -140,26 +140,31 @@ def data_augmentation_dataset(
                         if offset != 0
                     ]
                 )
-                # TODO reproduce file tree if out_path
-                saving_path = (
-                    file_path.parent if out_path is None else out_path
-                ) / f"{file_path.stem}{suffix}.json"
+                if out_path is None:
+                    saving_path = file_path.parent
+                else:
+                    saving_path = out_path / file_path.relative_to(data_path)
+                    saving_path.mkdir(parents=True, exist_ok=True)
+                saving_path /= f"{file_path.stem}{suffix}.json"
                 tokenizer.save_tokens(tracks_seq, saving_path, programs)
                 nb_augmentations += 1
                 nb_tracks_augmented += len(tracks_seq)
             if copy_original_in_new_location and out_path is not None:
                 if tokenizer.one_token_stream:
                     ids = ids[0]
-                tokenizer.save_tokens(
-                    ids, out_path / f"{file_path.stem}.json", programs
+                saving_path = (
+                    out_path
+                    / file_path.relative_to(data_path)
+                    / f"{file_path.stem}.json"
                 )
+                saving_path.parent.mkdir(parents=True, exist_ok=True)
+                tokenizer.save_tokens(ids, saving_path, programs)
 
         else:  # as midi
             try:
                 midi = MidiFile(file_path)
-            except (
-                Exception
-            ):  # ValueError, OSError, FileNotFoundError, IOError, EOFError, mido.KeySignatureError
+            except Exception:
+                # ValueError, OSError, FileNotFoundError, IOError, EOFError, mido.KeySignatureError
                 continue
 
             offsets = get_offsets(
@@ -188,16 +193,25 @@ def data_augmentation_dataset(
                         if offset != 0
                     ]
                 )
-                saving_path = (
-                    file_path.parent if out_path is None else out_path
-                ) / f"{file_path.stem}{suffix}.mid"
+                if out_path is None:
+                    saving_path = file_path.parent
+                else:
+                    saving_path = out_path / file_path.relative_to(data_path)
+                    saving_path.mkdir(parents=True, exist_ok=True)
+                saving_path /= f"{file_path.stem}{suffix}.mid"
                 aug_midi.dump(saving_path)
                 nb_augmentations += 1
                 nb_tracks_augmented += len(aug_midi.instruments)
             if (
                 copy_original_in_new_location and out_path is not None
             ):  # copy original midi
-                midi.dump(out_path / f"{file_path.stem}.mid")
+                saving_path = (
+                    out_path
+                    / file_path.relative_to(data_path)
+                    / f"{file_path.stem}.mid"
+                )
+                saving_path.parent.mkdir(parents=True, exist_ok=True)
+                midi.dump(saving_path)
 
     # Saves data augmentation report, json encoded with txt extension to not mess with others json files
     with open(data_path / "data_augmentation.txt", "w") as outfile:

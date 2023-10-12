@@ -32,8 +32,10 @@ def test_dataset_ram():
     one_track_midis_paths = list(Path("tests", "One_track_MIDIs").glob("**/*.mid"))[:3]
     tokens_os_dir = Path("tests", "multitrack_tokens_os")
     dummy_labels = {
-        label: i for i, label in
-        enumerate(set(path.name.split("_")[0] for path in one_track_midis_paths))
+        label: i
+        for i, label in enumerate(
+            set(path.name.split("_")[0] for path in one_track_midis_paths)
+        )
     }
 
     def get_labels_one_track(_: Sequence, file_path: Path) -> int:

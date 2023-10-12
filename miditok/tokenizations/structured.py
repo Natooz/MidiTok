@@ -227,7 +227,9 @@ class Structured(MIDITokenizer):
                 current_instrument = Instrument(
                     program=current_program,
                     is_drum=is_drum,
-                    name="Drums" if current_program == -1 else MIDI_INSTRUMENTS[current_program]["name"],
+                    name="Drums"
+                    if current_program == -1
+                    else MIDI_INSTRUMENTS[current_program]["name"],
                 )
 
             # Decode tokens
@@ -247,7 +249,9 @@ class Structured(MIDITokenizer):
                             duration = self._token_duration_to_ticks(
                                 seq[ti + 2].split("_")[1], time_division
                             )
-                            new_note = Note(vel, pitch, current_tick, current_tick + duration)
+                            new_note = Note(
+                                vel, pitch, current_tick, current_tick + duration
+                            )
                             if self.one_token_stream:
                                 check_inst(current_program)
                                 instruments[current_program].notes.append(new_note)

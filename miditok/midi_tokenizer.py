@@ -1663,16 +1663,18 @@ class MIDITokenizer(ABC):
     ):
         r"""Applies BPE to an already tokenized dataset (with no BPE).
 
-        :param dataset_path: path to token files to load.
+        :param dataset_path: path to the directory containing token json files.
         :param out_path: output directory to save. If none is given, this method will overwrite original files.
                 (default: None)
         """
         if not self.has_bpe:
             return
+        if isinstance(out_path, str):
+            out_path = Path(out_path)
 
         files_paths = list(Path(dataset_path).glob("**/*.json"))
-        for path in tqdm(files_paths, desc="Applying BPE to dataset"):
-            sample = self.load_tokens(path)
+        for json_path in tqdm(files_paths, desc="Applying BPE to dataset"):
+            sample = self.load_tokens(json_path)
             seq = (
                 TokSequence(ids=sample["ids"])
                 if self.one_token_stream
@@ -1680,13 +1682,13 @@ class MIDITokenizer(ABC):
             )
             self.apply_bpe(seq)
 
-            out_ = (
-                Path(out_path) / path.relative_to(dataset_path)
+            saving_path = (
+                out_path / json_path.relative_to(dataset_path)
                 if out_path is not None
-                else path
+                else json_path
             )
             self.save_tokens(
-                seq, out_, sample["programs"] if "programs" in sample else None
+                seq, saving_path, sample["programs"] if "programs" in sample else None
             )
 
     def _are_ids_bpe_encoded(self, ids: Union[List[int], np.ndarray]) -> bool:
@@ -1773,7 +1775,9 @@ class MIDITokenizer(ABC):
             if isinstance(midi_paths, str):
                 midi_paths = Path(midi_paths)
             root_dir = midi_paths
-            midi_paths = sum(list(midi_paths.glob(f"**/*.{ext}")) for ext in MIDI_FILES_EXTENSIONS)
+            midi_paths = sum(
+                list(midi_paths.glob(f"**/*.{ext}")) for ext in MIDI_FILES_EXTENSIONS
+            )
         # User gave a list of paths, we need to find the root / deepest common subdir
         else:
             all_parts = [Path(path).parent.parts for path in midi_paths]
@@ -1789,7 +1793,9 @@ class MIDITokenizer(ABC):
         out_path_tokenizer = out_dir / tokenizer_config_file_name
         if out_path_tokenizer.is_file():
             if overwrite_mode:
-                warnings.warn(f"Tokenizer config file already exists. Overwriting it ({out_path_tokenizer})")
+                warnings.warn(
+                    f"Tokenizer config file already exists. Overwriting it ({out_path_tokenizer})"
+                )
             # Set the new tokenizer file name
             else:
                 file_name_tokenizer = tokenizer_config_file_name
@@ -1800,9 +1806,15 @@ class MIDITokenizer(ABC):
                     file_name_tokenizer = ".".join(file_name_parts)
                 i = 1
                 while out_path_tokenizer.is_file():
-                    out_path_tokenizer = out_dir / (f"{file_name_tokenizer}_{i}" + f".{ext}" if ext is not None else "")
+                    out_path_tokenizer = out_dir / (
+                        f"{file_name_tokenizer}_{i}" + f".{ext}"
+                        if ext is not None
+                        else ""
+                    )
                     i += 1
-                warnings.warn(f"Tokenizer config file already exists. Saving it as ({out_path_tokenizer})")
+                warnings.warn(
+                    f"Tokenizer config file already exists. Saving it as ({out_path_tokenizer})"
+                )
         self.save_params(out_path_tokenizer)
         if save_programs is None:
             save_programs = not self.config.use_programs
@@ -1843,11 +1855,16 @@ class MIDITokenizer(ABC):
             tokens = self(midi, apply_bpe_if_possible=False)
 
             # Set output file path
-            out_path = out_dir / midi_path.parent.relative_to(root_dir) / f"{midi_path.stem}.json"
+            out_path = (
+                out_dir
+                / midi_path.parent.relative_to(root_dir)
+                / f"{midi_path.stem}.json"
+            )
+            out_path.parent.mkdir(parents=True, exist_ok=True)
             if not overwrite_mode and out_path.is_file():
                 i = 1
                 while out_path.is_file():
-                    out_path = out_dir / midi_path.parent.relative_to(root_dir) / f"{midi_path.stem}_{i}.json"
+                    out_path = out_path.parent / f"{midi_path.stem}_{i}.json"
                     i += 1
 
             # Save the tokens as JSON
@@ -1926,8 +1943,14 @@ class MIDITokenizer(ABC):
                         current_pitches[current_program].append(pitch_val)
                 elif event_type == "Position":
                     # With time signatures, it can happen that Rest -> TimeSig -> Position
-                    if (int(event_value) <= current_pos and previous_type != "Rest" and
-                            not (previous_type == "TimeSig" and tokens[ti-1].split("_")[0] == "Rest")):
+                    if (
+                        int(event_value) <= current_pos
+                        and previous_type != "Rest"
+                        and not (
+                            previous_type == "TimeSig"
+                            and tokens[ti - 1].split("_")[0] == "Rest"
+                        )
+                    ):
                         err_time += 1  # token position value <= to the current position
                     current_pos = int(event_value)
                     current_pitches = {p: [] for p in self.config.programs}
