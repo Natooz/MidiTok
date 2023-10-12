@@ -1,8 +1,9 @@
 """
 Collator objects for PyTorch `DataLoader`s.
 """
-from typing import List, Any, Dict
+from typing import List, Any, Mapping
 from copy import deepcopy
+import warnings
 
 from torch import LongTensor
 import torch
@@ -48,7 +49,7 @@ class DataCollator:
         self.inputs_kwarg_name = inputs_kwarg_name
         self.labels_kwarg_name = labels_kwarg_name
 
-    def __call__(self, batch: List[Dict[str, Any]]) -> Dict[str, LongTensor]:
+    def __call__(self, batch: List[Mapping[str, Any]]) -> Mapping[str, LongTensor]:
         out_batch = {}
         x, y = None, None
 
@@ -64,11 +65,13 @@ class DataCollator:
         # Figure out labels + adds BOS and EOS tokens
         if self.labels_kwarg_name in batch[0]:
             y = [seq[self.labels_kwarg_name] for seq in batch]
-            _add_bos_eos_tokens_to_batch(
-                y,
-                bos_tok_id=self.bos_token,
-                eos_tok_id=self.eos_token,
-            )
+            # If not classification
+            if y[0].dim() > 0:
+                _add_bos_eos_tokens_to_batch(
+                    y,
+                    bos_tok_id=self.bos_token,
+                    eos_tok_id=self.eos_token,
+                )
         elif self.copy_inputs_as_labels:
             y = deepcopy(x)
 
@@ -76,7 +79,8 @@ class DataCollator:
         if x is not None:
             x = _pad_batch(x, self.pad_token, self.pad_on_left)
         if y is not None:
-            if isinstance(y[0], LongTensor):
+            # If labels are sequences of tokens
+            if y[0].dim() > 0:
                 y = _pad_batch(y, self.labels_pad_idx, self.pad_on_left)
             else:  # classification
                 y = torch.stack(y)
@@ -84,7 +88,11 @@ class DataCollator:
         # Shift labels, otherwise it's handled by models
         if self.shift_labels:
             x = x[:, :-1]
-            y = y[:, 1:]
+            if y[0].dim() > 0:
+                y = y[:, 1:]
+            else:
+                warnings.warn("MidiTok DataCollator: You set shift_labels=True, but provided int labels"
+                              "(for sequence classification tasks) which is suited for. Skipping label shifting.")
 
         # Add inputs / labels to output batch
         if x is not None:

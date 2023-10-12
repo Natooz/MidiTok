@@ -55,8 +55,16 @@ def test_dataset_ram():
         tokenizer_os,
         func_to_get_labels=get_labels_one_track,
     )
+    # Test iteration, and collator with user labels
     for _ in dataset_os:
         pass
+    collator = miditok.pytorch_data.DataCollator(
+        0,
+        1,
+        2,
+        pad_on_left=True,
+    )
+    _ = collator([dataset_os[i] for i in range(4)])
 
     # MIDI + Multiple token streams + labels
     tokenizer_ms = miditok.TSD(miditok.TokenizerConfig())
