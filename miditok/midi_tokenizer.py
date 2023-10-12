@@ -1687,6 +1687,7 @@ class MIDITokenizer(ABC):
                 if out_path is not None
                 else json_path
             )
+            saving_path.parent.mkdir(parents=True, exist_ok=True)
             self.save_tokens(
                 seq, saving_path, sample["programs"] if "programs" in sample else None
             )
@@ -1776,7 +1777,8 @@ class MIDITokenizer(ABC):
                 midi_paths = Path(midi_paths)
             root_dir = midi_paths
             midi_paths = sum(
-                list(midi_paths.glob(f"**/*.{ext}")) for ext in MIDI_FILES_EXTENSIONS
+                (list(midi_paths.glob(f"**/*{ext}")) for ext in MIDI_FILES_EXTENSIONS),
+                []
             )
         # User gave a list of paths, we need to find the root / deepest common subdir
         else:
