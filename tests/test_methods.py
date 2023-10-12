@@ -282,6 +282,7 @@ def test_tokenize_datasets(data_path: Union[str, Path] = Path("./tests")):
         == midi_path.relative_to(data_path).with_suffix(".test")
         for json_path, midi_path in zip(json_paths, midi_paths)
     )
+    tokenizer.tokenize_midi_dataset(midi_paths, out_path, overwrite_mode=False)
 
 
 if __name__ == "__main__":
