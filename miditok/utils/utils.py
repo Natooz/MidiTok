@@ -192,7 +192,7 @@ def detect_chords(
                     break
 
             # We found a chord quality, or we specify unknown chords
-            if not (unknown_chords_nb_notes_range is not None and is_unknown_chord):
+            if unknown_chords_nb_notes_range is not None or not is_unknown_chord:
                 if specify_root_note:
                     chord_quality = (
                         f"{PITCH_CLASSES[notes[count, 0] % 12]}:{chord_quality}"
