@@ -143,7 +143,7 @@ def data_augmentation_dataset(
                 if out_path is None:
                     saving_path = file_path.parent
                 else:
-                    saving_path = out_path / file_path.relative_to(data_path)
+                    saving_path = out_path / file_path.parent.relative_to(data_path)
                     saving_path.mkdir(parents=True, exist_ok=True)
                 saving_path /= f"{file_path.stem}{suffix}.json"
                 tokenizer.save_tokens(tracks_seq, saving_path, programs)
@@ -196,7 +196,7 @@ def data_augmentation_dataset(
                 if out_path is None:
                     saving_path = file_path.parent
                 else:
-                    saving_path = out_path / file_path.relative_to(data_path)
+                    saving_path = out_path / file_path.parent.relative_to(data_path)
                     saving_path.mkdir(parents=True, exist_ok=True)
                 saving_path /= f"{file_path.stem}{suffix}.mid"
                 aug_midi.dump(saving_path)
