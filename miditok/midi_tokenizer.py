@@ -1778,7 +1778,7 @@ class MIDITokenizer(ABC):
             root_dir = midi_paths
             midi_paths = sum(
                 (list(midi_paths.glob(f"**/*{ext}")) for ext in MIDI_FILES_EXTENSIONS),
-                []
+                [],
             )
         # User gave a list of paths, we need to find the root / deepest common subdir
         else:
