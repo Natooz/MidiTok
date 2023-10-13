@@ -91,8 +91,10 @@ class DataCollator:
             if y[0].dim() > 0:
                 y = y[:, 1:]
             else:
-                warnings.warn("MidiTok DataCollator: You set shift_labels=True, but provided int labels"
-                              "(for sequence classification tasks) which is suited for. Skipping label shifting.")
+                warnings.warn(
+                    "MidiTok DataCollator: You set shift_labels=True, but provided int labels"
+                    "(for sequence classification tasks) which is suited for. Skipping label shifting."
+                )
 
         # Add inputs / labels to output batch
         if x is not None:

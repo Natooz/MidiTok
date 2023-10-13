@@ -4,7 +4,7 @@
 """
 
 from copy import deepcopy
-from pathlib import Path, PurePath
+from pathlib import Path
 from typing import Union
 from time import time
 import random
@@ -29,9 +29,7 @@ TOKENIZER_PARAMS = {
 }
 
 
-def test_bpe_conversion(
-    data_path: Union[str, Path, PurePath] = "./tests/One_track_MIDIs"
-):
+def test_bpe_conversion(data_path: Union[str, Path] = "./tests/One_track_MIDIs"):
     r"""Reads a few MIDI files, convert them into token sequences, convert them back to MIDI files.
     The converted back MIDI files should identical to original one, expect with note starting and ending
     times quantized, and maybe a some duplicated notes removed
@@ -51,8 +49,9 @@ def test_bpe_conversion(
         tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
             tokenizer_config=tokenizer_config
         )
+        # Give a str to dir for coverage
         tokenizer.tokenize_midi_dataset(
-            files, Path("tests", "test_results", tokenization)
+            str(data_path), Path("tests", "test_results", tokenization)
         )
         tokenizer.learn_bpe(
             vocab_size=len(tokenizer) + 400,

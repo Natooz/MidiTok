@@ -44,11 +44,13 @@ class CPWord(MIDITokenizer):
             # bars. Rests would have a maximal value corresponding to the difference between the previous event tick
             # and the tick of the next bar. However, in cases of long rests of more than one bar, we would have
             # successions of Rest --> Bar --> Rest --> Bar ... tokens.
-            warnings.warn("You are using both Time Signatures and Rests with CPWord. Be aware that this configuration"
-                          "can result in altered time, as the time signature is carried by the Bar tokens, that are"
-                          "skipped during rests. To disable this warning, you can disable either Time Signatures or"
-                          "Rests. Otherwise, you can check that your data does not have time signature changes"
-                          "occurring during rests.")
+            warnings.warn(
+                "You are using both Time Signatures and Rests with CPWord. Be aware that this configuration"
+                "can result in altered time, as the time signature is carried by the Bar tokens, that are"
+                "skipped during rests. To disable this warning, you can disable either Time Signatures or"
+                "Rests. Otherwise, you can check that your data does not have time signature changes"
+                "occurring during rests."
+            )
         self.config.use_sustain_pedals = False
         self.config.use_pitch_bends = False
         self.config.program_changes = False
@@ -172,9 +174,7 @@ class CPWord(MIDITokenizer):
                 )
                 if nb_new_bars >= 1:
                     if self.config.use_time_signatures:
-                        time_sig_arg = (
-                            f"{current_time_sig[0]}/{current_time_sig[1]}"
-                        )
+                        time_sig_arg = f"{current_time_sig[0]}/{current_time_sig[1]}"
                     else:
                         time_sig_arg = None
                     for i in range(nb_new_bars):
@@ -198,7 +198,9 @@ class CPWord(MIDITokenizer):
 
                 # Position
                 if event.type != "TimeSig":
-                    pos_index = int((event.time - tick_at_current_bar) / ticks_per_sample)
+                    pos_index = int(
+                        (event.time - tick_at_current_bar) / ticks_per_sample
+                    )
                     all_events.append(
                         self.__create_cp_token(
                             event.time,
@@ -215,8 +217,8 @@ class CPWord(MIDITokenizer):
             if event.type == "TimeSig":
                 current_time_sig = list(map(int, event.value.split("/")))
                 bar_at_last_ts_change += (
-                                                 event.time - tick_at_last_ts_change
-                                         ) // ticks_per_bar
+                    event.time - tick_at_last_ts_change
+                ) // ticks_per_bar
                 tick_at_last_ts_change = event.time
                 ticks_per_bar = self._compute_ticks_per_bar(
                     TimeSignature(*current_time_sig, event.time), time_division
@@ -396,11 +398,13 @@ class CPWord(MIDITokenizer):
                             bar_pos = compound_token[1].split("_")[0]
                             if bar_pos == "Bar":
                                 num, den = self._parse_token_time_signature(
-                                    compound_token[self.vocab_types_idx["TimeSig"]].split(
-                                        "_"
-                                    )[1]
+                                    compound_token[
+                                        self.vocab_types_idx["TimeSig"]
+                                    ].split("_")[1]
                                 )
-                                time_signature_changes.append(TimeSignature(num, den, 0))
+                                time_signature_changes.append(
+                                    TimeSignature(num, den, 0)
+                                )
                                 break
                         else:
                             break
@@ -420,7 +424,9 @@ class CPWord(MIDITokenizer):
                 current_instrument = Instrument(
                     program=current_program,
                     is_drum=is_drum,
-                    name="Drums" if current_program == -1 else MIDI_INSTRUMENTS[current_program]["name"],
+                    name="Drums"
+                    if current_program == -1
+                    else MIDI_INSTRUMENTS[current_program]["name"],
                 )
 
             # Decode tokens

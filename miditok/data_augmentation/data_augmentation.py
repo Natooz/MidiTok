@@ -1,7 +1,7 @@
 """Data augmentation methods
 
 """
-
+import warnings
 from typing import List, Tuple, Union, Dict
 from pathlib import Path
 from copy import deepcopy
@@ -31,6 +31,10 @@ def data_augmentation_dataset(
     The new created files have names in two parts, separated with a '§' character.
     Make sure your files do not have '§' in their names if you intend to reuse the information of the
     second part in some script.
+    For note duration augmentation, only the duration, i.e. the ending / offset times of the notes are altered,
+    while starting / onset times are unchanged.
+    **Note: data augmentation on note durations is not implemented at the moment for MIDI files. Duration offsets will
+    be skipped. Alternatively, you can perform data augmentation on note duration on JSON token files.**
 
     :param data_path: root path to the folder containing tokenized json files.
     :param tokenizer: tokenizer, needs to have 'Pitch' or 'NoteOn' tokens. Has to be given
@@ -140,25 +144,31 @@ def data_augmentation_dataset(
                         if offset != 0
                     ]
                 )
-                saving_path = (
-                    file_path.parent if out_path is None else out_path
-                ) / f"{file_path.stem}{suffix}.json"
+                if out_path is None:
+                    saving_path = file_path.parent
+                else:
+                    saving_path = out_path / file_path.parent.relative_to(data_path)
+                    saving_path.mkdir(parents=True, exist_ok=True)
+                saving_path /= f"{file_path.stem}{suffix}.json"
                 tokenizer.save_tokens(tracks_seq, saving_path, programs)
                 nb_augmentations += 1
                 nb_tracks_augmented += len(tracks_seq)
             if copy_original_in_new_location and out_path is not None:
                 if tokenizer.one_token_stream:
                     ids = ids[0]
-                tokenizer.save_tokens(
-                    ids, out_path / f"{file_path.stem}.json", programs
+                saving_path = (
+                    out_path
+                    / file_path.relative_to(data_path)
+                    / f"{file_path.stem}.json"
                 )
+                saving_path.parent.mkdir(parents=True, exist_ok=True)
+                tokenizer.save_tokens(ids, saving_path, programs)
 
         else:  # as midi
             try:
                 midi = MidiFile(file_path)
-            except (
-                Exception
-            ):  # ValueError, OSError, FileNotFoundError, IOError, EOFError, mido.KeySignatureError
+            except Exception:
+                # ValueError, OSError, FileNotFoundError, IOError, EOFError, mido.KeySignatureError
                 continue
 
             offsets = get_offsets(
@@ -187,16 +197,25 @@ def data_augmentation_dataset(
                         if offset != 0
                     ]
                 )
-                saving_path = (
-                    file_path.parent if out_path is None else out_path
-                ) / f"{file_path.stem}{suffix}.mid"
+                if out_path is None:
+                    saving_path = file_path.parent
+                else:
+                    saving_path = out_path / file_path.parent.relative_to(data_path)
+                    saving_path.mkdir(parents=True, exist_ok=True)
+                saving_path /= f"{file_path.stem}{suffix}.mid"
                 aug_midi.dump(saving_path)
                 nb_augmentations += 1
                 nb_tracks_augmented += len(aug_midi.instruments)
             if (
                 copy_original_in_new_location and out_path is not None
             ):  # copy original midi
-                midi.dump(out_path / f"{file_path.stem}.mid")
+                saving_path = (
+                    out_path
+                    / file_path.relative_to(data_path)
+                    / f"{file_path.stem}.mid"
+                )
+                saving_path.parent.mkdir(parents=True, exist_ok=True)
+                midi.dump(saving_path)
 
     # Saves data augmentation report, json encoded with txt extension to not mess with others json files
     with open(data_path / "data_augmentation.txt", "w") as outfile:
@@ -325,6 +344,8 @@ def data_augmentation_midi(
 ) -> List[Tuple[Tuple[int, int, int], MidiFile]]:
     r"""Perform data augmentation on a MIDI object.
     Drum tracks are not augmented, but copied as original in augmented MIDIs.
+    **Note: data augmentation on note durations is not implemented at the moment for MIDI files. Duration offsets will
+    be skipped. Alternatively, you can perform data augmentation on note duration on JSON token files.**
 
     :param midi: midi object to augment
     :param tokenizer: tokenizer, needs to have 'Pitch' tokens.
@@ -378,9 +399,15 @@ def data_augmentation_midi(
                 )  # for already augmented midis
         augmented += augment_vel(midi, (0, 0, 0))  # for original midi
 
-    # TODO Duration augmentation
-    """if duration_offsets is not None:
-        tokenizer.durations_ticks[midi.ticks_per_beat] = np.array([(beat * res + pos) * midi.ticks_per_beat // res
+    # Duration augmentation
+    if duration_offsets is not None:
+        warnings.warn(
+            "You provided duration offsets for data augmentation on MIDI files. Data augmentation on note"
+            "durations is not implemented in MidiTok at the moment. Your duration offsets will be skipped."
+            "Alternatively, you can perform data augmentation on note duration on JSON token files."
+        )
+        # TODO implement it, and remove warning above + update doc
+        """tokenizer.durations_ticks[midi.ticks_per_beat] = np.array([(beat * res + pos) * midi.ticks_per_beat // res
                                                                            for beat, pos, res in tokenizer.durations])
         def augment_dur(midi_: MidiFile, offsets_: Tuple[int, int, int]) -> List[Tuple[Tuple[int, int, int], MidiFile]]:
             aug_ = []

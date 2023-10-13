@@ -12,7 +12,11 @@ from .tokenizations import (
 )
 
 from .utils import utils
+from .constants import CURRENT_VERSION_PACKAGE
 from miditok import data_augmentation
+
+
+__version__ = CURRENT_VERSION_PACKAGE
 
 
 class REMIPlus(REMI):

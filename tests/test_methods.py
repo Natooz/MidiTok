@@ -5,7 +5,9 @@
 """
 
 from pathlib import Path
+from typing import Union
 import json
+import random
 
 import numpy as np
 from miditoolkit import MidiFile
@@ -261,6 +263,29 @@ def test_data_augmentation():
                             ]
 
 
+def test_tokenize_datasets(data_path: Union[str, Path] = Path("./tests")):
+    # Check the file tree is copied
+    random.seed(8)
+    midi_paths = list((data_path / "One_track_MIDIs").glob("**/*.mid")) + list(
+        (data_path / "Multitrack_MIDIs").glob("**/*.mid")
+    )
+    midi_paths = random.choices(midi_paths, k=6)
+    config = miditok.TokenizerConfig()
+    tokenizer = miditok.TSD(config)
+    out_path = Path("tests", "test_results", "file_tree")
+    tokenizer.tokenize_midi_dataset(midi_paths, out_path)
+    json_paths = list(out_path.glob("**/*.json"))
+    json_paths.sort(key=lambda x: x.stem)
+    midi_paths.sort(key=lambda x: x.stem)
+    assert all(
+        json_path.relative_to(out_path).with_suffix(".test")
+        == midi_path.relative_to(data_path).with_suffix(".test")
+        for json_path, midi_path in zip(json_paths, midi_paths)
+    )
+    tokenizer.tokenize_midi_dataset(midi_paths, out_path, overwrite_mode=False)
+
+
 if __name__ == "__main__":
+    test_tokenize_datasets()
     test_convert_tensors()
     test_data_augmentation()
