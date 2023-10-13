@@ -1,7 +1,7 @@
 """Data augmentation methods
 
 """
-
+import warnings
 from typing import List, Tuple, Union, Dict
 from pathlib import Path
 from copy import deepcopy
@@ -31,6 +31,10 @@ def data_augmentation_dataset(
     The new created files have names in two parts, separated with a '§' character.
     Make sure your files do not have '§' in their names if you intend to reuse the information of the
     second part in some script.
+    For note duration augmentation, only the duration, i.e. the ending / offset times of the notes are altered,
+    while starting / onset times are unchanged.
+    **Note: data augmentation on note durations is not implemented at the moment for MIDI files. Duration offsets will
+    be skipped. Alternatively, you can perform data augmentation on note duration on JSON token files.**
 
     :param data_path: root path to the folder containing tokenized json files.
     :param tokenizer: tokenizer, needs to have 'Pitch' or 'NoteOn' tokens. Has to be given
@@ -340,6 +344,8 @@ def data_augmentation_midi(
 ) -> List[Tuple[Tuple[int, int, int], MidiFile]]:
     r"""Perform data augmentation on a MIDI object.
     Drum tracks are not augmented, but copied as original in augmented MIDIs.
+    **Note: data augmentation on note durations is not implemented at the moment for MIDI files. Duration offsets will
+    be skipped. Alternatively, you can perform data augmentation on note duration on JSON token files.**
 
     :param midi: midi object to augment
     :param tokenizer: tokenizer, needs to have 'Pitch' tokens.
@@ -393,9 +399,15 @@ def data_augmentation_midi(
                 )  # for already augmented midis
         augmented += augment_vel(midi, (0, 0, 0))  # for original midi
 
-    # TODO Duration augmentation
-    """if duration_offsets is not None:
-        tokenizer.durations_ticks[midi.ticks_per_beat] = np.array([(beat * res + pos) * midi.ticks_per_beat // res
+    # Duration augmentation
+    if duration_offsets is not None:
+        warnings.warn(
+            "You provided duration offsets for data augmentation on MIDI files. Data augmentation on note"
+            "durations is not implemented in MidiTok at the moment. Your duration offsets will be skipped."
+            "Alternatively, you can perform data augmentation on note duration on JSON token files."
+        )
+        # TODO implement it, and remove warning above + update doc
+        """tokenizer.durations_ticks[midi.ticks_per_beat] = np.array([(beat * res + pos) * midi.ticks_per_beat // res
                                                                            for beat, pos, res in tokenizer.durations])
         def augment_dur(midi_: MidiFile, offsets_: Tuple[int, int, int]) -> List[Tuple[Tuple[int, int, int], MidiFile]]:
             aug_ = []
