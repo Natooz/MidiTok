@@ -2058,6 +2058,22 @@ class MIDITokenizer(ABC):
         with open(out_path, "w") as outfile:
             json.dump(params, outfile, indent=4)
 
+    @classmethod
+    def from_pretrained(
+        cls, pretrained: Union[str, Path], *args, **kwargs
+    ):
+        # from transformers import PreTrainedTokenizerBase
+        # TODO load from path (load_params) or HF hub repo
+        # TODO if HF hub, try to load from cache, else download and save in cache
+        # TODO make _load_params depreciated + warning
+        toto = 0
+
+    def push_to_hf_hub(self, repo_id: str, *args, **kwargs):
+        # TODO create PushToHubMixin object and use it
+        # TODO push_to_hf_hub arg in _load_params
+        # from transformers.utils import PushToHubMixin
+        toto = 0
+
     def _load_params(self, config_file_path: Union[str, Path]):
         r"""Loads the parameters of the tokenizer from a config file.
         This method is not intended to be called outside __init__, when creating a tokenizer.
