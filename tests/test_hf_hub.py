@@ -11,6 +11,7 @@ from miditok import REMI
 
 def test_push_to_hf_hub():
     tokenizer = REMI()
+    tokenizer.push_to_hub("Natooz/MidiTok-tests")
     assert True
 
 

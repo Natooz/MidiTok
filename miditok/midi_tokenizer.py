@@ -44,6 +44,13 @@ from .constants import (
     MIDI_FILES_EXTENSIONS,
 )
 
+HF_HUB_AVAILABLE = True
+try:
+    from .hf_hub import PushToHubMixin
+except ImportError:
+    PushToHubMixin = None
+    HF_HUB_AVAILABLE = False
+
 
 def convert_sequence_to_tokseq(
     tokenizer, input_seq, complete_seq: bool = True, decode_bpe: bool = True
@@ -2059,20 +2066,57 @@ class MIDITokenizer(ABC):
             json.dump(params, outfile, indent=4)
 
     @classmethod
-    def from_pretrained(
-        cls, pretrained: Union[str, Path], *args, **kwargs
-    ):
+    def from_pretrained(cls, pretrained: Union[str, Path], *args, **kwargs):
         # from transformers import PreTrainedTokenizerBase
         # TODO load from path (load_params) or HF hub repo
         # TODO if HF hub, try to load from cache, else download and save in cache
         # TODO make _load_params depreciated + warning
         toto = 0
 
-    def push_to_hf_hub(self, repo_id: str, *args, **kwargs):
-        # TODO create PushToHubMixin object and use it
-        # TODO push_to_hf_hub arg in _load_params
-        # from transformers.utils import PushToHubMixin
-        toto = 0
+    def push_to_hub(
+        self,
+        repo_id: str,
+        use_temp_dir: Optional[bool] = None,
+        commit_message: Optional[str] = None,
+        private: Optional[bool] = None,
+        token: Optional[Union[bool, str]] = None,
+        create_pr: bool = False,
+        revision: str = None,
+    ):
+        r"""Uploads the tokenizer to the Hugging Face Hub.
+        This method requires the `huggingface_hub` package to be installed. If it is not the case,
+        the calls to this method will be ignored.
+
+        :param repo_id: The name of the Hugging Face repository to push your tokenizer to. It should contain your
+            organization name when pushing to a given organization.
+        :param use_temp_dir: Whether to use a temporary directory to store the files saved before they are
+            pushed to the Hub. Will default to `True` if there is no directory named like `repo_id`, `False` otherwise.
+        :param commit_message: Message to commit while pushing. Will default to `"Upload tokenizer"`.
+        :param private: Set the repository created private.
+        :param token: The token to use as HTTP bearer authorization for remote files. If `True`, will use the token
+            generated when running `huggingface-cli login` (stored in `~/.huggingface`). Will default to `True` if
+            `repo_url` is not specified.
+        :param create_pr: Whether to create a PR with the uploaded files or directly commit (default: False).
+        :param revision: Branch to push the uploaded files to. (default: None)
+        """
+        if not HF_HUB_AVAILABLE:
+            warnings.warn(
+                "The Hugging Face hub package is not installed in your Python environment. "
+                "If you want to push your model to the hub, run `pip install huggingface_hub`. "
+                "Skipping this function call."
+            )
+            return
+
+        PushToHubMixin.push_to_hub(
+            self,
+            repo_id,
+            use_temp_dir,
+            commit_message,
+            private,
+            token,
+            create_pr,
+            revision,
+        )
 
     def _load_params(self, config_file_path: Union[str, Path]):
         r"""Loads the parameters of the tokenizer from a config file.

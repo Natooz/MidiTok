@@ -6,3 +6,4 @@ torch
 scipy  # needed for miditoolkit
 matplotlib  # needed for miditoolkit
 sphinx-rtd-theme
+huggingface_hub

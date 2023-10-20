@@ -40,7 +40,7 @@ from huggingface_hub.utils import (
 )
 import tokenizers
 
-from . import __version__
+from .constants import CURRENT_VERSION_PACKAGE
 
 
 # taken from transformers.utils.import_utils
@@ -141,7 +141,7 @@ def http_user_agent(user_agent: Union[Dict, str, None] = None) -> str:
     """
     Formats a user-agent string with basic info about a request.
     """
-    ua = (f"miditok/{__version__}; tokenizers/{tokenizers.__version__}; "
+    ua = (f"miditok/{CURRENT_VERSION_PACKAGE}; tokenizers/{tokenizers.__version__}; "
           f"python/{sys.version.split()[0]}; session_id/{SESSION_ID}")
     if DISABLE_TELEMETRY:
         return ua + "; telemetry/off"
@@ -634,8 +634,10 @@ class PushToHubMixin:
             revision=revision,
         )
 
+    @classmethod
     def push_to_hub(
-        self,
+        cls,
+        tokenizer,
         repo_id: str,
         use_temp_dir: Optional[bool] = None,
         commit_message: Optional[str] = None,
@@ -647,32 +649,25 @@ class PushToHubMixin:
         """
         Uploads the tokenizer to the 🤗 Hub.
 
-        # TODO reformat the doc
-        Parameters:
-            repo_id (`str`):
-                The name of the repository you want to push your {object} to. It should contain your organization name
-                when pushing to a given organization.
-            use_temp_dir (`bool`, *optional*):
-                Whether or not to use a temporary directory to store the files saved before they are pushed to the Hub.
-                Will default to `True` if there is no directory named like `repo_id`, `False` otherwise.
-            commit_message (`str`, *optional*):
-                Message to commit while pushing. Will default to `"Upload {object}"`.
-            private (`bool`, *optional*):
-                Whether or not the repository created should be private.
-            token (`bool` or `str`, *optional*):
-                The token to use as HTTP bearer authorization for remote files. If `True`, will use the token generated
-                when running `huggingface-cli login` (stored in `~/.huggingface`). Will default to `True` if `repo_url`
-                is not specified.
-            create_pr (`bool`, *optional*, defaults to `False`):
-                Whether or not to create a PR with the uploaded files or directly commit.
-            revision (`str`, *optional*):
-                Branch to push the uploaded files to.
-
+        :param tokenizer: `MIDITokenizer` object to save.
+        :param repo_id: The name of the Hugging Face repository to push your tokenizer to. It should contain your
+            organization name when pushing to a given organization.
+        :param use_temp_dir: Whether to use a temporary directory to store the files saved before they are
+            pushed to the Hub. Will default to `True` if there is no directory named like `repo_id`, `False` otherwise.
+        :param commit_message: Message to commit while pushing. Will default to `"Upload tokenizer"`.
+        :param private: Set the repository created private.
+        :param token: The token to use as HTTP bearer authorization for remote files. If `True`, will use the token
+            generated when running `huggingface-cli login` (stored in `~/.huggingface`). Will default to `True` if
+            `repo_url` is not specified.
+        :param create_pr: Whether to create a PR with the uploaded files or directly commit (default: False).
+        :param revision: Branch to push the uploaded files to. (default: None)
+        :return: Instance of [`CommitInfo`] containing information about the newly created commit (commit hash, commit
+                url, pr url, commit message,...).
         """
         # Repo_id is passed correctly: infer working_dir from it
         working_dir = repo_id.split("/")[-1]
 
-        repo_id = self._create_repo(
+        repo_id = cls._create_repo(
             repo_id,
             private=private,
             token=token,
@@ -684,9 +679,10 @@ class PushToHubMixin:
         with working_or_temp_dir(
             working_dir=working_dir, use_temp_dir=use_temp_dir
         ) as work_dir:
-            # TODO set tokenizer_file_path based on work_dir
 
-            return self._upload_tokenizer_config(
+            file_path = Path(work_dir, "tokenizer.conf")
+            tokenizer.save_params(file_path)
+            return cls._upload_modified_files(
                 file_path,
                 repo_id,
                 commit_message=commit_message,
