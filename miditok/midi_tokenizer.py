@@ -24,6 +24,7 @@ import tokenizers
 from tokenizers import Tokenizer as TokenizerFast
 from tokenizers.models import BPE
 from tokenizers.trainers import BpeTrainer
+from huggingface_hub import ModelHubMixin as HFHubMixin, hf_hub_download
 
 from .classes import Event, TokSequence, TokenizerConfig
 from .utils import (
@@ -36,20 +37,15 @@ from .utils import (
 from .data_augmentation import data_augmentation_dataset
 from .constants import (
     TIME_DIVISION,
-    CURRENT_VERSION_PACKAGE,
+    CURRENT_MIDITOK_VERSION,
     TIME_SIGNATURE,
     CHR_ID_START,
     PITCH_CLASSES,
     UNKNOWN_CHORD_PREFIX,
     MIDI_FILES_EXTENSIONS,
+    DEFAULT_TOKENIZER_FILE_NAME,
 )
 
-HF_HUB_AVAILABLE = True
-try:
-    from .hf_hub import PushToHubMixin
-except ImportError:
-    PushToHubMixin = None
-    HF_HUB_AVAILABLE = False
 
 
 def convert_sequence_to_tokseq(
@@ -175,7 +171,7 @@ def _out_as_complete_seq(function: Callable):
     return wrapper
 
 
-class MIDITokenizer(ABC):
+class MIDITokenizer(ABC, HFHubMixin):
     r"""MIDI tokenizer base class, containing common methods and attributes for all tokenizers.
 
     :param tokenizer_config: the tokenizer's configuration, as a :class:`miditok.classes.TokenizerConfig` object.
@@ -206,7 +202,7 @@ class MIDITokenizer(ABC):
         self._bpe_model = None
         # Used in _notes_to_events, especially MIDILike
         self._note_on_off = False
-        # Determines how the tokenizer will handle multiple tracks: either each track as a single indepandant token
+        # Determines how the tokenizer will handle multiple tracks: either each track as a single independent token
         # stream (False), or all the tracks as a single token stream (True).
         self.one_token_stream = False
 
@@ -1738,7 +1734,7 @@ class MIDITokenizer(ABC):
         midi_paths: Union[str, Path, List[str], List[Path]],
         out_dir: Union[str, Path],
         overwrite_mode: bool = True,
-        tokenizer_config_file_name: str = "tokenizer.conf",
+        tokenizer_config_file_name: str = DEFAULT_TOKENIZER_FILE_NAME,
         validation_fn: Callable[[MidiFile], bool] = None,
         data_augment_offsets=None,
         apply_bpe: bool = True,
@@ -2024,6 +2020,10 @@ class MIDITokenizer(ABC):
         with open(path) as file:
             return json.load(file)
 
+    def _save_pretrained(self, *args, **kwargs):
+        # called by `ModelHubMixin.from_pretrained`.
+        return self.save_params(*args, **kwargs)
+
     def save_params(
         self, out_path: Union[str, Path], additional_attributes: Dict = None
     ):
@@ -2032,7 +2032,8 @@ class MIDITokenizer(ABC):
         **Note:** if you override this method, you should probably call it (super()) at the end
         and use the additional_attributes argument.
 
-        :param out_path: output path to save the file.
+        :param out_path: output path to save the file. This can be either a path to a file (with a name and extension),
+                or a path to a directory in which case the default file name will be used (tokenizer.conf).
         :param additional_attributes: any additional information to store in the config file.
                 It can be used to override the default attributes saved in the parent method. (default: None)
         """
@@ -2055,68 +2056,57 @@ class MIDITokenizer(ABC):
             "one_token_stream": self.one_token_stream,
             "has_bpe": self.has_bpe,
             "tokenization": self.__class__.__name__,
-            "miditok_version": CURRENT_VERSION_PACKAGE,
+            "miditok_version": CURRENT_MIDITOK_VERSION,
             "hf_tokenizers_version": tokenizers.__version__,
             **additional_attributes,
         }
 
         out_path = Path(out_path)
+        if out_path.is_dir() or "." not in out_path.name:
+            out_path /= DEFAULT_TOKENIZER_FILE_NAME
         out_path.parent.mkdir(parents=True, exist_ok=True)
         with open(out_path, "w") as outfile:
             json.dump(params, outfile, indent=4)
 
     @classmethod
-    def from_pretrained(cls, pretrained: Union[str, Path], *args, **kwargs):
-        # from transformers import PreTrainedTokenizerBase
-        # TODO load from path (load_params) or HF hub repo
-        # TODO if HF hub, try to load from cache, else download and save in cache
-        # TODO make _load_params depreciated + warning
-        toto = 0
+    def _from_pretrained(
+        cls,
+        *,
+        model_id: str,
+        revision: Optional[str],
+        cache_dir: Optional[Union[str, Path]],
+        force_download: bool,
+        proxies: Optional[Dict],
+        resume_download: bool,
+        local_files_only: bool,
+        token: Optional[Union[str, bool]],
+        **kwargs,
+    ) -> "MIDITokenizer":
+        # Called by `ModelHubMixin.from_pretrained`
 
-    def push_to_hub(
-        self,
-        repo_id: str,
-        use_temp_dir: Optional[bool] = None,
-        commit_message: Optional[str] = None,
-        private: Optional[bool] = None,
-        token: Optional[Union[bool, str]] = None,
-        create_pr: bool = False,
-        revision: str = None,
-    ):
-        r"""Uploads the tokenizer to the Hugging Face Hub.
-        This method requires the `huggingface_hub` package to be installed. If it is not the case,
-        the calls to this method will be ignored.
+        pretrained_path = Path(model_id)
+        if pretrained_path.is_file():
+            params_path = pretrained_path
+        else:
+            filename = kwargs.get("filename", DEFAULT_TOKENIZER_FILE_NAME)
+            if (pretrained_path / filename).is_file():
+                params_path = pretrained_path / filename
+            else:
+                params_path = hf_hub_download(
+                    repo_id=model_id,
+                    filename=filename,
+                    revision=revision,
+                    cache_dir=cache_dir,
+                    force_download=force_download,
+                    proxies=proxies,
+                    resume_download=resume_download,
+                    local_files_only=local_files_only,
+                    token=token,
+                    library_name="MidiTok",
+                    library_version=CURRENT_MIDITOK_VERSION,
+                )
 
-        :param repo_id: The name of the Hugging Face repository to push your tokenizer to. It should contain your
-            organization name when pushing to a given organization.
-        :param use_temp_dir: Whether to use a temporary directory to store the files saved before they are
-            pushed to the Hub. Will default to `True` if there is no directory named like `repo_id`, `False` otherwise.
-        :param commit_message: Message to commit while pushing. Will default to `"Upload tokenizer"`.
-        :param private: Set the repository created private.
-        :param token: The token to use as HTTP bearer authorization for remote files. If `True`, will use the token
-            generated when running `huggingface-cli login` (stored in `~/.huggingface`). Will default to `True` if
-            `repo_url` is not specified.
-        :param create_pr: Whether to create a PR with the uploaded files or directly commit (default: False).
-        :param revision: Branch to push the uploaded files to. (default: None)
-        """
-        if not HF_HUB_AVAILABLE:
-            warnings.warn(
-                "The Hugging Face hub package is not installed in your Python environment. "
-                "If you want to push your model to the hub, run `pip install huggingface_hub`. "
-                "Skipping this function call."
-            )
-            return
-
-        PushToHubMixin.push_to_hub(
-            self,
-            repo_id,
-            use_temp_dir,
-            commit_message,
-            private,
-            token,
-            create_pr,
-            revision,
-        )
+        return cls(params=params_path)
 
     def _load_params(self, config_file_path: Union[str, Path]):
         r"""Loads the parameters of the tokenizer from a config file.

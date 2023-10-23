@@ -35,7 +35,7 @@ from .constants import (
     DELETE_EQUAL_SUCCESSIVE_TIME_SIG_CHANGES,
     PROGRAMS,
     ONE_TOKEN_STREAM_FOR_PROGRAMS,
-    CURRENT_VERSION_PACKAGE,
+    CURRENT_MIDITOK_VERSION,
     PROGRAM_CHANGES,
 )
 
@@ -394,7 +394,7 @@ class TokenizerConfig:
             dict_config[beat_res_key] = {
                 f"{k1}_{k2}": v for (k1, k2), v in dict_config[beat_res_key].items()
             }
-        dict_config["miditok_version"] = CURRENT_VERSION_PACKAGE
+        dict_config["miditok_version"] = CURRENT_MIDITOK_VERSION
 
         with open(out_path, "w") as outfile:
             json.dump(dict_config, outfile, indent=4)

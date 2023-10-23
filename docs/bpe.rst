@@ -40,7 +40,6 @@ BPE example
     from copy import deepcopy
 
     tokenizer = REMI()  # using defaults parameters (constants.py)
-    token_paths = list(Path('path', 'to', 'dataset').glob('**/*.json'))
 
     # Learns the vocabulary with BPE
     tokenizer.learn_bpe(
