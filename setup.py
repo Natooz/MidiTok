@@ -27,7 +27,7 @@ setup(
         "miditoolkit>=0.1.16",
         "tqdm",
         "tokenizers>=0.13.0",
-        "huggingface_hub>=0.15",
+        "huggingface_hub>=0.16.4",
         "scipy",  # needed for miditoolkit
         "matplotlib",  # needed for miditoolkit
     ],
