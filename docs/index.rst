@@ -50,6 +50,7 @@ Contents
    examples
    tokenizations
    bpe
+   hf_hub
    pytorch_data
    data_augmentation
    utils

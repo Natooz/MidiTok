@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.abspath(".."))
 project = "MidiTok"
 copyright = "2023, Nathan Fradet"
 author = "Nathan Fradet"
-release = "2.0.7"
+release = "2.1.7"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
