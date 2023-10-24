@@ -47,7 +47,6 @@ from .constants import (
 )
 
 
-
 def convert_sequence_to_tokseq(
     tokenizer, input_seq, complete_seq: bool = True, decode_bpe: bool = True
 ) -> Union[TokSequence, List[TokSequence]]:
@@ -2025,7 +2024,10 @@ class MIDITokenizer(ABC, HFHubMixin):
         return self.save_params(*args, **kwargs)
 
     def save_params(
-        self, out_path: Union[str, Path], additional_attributes: Dict = None
+        self,
+        out_path: Union[str, Path],
+        additional_attributes: Optional[Dict] = None,
+        filename: Optional[str] = DEFAULT_TOKENIZER_FILE_NAME,
     ):
         r"""Saves the config / parameters of the tokenizer in a json encoded file.
         This can be useful to keep track of how a dataset has been tokenized.
@@ -2033,9 +2035,11 @@ class MIDITokenizer(ABC, HFHubMixin):
         and use the additional_attributes argument.
 
         :param out_path: output path to save the file. This can be either a path to a file (with a name and extension),
-                or a path to a directory in which case the default file name will be used (tokenizer.conf).
+                or a path to a directory in which case the `filename` argument will be used.
         :param additional_attributes: any additional information to store in the config file.
                 It can be used to override the default attributes saved in the parent method. (default: None)
+        :param filename: name of the file to save, to be used in case `out_path` leads to a directory.
+                (default: "tokenizer.conf")
         """
         if additional_attributes is None:
             additional_attributes = {}
@@ -2063,7 +2067,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         out_path = Path(out_path)
         if out_path.is_dir() or "." not in out_path.name:
-            out_path /= DEFAULT_TOKENIZER_FILE_NAME
+            out_path /= filename
         out_path.parent.mkdir(parents=True, exist_ok=True)
         with open(out_path, "w") as outfile:
             json.dump(params, outfile, indent=4)
@@ -2083,7 +2087,6 @@ class MIDITokenizer(ABC, HFHubMixin):
         **kwargs,
     ) -> "MIDITokenizer":
         # Called by `ModelHubMixin.from_pretrained`
-
         pretrained_path = Path(model_id)
         if pretrained_path.is_file():
             params_path = pretrained_path

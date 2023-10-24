@@ -7,15 +7,16 @@
 from miditok import REMI, TSD
 
 
-def test_push_and_load_to_hf_hub(hf_hub_token: str):
+def test_push_and_load_to_hf_hub(hf_token: str):
     tokenizer = REMI()
-    tokenizer.push_to_hub("Natooz/MidiTok-tests", private=True, token=hf_hub_token)
+    tokenizer.push_to_hub("Natooz/MidiTok-tests", private=True, token=hf_token)
 
-    tokenizer2 = REMI.from_pretrained("Natooz/MidiTok-tests", token=hf_hub_token)
+    tokenizer2 = REMI.from_pretrained("Natooz/MidiTok-tests", token=hf_token)
     assert tokenizer == tokenizer2
 
 
 def test_from_pretrained_local():
+    # Here using paths to directories
     tokenizer = TSD()
     tokenizer.save_pretrained("tests/tokenizer_confs")
     tokenizer2 = TSD.from_pretrained("tests/tokenizer_confs")
