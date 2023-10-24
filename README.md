@@ -58,6 +58,8 @@ tokenizer.learn_bpe(
 
 # Saving our tokenizer, to retrieve it back later with the load_params method
 tokenizer.save_params(Path("path", "to", "save", "tokenizer.json"))
+# And pushing it to the Hugging Face hub (you can download it back with .from_pretrained)
+tokenizer.push_to_hub("username/model-name", private=True, token="your_hugging_face_token")
 
 # Applies BPE to the previous tokens
 tokenizer.apply_bpe_to_dataset(Path('path', 'to', 'tokens_noBPE'), Path('path', 'to', 'tokens_BPE'))

@@ -5,9 +5,9 @@ Hugging Face hub
 What is the Hugging Face hub
 ---------------------------------
 
-The `Hugging Face Hub <https://huggingface.co>`_ is a model and dataset sharing platform which is widely used in the AI community. It allows to freely upload, share and download models and datasets, directly in your code. Its interactions rely on an open-source Python package named `huggingface_hub <https://github.com/huggingface/huggingface_hub>`_. As it works seamlessly in the Hugging Face ecosystem, especially the `Transformers <https://huggingface.co/docs/transformers/index>`_ or `Diffusers <https://huggingface.co/docs/diffusers/index>`_ libraries, it stood out and became one of the preferred way to openly share and download models.
+The `Hugging Face Hub <https://huggingface.co>`_ is a model and dataset sharing platform which is widely used in the AI community. It allows to freely upload, share and download models and datasets, directly in your code in a very convenient way. Its interactions rely on an open-source Python package named `huggingface_hub <https://github.com/huggingface/huggingface_hub>`_. As it works seamlessly in the Hugging Face ecosystem, especially the `Transformers <https://huggingface.co/docs/transformers/index>`_ or `Diffusers <https://huggingface.co/docs/diffusers/index>`_ libraries, it stood out and became one of the preferred way to openly share and download models.
 
-Now when downloading a Transformer model, you will need to also download its associated tokenizer to be able to "dialog" with it. MidiTok allows you to push and download tokenizers in similar way to what is done in the Hugging Face Transformers library.
+Now when downloading a Transformer model, you will need to also download its associated tokenizer to be able to "dialog" with it. Likewise, if you want to share one of your models, you will need to share its tokenizer too for people to be able to use it. MidiTok allows you to push and download tokenizers in similar way to what is done in the Hugging Face Transformers library.
 
 How MidiTok interoperates with the hub
 ------------------------------------------
