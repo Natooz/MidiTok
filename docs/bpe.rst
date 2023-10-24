@@ -40,16 +40,17 @@ BPE example
     from copy import deepcopy
 
     tokenizer = REMI()  # using defaults parameters (constants.py)
+    tokens_no_bpe_paths = list(Path('path', 'to', 'dataset').glob('**/*.json'))
 
     # Learns the vocabulary with BPE
     tokenizer.learn_bpe(
         vocab_size=500,
-        tokens_paths=list(Path('path', 'to', 'tokens_noBPE').glob("**/*.json")),
+        tokens_paths=tokens_no_bpe_paths,
         out_dir=Path('path', 'to', 'tokens_BPE'),
     )
 
     # Opens tokens, apply BPE on them, and decode BPE back
-    tokens = tokenizer.load_tokens(token_paths[0])
+    tokens = tokenizer.load_tokens(tokens_no_bpe_paths[0])
     tokens = TokSequence(ids=tokens)
     tokens_with_bpe = tokenizer.apply_bpe(deepcopy(tokens))  # copy as the method is inplace
     tokens_no_bpe = tokenizer.decode_bpe(deepcopy(tokens_with_bpe))
