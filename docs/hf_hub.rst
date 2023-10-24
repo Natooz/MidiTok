@@ -3,14 +3,14 @@ Hugging Face hub
 ========================
 
 What is the Hugging Face hub
-------------------------
+---------------------------------
 
 The `Hugging Face Hub <https://huggingface.co>`_ is a model and dataset sharing platform which is widely used in the AI community. It allows to freely upload, share and download models and datasets, directly in your code. Its interactions rely on an open-source Python package named `huggingface_hub <https://github.com/huggingface/huggingface_hub>`_. As it works seamlessly in the Hugging Face ecosystem, especially the Transformers or Diffusers libraries, it stood out and became one of the preferred way to openly share and download models.
 
 Now when downloading a Transformer model, you will need to also download its associated tokenizer to be able to "dialog" with it. MidiTok allows you to push and download tokenizers in way similar to what is done in the Hugging Face Transformers library.
 
 How MidiTok interoperates with the hub
-------------------------
+------------------------------------------
 
 Internally, MidiTok relies on the ``huggingface_hub.ModelHubMixin`` component. It implements the save methods commonly used in the Hugging Face ecosystem. Note that:
 

@@ -69,7 +69,7 @@ MidiTok offers to include additional tokens on music information. You can specif
 
 .. image:: /assets/Octuple_TS_Rest/original.png
   :width: 800
-  :alt: Original MIDI sample as played by a human performer
+  :alt: Original MIDI sample preprocessed / downsampled
 
 .. image:: /assets/Octuple_TS_Rest/tokenized.png
   :width: 800
@@ -91,9 +91,9 @@ To use special tokens, you must specify them with the ``special_tokens`` argumen
 
 
 Tokens & TokSequence input / output format
-------------------------
+--------------------------------------------
 
-Depending on the tokenizer at use, the **format** of the tokens returned by the ``midi_to_tokens`` method may vary, as well as the expected format for the ``tokens_to_midi`` method. The format is given by the ``tokenizer.io_format` property. For any tokenizer, the format is the same for both methods.
+Depending on the tokenizer at use, the **format** of the tokens returned by the ``midi_to_tokens`` method may vary, as well as the expected format for the ``tokens_to_midi`` method. The format is given by the ``tokenizer.io_format`` property. For any tokenizer, the format is the same for both methods.
 
 The format is deduced from the ``is_multi_voc`` and ``one_token_stream`` tokenizer properties. **one_token_stream** being True means that the tokenizer will convert a MIDI file into a single stream of tokens for all instrument tracks, otherwise it will convert each track to a distinct token sequence. **is_mult_voc** being True means that each token stream is a list of lists of tokens, of shape ``(T,C)`` for T time steps and C subtokens per time step.
 
