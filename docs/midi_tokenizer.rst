@@ -65,7 +65,15 @@ MidiTok offers to include additional tokens on music information. You can specif
    :file: additional_tokens_table.csv
    :header-rows: 1
 
-¹: using both time signatures and rests with `CPWord` might result in time alterations, as the time signature is carried by the Bar tokens which are skipped during period of rests.
+¹: using both time signatures and rests with `CPWord` might result in time alterations, as the time signature is carried by the Bar tokens which are skipped during period of rests. An example is shown below
+
+.. image:: /assets/Octuple_TS_Rest/original.png
+  :width: 800
+  :alt: Original MIDI sample as played by a human performer
+
+.. image:: /assets/Octuple_TS_Rest/tokenized.png
+  :width: 800
+  :alt: MIDI sample after being tokenized, the time has been shifted to a bar during the time signature change
 
 
 Special tokens

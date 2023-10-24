@@ -16,7 +16,8 @@ Internally, MidiTok relies on the ``huggingface_hub.ModelHubMixin`` component. I
 
 * :py:func:`miditok.MIDITokenizer.save_pretrained` is equivalent to calling :py:func:`miditok.MIDITokenizer.save_params`;
 * :py:func:`miditok.MIDITokenizer.from_pretrained` can be used to whether load tokenizers from the Hugging Face hub or from a file on your local filesystem;
-* for :py:func:`miditok.MIDITokenizer.save_pretrained` and :py:func:`miditok.MIDITokenizer.push_to_hub`, you can ignore the ``config`` argument.
+* for :py:func:`miditok.MIDITokenizer.save_pretrained` and :py:func:`miditok.MIDITokenizer.push_to_hub`, you can ignore the ``config`` argument;
+* you can give a ``filename`` keyword argument with the :py:func:`miditok.MIDITokenizer.save_pretrained` and :py:func:`miditok.MIDITokenizer.from_pretrained` methods to use a specific tokenizer configuration file name, otherwise the default one will be used (``tokenizer.conf``).
 
 .. autofunction:: miditok.MIDITokenizer.from_pretrained
     :noindex:
