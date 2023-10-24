@@ -30,4 +30,4 @@ if __name__ == "__main__":
     args = vars(parser.parse_args())
 
     test_from_pretrained_local()
-    # test_push_and_load_to_hf_hub(args["hf_token"])
+    test_push_and_load_to_hf_hub(args["hf_token"])
