@@ -96,7 +96,8 @@ Contributions are gratefully welcomed, feel free to open an issue or send a PR i
 
 If you use MidiTok for your research, a citation in your manuscript would be gladly appreciated. ❤️
 
-[**MidiTok paper**](https://archives.ismir.net/ismir2021/latebreaking/000005.pdf)
+[**[MidiTok paper]**](https://arxiv.org/abs/2310.17202)
+[**[MidiTok original ISMIR publication]**](https://archives.ismir.net/ismir2021/latebreaking/000005.pdf)
 ```bibtex
 @inproceedings{miditok2021,
     title={{MidiTok}: A Python package for {MIDI} file tokenization},
