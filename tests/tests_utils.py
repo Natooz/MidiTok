@@ -17,6 +17,7 @@ from miditoolkit import (
 import numpy as np
 
 import miditok
+from miditok.constants import TIME_SIGNATURE_RANGE
 
 
 ALL_TOKENIZATIONS = [
@@ -29,6 +30,10 @@ ALL_TOKENIZATIONS = [
     "MuMIDI",
     "MMM",
 ]
+TIME_SIGNATURE_RANGE_TESTS = TIME_SIGNATURE_RANGE
+TIME_SIGNATURE_RANGE_TESTS.update({2: [2, 3, 4]})
+TIME_SIGNATURE_RANGE_TESTS[4].append(8)
+
 
 
 def midis_equals(
