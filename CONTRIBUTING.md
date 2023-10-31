@@ -1,10 +1,10 @@
 # Contributing to `MidiTok`
 
-- Reporting a bug
-- Discussing the current state of the code
-- Submitting a fix
-- Proposing new features
-- Becoming a maintainer
+- Reporting a bug.
+- Discussing the current state of the code.
+- Submitting a fix.
+- Proposing new features.
+- Becoming a maintainer.
 
 ## We Develop with Github
 
@@ -33,19 +33,19 @@ We use GitHub issues to track public bugs. Report a bug by [opening a new issue]
 
 **Great Bug Reports** tend to have:
 
-- A quick summary and/or background
-- Steps to reproduce
+- A quick summary and/or background.
+- Steps to reproduce.
   - Be specific!
   - Give sample code if you can, for example,
-- What you expected would happen
-- What actually happens
-- Notes (possibly including why you think this might be happening, or stuff you tried that didn't work)
+- What you expected would happen.
+- What actually happens.
+- Notes (possibly including why you think this might be happening, or stuff you tried that didn't work).
 
 ## Development
 
 ### Tests
 
-We use `pytest` for testing and `pytest-cov` for measuring coverage. In the test script, we use `torch` and `tensorflow` to check functionalities related to token-tensor conversion.
+We use `pytest` for testing and `pytest-cov` for measuring coverage. In the test script, we use `torch` and `tensorflow` to check functionalities related to token-tensor conversion:
 
 ```bash
 pip install setuptools flake8 pytest coverage torch tensorflow
