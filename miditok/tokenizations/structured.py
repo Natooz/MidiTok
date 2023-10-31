@@ -141,7 +141,7 @@ class Structured(MIDITokenizer):
         We override the parent method to handle the "non-program" case where `TimeShift` events have already been
         added by `_notes_to_events`.
 
-        :param midi: the MIDI objet to convert.
+        :param midi: the MIDI object to convert.
         :return: a :class:`miditok.TokSequence` if `tokenizer.one_token_stream` is true, else a list of
                 :class:`miditok.TokSequence` objects.
         """
