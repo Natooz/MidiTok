@@ -601,7 +601,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         gathered into a list, then the time events are added. If `one_token_stream` is true, all events of all tracks
         are treated all at once, otherwise the events of each track are treated independently.
 
-        :param midi: the MIDI objet to convert.
+        :param midi: the MIDI object to convert.
         :return: a :class:`miditok.TokSequence` if `tokenizer.one_token_stream` is true, else a list of
                 :class:`miditok.TokSequence` objects.
         """

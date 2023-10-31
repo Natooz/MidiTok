@@ -123,7 +123,7 @@ class MIDILike(MIDITokenizer):
         r"""Converts a preprocessed MIDI object to a sequence of tokens.
         Overridden to call fix_offsets_overlapping_notes before.
 
-        :param midi: the MIDI objet to convert.
+        :param midi: the MIDI object to convert.
         :return: a :class:`miditok.TokSequence` if `tokenizer.one_token_stream` is true, else a list of
                 :class:`miditok.TokSequence` objects.
         """

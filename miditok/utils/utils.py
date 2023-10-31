@@ -65,7 +65,7 @@ def remove_duplicated_notes(notes: List[Note], filter_by_starting_tick: bool = T
     `notes.sort(key=lambda x: (x.start, x.pitch, x.end))`
 
     :param notes: notes to analyse
-    :param filter_by_starting_tick: will remove identical notes being played at the same onset time regarless of their
+    :param filter_by_starting_tick: will remove identical notes being played at the same onset time regardless of their
         duration / offset time. If this argument is disabled, only 100% identical notes will be deduplicated,
         i.e. with the same duration too. (default: True)
     """
