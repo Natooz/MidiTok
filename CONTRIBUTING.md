@@ -8,7 +8,7 @@
 
 ## We Develop with Github
 
-We use github to host code, to track issues and feature requests, as well as accept pull requests.
+We use GitHub to host code, track issues and feature requests, as well as accept pull requests.
 
 ## We Use [Github Flow](https://guides.github.com/introduction/flow/index.html), So All Code Changes Happen Through Pull Requests
 
@@ -33,12 +33,12 @@ We use GitHub issues to track public bugs. Report a bug by [opening a new issue]
 
 **Great Bug Reports** tend to have:
 
-- A quick summary and/or background.
+- A quick summary and background.
 - Steps to reproduce.
   - Be specific!
   - Give sample code if you can, for example,
 - What you expected would happen.
-- What actually happens.
+- What actually happens?
 - Notes (possibly including why you think this might be happening, or stuff you tried that didn't work).
 
 ## Development
