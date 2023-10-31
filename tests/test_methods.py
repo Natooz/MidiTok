@@ -16,7 +16,7 @@ from torch import (
     IntTensor as ptIntTensor,
     FloatTensor as ptFloatTensor,
 )
-from tensorflow import Tensor as tfTensor, convert_to_tensor
+from tqdm import tqdm
 
 import miditok
 from .tests_utils import ALL_TOKENIZATIONS
@@ -94,55 +94,57 @@ def test_data_augmentation():
         tokens_path = Path("tests", "Multitrack_tokens", tokenization)
         tokens_aug_path = Path("tests", "Multitrack_tokens_aug", tokenization)
 
-        print("PERFORMING DATA AUGMENTATION ON MIDIS")
-        miditok.data_augmentation.data_augmentation_dataset(
-            data_path,
-            tokenizer,
-            2,
-            1,
-            1,
-            out_path=midi_aug_path,
-            copy_original_in_new_location=False,
-        )
-        aug_midi_paths = list(midi_aug_path.glob("**/*.mid"))
-        for aug_midi_path in aug_midi_paths:
-            # Determine offsets of file
-            parts = aug_midi_path.stem.split("§")
-            original_stem, offsets_str = parts[0], parts[1].split("_")
-            offsets = [0, 0, 0]
-            for offset_str in offsets_str:
-                for pos, letter in enumerate(["p", "v", "d"]):
-                    if offset_str[0] == letter:
-                        offsets[pos] = int(offset_str[1:])
+        # We only perform and test data augmentation on MIDIs once, as tokenizers does not play here
+        if tokenization == "MIDILike":
+            print("PERFORMING DATA AUGMENTATION ON MIDIS")
+            miditok.data_augmentation.data_augmentation_dataset(
+                data_path,
+                tokenizer,
+                2,
+                1,
+                1,
+                out_path=midi_aug_path,
+                copy_original_in_new_location=False,
+            )
+            aug_midi_paths = list(midi_aug_path.glob("**/*.mid"))
+            for aug_midi_path in tqdm(aug_midi_paths, desc="CHECKING DATA AUGMENTATION ON MIDIS"):
+                # Determine offsets of file
+                parts = aug_midi_path.stem.split("§")
+                original_stem, offsets_str = parts[0], parts[1].split("_")
+                offsets = [0, 0, 0]
+                for offset_str in offsets_str:
+                    for pos, letter in enumerate(["p", "v", "d"]):
+                        if offset_str[0] == letter:
+                            offsets[pos] = int(offset_str[1:])
 
-            # Loads MIDIs to compare
-            try:
-                aug_midi = MidiFile(aug_midi_path)
-                original_midi = MidiFile(data_path / f"{original_stem}.mid")
-            except (
-                Exception
-            ):  # ValueError, OSError, FileNotFoundError, IOError, EOFError, mido.KeySignatureError
-                continue
-
-            # Compare them
-            for original_track, aug_track in zip(
-                original_midi.instruments, aug_midi.instruments
-            ):
-                if original_track.is_drum:
+                # Loads MIDIs to compare
+                try:
+                    aug_midi = MidiFile(aug_midi_path)
+                    original_midi = MidiFile(data_path / f"{original_stem}.mid")
+                except (
+                    Exception
+                ):  # ValueError, OSError, FileNotFoundError, IOError, EOFError, mido.KeySignatureError
                     continue
-                original_track.notes.sort(
-                    key=lambda x: (x.start, x.pitch, x.end, x.velocity)
-                )  # sort notes
-                aug_track.notes.sort(
-                    key=lambda x: (x.start, x.pitch, x.end, x.velocity)
-                )  # sort notes
-                for note_o, note_s in zip(original_track.notes, aug_track.notes):
-                    assert note_s.pitch == note_o.pitch + offsets[0]
-                    assert note_s.velocity in [
-                        tokenizer.velocities[0],
-                        tokenizer.velocities[-1],
-                        note_o.velocity + offsets[1],
-                    ]
+
+                # Compare them
+                for original_track, aug_track in zip(
+                    original_midi.instruments, aug_midi.instruments
+                ):
+                    if original_track.is_drum:
+                        continue
+                    original_track.notes.sort(
+                        key=lambda x: (x.start, x.pitch, x.end, x.velocity)
+                    )  # sort notes
+                    aug_track.notes.sort(
+                        key=lambda x: (x.start, x.pitch, x.end, x.velocity)
+                    )  # sort notes
+                    for note_o, note_s in zip(original_track.notes, aug_track.notes):
+                        assert note_s.pitch == note_o.pitch + offsets[0]
+                        assert note_s.velocity in [
+                            tokenizer.velocities[0],
+                            tokenizer.velocities[-1],
+                            note_o.velocity + offsets[1],
+                        ]
 
         print("PERFORMING DATA AUGMENTATION ON TOKENS")
         tokenizer.tokenize_midi_dataset(original_midi_paths, tokens_path)
