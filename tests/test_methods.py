@@ -16,6 +16,7 @@ from torch import (
     IntTensor as ptIntTensor,
     FloatTensor as ptFloatTensor,
 )
+from tensorflow import Tensor as tfTensor, convert_to_tensor
 from tqdm import tqdm
 
 import miditok
