@@ -9,9 +9,11 @@ from typing import Union
 from time import time
 import random
 
-import miditok
 from miditoolkit import MidiFile
 from tqdm import tqdm
+
+import miditok
+from .tests_utils import TIME_SIGNATURE_RANGE_TESTS
 
 # Special beat res for test, up to 64 beats so the duration and time-shift values are
 # long enough for MIDI-Like and Structured encodings, and with a single beat resolution
@@ -26,6 +28,7 @@ TOKENIZER_PARAMS = {
     "beat_res_rest": {(0, 16): 4},
     "nb_tempos": 32,
     "tempo_range": (40, 250),
+    "time_signature_range": TIME_SIGNATURE_RANGE_TESTS,
 }
 
 

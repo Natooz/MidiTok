@@ -24,7 +24,7 @@ setup(
     ],
     install_requires=[
         "numpy>=1.19,<1.24",
-        "miditoolkit>=0.1.16",
+        "miditoolkit==0.1.16",
         "tqdm",
         "tokenizers>=0.13.0",
         "huggingface_hub>=0.16.4",

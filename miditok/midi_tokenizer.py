@@ -965,9 +965,9 @@ class MIDITokenizer(ABC, HFHubMixin):
         if isinstance(tokens[0], (list, tuple)):
             ids = []
             for seq in tokens:
-                ids.append([self[i, token] for i, token in enumerate(seq)])
+                ids.append([self.vocab[i][token] for i, token in enumerate(seq)])
         else:
-            ids = [self[token] for token in tokens]
+            ids = [self.vocab[token] for token in tokens]
         return ids
 
     def _ids_to_tokens(
@@ -1584,9 +1584,11 @@ class MIDITokenizer(ABC, HFHubMixin):
             )
 
         # Trains the tokenizer
-        special_tokens_bytes = self._ids_to_bytes(
-            self._tokens_to_ids([f"{tok}_None" for tok in self.config.special_tokens])
-        )
+        special_tokens_bytes = []
+        if len(self.config.special_tokens) > 0:
+            special_tokens_bytes = self._ids_to_bytes(
+                self._tokens_to_ids([f"{tok}_None" for tok in self.config.special_tokens])
+            )
         trainer = BpeTrainer(
             vocab_size=vocab_size,
             special_tokens=special_tokens_bytes,

@@ -9,20 +9,19 @@ from typing import Union
 from time import time
 
 import miditok
-from miditok.constants import TIME_SIGNATURE_RANGE, CHORD_MAPS
+from miditok.constants import CHORD_MAPS
 from miditoolkit import MidiFile
 from tqdm import tqdm
 
 from .tests_utils import (
     ALL_TOKENIZATIONS,
+    TIME_SIGNATURE_RANGE_TESTS,
     tokenize_check_equals,
     adapt_tempo_changes_times,
     adjust_pedal_durations,
     remove_equal_successive_tempos,
 )
 
-TIME_SIGNATURE_RANGE.update({2: [2, 3, 4]})
-TIME_SIGNATURE_RANGE[4].append(8)
 BEAT_RES_TEST = {(0, 16): 8}
 TOKENIZER_PARAMS = {
     "beat_res": BEAT_RES_TEST,
@@ -37,7 +36,7 @@ TOKENIZER_PARAMS = {
     "nb_tempos": 32,
     "tempo_range": (40, 250),
     "log_tempos": True,
-    "time_signature_range": TIME_SIGNATURE_RANGE,
+    "time_signature_range": TIME_SIGNATURE_RANGE_TESTS,
     "chord_maps": CHORD_MAPS,
     "chord_tokens_with_root_note": True,  # Tokens will look as "Chord_C:maj"
     "chord_unknown": False,
