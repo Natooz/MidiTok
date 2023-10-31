@@ -21,7 +21,7 @@ Pull requests are the best way to propose changes to the codebase (we use [Githu
 5. Make sure your code lints.
 6. Issue that pull request!
 
-## Any contributions you make will be under the MIT Software License
+## Any Contributions You Make will be Under the MIT Software License
 
 In short, when you submit code changes, your submissions are understood to be under the same [MIT License](http://choosealicense.com/licenses/mit/) that covers the project. Feel free to contact the maintainers if that's a concern.
 
@@ -29,7 +29,7 @@ In short, when you submit code changes, your submissions are understood to be un
 
 We use GitHub issues to track public bugs. Report a bug by [opening a new issue](https://github.com/Natooz/MidiTok/issues/new)
 
-## Write bug reports with detail, background, and sample code
+## Write bug Reports with Detail, Background, and Sample Code
 
 **Great Bug Reports** tend to have:
 
