@@ -8,13 +8,13 @@
 
 ## We Develop with Github
 
-We use github to host code, to track issues and feature requests, as well as accept pull requests.
+We use Github to host code, to track issues and feature requests, and accept pull requests.
 
 ## We Use [Github Flow](https://guides.github.com/introduction/flow/index.html), So All Code Changes Happen Through Pull Requests
 
 Pull requests are the best way to propose changes to the codebase (we use [Github Flow](https://guides.github.com/introduction/flow/index.html)). We actively welcome your pull requests:
 
-1. Fork the repo and create your branch from `main`.
+1. Fork the repo and create your branch from the `main`.
 2. If you've added code that should be tested, add [tests](tests).
 3. If you've changed APIs, update the documentation.
 4. Ensure the test suite passes.
@@ -27,7 +27,7 @@ In short, when you submit code changes, your submissions are understood to be un
 
 ## Report bugs using Github's [issues](https://github.com/briandk/transcriptase-atom/issues)
 
-We use GitHub issues to track public bugs. Report a bug by [opening a new issue](https://github.com/Natooz/MidiTok/issues/new)
+We use GitHub issues to track public bugs. Report a bug by [opening a new issue](https://github.com/Natooz/MidiTok/issues/new).
 
 ## Write bug Reports with Detail, Background, and Sample Code
 
@@ -36,7 +36,7 @@ We use GitHub issues to track public bugs. Report a bug by [opening a new issue]
 - A quick summary and/or background.
 - Steps to reproduce.
   - Be specific!
-  - Give sample code if you can, for example,
+  - Give a sample code if you can, for example,
 - What you expected would happen.
 - What actually happens.
 - Notes (possibly including why you think this might be happening, or stuff you tried that didn't work).
@@ -54,12 +54,12 @@ coverage run -m pytest
 
 ### Use a Consistent Coding Style
 
-We use [black](https://github.com/psf/black) code format for Python in this project.
+We use the [black](https://github.com/psf/black) code format for Python in this project.
 
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under its MIT License.
+By contributing, you agree that your contributions will be licensed under the MIT License.
 
 ## References
 
