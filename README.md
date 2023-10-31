@@ -13,21 +13,25 @@ Python package to tokenize MIDI music files, presented at the ISMIR 2021 LBD.
 [![Downloads](https://static.pepy.tech/badge/miditok)](https://pepy.tech/project/MidiTok)
 [![Code style](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-Using Deep Learning with symbolic music ? MidiTok can take care of converting (tokenizing) your MIDI files into tokens, ready to be fed to models such as Transformer, for any generation, transcription or MIR task.
-MidiTok features most known [MIDI tokenizations](https://miditok.readthedocs.io/en/latest/tokenizations.html) (e.g. [REMI](https://arxiv.org/abs/2002.00212), [Compound Word](https://arxiv.org/abs/2101.02402)...), and is built around the idea that they all share common parameters and methods. It supports [Byte Pair Encoding (BPE)](https://arxiv.org/abs/2301.11975) and data augmentation.
+### Using Deep Learning with Symbolic Music? MidiTok is Your Solution!
+
+MidiTok specializes in converting (tokenizing) your MIDI files into tokens, preparing them to be fed into models such as Transformer for various tasks including generation, transcription, or Music Information Retrieval (MIR).
+
+MidiTok features the most well-known [MIDI tokenizations](https://miditok.readthedocs.io/en/latest/tokenizations.html), such as [REMI](https://arxiv.org/abs/2002.00212) and [Compound Word](https://arxiv.org/abs/2101.02402), and is designed with the idea that they all share common parameters and methods. In addition, MidiTok supports [Byte Pair Encoding (BPE)](https://arxiv.org/abs/2301.11975) and data augmentation to enhance your music processing tasks.
 
 **Documentation:** [miditok.readthedocs.com](https://miditok.readthedocs.io/en/latest/index.html)
 
 ## Install
 
-```shell
+```
 pip install miditok
 ```
-MidiTok uses [MIDIToolkit](https://github.com/YatingMusic/miditoolkit), which itself uses [Mido](https://github.com/mido/mido) to read and write MIDI files, and BPE is backed by [Hugging Face 🤗tokenizers](https://github.com/huggingface/tokenizers) for super-fast encoding.
+MidiTok utilizes [MIDIToolkit](https://github.com/YatingMusic/miditoolkit), which in turn employs [Mido](https://github.com/mido/mido) for reading and writing MIDI files. Additionally, the Byte Pair Encoding (BPE) functionality in MidiTok is powered by [Hugging Face 🤗 tokenizers](https://github.com/huggingface/tokenizers) to ensure super-fast encoding.
+
 
 ## Usage example
 
-The most basic and useful methods are summarized here. And [here](colab-notebooks/Full_Example_HuggingFace_GPT2_Transformer.ipynb) is a simple notebook example showing how to use Hugging Face models to generate music, with MidiTok taking care of tokenizing MIDIs.
+The essential and most beneficial methods are outlined below. Additionally, you can check out this [example notebook](colab-notebooks/Full_Example_HuggingFace_GPT2_Transformer.ipynb) which demonstrates how to utilize Hugging Face models for music generation. In this example, MidiTok efficiently handles the MIDI tokenization.
 
 ```python
 from miditok import REMI, TokenizerConfig
@@ -67,16 +71,17 @@ tokenizer.apply_bpe_to_dataset(Path('path', 'to', 'tokens_noBPE'), Path('path', 
 
 ## Tokenizations
 
-MidiTok implements the tokenizations: (links to original papers)
-* [REMI](https://dl.acm.org/doi/10.1145/3394171.3413671)
-* [REMI+](https://openreview.net/forum?id=NyR8OZFHw6i)
-* [MIDI-Like](https://link.springer.com/article/10.1007/s00521-018-3758-9)
-* [TSD](https://arxiv.org/abs/2301.11975)
-* [Structured](https://arxiv.org/abs/2107.05944)
-* [CPWord](https://ojs.aaai.org/index.php/AAAI/article/view/16091)
-* [Octuple](https://aclanthology.org/2021.findings-acl.70)
-* [MuMIDI](https://dl.acm.org/doi/10.1145/3394171.3413721)
-* [MMM](https://arxiv.org/abs/2008.06048)
+MidiTok implements the following tokenizations, with links to the original papers:
+
+- [REMI](https://dl.acm.org/doi/10.1145/3394171.3413671)
+- [REMI+](https://openreview.net/forum?id=NyR8OZFHw6i)
+- [MIDI-Like](https://link.springer.com/article/10.1007/s00521-018-3758-9)
+- [TSD](https://arxiv.org/abs/2301.11975)
+- [Structured](https://arxiv.org/abs/2107.05944)
+- [CPWord](https://ojs.aaai.org/index.php/AAAI/article/view/16091)
+- [Octuple](https://aclanthology.org/2021.findings-acl.70)
+- [MuMIDI](https://dl.acm.org/doi/10.1145/3394171.3413721)
+- [MMM](https://arxiv.org/abs/2008.06048)
 
 You can find short presentations in the [documentation](https://miditok.readthedocs.io/en/latest/tokenizations.html).
 
@@ -86,11 +91,12 @@ Contributions are gratefully welcomed, feel free to open an issue or send a PR i
 
 ### Todos
 
-* Extend unimplemented additional tokens to all compatible tokenizations;
-* Control Change messages;
-* Option to represent pitch values as pitch intervals, as [it seems to improve performances](https://ismir2022program.ismir.net/lbd_369.html);
-* Speeding up MIDI read / load (using a Rust / C++ io library + Python binding ?);
-* Data augmentation on duration values at the MIDI level.
+- Extend unimplemented additional tokens to all compatible tokenizations.
+- Incorporate Control Change messages.
+- Provide an option to represent pitch values as pitch intervals, as [it has shown to improve performances](https://ismir2022program.ismir.net/lbd_369.html).
+- Enhance the speed of MIDI read/load operations, potentially using a Rust or C++ IO library with Python binding.
+- Implement data augmentation on duration values at the MIDI level.
+
 
 ## Citation
 
