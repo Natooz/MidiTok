@@ -8,7 +8,7 @@
 
 ## We Develop with Github
 
-We use github to host code, to track issues and feature requests, as well as accept pull requests.
+We use GitHub to host code, track issues, and feature requests, as well as accept pull requests.
 
 ## We Use [Github Flow](https://guides.github.com/introduction/flow/index.html), So All Code Changes Happen Through Pull Requests
 
@@ -18,7 +18,7 @@ Pull requests are the best way to propose changes to the codebase (we use [Githu
 2. If you've added code that should be tested, add [tests](tests).
 3. If you've changed APIs, update the documentation.
 4. Ensure the test suite passes.
-5. Make sure your code lints.
+5. Make sure your code lines.
 6. Issue that pull request!
 
 ## Any Contributions You Make will be Under the MIT Software License
