@@ -179,7 +179,7 @@ class TokenizerConfig:
             ``TimeSignature`` tokens will specify the current time signature. Note that :ref:`REMI` adds a
             ``TimeSignature`` token at the beginning of each Bar (i.e. after ``Bar`` tokens), while :ref:`TSD` and
             :ref:`MIDI-Like` will only represent time signature changes (MIDI messages) as they come. If you want more
-            "recalls" of the current time signature within your token sequences, you can preprocess you MIDI file to
+            "recalls" of the current time signature within your token sequences, you can preprocess your MIDI file to
             add more ``TimeSignatureChange`` objects. (default: ``False``)
     :param use_sustain_pedals: will use ``Pedal`` tokens to represent the sustain pedal events. In multitrack setting,
             The value of each ``Pedal`` token will be equal to the program of the track. (default: ``False``)
