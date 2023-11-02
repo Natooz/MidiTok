@@ -24,11 +24,9 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: |
+          # Install local package with tests dependencies extras
           python -m pip install --upgrade pip
-          # Install dependencies for tests
-          pip install setuptools flake8 pytest-cov pytest-xdist[psutil] torch tensorflow
-          # Install local package with its dependencies in setup.py
-          pip install -e .
+          pip install -e ".[tests]"
       - name: Lint with flake8
         run: |
           # stop the build if there are Python syntax errors or undefined names

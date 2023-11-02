@@ -3,6 +3,18 @@ from setuptools import setup, find_packages
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
+
+extras = {
+    "tests": [
+        "setuptools",
+        "flake8",
+        "pytest-cov",
+        "pytest-xdist[psutil]",
+        "torch",
+        "tensorflow",
+    ]
+}
+
 setup(
     name="miditok",
     author="Nathan Fradet",
@@ -22,6 +34,8 @@ setup(
         "music",
         "mir",
     ],
+    extras_require=extras,
+    python_requires=">=3.7.0",
     install_requires=[
         "numpy>=1.19",
         "miditoolkit",  # TODO >=v1.0.1
@@ -38,6 +52,9 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
         "Operating System :: OS Independent",
     ],
 )
