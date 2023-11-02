@@ -1,6 +1,0 @@
-miditoolkit
-tqdm>=4.64.0
-numpy>=1.19
-tokenizers>=0.13.2
-huggingface_hub>=0.16.4
-scipy  # needed for miditoolkit

@@ -17,7 +17,7 @@ jobs:
         os: [ ubuntu-latest, macOS-latest, windows-latest ]
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
@@ -25,8 +25,10 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          # Install dependencies for tests
           pip install setuptools flake8 pytest-cov pytest-xdist[psutil] torch tensorflow
-          pip install -r requirements.txt
+          # Install local package with its dependencies in setup.py
+          pip install -e .
       - name: Lint with flake8
         run: |
           # stop the build if there are Python syntax errors or undefined names

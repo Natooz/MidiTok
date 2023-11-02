@@ -108,7 +108,9 @@ def test_data_augmentation():
                 copy_original_in_new_location=False,
             )
             aug_midi_paths = list(midi_aug_path.glob("**/*.mid"))
-            for aug_midi_path in tqdm(aug_midi_paths, desc="CHECKING DATA AUGMENTATION ON MIDIS"):
+            for aug_midi_path in tqdm(
+                aug_midi_paths, desc="CHECKING DATA AUGMENTATION ON MIDIS"
+            ):
                 if "Mr. Blue Sky" in aug_midi_path.stem:
                     continue  # TODO remove when miditoolkit v1.0.1 is released
                 # Determine offsets of file
