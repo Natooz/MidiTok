@@ -77,7 +77,7 @@ def test_bpe_conversion(data_path: Union[str, Path] = "./tests/One_track_MIDIs")
             test_id_to_token == vocab_inv
         ), "Vocabulary inversion failed, something might be wrong with the way they are built"
 
-        for file_path in files:
+        for file_path in tqdm(files, desc=f"Checking BPE tok / detok ({tokenization})"):
             tokens = tokenizer(file_path, apply_bpe_if_possible=False)
             if not tokenizer.one_token_stream:
                 tokens = tokens[0]

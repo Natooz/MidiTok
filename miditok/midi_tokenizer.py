@@ -1587,7 +1587,9 @@ class MIDITokenizer(ABC, HFHubMixin):
         special_tokens_bytes = []
         if len(self.config.special_tokens) > 0:
             special_tokens_bytes = self._ids_to_bytes(
-                self._tokens_to_ids([f"{tok}_None" for tok in self.config.special_tokens])
+                self._tokens_to_ids(
+                    [f"{tok}_None" for tok in self.config.special_tokens]
+                )
             )
         trainer = BpeTrainer(
             vocab_size=vocab_size,

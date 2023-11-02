@@ -3,14 +3,26 @@ from setuptools import setup, find_packages
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
+
+extras = {
+    "tests": [
+        "setuptools",
+        "flake8",
+        "pytest-cov",
+        "pytest-xdist[psutil]",
+        "torch",
+        "tensorflow",
+    ]
+}
+
 setup(
     name="miditok",
     author="Nathan Fradet",
     url="https://github.com/Natooz/MidiTok",
     packages=find_packages(exclude=("tests",)),
-    version="2.1.7",
+    version="2.1.8",
     license="MIT",
-    description="A convenient MIDI tokenizer for Deep Learning networks, with multiple encoding strategies",
+    description="MIDI / symbolic music tokenizers for Deep Learning models",
     long_description=long_description,
     long_description_content_type="text/markdown",
     keywords=[
@@ -22,14 +34,15 @@ setup(
         "music",
         "mir",
     ],
+    extras_require=extras,
+    python_requires=">=3.7.0",
     install_requires=[
-        "numpy>=1.19,<1.24",
-        "miditoolkit==0.1.16",
+        "numpy>=1.19",
+        "miditoolkit",  # TODO >=v1.0.1
         "tqdm",
         "tokenizers>=0.13.0",
         "huggingface_hub>=0.16.4",
-        "scipy",  # needed for miditoolkit
-        "matplotlib",  # needed for miditoolkit
+        "scipy",  # needed for miditoolkit TODO remove when miditoolkit v1.0.1
     ],
     classifiers=[
         "Intended Audience :: Developers",
@@ -39,6 +52,9 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
         "Operating System :: OS Independent",
     ],
 )

@@ -35,7 +35,6 @@ TIME_SIGNATURE_RANGE_TESTS.update({2: [2, 3, 4]})
 TIME_SIGNATURE_RANGE_TESTS[4].append(8)
 
 
-
 def midis_equals(
     midi1: MidiFile, midi2: MidiFile
 ) -> List[Tuple[int, str, List[Tuple[str, Union[Note, int], int]]]]:
