@@ -688,6 +688,15 @@ class MIDITokenizer(ABC, HFHubMixin):
         program = track.program if not track.is_drum else -1
         events = []
         note_token_name = "NoteOn" if self._note_on_off else "Pitch"
+        max_time_interval = 0
+        if self.config.use_pitch_intervals:
+            max_time_interval = (
+                self._current_midi_metadata["time_division"]
+                * self.config.pitch_intervals_max_time_dist
+            )
+        previous_note_onset = -max_time_interval - 1
+        previous_pitch_onset = -128  # lowest at a given time
+        previous_pitch_chord = -128  # for chord intervals
 
         # Add chords
         if self.config.use_chords and not track.is_drum:
@@ -754,7 +763,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         # Creates the Note On, Note Off and Velocity events
         for n, note in enumerate(track.notes):
-            # Pitch / Velocity
+            # Program
             if self.config.use_programs and not self.config.program_changes:
                 events.append(
                     Event(
@@ -765,15 +774,58 @@ class MIDITokenizer(ABC, HFHubMixin):
                         desc=note.end,
                     )
                 )
-            events.append(
-                Event(
-                    type=note_token_name,
-                    value=note.pitch,
-                    time=note.start,
-                    program=program,
-                    desc=note.end,
+
+            # Pitch / interval
+            add_absolute_pitch_token = True
+            if self.config.use_pitch_intervals:
+                if note.start != previous_note_onset:
+                    if (
+                        note.start - previous_note_onset <= max_time_interval
+                        and abs(note.pitch - previous_pitch_onset)
+                        <= self.config.max_pitch_interval
+                    ):
+                        events.append(
+                            Event(
+                                type="PitchIntervalTime",
+                                value=note.pitch - previous_pitch_onset,
+                                time=note.start,
+                                program=program,
+                                desc=note.end,
+                            )
+                        )
+                        add_absolute_pitch_token = False
+                    previous_pitch_onset = previous_pitch_chord = note.pitch
+                elif note.start == previous_note_onset:
+                    if (
+                        abs(note.pitch - previous_pitch_chord)
+                        <= self.config.max_pitch_interval
+                    ):
+                        events.append(
+                            Event(
+                                type="PitchIntervalChord",
+                                value=note.pitch - previous_pitch_chord,
+                                time=note.start,
+                                program=program,
+                                desc=note.end,
+                            )
+                        )
+                        add_absolute_pitch_token = False
+                    previous_pitch_chord = (
+                        note.pitch
+                    )  # TODO problem last Pitch may not be the good ref
+                previous_note_onset = note.start
+            if add_absolute_pitch_token:
+                events.append(
+                    Event(
+                        type=note_token_name,
+                        value=note.pitch,
+                        time=note.start,
+                        program=program,
+                        desc=note.end,
+                    )
                 )
-            )
+
+            # Velocity
             events.append(
                 Event(
                     type="Velocity",
@@ -1118,6 +1170,17 @@ class MIDITokenizer(ABC, HFHubMixin):
                 self.add_to_vocab(tok)
 
     def _add_additional_tokens_to_vocab_list(self, vocab: List[str]):
+        # PITCH INTERVALS
+        if self.config.use_pitch_intervals:
+            for interval_type in ("PitchIntervalTime", "PitchIntervalChord"):
+                vocab += [
+                    f"{interval_type}_{pitch}"
+                    for pitch in range(
+                        -self.config.max_pitch_interval,
+                        self.config.max_pitch_interval + 1,
+                    )
+                ]
+
         # CHORD
         if self.config.use_chords:
             vocab += self._create_chords_tokens()

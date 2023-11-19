@@ -31,6 +31,11 @@ USE_SUSTAIN_PEDALS = False
 USE_PITCH_BENDS = False
 USE_PROGRAMS = False
 
+# Pitch as intervals
+USE_PITCH_INTERVALS = False
+MAX_PITCH_INTERVAL = 16
+PITCH_INTERVALS_MAX_TIME_DIST = 1
+
 # Rest params
 BEAT_RES_REST = {(0, 1): 8, (1, 2): 4, (2, 12): 2}
 
