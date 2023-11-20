@@ -1988,7 +1988,11 @@ class MIDITokenizer(ABC, HFHubMixin):
         current_pos = -1
         current_program = 0
         current_pitches = {p: [] for p in self.config.programs}
+        previous_pitch_onset = {program: -128 for program in self.config.programs}
+        previous_pitch_chord = {program: -128 for program in self.config.programs}
         note_tokens_types = ["Pitch", "NoteOn"]
+        if self.config.use_pitch_intervals:
+            note_tokens_types += ["PitchIntervalTime", "PitchIntervalChord"]
 
         # Init first note and current pitches if needed
         if previous_type in note_tokens_types:
@@ -1999,7 +2003,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         for ti, token in enumerate(tokens[1:]):
             # err_tokens = tokens[ti - 4 : ti + 4]  # uncomment for debug
-            event_type, event_value = token.split("_")[0], token.split("_")[1]
+            event_type, event_value = token.split("_")
 
             # Good token type
             if event_type in self.tokens_types_graph[previous_type]:
@@ -2009,7 +2013,17 @@ class MIDITokenizer(ABC, HFHubMixin):
                 elif event_type in ["TimeShift", "Time-Shift", "Rest"]:
                     current_pitches = {p: [] for p in self.config.programs}
                 elif event_type in note_tokens_types:
-                    pitch_val = int(event_value)
+                    if event_type == "Pitch":
+                        pitch_val = int(event_value)
+                        previous_pitch_onset[current_program] = pitch_val
+                        previous_pitch_chord[current_program] = pitch_val
+                    elif event_type == "PitchIntervalTime":
+                        pitch_val = previous_pitch_onset[current_program] + int(event_value)
+                        previous_pitch_onset[current_program] = pitch_val
+                        previous_pitch_chord[current_program] = pitch_val
+                    else:  # PitchIntervalChord
+                        pitch_val = previous_pitch_chord[current_program] + int(event_value)
+                        previous_pitch_chord[current_program] = pitch_val
                     if pitch_val in current_pitches[current_program]:
                         err_note += 1  # pitch already played at current position
                     else:

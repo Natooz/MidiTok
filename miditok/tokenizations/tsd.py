@@ -145,6 +145,8 @@ class TSD(MIDITokenizer):
         tempo_changes = [TempoChange(TEMPO, -1)]
         time_signature_changes = [TimeSignature(*TIME_SIGNATURE, 0)]
         active_pedals = {}
+        previous_pitch_onset = {program: -128 for program in self.config.programs}
+        previous_pitch_chord = {program: -128 for program in self.config.programs}
 
         def check_inst(prog: int):
             if prog not in instruments.keys():
@@ -158,14 +160,14 @@ class TSD(MIDITokenizer):
         current_program = 0
         current_instrument = None
         previous_note_end = 0
-        previous_pitch_onset = previous_pitch_chord = -128
         for si, seq in enumerate(tokens):
             # Set track / sequence program if needed
             if not self.one_token_stream:
                 # TODO pass this outside of if?
                 current_tick = 0
                 previous_note_end = 0
-                previous_pitch_onset = previous_pitch_chord = -128
+                previous_pitch_onset = {program: -128 for program in self.config.programs}
+                previous_pitch_chord = {program: -128 for program in self.config.programs}
                 active_pedals = {}
                 is_drum = False
                 if programs is not None:
@@ -190,14 +192,16 @@ class TSD(MIDITokenizer):
                 elif tok_type in ["Pitch", "PitchIntervalTime", "PitchIntervalChord"]:
                     if tok_type == "Pitch":
                         pitch = int(tok_val)
-                        previous_pitch_onset = previous_pitch_chord = pitch
+                        previous_pitch_onset[current_program] = pitch
+                        previous_pitch_chord[current_program] = pitch
                     # We update previous_pitch_onset and previous_pitch_chord even if the try fails.
                     elif tok_type == "PitchIntervalTime":
-                        pitch = previous_pitch_onset + int(tok_val)
-                        previous_pitch_onset = previous_pitch_chord = pitch
+                        pitch = previous_pitch_onset[current_program] + int(tok_val)
+                        previous_pitch_onset[current_program] = pitch
+                        previous_pitch_chord[current_program] = pitch
                     else:  # PitchIntervalChord
-                        pitch = previous_pitch_chord + int(tok_val)
-                        previous_pitch_chord = pitch
+                        pitch = previous_pitch_chord[current_program] + int(tok_val)
+                        previous_pitch_chord[current_program] = pitch
                     try:
                         vel_type, vel = seq[ti + 1].split("_")
                         dur_type, dur = seq[ti + 2].split("_")
