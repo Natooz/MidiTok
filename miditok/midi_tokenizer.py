@@ -795,7 +795,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                         )
                         add_absolute_pitch_token = False
                     previous_pitch_onset = previous_pitch_chord = note.pitch
-                elif note.start == previous_note_onset:
+                else:  # same onset time
                     if (
                         abs(note.pitch - previous_pitch_chord)
                         <= self.config.max_pitch_interval
@@ -810,9 +810,11 @@ class MIDITokenizer(ABC, HFHubMixin):
                             )
                         )
                         add_absolute_pitch_token = False
-                    previous_pitch_chord = (
-                        note.pitch
-                    )  # TODO problem last Pitch may not be the good ref
+                    else:
+                        # We update previous_pitch_onset as there might be a chord interval starting from the
+                        # current note to the next one.
+                        previous_pitch_onset = note.pitch
+                    previous_pitch_chord = note.pitch
                 previous_note_onset = note.start
             if add_absolute_pitch_token:
                 events.append(

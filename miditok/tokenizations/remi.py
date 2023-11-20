@@ -214,7 +214,7 @@ class REMI(MIDITokenizer):
             all_events.append(event)
 
             # Update max offset time of the notes encountered
-            if event.type == "Pitch":
+            if event.type.startswith("Pitch"):
                 previous_note_end = max(previous_note_end, event.desc)
             elif event.type in [
                 "Program",
@@ -279,6 +279,7 @@ class REMI(MIDITokenizer):
         current_program = 0
         current_instrument = None
         previous_note_end = 0
+        previous_pitch_onset = previous_pitch_chord = -128
         for si, seq in enumerate(tokens):
             # First look for the first time signature if needed
             if si == 0:
@@ -308,6 +309,7 @@ class REMI(MIDITokenizer):
                 current_bar = -1
                 bar_at_last_ts_change = 0
                 previous_note_end = 0
+                previous_pitch_onset = previous_pitch_chord = -128
                 active_pedals = {}
                 is_drum = False
                 if programs is not None:
@@ -347,19 +349,24 @@ class REMI(MIDITokenizer):
                         # as this Position token occurs before any Bar token
                         current_bar = 0
                     current_tick = tick_at_current_bar + int(tok_val) * ticks_per_sample
-                elif tok_type == "Pitch":
+                elif tok_type.startswith("Pitch"):
+                    if tok_type == "Pitch":
+                        pitch = int(tok_val)
+                        previous_pitch_onset = previous_pitch_chord = pitch
+                    # We update previous_pitch_onset and previous_pitch_chord even if the try fails.
+                    elif tok_type == "PitchIntervalTime":
+                        pitch = previous_pitch_onset + int(tok_val)
+                        previous_pitch_onset = previous_pitch_chord = pitch
+                    else:  # PitchIntervalChord
+                        pitch = previous_pitch_chord + int(tok_val)
+                        previous_pitch_chord = pitch
                     try:
-                        if (
-                            seq[ti + 1].split("_")[0] == "Velocity"
-                            and seq[ti + 2].split("_")[0] == "Duration"
-                        ):
-                            pitch = int(seq[ti].split("_")[1])
-                            vel = int(seq[ti + 1].split("_")[1])
-                            duration = self._token_duration_to_ticks(
-                                seq[ti + 2].split("_")[1], time_division
-                            )
+                        vel_type, vel = seq[ti + 1].split("_")
+                        dur_type, dur = seq[ti + 2].split("_")
+                        if vel_type == "Velocity" and dur_type == "Duration":
+                            dur = self._token_duration_to_ticks(dur, time_division)
                             new_note = Note(
-                                vel, pitch, current_tick, current_tick + duration
+                                int(vel), pitch, current_tick, current_tick + dur
                             )
                             if self.one_token_stream:
                                 check_inst(current_program)
@@ -367,12 +374,12 @@ class REMI(MIDITokenizer):
                             else:
                                 current_instrument.notes.append(new_note)
                             previous_note_end = max(
-                                previous_note_end, current_tick + duration
+                                previous_note_end, current_tick + dur
                             )
-                    except (
-                        IndexError
-                    ):  # A well constituted sequence should not raise an exception
-                        pass  # However with generated sequences this can happen, or if the sequence isn't finished
+                    except IndexError:
+                        # A well constituted sequence should not raise an exception
+                        # However with generated sequences this can happen, or if the sequence isn't finished
+                        pass
                 elif tok_type == "Program":
                     current_program = int(tok_val)
                 elif tok_type == "Tempo":
@@ -527,6 +534,14 @@ class REMI(MIDITokenizer):
         dic["Duration"] = [first_note_token_type, "Position", "Bar"]
         dic["Bar"] = ["Position", "Bar"]
         dic["Position"] = [first_note_token_type]
+        if self.config.use_pitch_intervals:
+            for token_type in ("PitchIntervalTime", "PitchIntervalChord"):
+                dic[token_type] = ["Velocity"]
+                if self.config.use_programs:
+                    dic["Program"].append(token_type)
+                else:
+                    dic["Duration"].append(token_type)
+                    dic["Position"].append(token_type)
         if self.config.program_changes:
             dic["Duration"].append("Program")
 
@@ -535,6 +550,8 @@ class REMI(MIDITokenizer):
             dic["Position"] += ["Chord"]
             if self.config.use_programs:
                 dic["Program"].append("Chord")
+            if self.config.use_pitch_intervals:
+                dic["Chord"] += ["PitchIntervalTime", "PitchIntervalChord"]
 
         if self.config.use_tempos:
             dic["Position"] += ["Tempo"]
@@ -543,6 +560,8 @@ class REMI(MIDITokenizer):
                 dic["Tempo"] += ["Chord"]
             if self.config.use_rests:
                 dic["Tempo"].append("Rest")  # only for first token
+            if self.config.use_pitch_intervals:
+                dic["Tempo"] += ["PitchIntervalTime", "PitchIntervalChord"]
 
         if self.config.use_time_signatures:
             dic["Bar"] = ["TimeSig"]
@@ -553,12 +572,13 @@ class REMI(MIDITokenizer):
                 dic["TimeSig"].append("Rest")  # only for first token
             if self.config.use_tempos:
                 dic["Tempo"].append("TimeSig")
+            if self.config.use_pitch_intervals:
+                dic["TimeSig"] += ["PitchIntervalTime", "PitchIntervalChord"]
 
         if self.config.use_sustain_pedals:
             dic["Position"].append("Pedal")
             if self.config.sustain_pedal_duration:
                 dic["Pedal"] = ["Duration"]
-                dic["Duration"] = [first_note_token_type, "Position", "Bar"]
             else:
                 dic["PedalOff"] = [
                     "Pedal",
@@ -628,6 +648,8 @@ class REMI(MIDITokenizer):
                     dic["PedalOff"].append("Rest")
             if self.config.use_pitch_bends:
                 dic["Rest"].append("PitchBend")
+            if self.config.use_pitch_intervals:
+                dic["Rest"] += ["PitchIntervalTime", "PitchIntervalChord"]
 
         if self.config.program_changes:
             for token_type in [
