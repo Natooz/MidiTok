@@ -214,7 +214,7 @@ class REMI(MIDITokenizer):
             all_events.append(event)
 
             # Update max offset time of the notes encountered
-            if event.type.startswith("Pitch"):
+            if event.type in ["Pitch", "PitchIntervalTime", "PitchIntervalChord"]:
                 previous_note_end = max(previous_note_end, event.desc)
             elif event.type in [
                 "Program",
