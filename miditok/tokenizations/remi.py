@@ -349,7 +349,7 @@ class REMI(MIDITokenizer):
                         # as this Position token occurs before any Bar token
                         current_bar = 0
                     current_tick = tick_at_current_bar + int(tok_val) * ticks_per_sample
-                elif tok_type.startswith("Pitch"):
+                elif tok_type in ["Pitch", "PitchIntervalTime", "PitchIntervalChord"]:
                     if tok_type == "Pitch":
                         pitch = int(tok_val)
                         previous_pitch_onset = previous_pitch_chord = pitch

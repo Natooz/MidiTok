@@ -187,7 +187,7 @@ class TSD(MIDITokenizer):
                     current_tick += self._token_duration_to_ticks(
                         tok_val, time_division
                     )
-                elif tok_type.startswith("Pitch"):
+                elif tok_type in ["Pitch", "PitchIntervalTime", "PitchIntervalChord"]:
                     if tok_type == "Pitch":
                         pitch = int(tok_val)
                         previous_pitch_onset = previous_pitch_chord = pitch
