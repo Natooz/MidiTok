@@ -103,7 +103,7 @@ class MIDILike(MIDITokenizer):
             all_events.append(event)
 
             # Update max offset time of the notes encountered
-            if event.type in ["NoteOn"]:
+            if event.type in ["NoteOn", "PitchIntervalTime", "PitchIntervalChord"]:
                 previous_note_end = max(previous_note_end, event.desc)
             elif event.type in [
                 "Program",
@@ -215,6 +215,8 @@ class MIDILike(MIDITokenizer):
         current_tick = 0
         current_program = 0
         for si, seq in enumerate(tokens):
+            previous_pitch_onset = {program: -128 for program in self.config.programs}
+            previous_pitch_chord = {program: -128 for program in self.config.programs}
             # Set track / sequence program if needed
             if not self.one_token_stream:
                 current_tick = 0
@@ -237,8 +239,20 @@ class MIDILike(MIDITokenizer):
                     current_tick += self._token_duration_to_ticks(
                         tok_val, time_division
                     )
-                elif tok_type in ["NoteOn", "NoteOff"]:
-                    pitch = int(tok_val)
+                elif tok_type in ["NoteOn", "NoteOff", "PitchIntervalTime", "PitchIntervalChord"]:
+                    # We update previous_pitch_onset and previous_pitch_chord even if the try fails.
+                    if tok_type == "PitchIntervalTime":
+                        pitch = previous_pitch_onset[current_program] + int(tok_val)
+                        previous_pitch_onset[current_program] = pitch
+                        previous_pitch_chord[current_program] = pitch
+                    elif tok_type == "PitchIntervalChord":
+                        pitch = previous_pitch_chord[current_program] + int(tok_val)
+                        previous_pitch_chord[current_program] = pitch
+                    else:
+                        pitch = int(tok_val)
+                        if tok_type == "NoteOn":
+                            previous_pitch_onset[current_program] = pitch
+                            previous_pitch_chord[current_program] = pitch
                     # if NoteOn and already active, end the active note here, but this shouldn't happen
                     if pitch in active_notes[current_program]:
                         note_onset_tick, vel = active_notes[current_program][pitch]
@@ -255,7 +269,7 @@ class MIDILike(MIDITokenizer):
                         else:
                             current_instrument.notes.append(new_note)
                         del active_notes[current_program][pitch]
-                    if tok_type == "NoteOn" and ti + 1 < len(seq):
+                    if tok_type != "NoteOff" and ti + 1 < len(seq):
                         vel = int(seq[ti + 1].split("_")[1])
                         active_notes[current_program][pitch] = (current_tick, vel)
                 elif tok_type == "Program":
@@ -410,6 +424,15 @@ class MIDILike(MIDITokenizer):
         dic["Velocity"] = [first_note_token_type, "TimeShift"]
         dic["NoteOff"] = ["NoteOff", first_note_token_type, "TimeShift"]
         dic["TimeShift"] = ["NoteOff", first_note_token_type]
+        if self.config.use_pitch_intervals:
+            for token_type in ("PitchIntervalTime", "PitchIntervalChord"):
+                dic[token_type] = ["Velocity"]
+                if self.config.use_programs:
+                    dic["Program"].append(token_type)
+                else:
+                    dic["Velocity"].append(token_type)
+                    dic["NoteOff"].append(token_type)
+                    dic["TimeShift"].append(token_type)
         if self.config.program_changes:
             for token_type in ["Velocity", "NoteOff"]:
                 dic[token_type].append("Program")
@@ -420,6 +443,8 @@ class MIDILike(MIDITokenizer):
             dic["NoteOff"] += ["Chord"]
             if self.config.use_programs:
                 dic["Program"].append("Chord")
+            if self.config.use_pitch_intervals:
+                dic["Chord"] += ["PitchIntervalTime", "PitchIntervalChord"]
 
         if self.config.use_tempos:
             dic["TimeShift"] += ["Tempo"]
@@ -430,6 +455,8 @@ class MIDILike(MIDITokenizer):
                 dic["Tempo"] += ["Chord"]
             if self.config.use_rests:
                 dic["Tempo"].append("Rest")  # only for first token
+            if self.config.use_pitch_intervals:
+                dic["Tempo"] += ["PitchIntervalTime", "PitchIntervalChord"]
 
         if self.config.use_time_signatures:
             dic["TimeShift"] += ["TimeSig"]
@@ -442,6 +469,8 @@ class MIDILike(MIDITokenizer):
                 dic["TimeSig"].append("Rest")  # only for first token
             if self.config.use_tempos:
                 dic["TimeSig"].append("Tempo")
+            if self.config.use_pitch_intervals:
+                dic["TimeSig"] += ["PitchIntervalTime", "PitchIntervalChord"]
 
         if self.config.use_sustain_pedals:
             dic["TimeShift"].append("Pedal")
@@ -451,6 +480,8 @@ class MIDILike(MIDITokenizer):
             if self.config.sustain_pedal_duration:
                 dic["Pedal"] = ["Duration"]
                 dic["Duration"] = [first_note_token_type, "NoteOff", "TimeShift"]
+                if self.config.use_pitch_intervals:
+                    dic["Duration"] += ["PitchIntervalTime", "PitchIntervalChord"]
             else:
                 dic["PedalOff"] = [
                     "Pedal",
@@ -521,6 +552,8 @@ class MIDILike(MIDITokenizer):
                     dic["PedalOff"].append("Rest")
             if self.config.use_pitch_bends:
                 dic["Rest"].append("PitchBend")
+            if self.config.use_pitch_intervals:
+                dic["Rest"] += ["PitchIntervalTime", "PitchIntervalChord"]
         else:
             dic["TimeShift"].append("TimeShift")
 
@@ -573,6 +606,8 @@ class MIDILike(MIDITokenizer):
         max_duration += self.durations[-1][1] * (
             max(self.config.beat_res.values()) // self.durations[-1][2]
         )
+        previous_pitch_onset = {program: -128 for program in self.config.programs}
+        previous_pitch_chord = {program: -128 for program in self.config.programs}
 
         events = (
             tokens.events
@@ -584,20 +619,30 @@ class MIDILike(MIDITokenizer):
             # err_tokens = events[i - 4: i + 4]  # uncomment for debug
             # Good token type
             if events[i].type in self.tokens_types_graph[events[i - 1].type]:
-                if events[i].type == "NoteOn":
+                if events[i].type in ["NoteOn", "PitchIntervalTime", "PitchIntervalChord"]:
                     current_program_noff = current_program
-                    current_pitches[current_program].append(int(events[i].value))
-                    if int(events[i].value) in current_pitches_tick[current_program]:
+                    if events[i].type == "NoteOn":
+                        pitch_val = int(events[i].value)
+                        previous_pitch_onset[current_program] = pitch_val
+                        previous_pitch_chord[current_program] = pitch_val
+                    elif events[i].type == "PitchIntervalTime":
+                        pitch_val = previous_pitch_onset[current_program] + int(events[i].value)
+                        previous_pitch_onset[current_program] = pitch_val
+                        previous_pitch_chord[current_program] = pitch_val
+                    else:  # PitchIntervalChord
+                        pitch_val = previous_pitch_chord[current_program] + int(events[i].value)
+                        previous_pitch_chord[current_program] = pitch_val
+
+                    current_pitches[current_program].append(pitch_val)
+                    if pitch_val in current_pitches_tick[current_program]:
                         err += 1  # note already being played at current tick
                         continue
 
-                    current_pitches_tick[current_program].append(int(events[i].value))
+                    current_pitches_tick[current_program].append(pitch_val)
                     # look for an associated note off event to get duration
                     offset_sample = 0
                     for j in range(i + 1, len(events)):
-                        if events[j].type == "NoteOff" and int(events[j].value) == int(
-                            events[i].value
-                        ):
+                        if events[j].type == "NoteOff" and int(events[j].value) == pitch_val:
                             if (
                                 self.config.use_programs
                                 and current_program_noff == current_program
