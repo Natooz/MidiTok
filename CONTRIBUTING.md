@@ -48,14 +48,21 @@ We use GitHub issues to track public bugs. Report a bug by [opening a new issue]
 We use `pytest` for testing and `pytest-cov` for measuring coverage. In the test script, we use `torch` and `tensorflow` to check functionalities related to token-tensor conversion:
 
 ```bash
-pip install setuptools flake8 pytest coverage torch tensorflow
+pip install setuptools pytest coverage torch tensorflow
 coverage run -m pytest
 ```
 
 ### Use a Consistent Coding Style
 
-We use the [black](https://github.com/psf/black) code format for Python in this project.
+We use the [ruff](https://github.com/astral-sh/ruff) formatter for Python in this project.
 
+### Pre-commit lints
+
+Linting is configured via [pre-commit](https://www.pre-commit.com/).
+
+Run `pre-commit install` to install the pre-commit Git hook.
+
+If you don't care to do that, you can also run `pre-commit run`.
 
 ## License
 
