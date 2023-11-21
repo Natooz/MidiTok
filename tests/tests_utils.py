@@ -2,23 +2,22 @@
 
 """
 
-from typing import Tuple, List, Union
+from typing import List, Tuple, Union
 
+import numpy as np
 from miditoolkit import (
-    MidiFile,
     Instrument,
+    Marker,
+    MidiFile,
     Note,
-    TempoChange,
-    TimeSignature,
     Pedal,
     PitchBend,
-    Marker,
+    TempoChange,
+    TimeSignature,
 )
-import numpy as np
 
 import miditok
 from miditok.constants import TIME_SIGNATURE_RANGE
-
 
 ALL_TOKENIZATIONS = [
     "MIDILike",

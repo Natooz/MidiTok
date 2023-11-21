@@ -4,19 +4,19 @@
 
 """
 
-from pathlib import Path
 from copy import deepcopy
+from pathlib import Path
 
 from miditoolkit import MidiFile
 
 from miditok import REMI
+from miditok.constants import CLASS_OF_INST
 from miditok.utils import (
+    merge_same_program_tracks,
     merge_tracks,
     merge_tracks_per_class,
-    merge_same_program_tracks,
     nb_bar_pos,
 )
-from miditok.constants import CLASS_OF_INST
 
 
 def test_merge_tracks():

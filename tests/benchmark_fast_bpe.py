@@ -3,15 +3,16 @@
 """Benchmark for fast BPE with Hugging Face tokenizers library.
 """
 
+import random
 from copy import deepcopy
 from pathlib import Path, PurePath
-from typing import Union
 from time import time
-import random
+from typing import Union
+
+from prettytable import PrettyTable
+from tqdm import tqdm
 
 import miditok
-from tqdm import tqdm
-from prettytable import PrettyTable
 
 # Special beat res for test, up to 64 beats so the duration and time-shift values are
 # long enough for MIDI-Like and Structured encodings, and with a single beat resolution

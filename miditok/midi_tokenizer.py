@@ -1,49 +1,50 @@
 """
 MIDI encoding base class and methods
 """
-from abc import ABC, abstractmethod
-import math
-from pathlib import Path
 import json
+import math
 import warnings
+from abc import ABC, abstractmethod
 from copy import deepcopy
-from typing import List, Tuple, Dict, Union, Callable, Iterable, Optional, Any, Sequence
+from pathlib import Path
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
-from tqdm import tqdm
+import tokenizers
+from huggingface_hub import ModelHubMixin as HFHubMixin
+from huggingface_hub import hf_hub_download
 from miditoolkit import (
-    MidiFile,
     Instrument,
+    MidiFile,
     Note,
-    TempoChange,
-    TimeSignature,
     Pedal,
     PitchBend,
+    TempoChange,
+    TimeSignature,
 )
-import tokenizers
 from tokenizers import Tokenizer as TokenizerFast
 from tokenizers.models import BPE
 from tokenizers.trainers import BpeTrainer
-from huggingface_hub import ModelHubMixin as HFHubMixin, hf_hub_download
+from tqdm import tqdm
 
-from .classes import Event, TokSequence, TokenizerConfig
-from .utils import (
-    remove_duplicated_notes,
-    get_midi_programs,
-    convert_ids_tensors_to_list,
-    merge_same_program_tracks,
-    detect_chords,
+from .classes import Event, TokenizerConfig, TokSequence
+from .constants import (
+    CHR_ID_START,
+    CURRENT_MIDITOK_VERSION,
+    DEFAULT_TOKENIZER_FILE_NAME,
+    MIDI_FILES_EXTENSIONS,
+    PITCH_CLASSES,
+    TIME_DIVISION,
+    TIME_SIGNATURE,
+    UNKNOWN_CHORD_PREFIX,
 )
 from .data_augmentation import data_augmentation_dataset
-from .constants import (
-    TIME_DIVISION,
-    CURRENT_MIDITOK_VERSION,
-    TIME_SIGNATURE,
-    CHR_ID_START,
-    PITCH_CLASSES,
-    UNKNOWN_CHORD_PREFIX,
-    MIDI_FILES_EXTENSIONS,
-    DEFAULT_TOKENIZER_FILE_NAME,
+from .utils import (
+    convert_ids_tensors_to_list,
+    detect_chords,
+    get_midi_programs,
+    merge_same_program_tracks,
+    remove_duplicated_notes,
 )
 
 

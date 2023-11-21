@@ -1,19 +1,19 @@
 from math import ceil
 from pathlib import Path
-from typing import List, Dict, Optional, Union, Any
+from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
-from miditoolkit import MidiFile, Instrument, Note, TempoChange
+from miditoolkit import Instrument, MidiFile, Note, TempoChange
 
-from ..midi_tokenizer import MIDITokenizer, _in_as_seq, _out_as_complete_seq
-from ..classes import TokSequence, Event
-from ..utils import detect_chords
+from ..classes import Event, TokSequence
 from ..constants import (
-    TIME_DIVISION,
-    TEMPO,
-    MIDI_INSTRUMENTS,
     DRUM_PITCH_RANGE,
+    MIDI_INSTRUMENTS,
+    TEMPO,
+    TIME_DIVISION,
 )
+from ..midi_tokenizer import MIDITokenizer, _in_as_seq, _out_as_complete_seq
+from ..utils import detect_chords
 
 
 class MuMIDI(MIDITokenizer):

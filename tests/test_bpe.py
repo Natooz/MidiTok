@@ -3,16 +3,17 @@
 """Tests Fast BPE encoding - decoding, as well as saving and loading tokenizers with BPE.
 """
 
+import random
 from copy import deepcopy
 from pathlib import Path
-from typing import Union
 from time import time
-import random
+from typing import Union
 
 from miditoolkit import MidiFile
 from tqdm import tqdm
 
 import miditok
+
 from .tests_utils import TIME_SIGNATURE_RANGE_TESTS
 
 # Special beat res for test, up to 64 beats so the duration and time-shift values are

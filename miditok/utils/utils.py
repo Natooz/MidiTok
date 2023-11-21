@@ -2,11 +2,11 @@
 
 """
 
-from typing import List, Tuple, Sequence, Dict, Union, Any
 from collections import Counter
+from typing import Any, Dict, List, Sequence, Tuple, Union
 
-from miditoolkit import MidiFile, Note, Instrument
 import numpy as np
+from miditoolkit import Instrument, MidiFile, Note
 
 from miditok.classes import Event
 from miditok.constants import (
