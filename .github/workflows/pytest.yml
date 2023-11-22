@@ -9,7 +9,7 @@ on:
     branches: [main]
 
 jobs:
-  build:
+  test:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -22,14 +22,28 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
       - name: Install dependencies
         run: |
           # Install local package with tests dependencies extras
           python -m pip install --upgrade pip
           pip install -e ".[tests]"
       - name: Test with pytest
-        run: pytest --cov=./ --cov-report=xml -n auto
+        run: pytest --cov=./ --cov-report=xml -n auto --durations=0 -v
         env:
           HF_TOKEN_HUB_TESTS: ${{ secrets.HF_TOKEN_HUB_TESTS }}
       - name: Codecov
         uses: codecov/codecov-action@v3.1.0
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      - name: Install dependencies
+        run: pip install build
+      - name: Build package
+        run: python -m build
