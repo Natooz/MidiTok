@@ -75,6 +75,12 @@ MidiTok offers to include additional tokens on music information. You can specif
   :width: 800
   :alt: MIDI sample after being tokenized, the time has been shifted to a bar during the time signature change
 
+Below is an example of how pitch intervals would be tokenized, with a ``max_pitch_interval`` of 15.
+
+.. image:: /assets/pitch_intervals.png
+  :width: 800
+  :alt: Schema of the pitch intervals over a piano-roll
+
 
 Special tokens
 ------------------------

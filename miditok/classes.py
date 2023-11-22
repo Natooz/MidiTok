@@ -190,6 +190,10 @@ class TokenizerConfig:
             The value of each ``Pedal`` token will be equal to the program of the track. (default: ``False``)
     :param use_pitch_bends: will use ``PitchBend`` tokens. In multitrack setting, a ``Program`` token will be added
             before each ``PitchBend` token. (default: ``False``)
+    :param use_pitch_intervals: if given True, will represent the pitch of the notes with pitch intervals tokens.
+            This way, successive and simultaneous notes will be represented with respectively ``PitchIntervalTime`` and
+            ``PitchIntervalChord`` tokens. A good example is depicted in :ref:`Additional tokens`. This option is to be
+            used with the ``max_pitch_interval`` and ``pitch_intervals_max_time_dist`` arguments. (default: False)
     :param use_programs: will use ``Program`` tokens to specify the instrument / MIDI program of the notes, if the
             tokenizer is compatible (:ref:`TSD`, :ref:`REMI`, :ref:`MIDI-Like`, :ref:`Structured` and :ref:`CPWord`).
             Use this parameter with the ``programs``, ``one_token_stream_for_programs`` and `program_changes` arguments.
@@ -254,9 +258,6 @@ class TokenizerConfig:
             This parameter only apply for :ref:`REMI`, :ref:`TSD` and :ref:`MIDI-Like`. If you set it True while your
             tokenizer is not int ``one_token_stream`` mode, a ``Program`` token at the beginning of each track token
             sequence. (default: ``False``)
-    :param use_pitch_intervals: if given True, will represent the pitch tokens as pitch intervals. This way,
-            successive and simultaneous notes will represented with "horizontal" pitch intervals and "vertical"
-            intervals, relatively from a base absolute `Pitch` token. (default: False)
     :param max_pitch_interval: sets the maximum pitch interval that can be represented. (default: 16)
     :param pitch_intervals_max_time_dist: sets the default maximum time interval in beats between two consecutive
             notes to be represented with pitch intervals (default: 1)
