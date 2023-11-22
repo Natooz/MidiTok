@@ -1,5 +1,5 @@
 ﻿Tokenization,Tempo,Time signature,Chord,Rest,Sustain pedal, Pitch bend, Pitch interval
-MIDILike,✅,✅,✅,✅,✅,✅
+MIDILike,✅,✅,✅,✅,✅,✅,✅
 REMI,✅,✅,✅,✅,✅,✅,✅
 TSD,✅,✅,✅,✅,✅,✅,✅
 Structured,❌,❌,❌,❌,❌,❌,❌

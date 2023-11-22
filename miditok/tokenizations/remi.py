@@ -263,7 +263,6 @@ class REMI(MIDITokenizer):
         instruments: Dict[int, Instrument] = {}
         tempo_changes = [TempoChange(TEMPO, -1)]
         time_signature_changes = []
-        active_pedals = {}
 
         def check_inst(prog: int):
             if prog not in instruments.keys():
@@ -273,14 +272,7 @@ class REMI(MIDITokenizer):
                     name="Drums" if prog == -1 else MIDI_INSTRUMENTS[prog]["name"],
                 )
 
-        current_tick = tick_at_last_ts_change = tick_at_current_bar = 0
-        current_bar = -1
-        bar_at_last_ts_change = 0
-        current_program = 0
         current_instrument = None
-        previous_note_end = 0
-        previous_pitch_onset = {program: -128 for program in self.config.programs}
-        previous_pitch_chord = {program: -128 for program in self.config.programs}
         for si, seq in enumerate(tokens):
             # First look for the first time signature if needed
             if si == 0:
@@ -304,15 +296,19 @@ class REMI(MIDITokenizer):
                     time_signature_changes.append(TimeSignature(*TIME_SIGNATURE, 0))
             current_time_sig = time_signature_changes[-1]
             ticks_per_bar = self._compute_ticks_per_bar(current_time_sig, time_division)
+
+            # Set tracking variables
+            current_tick = tick_at_last_ts_change = tick_at_current_bar = 0
+            current_bar = -1
+            bar_at_last_ts_change = 0
+            current_program = 0
+            previous_note_end = 0
+            previous_pitch_onset = {prog: -128 for prog in self.config.programs}
+            previous_pitch_chord = {prog: -128 for prog in self.config.programs}
+            active_pedals = {}
+
             # Set track / sequence program if needed
             if not self.one_token_stream:
-                current_tick = tick_at_last_ts_change = tick_at_current_bar = 0
-                current_bar = -1
-                bar_at_last_ts_change = 0
-                previous_note_end = 0
-                previous_pitch_onset = {program: -128 for program in self.config.programs}
-                previous_pitch_chord = {program: -128 for program in self.config.programs}
-                active_pedals = {}
                 is_drum = False
                 if programs is not None:
                     current_program, is_drum = programs[si]

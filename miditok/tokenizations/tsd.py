@@ -144,9 +144,6 @@ class TSD(MIDITokenizer):
         instruments: Dict[int, Instrument] = {}
         tempo_changes = [TempoChange(TEMPO, -1)]
         time_signature_changes = [TimeSignature(*TIME_SIGNATURE, 0)]
-        active_pedals = {}
-        previous_pitch_onset = {program: -128 for program in self.config.programs}
-        previous_pitch_chord = {program: -128 for program in self.config.programs}
 
         def check_inst(prog: int):
             if prog not in instruments.keys():
@@ -156,19 +153,18 @@ class TSD(MIDITokenizer):
                     name="Drums" if prog == -1 else MIDI_INSTRUMENTS[prog]["name"],
                 )
 
-        current_tick = 0
-        current_program = 0
-        current_instrument = None
-        previous_note_end = 0
+        current_instrument = None  # only use in when one_token_stream is False
         for si, seq in enumerate(tokens):
+            # Set tracking variables
+            current_tick = 0
+            current_program = 0
+            previous_note_end = 0
+            previous_pitch_onset = {prog: -128 for prog in self.config.programs}
+            previous_pitch_chord = {prog: -128 for prog in self.config.programs}
+            active_pedals = {}
+
             # Set track / sequence program if needed
             if not self.one_token_stream:
-                # TODO pass this outside of if?
-                current_tick = 0
-                previous_note_end = 0
-                previous_pitch_onset = {program: -128 for program in self.config.programs}
-                previous_pitch_chord = {program: -128 for program in self.config.programs}
-                active_pedals = {}
                 is_drum = False
                 if programs is not None:
                     current_program, is_drum = programs[si]

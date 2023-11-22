@@ -2019,11 +2019,15 @@ class MIDITokenizer(ABC, HFHubMixin):
                         previous_pitch_onset[current_program] = pitch_val
                         previous_pitch_chord[current_program] = pitch_val
                     elif event_type == "PitchIntervalTime":
-                        pitch_val = previous_pitch_onset[current_program] + int(event_value)
+                        pitch_val = previous_pitch_onset[current_program] + int(
+                            event_value
+                        )
                         previous_pitch_onset[current_program] = pitch_val
                         previous_pitch_chord[current_program] = pitch_val
                     else:  # PitchIntervalChord
-                        pitch_val = previous_pitch_chord[current_program] + int(event_value)
+                        pitch_val = previous_pitch_chord[current_program] + int(
+                            event_value
+                        )
                         previous_pitch_chord[current_program] = pitch_val
                     if pitch_val in current_pitches[current_program]:
                         err_note += 1  # pitch already played at current position
