@@ -1,12 +1,12 @@
 """
 Collator objects for PyTorch `DataLoader`s.
 """
-from typing import List, Any, Mapping
-from copy import deepcopy
 import warnings
+from copy import deepcopy
+from typing import Any, List, Mapping
 
-from torch import LongTensor
 import torch
+from torch import LongTensor
 
 
 class DataCollator:

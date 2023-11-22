@@ -1,20 +1,19 @@
-from .midi_tokenizer import MIDITokenizer, convert_sequence_to_tokseq
-from .classes import Event, TokSequence, TokenizerConfig
-from .tokenizations import (
-    MIDILike,
-    REMI,
-    TSD,
-    Structured,
-    Octuple,
-    CPWord,
-    MuMIDI,
-    MMM,
-)
-
-from .utils import utils
-from .constants import CURRENT_MIDITOK_VERSION
 from miditok import data_augmentation
 
+from .classes import Event, TokenizerConfig, TokSequence
+from .constants import CURRENT_MIDITOK_VERSION
+from .midi_tokenizer import MIDITokenizer, convert_sequence_to_tokseq
+from .tokenizations import (
+    MMM,
+    REMI,
+    TSD,
+    CPWord,
+    MIDILike,
+    MuMIDI,
+    Octuple,
+    Structured,
+)
+from .utils import utils
 
 __version__ = CURRENT_MIDITOK_VERSION
 
@@ -55,8 +54,8 @@ __all__ = [
 ]
 
 try:
-    from miditok import pytorch_data
+    from miditok import pytorch_data  # noqa: F401
 
     __all__.append("pytorch_data")
-except ImportError as e:
+except ImportError:
     pass

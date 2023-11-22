@@ -1,10 +1,16 @@
-def pytest_addoption(parser):
-    parser.addoption("--hf-token", type=str, default=None)
+import os
+
+import pytest
 
 
-def pytest_generate_tests(metafunc):
-    # This is called for every test. Only get/set command line arguments
-    # if the argument is specified in the list of test "fixturenames".
-    option_value = metafunc.config.option.hf_token
-    if "hf_token" in metafunc.fixturenames and option_value is not None:
-        metafunc.parametrize("hf_token", [option_value])
+@pytest.fixture()
+def hf_token() -> str:
+    """
+    Get the Hugging Face token from the environment variable HF_TOKEN_HUB_TESTS.
+
+    If the variable is not set, the test using this fixture will be skipped.
+    """
+    token = os.environ.get("HF_TOKEN_HUB_TESTS")
+    if not token:
+        pytest.skip("HF_TOKEN_HUB_TESTS is not set")
+    return token

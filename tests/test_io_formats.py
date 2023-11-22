@@ -7,11 +7,11 @@ Testing the possible I/O formats of the tokenizers.
 from copy import deepcopy
 from pathlib import Path
 
-import miditok
 from miditoolkit import MidiFile
 
-from .tests_utils import ALL_TOKENIZATIONS, midis_equals
+import miditok
 
+from .tests_utils import ALL_TOKENIZATIONS, midis_equals
 
 BEAT_RES_TEST = {(0, 16): 8}
 TOKENIZER_PARAMS = {

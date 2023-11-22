@@ -1,16 +1,16 @@
 """Data augmentation methods
 
 """
-import warnings
-from typing import List, Tuple, Union, Dict
-from pathlib import Path
-from copy import deepcopy
-from warnings import warn
 import json
+import warnings
+from copy import deepcopy
+from pathlib import Path
+from typing import Dict, List, Tuple, Union
+from warnings import warn
 
 import numpy as np
-from tqdm import tqdm
 from miditoolkit import MidiFile
+from tqdm import tqdm
 
 
 def data_augmentation_dataset(

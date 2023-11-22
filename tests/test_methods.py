@@ -4,22 +4,28 @@
 
 """
 
-from pathlib import Path
-from typing import Union
 import json
 import random
+from pathlib import Path
+from typing import Union
 
 import numpy as np
 from miditoolkit import MidiFile
+from tensorflow import Tensor as tfTensor
+from tensorflow import convert_to_tensor
 from torch import (
-    Tensor as ptTensor,
-    IntTensor as ptIntTensor,
     FloatTensor as ptFloatTensor,
 )
-from tensorflow import Tensor as tfTensor, convert_to_tensor
+from torch import (
+    IntTensor as ptIntTensor,
+)
+from torch import (
+    Tensor as ptTensor,
+)
 from tqdm import tqdm
 
 import miditok
+
 from .tests_utils import ALL_TOKENIZATIONS
 
 
@@ -126,9 +132,7 @@ def test_data_augmentation():
                 try:
                     aug_midi = MidiFile(aug_midi_path)
                     original_midi = MidiFile(data_path / f"{original_stem}.mid")
-                except (
-                    Exception
-                ):  # ValueError, OSError, FileNotFoundError, IOError, EOFError, mido.KeySignatureError
+                except Exception:  # ValueError, OSError, FileNotFoundError, IOError, EOFError, mido.KeySignatureError
                     continue
 
                 # Compare them

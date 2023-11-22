@@ -1,18 +1,18 @@
 from math import ceil
 from pathlib import Path
-from typing import List, Tuple, Dict, Optional, Union, Any
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
-from miditoolkit import MidiFile, Instrument, Note, TempoChange, TimeSignature
+from miditoolkit import Instrument, MidiFile, Note, TempoChange, TimeSignature
 
-from ..midi_tokenizer import MIDITokenizer, _in_as_seq
-from ..classes import TokSequence, Event
+from ..classes import Event, TokSequence
 from ..constants import (
+    MIDI_INSTRUMENTS,
+    TEMPO,
     TIME_DIVISION,
     TIME_SIGNATURE,
-    TEMPO,
-    MIDI_INSTRUMENTS,
 )
+from ..midi_tokenizer import MIDITokenizer, _in_as_seq
 
 
 class Octuple(MIDITokenizer):

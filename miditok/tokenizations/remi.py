@@ -7,13 +7,13 @@ from miditoolkit import (
     Instrument,
     MidiFile,
     Note,
-    TempoChange,
-    TimeSignature,
     Pedal,
     PitchBend,
+    TempoChange,
+    TimeSignature,
 )
 
-from ..classes import Event, TokSequence, TokenizerConfig
+from ..classes import Event, TokenizerConfig, TokSequence
 from ..constants import (
     MIDI_INSTRUMENTS,
     TEMPO,
