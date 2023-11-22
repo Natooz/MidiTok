@@ -28,7 +28,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[tests]"
       - name: Test with pytest
-        run: |
-          pytest --cov=./ --cov-report=xml -n auto --hf-token ${{ secrets.HF_TOKEN_HUB_TESTS }}
+        run: pytest --cov=./ --cov-report=xml -n auto
+        env:
+          HF_TOKEN_HUB_TESTS: ${{ secrets.HF_TOKEN_HUB_TESTS }}
       - name: Codecov
         uses: codecov/codecov-action@v3.1.0
