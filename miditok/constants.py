@@ -2,8 +2,6 @@
 
 """
 
-CURRENT_MIDITOK_VERSION = "2.1.8"  # used when saving the config of a tokenizer
-
 MIDI_FILES_EXTENSIONS = [".mid", ".midi", ".MID", ".MIDI"]
 DEFAULT_TOKENIZER_FILE_NAME = "tokenizer.conf"
 

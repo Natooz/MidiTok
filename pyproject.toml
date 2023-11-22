@@ -53,7 +53,7 @@ tests = [
 
 [project.urls]
 Homepage = "https://github.com/Natooz/MidiTok"
-Documentation = "https://miditok.readthedocs.io/en/v2.1.7/"
+Documentation = "https://miditok.readthedocs.io"
 
 [tool.hatch.version]
 path = "miditok/__init__.py"

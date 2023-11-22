@@ -9,13 +9,13 @@ from typing import Any, Dict, List, Sequence, Tuple, Union
 
 from numpy import ndarray
 
+from .__version__ import __version__
 from .constants import (
     BEAT_RES,
     BEAT_RES_REST,
     CHORD_MAPS,
     CHORD_TOKENS_WITH_ROOT_NOTE,
     CHORD_UNKNOWN,
-    CURRENT_MIDITOK_VERSION,
     DELETE_EQUAL_SUCCESSIVE_TEMPO_CHANGES,
     DELETE_EQUAL_SUCCESSIVE_TIME_SIG_CHANGES,
     LOG_TEMPOS,
@@ -430,7 +430,7 @@ class TokenizerConfig:
             dict_config[beat_res_key] = {
                 f"{k1}_{k2}": v for (k1, k2), v in dict_config[beat_res_key].items()
             }
-        dict_config["miditok_version"] = CURRENT_MIDITOK_VERSION
+        dict_config["miditok_version"] = __version__
 
         with open(out_path, "w") as outfile:
             json.dump(dict_config, outfile, indent=4)
