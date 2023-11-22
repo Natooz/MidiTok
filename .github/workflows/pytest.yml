@@ -28,6 +28,7 @@ jobs:
         run: |
           # Install local package with tests dependencies extras
           python -m pip install --upgrade pip
+          pip install importlib-metadata  # for Python 3.7, to remove when support is drop
           pip install -e ".[tests]"
       - name: Test with pytest
         run: pytest --cov=./ --cov-report=xml -n auto --durations=0 -v
