@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
-import tokenizers
 from huggingface_hub import ModelHubMixin as HFHubMixin
 from huggingface_hub import hf_hub_download
 from miditoolkit import (
@@ -31,6 +30,7 @@ from .classes import Event, TokenizerConfig, TokSequence
 from .constants import (
     CHR_ID_START,
     CURRENT_MIDITOK_VERSION,
+    CURRENT_TOKENIZERS_VERSION,
     DEFAULT_TOKENIZER_FILE_NAME,
     MIDI_FILES_EXTENSIONS,
     PITCH_CLASSES,
@@ -2149,7 +2149,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             "has_bpe": self.has_bpe,
             "tokenization": self.__class__.__name__,
             "miditok_version": CURRENT_MIDITOK_VERSION,
-            "hf_tokenizers_version": tokenizers.__version__,
+            "hf_tokenizers_version": CURRENT_TOKENIZERS_VERSION,
             **additional_attributes,
         }
 

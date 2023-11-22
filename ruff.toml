@@ -1,4 +1,4 @@
-target-version = "py37"
+target-version = "py38"
 extend-select = [
     "I",
 ]
