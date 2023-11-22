@@ -27,10 +27,10 @@ from tokenizers.models import BPE
 from tokenizers.trainers import BpeTrainer
 from tqdm import tqdm
 
-from .__version__ import __version__
 from .classes import Event, TokenizerConfig, TokSequence
 from .constants import (
     CHR_ID_START,
+    CURRENT_MIDITOK_VERSION,
     DEFAULT_TOKENIZER_FILE_NAME,
     MIDI_FILES_EXTENSIONS,
     PITCH_CLASSES,
@@ -2148,7 +2148,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             "one_token_stream": self.one_token_stream,
             "has_bpe": self.has_bpe,
             "tokenization": self.__class__.__name__,
-            "miditok_version": __version__,
+            "miditok_version": CURRENT_MIDITOK_VERSION,
             "hf_tokenizers_version": tokenizers.__version__,
             **additional_attributes,
         }
@@ -2194,7 +2194,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                     local_files_only=local_files_only,
                     token=token,
                     library_name="MidiTok",
-                    library_version=__version__,
+                    library_version=CURRENT_MIDITOK_VERSION,
                 )
 
         return cls(params=params_path)

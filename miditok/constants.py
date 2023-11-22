@@ -2,6 +2,10 @@
 
 """
 
+from importlib.metadata import version
+
+CURRENT_MIDITOK_VERSION = version("miditok")
+
 MIDI_FILES_EXTENSIONS = [".mid", ".midi", ".MID", ".MIDI"]
 DEFAULT_TOKENIZER_FILE_NAME = "tokenizer.conf"
 
