@@ -2,7 +2,10 @@
 
 """
 
-CURRENT_MIDITOK_VERSION = "2.1.8"  # used when saving the config of a tokenizer
+from importlib.metadata import version
+
+CURRENT_MIDITOK_VERSION = version("miditok")
+CURRENT_TOKENIZERS_VERSION = version("tokenizers")
 
 MIDI_FILES_EXTENSIONS = [".mid", ".midi", ".MID", ".MIDI"]
 DEFAULT_TOKENIZER_FILE_NAME = "tokenizer.conf"

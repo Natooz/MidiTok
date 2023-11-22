@@ -1,7 +1,6 @@
 from miditok import data_augmentation
 
 from .classes import Event, TokenizerConfig, TokSequence
-from .constants import CURRENT_MIDITOK_VERSION
 from .midi_tokenizer import MIDITokenizer, convert_sequence_to_tokseq
 from .tokenizations import (
     MMM,
@@ -14,8 +13,6 @@ from .tokenizations import (
     Structured,
 )
 from .utils import utils
-
-__version__ = CURRENT_MIDITOK_VERSION
 
 
 class REMIPlus(REMI):
