@@ -1,6 +1,6 @@
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union, cast
-from copy import deepcopy
 
 import numpy as np
 from miditoolkit import Instrument, MidiFile, Note, TempoChange, TimeSignature
@@ -8,10 +8,10 @@ from miditoolkit import Instrument, MidiFile, Note, TempoChange, TimeSignature
 from ..classes import Event, TokSequence
 from ..constants import (
     MIDI_INSTRUMENTS,
+    MMM_DENSITY_BINS_MAX,
     TEMPO,
     TIME_DIVISION,
     TIME_SIGNATURE,
-    MMM_DENSITY_BINS_MAX,
 )
 from ..midi_tokenizer import MIDITokenizer, _in_as_seq
 

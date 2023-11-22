@@ -1,17 +1,18 @@
 """
 PyTorch `Dataset` objects, to be used with PyTorch `DataLoaders` to load and send data during training.
 """
-from pathlib import Path
-from typing import List, Union, Sequence, Any, Mapping, Callable
+import json
 from abc import ABC
 from copy import deepcopy
-import json
+from pathlib import Path
+from typing import Any, Callable, List, Mapping, Sequence, Union
 
+from miditoolkit import MidiFile
 from torch import LongTensor, randint
 from torch.utils.data import Dataset
-from miditok import MIDITokenizer
-from miditoolkit import MidiFile
 from tqdm import tqdm
+
+from miditok import MIDITokenizer
 
 from ..constants import MIDI_FILES_EXTENSIONS
 

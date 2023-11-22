@@ -91,4 +91,3 @@ Finally, we learn :ref:`Byte Pair Encoding (BPE)` on the tokenized dataset, and 
 
     # Applies BPE to the previous tokens
     tokenizer.apply_bpe_to_dataset(Path('path', 'to', 'tokens_noBPE'), Path('path', 'to', 'tokens_BPE'))
-

@@ -1,25 +1,25 @@
-from typing import List, Tuple, Dict, Optional, Union, Any
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 from miditoolkit import (
-    MidiFile,
     Instrument,
+    MidiFile,
     Note,
-    TempoChange,
-    TimeSignature,
     Pedal,
     PitchBend,
+    TempoChange,
+    TimeSignature,
 )
 
-from ..midi_tokenizer import MIDITokenizer, _in_as_seq
-from ..classes import TokSequence, Event
+from ..classes import Event, TokSequence
 from ..constants import (
-    TIME_DIVISION,
-    TEMPO,
     MIDI_INSTRUMENTS,
+    TEMPO,
+    TIME_DIVISION,
     TIME_SIGNATURE,
 )
+from ..midi_tokenizer import MIDITokenizer, _in_as_seq
 
 
 class TSD(MIDITokenizer):

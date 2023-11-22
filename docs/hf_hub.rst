@@ -52,5 +52,3 @@ Example
     # Recreates it from the configuration saved on the hub
     tokenizer2 = REMI.from_pretrained("YourUserName/model-name", token=hf_token)
     assert tokenizer == tokenizer2
-
-

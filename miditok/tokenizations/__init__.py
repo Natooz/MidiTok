@@ -1,11 +1,11 @@
-from .remi import REMI
-from .structured import Structured
-from .midi_like import MIDILike
-from .tsd import TSD
 from .cp_word import CPWord
+from .midi_like import MIDILike
+from .mmm import MMM
 from .mumidi import MuMIDI
 from .octuple import Octuple
-from .mmm import MMM
+from .remi import REMI
+from .structured import Structured
+from .tsd import TSD
 
 __all__ = [
     "MIDILike",

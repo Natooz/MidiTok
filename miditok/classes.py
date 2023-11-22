@@ -1,45 +1,45 @@
 """
 Common classes.
 """
-from dataclasses import dataclass
-from typing import Union, Any, List, Sequence, Dict, Tuple
-from copy import deepcopy
-from pathlib import Path
 import json
+from copy import deepcopy
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, List, Sequence, Tuple, Union
 
 from numpy import ndarray
 
 from .constants import (
-    PITCH_RANGE,
     BEAT_RES,
-    NB_VELOCITIES,
-    SPECIAL_TOKENS,
-    USE_CHORDS,
-    USE_RESTS,
-    USE_TEMPOS,
-    USE_TIME_SIGNATURE,
-    USE_SUSTAIN_PEDALS,
-    USE_PITCH_BENDS,
-    USE_PROGRAMS,
     BEAT_RES_REST,
     CHORD_MAPS,
     CHORD_TOKENS_WITH_ROOT_NOTE,
     CHORD_UNKNOWN,
-    NB_TEMPOS,
-    TEMPO_RANGE,
-    LOG_TEMPOS,
-    DELETE_EQUAL_SUCCESSIVE_TEMPO_CHANGES,
-    TIME_SIGNATURE_RANGE,
-    SUSTAIN_PEDAL_DURATION,
-    PITCH_BEND_RANGE,
-    DELETE_EQUAL_SUCCESSIVE_TIME_SIG_CHANGES,
-    PROGRAMS,
-    ONE_TOKEN_STREAM_FOR_PROGRAMS,
     CURRENT_MIDITOK_VERSION,
-    PROGRAM_CHANGES,
-    USE_PITCH_INTERVALS,
+    DELETE_EQUAL_SUCCESSIVE_TEMPO_CHANGES,
+    DELETE_EQUAL_SUCCESSIVE_TIME_SIG_CHANGES,
+    LOG_TEMPOS,
     MAX_PITCH_INTERVAL,
+    NB_TEMPOS,
+    NB_VELOCITIES,
+    ONE_TOKEN_STREAM_FOR_PROGRAMS,
+    PITCH_BEND_RANGE,
     PITCH_INTERVALS_MAX_TIME_DIST,
+    PITCH_RANGE,
+    PROGRAM_CHANGES,
+    PROGRAMS,
+    SPECIAL_TOKENS,
+    SUSTAIN_PEDAL_DURATION,
+    TEMPO_RANGE,
+    TIME_SIGNATURE_RANGE,
+    USE_CHORDS,
+    USE_PITCH_BENDS,
+    USE_PITCH_INTERVALS,
+    USE_PROGRAMS,
+    USE_RESTS,
+    USE_SUSTAIN_PEDALS,
+    USE_TEMPOS,
+    USE_TIME_SIGNATURE,
 )
 
 
@@ -52,6 +52,7 @@ class Event:
     This class is mainly used during tokenization when the tokens / events have
     to be sorted by time.
     """
+
     type: str
     value: Union[str, int]
     time: Union[int, float] = None
@@ -80,6 +81,7 @@ class TokSequence:
 
     :py:meth:`miditok.MIDITokenizer.complete_sequence`
     """
+
     tokens: List[Union[str, List[str]]] = None
     ids: List[Union[int, List[int]]] = None  # BPE can be applied on ids
     bytes: str = None

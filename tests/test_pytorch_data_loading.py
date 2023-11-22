@@ -4,12 +4,13 @@
 Test classes and methods from the pytorch_data module.
 """
 
-from typing import Sequence
 from pathlib import Path
+from typing import Sequence
 
-import miditok
 from miditoolkit import MidiFile
 from torch import randint
+
+import miditok
 
 
 def test_split_seq():

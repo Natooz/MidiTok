@@ -5,18 +5,19 @@
 
 from copy import deepcopy
 from pathlib import Path
-from typing import Union
 from time import time
+from typing import Union
 
-import miditok
 from miditoolkit import MidiFile, Pedal
 from tqdm import tqdm
 
+import miditok
+
 from .tests_utils import (
     ALL_TOKENIZATIONS,
-    tokenize_check_equals,
     adapt_tempo_changes_times,
     remove_equal_successive_tempos,
+    tokenize_check_equals,
 )
 
 BEAT_RES_TEST = {(0, 16): 8}

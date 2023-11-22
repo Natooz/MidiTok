@@ -6,8 +6,8 @@ If all went well the tokenizer should be identical.
 """
 
 import miditok
-from .tests_utils import ALL_TOKENIZATIONS
 
+from .tests_utils import ALL_TOKENIZATIONS
 
 ADDITIONAL_TOKENS_TEST = {
     "use_chords": False,  # set False to speed up tests as it takes some time on maestro MIDIs
