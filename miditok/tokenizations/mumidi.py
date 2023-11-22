@@ -51,6 +51,7 @@ class MuMIDI(MIDITokenizer):
         self.config.use_sustain_pedals = False
         self.config.use_pitch_bends = False
         self.config.use_programs = True
+        self.config.use_pitch_intervals = True
         self.config.one_token_stream_for_programs = True
         self.config.program_changes = False
 

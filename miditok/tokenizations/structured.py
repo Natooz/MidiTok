@@ -36,6 +36,7 @@ class Structured(MIDITokenizer):
         self.config.use_time_signatures = False
         self.config.use_sustain_pedals = False
         self.config.use_pitch_bends = False
+        self.config.use_pitch_intervals = False
         self.config.program_changes = False
 
     def _create_track_events(self, track: Instrument) -> List[Event]:

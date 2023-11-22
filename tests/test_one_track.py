@@ -33,6 +33,7 @@ TOKENIZER_PARAMS = {
     "use_sustain_pedals": True,
     "use_pitch_bends": True,
     "use_programs": False,
+    "use_pitch_intervals": True,
     "beat_res_rest": {(0, 2): 4, (2, 12): 2},
     "nb_tempos": 32,
     "tempo_range": (40, 250),

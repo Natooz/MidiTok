@@ -31,6 +31,11 @@ USE_SUSTAIN_PEDALS = False
 USE_PITCH_BENDS = False
 USE_PROGRAMS = False
 
+# Pitch as intervals
+USE_PITCH_INTERVALS = False
+MAX_PITCH_INTERVAL = 16
+PITCH_INTERVALS_MAX_TIME_DIST = 1
+
 # Rest params
 BEAT_RES_REST = {(0, 1): 8, (1, 2): 4, (2, 12): 2}
 
@@ -62,7 +67,7 @@ UNKNOWN_CHORD_PREFIX = "ukn"  # only used in methods
 
 # Tempo params
 # nb of tempo bins for additional tempo tokens, quantized like velocities
-NB_TEMPOS = 32
+NB_TEMPOS = 32  # TODO raname num contractions
 TEMPO_RANGE = (40, 250)  # (min_tempo, max_tempo)
 LOG_TEMPOS = False  # log or linear scale tempos
 DELETE_EQUAL_SUCCESSIVE_TEMPO_CHANGES = False

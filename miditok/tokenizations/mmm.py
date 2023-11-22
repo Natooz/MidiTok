@@ -237,6 +237,7 @@ class MMM(MIDITokenizer):
         previous_note_end = 0  # unused (rest)
         first_program = None
         current_program = -2
+        previous_pitch_onset = previous_pitch_chord = -128
         for ti, token in enumerate(tokens):
             tok_type, tok_val = token.split("_")
             if tok_type == "Program":
@@ -284,27 +285,32 @@ class MMM(MIDITokenizer):
                     ticks_per_bar = self._compute_ticks_per_bar(
                         time_signature_changes[-1], time_division
                     )
-            elif tok_type == "Pitch":
+            elif tok_type in ["Pitch", "PitchIntervalTime", "PitchIntervalChord"]:
+                if tok_type == "Pitch":
+                    pitch = int(tok_val)
+                    previous_pitch_onset = pitch
+                    previous_pitch_chord = pitch
+                # We update previous_pitch_onset and previous_pitch_chord even if the try fails.
+                elif tok_type == "PitchIntervalTime":
+                    pitch = previous_pitch_onset + int(tok_val)
+                    previous_pitch_onset = pitch
+                    previous_pitch_chord = pitch
+                else:  # PitchIntervalChord
+                    pitch = previous_pitch_chord + int(tok_val)
+                    previous_pitch_chord = pitch
                 try:
-                    if (
-                        tokens[ti + 1].split("_")[0] == "Velocity"
-                        and tokens[ti + 2].split("_")[0] == "Duration"
-                    ):
-                        pitch = int(tokens[ti].split("_")[1])
-                        vel = int(tokens[ti + 1].split("_")[1])
-                        duration = self._token_duration_to_ticks(
-                            tokens[ti + 2].split("_")[1], time_division
-                        )
+                    vel_type, vel = tokens[ti + 1].split("_")
+                    dur_type, dur = tokens[ti + 2].split("_")
+                    if vel_type == "Velocity" and dur_type == "Duration":
+                        dur = self._token_duration_to_ticks(dur, time_division)
                         instruments[-1].notes.append(
-                            Note(vel, pitch, current_tick, current_tick + duration)
+                            Note(int(vel), pitch, current_tick, current_tick + dur)
                         )
-                        previous_note_end = max(
-                            previous_note_end, current_tick + duration
-                        )
-                except (
-                    IndexError
-                ):  # A well constituted sequence should not raise an exception
-                    pass  # However with generated sequences this can happen, or if the sequence isn't finished
+                        previous_note_end = max(previous_note_end, current_tick + dur)
+                except IndexError:
+                    # A well constituted sequence should not raise an exception
+                    # However with generated sequences this can happen, or if the sequence isn't finished
+                    pass
         if len(tempo_changes) > 1:
             del tempo_changes[0]  # delete mocked tempo change
         tempo_changes[0].time = 0
@@ -389,14 +395,25 @@ class MMM(MIDITokenizer):
         dic["Velocity"] = ["Duration"]
         dic["Duration"] = ["Pitch", "TimeShift", "Bar"]
 
+        if self.config.use_pitch_intervals:
+            for token_type in ("PitchIntervalTime", "PitchIntervalChord"):
+                dic[token_type] = ["Velocity"]
+                dic["Duration"].append(token_type)
+                dic["TimeShift"].append(token_type)
+                dic["Bar"].append(token_type)
+
         if self.config.use_time_signatures:
             dic["Bar"] += ["TimeSig"]
             dic["TimeSig"] = ["Pitch", "TimeShift", "Bar"]
+            if self.config.use_pitch_intervals:
+                dic["TimeSig"] += ["PitchIntervalTime", "PitchIntervalChord"]
 
         if self.config.use_chords:
             dic["Chord"] = ["TimeShift", "Pitch"]
             dic["Bar"] += ["Chord"]
             dic["TimeShift"] += ["Chord"]
+            if self.config.use_pitch_intervals:
+                dic["Chord"] += ["PitchIntervalTime", "PitchIntervalChord"]
 
         if self.config.use_tempos:
             dic["Tempo"] = ["TimeShift", "Pitch", "Bar"]
@@ -406,6 +423,8 @@ class MMM(MIDITokenizer):
                 dic["TimeSig"] += ["Tempo"]
             if self.config.use_chords:
                 dic["Tempo"] += ["Chord"]
+            if self.config.use_pitch_intervals:
+                dic["Tempo"] += ["PitchIntervalTime", "PitchIntervalChord"]
 
         dic["Fill"] = list(dic.keys())
 
@@ -423,11 +442,15 @@ class MMM(MIDITokenizer):
 
         # Override from here
         tokens = cast(List[str], tokens_to_check.tokens)
+        note_tokens_types = ["Pitch"]
+        if self.config.use_pitch_intervals:
+            note_tokens_types += ["PitchIntervalTime", "PitchIntervalChord"]
 
         err_type = 0  # i.e. incompatible next type predicted
         err_note = 0  # i.e. duplicated
         previous_type = tokens[0].split("_")[0]
         current_pitches = []
+        previous_pitch_onset = previous_pitch_chord = -128
 
         # Init first note and current pitches if needed
         if previous_type == "Pitch":
@@ -442,14 +465,25 @@ class MMM(MIDITokenizer):
             if event_type in self.tokens_types_graph[previous_type]:
                 if event_type in ["Bar", "TimeShift"]:  # reset
                     current_pitches = []
-                elif event_type == "Pitch":
-                    pitch_val = int(event_value)
+                elif event_type in note_tokens_types:
+                    if event_type == "Pitch":
+                        pitch_val = int(event_value)
+                        previous_pitch_onset = pitch_val
+                        previous_pitch_chord = pitch_val
+                    elif event_type == "PitchIntervalTime":
+                        pitch_val = previous_pitch_onset + int(event_value)
+                        previous_pitch_onset = pitch_val
+                        previous_pitch_chord = pitch_val
+                    else:  # PitchIntervalChord
+                        pitch_val = previous_pitch_chord + int(event_value)
+                        previous_pitch_chord = pitch_val
                     if pitch_val in current_pitches:
                         err_note += 1  # pitch already played at current position
                     else:
                         current_pitches.append(pitch_val)
                 elif event_type == "Program":  # reset
                     current_pitches = []
+                    previous_pitch_onset = previous_pitch_chord = -128
             # Bad token type
             else:
                 err_type += 1

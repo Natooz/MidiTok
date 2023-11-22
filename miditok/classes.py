@@ -19,10 +19,12 @@ from .constants import (
     DELETE_EQUAL_SUCCESSIVE_TEMPO_CHANGES,
     DELETE_EQUAL_SUCCESSIVE_TIME_SIG_CHANGES,
     LOG_TEMPOS,
+    MAX_PITCH_INTERVAL,
     NB_TEMPOS,
     NB_VELOCITIES,
     ONE_TOKEN_STREAM_FOR_PROGRAMS,
     PITCH_BEND_RANGE,
+    PITCH_INTERVALS_MAX_TIME_DIST,
     PITCH_RANGE,
     PROGRAM_CHANGES,
     PROGRAMS,
@@ -32,6 +34,7 @@ from .constants import (
     TIME_SIGNATURE_RANGE,
     USE_CHORDS,
     USE_PITCH_BENDS,
+    USE_PITCH_INTERVALS,
     USE_PROGRAMS,
     USE_RESTS,
     USE_SUSTAIN_PEDALS,
@@ -187,6 +190,10 @@ class TokenizerConfig:
             The value of each ``Pedal`` token will be equal to the program of the track. (default: ``False``)
     :param use_pitch_bends: will use ``PitchBend`` tokens. In multitrack setting, a ``Program`` token will be added
             before each ``PitchBend` token. (default: ``False``)
+    :param use_pitch_intervals: if given True, will represent the pitch of the notes with pitch intervals tokens.
+            This way, successive and simultaneous notes will be represented with respectively ``PitchIntervalTime`` and
+            ``PitchIntervalChord`` tokens. A good example is depicted in :ref:`Additional tokens`. This option is to be
+            used with the ``max_pitch_interval`` and ``pitch_intervals_max_time_dist`` arguments. (default: False)
     :param use_programs: will use ``Program`` tokens to specify the instrument / MIDI program of the notes, if the
             tokenizer is compatible (:ref:`TSD`, :ref:`REMI`, :ref:`MIDI-Like`, :ref:`Structured` and :ref:`CPWord`).
             Use this parameter with the ``programs``, ``one_token_stream_for_programs`` and `program_changes` arguments.
@@ -251,6 +258,9 @@ class TokenizerConfig:
             This parameter only apply for :ref:`REMI`, :ref:`TSD` and :ref:`MIDI-Like`. If you set it True while your
             tokenizer is not int ``one_token_stream`` mode, a ``Program`` token at the beginning of each track token
             sequence. (default: ``False``)
+    :param max_pitch_interval: sets the maximum pitch interval that can be represented. (default: 16)
+    :param pitch_intervals_max_time_dist: sets the default maximum time interval in beats between two consecutive
+            notes to be represented with pitch intervals (default: 1)
     :param kwargs: additional parameters that will be saved in ``config.additional_params``.
     """
 
@@ -267,6 +277,7 @@ class TokenizerConfig:
         use_sustain_pedals: bool = USE_SUSTAIN_PEDALS,
         use_pitch_bends: bool = USE_PITCH_BENDS,
         use_programs: bool = USE_PROGRAMS,
+        use_pitch_intervals: bool = USE_PITCH_INTERVALS,
         beat_res_rest: Dict[Tuple[int, int], int] = BEAT_RES_REST,
         chord_maps: Dict[str, Tuple] = CHORD_MAPS,
         chord_tokens_with_root_note: bool = CHORD_TOKENS_WITH_ROOT_NOTE,
@@ -284,8 +295,23 @@ class TokenizerConfig:
         programs: Sequence[int] = PROGRAMS,
         one_token_stream_for_programs: bool = ONE_TOKEN_STREAM_FOR_PROGRAMS,
         program_changes: bool = PROGRAM_CHANGES,
+        max_pitch_interval: int = MAX_PITCH_INTERVAL,
+        pitch_intervals_max_time_dist: bool = PITCH_INTERVALS_MAX_TIME_DIST,
         **kwargs,
     ):
+        # Checks
+        if max_pitch_interval:
+            assert 0 <= pitch_range[0] < pitch_range[1] <= 127, (
+                f"pitch_range must be within 0 and 127, and an first value greater than the second "
+                f"(received {pitch_range})"
+            )
+            assert (
+                1 <= nb_velocities <= 127
+            ), f"nb_velocities must be within 1 and 127 (received {nb_velocities})"
+            assert (
+                0 <= max_pitch_interval <= 127
+            ), f"max_pitch_interval must be within 0 and 127 (received {max_pitch_interval})."
+
         # Global parameters
         self.pitch_range: Tuple[int, int] = pitch_range
         self.beat_res: Dict[Tuple[int, int], int] = beat_res
@@ -300,6 +326,7 @@ class TokenizerConfig:
         self.use_sustain_pedals: bool = use_sustain_pedals
         self.use_pitch_bends: bool = use_pitch_bends
         self.use_programs: bool = use_programs
+        self.use_pitch_intervals = use_pitch_intervals
 
         # Rest params
         self.beat_res_rest: Dict[Tuple[int, int], int] = beat_res_rest
@@ -340,6 +367,10 @@ class TokenizerConfig:
         self.programs: Sequence[int] = programs
         self.one_token_stream_for_programs = one_token_stream_for_programs
         self.program_changes = program_changes and use_programs
+
+        # Pitch as interval tokens
+        self.max_pitch_interval = max_pitch_interval
+        self.pitch_intervals_max_time_dist = pitch_intervals_max_time_dist
 
         # Additional params
         self.additional_params = kwargs

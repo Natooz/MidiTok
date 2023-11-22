@@ -1,9 +1,9 @@
-﻿Tokenization,Tempo,Time signature,Chord,Rest,Sustain pedal, Pitch bend
-MIDILike,✅,✅,✅,✅,✅,✅
-REMI,✅,✅,✅,✅,✅,✅
-TSD,✅,✅,✅,✅,✅,✅
-Structured,❌,❌,❌,❌,❌,❌
-CPWord,✅,✅¹,✅,✅¹,❌,❌
-Octuple,✅,✅,❌,❌,❌,❌
-MuMIDI,✅,❌,✅,❌,❌,❌
-MMM,✅,✅,✅,❌,❌,❌
+﻿Tokenization,Tempo,Time signature,Chord,Rest,Sustain pedal, Pitch bend, Pitch interval
+MIDILike,✅,✅,✅,✅,✅,✅,✅
+REMI,✅,✅,✅,✅,✅,✅,✅
+TSD,✅,✅,✅,✅,✅,✅,✅
+Structured,❌,❌,❌,❌,❌,❌,❌
+CPWord,✅,✅¹,✅,✅¹,❌,❌,❌
+Octuple,✅,✅,❌,❌,❌,❌,❌
+MuMIDI,✅,❌,✅,❌,❌,❌,❌
+MMM,✅,✅,✅,❌,❌,❌,✅
