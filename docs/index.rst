@@ -55,3 +55,4 @@ Contents
    data_augmentation
    utils
    citations
+   misc
