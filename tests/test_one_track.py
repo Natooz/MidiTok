@@ -17,7 +17,7 @@ from miditok.constants import CHORD_MAPS
 from .utils import (
     ALL_TOKENIZATIONS,
     MIDI_PATHS_ONE_TRACK,
-    TEST_DIR,
+    TEST_LOG_DIR,
     TIME_SIGNATURE_RANGE_TESTS,
     prepare_midi_for_tests,
     tokenize_and_check_equals,
@@ -67,7 +67,6 @@ def test_one_track_midi_to_tokens_to_midi(
     """
     if tokenizations is None:
         tokenizations = ALL_TOKENIZATIONS
-    (out_path := TEST_DIR / "tokenization_errors").mkdir(exist_ok=True)
     at_least_one_error = False
 
     # Reads the midi
@@ -124,9 +123,10 @@ def test_one_track_midi_to_tokens_to_midi(
     if len(tracks_with_errors) > len(midi.instruments):
         at_least_one_error = True
         if saving_erroneous_midis:
+            TEST_LOG_DIR.mkdir(exist_ok=True, parents=True)
             midi.tempo_changes = midi_to_compare.tempo_changes
             midi.time_signature_changes = midi_to_compare.time_signature_changes
             midi.instruments += tracks_with_errors
-            midi.dump(out_path / midi_path.name)
+            midi.dump(TEST_LOG_DIR / midi_path.name)
 
     assert not at_least_one_error

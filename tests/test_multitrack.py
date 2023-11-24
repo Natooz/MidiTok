@@ -15,7 +15,7 @@ import miditok
 from .utils import (
     ALL_TOKENIZATIONS,
     MIDI_PATHS_MULTITRACK,
-    TEST_DIR,
+    TEST_LOG_DIR,
     prepare_midi_for_tests,
     tokenize_and_check_equals,
 )
@@ -82,7 +82,6 @@ def test_multitrack_midi_to_tokens_to_midi(
     """
     if tokenizations is None:
         tokenizations = ALL_TOKENIZATIONS
-    (out_path := TEST_DIR / "tokenization_errors").mkdir(exist_ok=True)
     at_least_one_error = False
 
     # Reads the MIDI and add pedal messages
@@ -112,11 +111,14 @@ def test_multitrack_midi_to_tokens_to_midi(
             )
 
             if has_errors:
+                TEST_LOG_DIR.mkdir(exist_ok=True, parents=True)
                 at_least_one_error = True
                 if saving_erroneous_midis:
-                    decoded_midi.dump(out_path / f"{midi_path.stem}_{tokenization}.mid")
+                    decoded_midi.dump(
+                        TEST_LOG_DIR / f"{midi_path.stem}_{tokenization}.mid"
+                    )
                     midi_to_compare.dump(
-                        out_path / f"{midi_path.stem}_{tokenization}_original.mid"
+                        TEST_LOG_DIR / f"{midi_path.stem}_{tokenization}_original.mid"
                     )
 
     assert not at_least_one_error

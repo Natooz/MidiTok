@@ -21,7 +21,7 @@ from torch import (
 
 import miditok
 
-from .utils import HERE, MIDI_PATHS_ALL, TEST_DIR
+from .utils import HERE, MIDI_PATHS_ALL
 
 
 def test_convert_tensors():
@@ -39,22 +39,23 @@ def test_convert_tensors():
         assert as_list == original
 
 
-def test_tokenize_datasets_file_tree(midi_paths: Sequence[Union[str, Path]] = None):
+def test_tokenize_datasets_file_tree(
+    tmp_path: Path, midi_paths: Sequence[Union[str, Path]] = None
+):
     if midi_paths is None:
         midi_paths = MIDI_PATHS_ALL
 
     # Check the file tree is copied
     tokenizer = miditok.TSD(miditok.TokenizerConfig())
-    out_path = TEST_DIR / "file_tree"
-    tokenizer.tokenize_midi_dataset(midi_paths, out_path, overwrite_mode=True)
-    json_paths = list(out_path.glob("**/*.json"))
+    tokenizer.tokenize_midi_dataset(midi_paths, tmp_path, overwrite_mode=True)
+    json_paths = list(tmp_path.glob("**/*.json"))
     json_paths.sort(key=lambda x: x.stem)
     midi_paths.sort(key=lambda x: x.stem)
     for json_path, midi_path in zip(json_paths, midi_paths):
         assert (
-            json_path.relative_to(out_path).with_suffix(".test")
+            json_path.relative_to(tmp_path).with_suffix(".test")
             == midi_path.relative_to(HERE).with_suffix(".test")
         ), f"The file tree has not been reproduced as it should, for the file {midi_path} tokenized {json_path}"
 
     # Just make sure the non-overwrite mode doesn't crash
-    tokenizer.tokenize_midi_dataset(midi_paths, out_path, overwrite_mode=False)
+    tokenizer.tokenize_midi_dataset(midi_paths, tmp_path, overwrite_mode=False)

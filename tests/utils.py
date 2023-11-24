@@ -37,9 +37,7 @@ MIDI_PATHS_MULTITRACK = sorted((HERE / "MIDIs_multitrack").rglob("*.mid"))
 MIDI_PATHS_ALL = sorted(
     deepcopy(MIDI_PATHS_ONE_TRACK) + deepcopy(MIDI_PATHS_MULTITRACK)
 )
-# TODO temporary directory
-TEST_DIR = HERE / "test_results"
-TEST_DIR.mkdir(exist_ok=True)
+TEST_LOG_DIR = HERE / "test_logs"
 
 
 def prepare_midi_for_tests(

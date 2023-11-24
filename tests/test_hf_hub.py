@@ -4,9 +4,9 @@
 
 """
 
-from miditok import REMI, TSD
+from pathlib import Path
 
-from .utils import TEST_DIR
+from miditok import REMI, TSD
 
 
 def test_push_and_load_to_hf_hub(hf_token: str):
@@ -17,9 +17,9 @@ def test_push_and_load_to_hf_hub(hf_token: str):
     assert tokenizer == tokenizer2
 
 
-def test_from_pretrained_local():
+def test_from_pretrained_local(tmp_path: Path):
     # Here using paths to directories
     tokenizer = TSD()
-    tokenizer.save_pretrained(TEST_DIR / "tests/tokenizer_confs")
-    tokenizer2 = TSD.from_pretrained(TEST_DIR / "tests/tokenizer_confs")
+    tokenizer.save_pretrained(tmp_path)
+    tokenizer2 = TSD.from_pretrained(tmp_path)
     assert tokenizer == tokenizer2

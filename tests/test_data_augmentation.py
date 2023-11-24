@@ -15,19 +15,20 @@ from tqdm import tqdm
 
 import miditok
 
-from .utils import ALL_TOKENIZATIONS, HERE, TEST_DIR
+from .utils import ALL_TOKENIZATIONS, HERE
 
 MAX_NUM_FILES_TEST_TOKENS = 7
 
 
 def test_data_augmentation_midi(
+    tmp_path: Path,
     data_path: Union[str, Path] = HERE / "MIDIs_multitrack",
     tokenization: str = "MIDILike",
 ):
     # We only test data augmentation on MIDIs with one tokenization, as tokenizers does not play here
 
     tokenizer = getattr(miditok, tokenization)()
-    midi_aug_path = TEST_DIR / "Multitrack_MIDIs_aug" / tokenization
+    midi_aug_path = tmp_path / "Multitrack_MIDIs_aug" / tokenization
     miditok.data_augmentation.data_augmentation_dataset(
         data_path,
         tokenizer,
@@ -74,6 +75,7 @@ def test_data_augmentation_midi(
 
 @pytest.mark.parametrize("tokenization", ALL_TOKENIZATIONS)
 def test_data_augmentation_tokens(
+    tmp_path: Path,
     tokenization: str,
     data_path: Union[str, Path] = HERE / "MIDIs_multitrack",
     max_num_files: int = MAX_NUM_FILES_TEST_TOKENS,
@@ -85,8 +87,8 @@ def test_data_augmentation_tokens(
         )
 
     tokenizer = getattr(miditok, tokenization)()
-    tokens_path = TEST_DIR / "Multitrack_tokens" / tokenization
-    tokens_aug_path = TEST_DIR / "Multitrack_tokens_aug" / tokenization
+    tokens_path = tmp_path / "Multitrack_tokens" / tokenization
+    tokens_aug_path = tmp_path / "Multitrack_tokens_aug" / tokenization
 
     print("PERFORMING DATA AUGMENTATION ON TOKENS")
     tokenizer.tokenize_midi_dataset(original_midi_paths, tokens_path)

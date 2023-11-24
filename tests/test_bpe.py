@@ -42,6 +42,7 @@ TOKENIZER_PARAMS = {
 @pytest.mark.parametrize("tokenization", TOKENIZATIONS_BPE)
 def test_bpe_conversion(
     tokenization: str,
+    tmp_path: Path,
     midi_paths: Sequence[Union[str, Path]] = None,
     seed: int = SEED,
 ):
@@ -64,19 +65,13 @@ def test_bpe_conversion(
         tokenizer_config=tokenizer_config
     )
     # Give a str to dir for coverage
-    tokenizer.tokenize_midi_dataset(
-        midi_paths, Path("tests", "test_results", tokenization)
-    )
+    tokenizer.tokenize_midi_dataset(midi_paths, tmp_path)
     tokenizer.learn_bpe(
         vocab_size=len(tokenizer) + 400,
-        tokens_paths=list(
-            Path("tests", "test_results", tokenization).glob("**/*.json")
-        ),
+        tokens_paths=list(tmp_path.glob("**/*.json")),
         start_from_empty_voc=True,
     )
-    tokenizer.save_params(
-        Path("tests", "test_results", f"{tokenization}_bpe", "config.txt")
-    )
+    tokenizer.save_params(tmp_path / "bpe_config.txt")
 
     test_id_to_token = {
         id_: tokenizer._vocab_base_byte_to_token[byte_]
@@ -105,7 +100,7 @@ def test_bpe_conversion(
 
     # Reload (test) tokenizer from the saved config file
     tokenizer_reloaded = getattr(miditok, tokenization)(
-        params=Path("tests", "test_results", f"{tokenization}_bpe", "config.txt")
+        params=tmp_path / "bpe_config.txt"
     )
     assert (
         tokenizer_reloaded == tokenizer

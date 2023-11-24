@@ -12,7 +12,7 @@ from torch import randint
 
 import miditok
 
-from .utils import MIDI_PATHS_MULTITRACK, MIDI_PATHS_ONE_TRACK, TEST_DIR
+from .utils import MIDI_PATHS_MULTITRACK, MIDI_PATHS_ONE_TRACK
 
 
 def test_split_seq():
@@ -29,6 +29,7 @@ def test_split_seq():
 
 
 def test_dataset_ram(
+    tmp_path: Path,
     midi_paths_one_track: Sequence[Union[str, Path]] = None,
     midi_paths_multitrack: Sequence[Union[str, Path]] = None,
 ):
@@ -36,7 +37,7 @@ def test_dataset_ram(
         midi_paths_one_track = MIDI_PATHS_ONE_TRACK[:3]
     if midi_paths_multitrack is None:
         midi_paths_multitrack = MIDI_PATHS_MULTITRACK[:3]
-    tokens_os_dir = TEST_DIR / "multitrack_tokens_os"
+    tokens_os_dir = tmp_path / "multitrack_tokens_os"
     dummy_labels = {
         label: i
         for i, label in enumerate(
@@ -101,10 +102,10 @@ def test_dataset_ram(
     )
 
 
-def test_dataset_io(midi_path: Sequence[Union[str, Path]] = None):
+def test_dataset_io(tmp_path: Path, midi_path: Sequence[Union[str, Path]] = None):
     if midi_path is None:
         midi_path = MIDI_PATHS_MULTITRACK[:3]
-    tokens_os_dir = TEST_DIR / "multitrack_tokens_os"
+    tokens_os_dir = tmp_path / "multitrack_tokens_os"
 
     if not tokens_os_dir.is_dir():
         config = miditok.TokenizerConfig(use_programs=True)
@@ -124,13 +125,14 @@ def test_dataset_io(midi_path: Sequence[Union[str, Path]] = None):
 
 
 def test_split_dataset_to_subsequences(
+    tmp_path: Path,
     midi_path: Sequence[Union[str, Path]] = None,
 ):
     if midi_path is None:
         midi_path = MIDI_PATHS_MULTITRACK[:3]
-    tokens_os_dir = TEST_DIR / "multitrack_tokens_os"
-    tokens_split_dir = TEST_DIR / "multitrack_tokens_os_split"
-    tokens_split_dir_ms = TEST_DIR / "multitrack_tokens_ms_split"
+    tokens_os_dir = tmp_path / "multitrack_tokens_os"
+    tokens_split_dir = tmp_path / "multitrack_tokens_os_split"
+    tokens_split_dir_ms = tmp_path / "multitrack_tokens_ms_split"
 
     # One token stream
     if not tokens_os_dir.is_dir():

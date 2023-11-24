@@ -5,11 +5,13 @@ If all went well the tokenizer should be identical.
 
 """
 
+from pathlib import Path
+
 import pytest
 
 import miditok
 
-from .utils import ALL_TOKENIZATIONS, TEST_DIR
+from .utils import ALL_TOKENIZATIONS
 
 ADDITIONAL_TOKENS_TEST = {
     "use_chords": False,  # set False to speed up tests as it takes some time on maestro MIDIs
@@ -24,12 +26,12 @@ ADDITIONAL_TOKENS_TEST = {
 
 
 @pytest.mark.parametrize("tokenization", ALL_TOKENIZATIONS)
-def test_saving_loading_tokenizer_config(tokenization: str):
+def test_saving_loading_tokenizer_config(tokenization: str, tmp_path: Path):
     config1 = miditok.TokenizerConfig()
-    config1.save_to_json(TEST_DIR / "configs" / f"tok_conf_{tokenization}.json")
+    config1.save_to_json(tmp_path / f"tok_conf_{tokenization}.json")
 
     config2 = miditok.TokenizerConfig.load_from_json(
-        TEST_DIR / "configs" / f"tok_conf_{tokenization}.json"
+        tmp_path / f"tok_conf_{tokenization}.json"
     )
 
     assert config1 == config2
@@ -38,7 +40,7 @@ def test_saving_loading_tokenizer_config(tokenization: str):
 
 
 @pytest.mark.parametrize("tokenization", ALL_TOKENIZATIONS)
-def test_saving_loading_tokenizer(tokenization: str):
+def test_saving_loading_tokenizer(tokenization: str, tmp_path: Path):
     r"""Tests to create tokenizers, save their config, and load it back.
     If all went well the tokenizer should be identical.
     """
@@ -46,10 +48,10 @@ def test_saving_loading_tokenizer(tokenization: str):
     tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
         tokenizer_config=tokenizer_config
     )
-    tokenizer.save_params(TEST_DIR / "configs" / f"{tokenization}.txt")
+    tokenizer.save_params(tmp_path / f"{tokenization}.txt")
 
     tokenizer2: miditok.MIDITokenizer = getattr(miditok, tokenization)(
-        params=TEST_DIR / "configs" / f"{tokenization}.txt"
+        params=tmp_path / f"{tokenization}.txt"
     )
     assert tokenizer == tokenizer2
     if tokenization == "Octuple":
