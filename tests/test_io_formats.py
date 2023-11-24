@@ -13,7 +13,7 @@ from miditoolkit import MidiFile
 
 import miditok
 
-from .utils import ALL_TOKENIZATIONS, prepare_midi_for_tests
+from .utils import ALL_TOKENIZATIONS, HERE, prepare_midi_for_tests
 
 BEAT_RES_TEST = {(0, 16): 8}
 TOKENIZER_PARAMS = {
@@ -98,7 +98,7 @@ def encode_decode_and_check(tokenizer: miditok.MIDITokenizer, midi: MidiFile) ->
 @pytest.mark.parametrize("tokenization", ALL_TOKENIZATIONS)
 def test_io_formats(
     tokenization: str,
-    midi_path: Union[str, Path] = Path("MIDIs_multitrack", "Funkytown.mid"),
+    midi_path: Union[str, Path] = HERE / "MIDIs_multitrack" / "Funkytown.mid",
 ):
     r"""Reads a few MIDI files, convert them into token sequences, convert them back to MIDI files.
     The converted back MIDI files should identical to original one, expect with note starting and ending

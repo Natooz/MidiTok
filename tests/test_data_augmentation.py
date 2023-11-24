@@ -15,13 +15,13 @@ from tqdm import tqdm
 
 import miditok
 
-from .utils import ALL_TOKENIZATIONS, TEST_DIR
+from .utils import ALL_TOKENIZATIONS, HERE, TEST_DIR
 
 MAX_NUM_FILES_TEST_TOKENS = 7
 
 
 def test_data_augmentation_midi(
-    data_path: Union[str, Path] = Path("MIDIs_multitrack"),
+    data_path: Union[str, Path] = HERE / "MIDIs_multitrack",
     tokenization: str = "MIDILike",
 ):
     # We only test data augmentation on MIDIs with one tokenization, as tokenizers does not play here
@@ -75,7 +75,7 @@ def test_data_augmentation_midi(
 @pytest.mark.parametrize("tokenization", ALL_TOKENIZATIONS)
 def test_data_augmentation_tokens(
     tokenization: str,
-    data_path: Union[str, Path] = Path("MIDIs_multitrack"),
+    data_path: Union[str, Path] = HERE / "MIDIs_multitrack",
     max_num_files: int = MAX_NUM_FILES_TEST_TOKENS,
 ):
     original_midi_paths = list(data_path.glob("**/*.mid"))[:max_num_files]
