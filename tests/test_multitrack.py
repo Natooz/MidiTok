@@ -5,19 +5,19 @@
 
 from copy import deepcopy
 from pathlib import Path
-from time import time
-from typing import Union
+from typing import Sequence, Union
 
+import pytest
 from miditoolkit import MidiFile, Pedal
-from tqdm import tqdm
 
 import miditok
 
-from .tests_utils import (
+from .utils import (
     ALL_TOKENIZATIONS,
-    adapt_tempo_changes_times,
-    remove_equal_successive_tempos,
-    tokenize_check_equals,
+    MIDI_PATHS_MULTITRACK,
+    TEST_DIR,
+    prepare_midi_for_tests,
+    tokenize_and_check_equals,
 )
 
 BEAT_RES_TEST = {(0, 16): 8}
@@ -64,100 +64,59 @@ for kwargs_set in params_kwargs_sets["Structured"]:
     kwargs_set["beat_res"] = {(0, 512): 8}
 
 
+@pytest.mark.parametrize("midi_path", MIDI_PATHS_MULTITRACK)
 def test_multitrack_midi_to_tokens_to_midi(
-    data_path: Union[str, Path] = "./tests/Multitrack_MIDIs",
+    midi_path: Union[str, Path],
+    tokenizations: Sequence[str] = None,
     saving_erroneous_midis: bool = False,
 ):
-    r"""Reads a few MIDI files, convert them into token sequences, convert them back to MIDI files.
-    The converted back MIDI files should identical to original one, expect with note starting and ending
-    times quantized, and maybe a some duplicated notes removed
+    r"""Reads a MIDI file, converts it into tokens, convert it back to a MIDI object.
+    The decoded MIDI should be identical to the original one after downsampling, and potentially notes deduplication.
+    We only parametrize for midi files, as it would otherwise require to load them multiple times each.
+    # TODO test parametrize tokenization / params_set
+
+
+    :param tokenizations: sequence of tokenizer names to test.
+    :param midi_path: path to the MIDI file to test.
+    :param saving_erroneous_midis: will save MIDIs decoded with errors, to be used to debug.
     """
-    files = list(Path(data_path).glob("**/*.mid"))
+    if tokenizations is None:
+        tokenizations = ALL_TOKENIZATIONS
+    (out_path := TEST_DIR / "tokenization_errors").mkdir(exist_ok=True)
     at_least_one_error = False
-    t0 = time()
 
-    for fi, file_path in enumerate(tqdm(files, desc="Testing multitrack")):
-        # Reads the MIDI
-        midi = MidiFile(Path(file_path))
-        if midi.ticks_per_beat % max(BEAT_RES_TEST.values()) != 0:
-            continue
-        # add pedal messages
-        for ti in range(max(3, len(midi.instruments))):
-            midi.instruments[ti].pedals = [
-                Pedal(start, start + 200) for start in [100, 600, 1800, 2200]
-            ]
+    # Reads the MIDI and add pedal messages
+    midi = MidiFile(Path(midi_path))
+    for ti in range(max(3, len(midi.instruments))):
+        midi.instruments[ti].pedals = [
+            Pedal(start, start + 200) for start in [100, 600, 1800, 2200]
+        ]
 
-        for tokenization in ALL_TOKENIZATIONS:
-            for pi, params_kwargs in enumerate(params_kwargs_sets[tokenization]):
-                idx = f"{fi}_{pi}"
-                params = deepcopy(TOKENIZER_PARAMS)
-                params.update(params_kwargs)
-                tokenizer_config = miditok.TokenizerConfig(**params)
-                tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
-                    tokenizer_config=tokenizer_config
-                )
+    for tok_i, tokenization in enumerate(tokenizations):
+        for pi, params_kwargs in enumerate(params_kwargs_sets[tokenization]):
+            idx = f"{tok_i}_{pi}"
+            params = deepcopy(TOKENIZER_PARAMS)
+            params.update(params_kwargs)
+            tokenizer_config = miditok.TokenizerConfig(**params)
+            tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
+                tokenizer_config=tokenizer_config
+            )
 
-                # Process the MIDI
-                # midi notes / tempos / time signature quantized with the line above
-                midi_to_compare = deepcopy(midi)
-                for track in midi_to_compare.instruments:
-                    if track.is_drum:
-                        track.program = (
-                            0  # need to be done before sorting tracks per program
-                        )
+            # Process the MIDI
+            # midi notes / tempos / time signature quantized with the line above
+            midi_to_compare = prepare_midi_for_tests(midi, tokenizer=tokenizer)
 
-                # Sort and merge tracks if needed
-                # MIDI produced with one_token_stream contains tracks with different orders
-                # This step is also performed in preprocess_midi, but we need to call it here for the assertions below
-                tokenizer.preprocess_midi(midi_to_compare)
-                # For Octuple, as tempo is only carried at notes times, we need to adapt their times for comparison
-                # Same for CPWord which carries tempo with Position (for notes)
-                if tokenization in ["Octuple", "CPWord"]:
-                    adapt_tempo_changes_times(
-                        midi_to_compare.instruments, midi_to_compare.tempo_changes
+            # MIDI -> Tokens -> MIDI
+            decoded_midi, has_errors = tokenize_and_check_equals(
+                midi_to_compare, tokenizer, idx, midi_path.stem
+            )
+
+            if has_errors:
+                at_least_one_error = True
+                if saving_erroneous_midis:
+                    decoded_midi.dump(out_path / f"{midi_path.stem}_{tokenization}.mid")
+                    midi_to_compare.dump(
+                        out_path / f"{midi_path.stem}_{tokenization}_original.mid"
                     )
-                # When the tokenizer only decoded tempo changes different from the last tempo val
-                if tokenization in ["CPWord"]:
-                    remove_equal_successive_tempos(midi_to_compare.tempo_changes)
 
-                # MIDI -> Tokens -> MIDI
-                decoded_midi, has_errors = tokenize_check_equals(
-                    midi_to_compare, tokenizer, idx, file_path.stem
-                )
-
-                if has_errors:
-                    at_least_one_error = True
-                    if saving_erroneous_midis:
-                        decoded_midi.dump(
-                            Path(
-                                "tests",
-                                "test_results",
-                                f"{file_path.stem}_{tokenization}.mid",
-                            )
-                        )
-                        midi_to_compare.dump(
-                            Path(
-                                "tests",
-                                "test_results",
-                                f"{file_path.stem}_{tokenization}_original.mid",
-                            )
-                        )
-
-    ttotal = time() - t0
-    print(f"Took {ttotal:.2f} seconds")
     assert not at_least_one_error
-
-
-if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(description="MIDI Encoding test")
-    parser.add_argument(
-        "--data",
-        type=str,
-        default="tests/Multitrack_MIDIs",
-        help="directory of MIDI files to use for test",
-    )
-    args = parser.parse_args()
-
-    test_multitrack_midi_to_tokens_to_midi(args.data)

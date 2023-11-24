@@ -6,6 +6,8 @@
 
 from miditok import REMI, TSD
 
+from .utils import TEST_DIR
+
 
 def test_push_and_load_to_hf_hub(hf_token: str):
     tokenizer = REMI()
@@ -18,6 +20,6 @@ def test_push_and_load_to_hf_hub(hf_token: str):
 def test_from_pretrained_local():
     # Here using paths to directories
     tokenizer = TSD()
-    tokenizer.save_pretrained("tests/tokenizer_confs")
-    tokenizer2 = TSD.from_pretrained("tests/tokenizer_confs")
+    tokenizer.save_pretrained(TEST_DIR / "tests/tokenizer_confs")
+    tokenizer2 = TSD.from_pretrained(TEST_DIR / "tests/tokenizer_confs")
     assert tokenizer == tokenizer2

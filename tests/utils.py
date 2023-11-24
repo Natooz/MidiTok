@@ -1,7 +1,10 @@
-""" Test validation methods
-
+"""
+Test validation methods.
+# TODO make use of MidiFile __eq__?
 """
 
+from copy import deepcopy
+from pathlib import Path
 from typing import List, Tuple, Union
 
 import numpy as np
@@ -19,22 +22,68 @@ from miditoolkit import (
 import miditok
 from miditok.constants import TIME_SIGNATURE_RANGE
 
-ALL_TOKENIZATIONS = [
-    "MIDILike",
-    "TSD",
-    "Structured",
-    "REMI",
-    "CPWord",
-    "Octuple",
-    "MuMIDI",
-    "MMM",
-]
+SEED = 777
+ALL_TOKENIZATIONS = miditok.tokenizations.__all__
+TOKENIZATIONS_BPE = ["REMI", "MIDILike", "TSD", "MMM", "Structured"]
+
 TIME_SIGNATURE_RANGE_TESTS = TIME_SIGNATURE_RANGE
 TIME_SIGNATURE_RANGE_TESTS.update({2: [2, 3, 4]})
 TIME_SIGNATURE_RANGE_TESTS[4].append(8)
+# TODO centralize params?
+
+HERE = Path(__file__).parent
+MIDI_PATHS_ONE_TRACK = sorted((HERE / "MIDIs_one_track").rglob("*.mid"))
+MIDI_PATHS_MULTITRACK = sorted((HERE / "MIDIs_multitrack").rglob("*.mid"))
+MIDI_PATHS_ALL = sorted(
+    deepcopy(MIDI_PATHS_ONE_TRACK) + deepcopy(MIDI_PATHS_MULTITRACK)
+)
+# TODO temporary directory
+TEST_DIR = HERE / "test_results"
+TEST_DIR.mkdir(exist_ok=True)
 
 
-def midis_equals(
+def prepare_midi_for_tests(
+    midi: MidiFile, sort_notes: bool = False, tokenizer: miditok.MIDITokenizer = None
+) -> MidiFile:
+    """Prepares a midi for test by returning a copy with tracks sorted, and optionally notes.
+    It also
+
+    :param midi: midi reference.
+    :param sort_notes: whether to sort the notes. This is not necessary before tokenizing a MIDI, as the sorting
+        will be performed by the tokenizer. (default: False)
+    :param tokenizer: in order to downsample the MIDI before sorting its content.
+    :return: a new MIDI object with track (and notes) sorted.
+    """
+    tokenization = type(tokenizer).__name__ if tokenizer is not None else None
+    new_midi = deepcopy(midi)
+
+    # Downsamples the MIDI if a tokenizer is given
+    if tokenizer is not None:
+        tokenizer.preprocess_midi(new_midi)
+
+        # For Octuple/CPWord, as tempo is only carried at notes times, we need to adapt their times for comparison
+        # Set tempo changes at onset times of notes
+        # We use the first track only, as it is the one for which tempos are decoded
+        if tokenizer.config.use_tempos and tokenization in ["Octuple", "CPWord"]:
+            adapt_tempo_changes_times([new_midi.instruments[0]], new_midi.tempo_changes)
+
+    for track in new_midi.instruments:
+        # Adjust pedal ends to the maximum possible value
+        if tokenizer is not None and tokenizer.config.use_sustain_pedals:
+            adjust_pedal_durations(track.pedals, tokenizer, midi.ticks_per_beat)
+        if track.is_drum:
+            track.program = 0  # need to be done before sorting tracks per program
+        if sort_notes:
+            track.notes.sort(key=lambda x: (x.start, x.pitch, x.end, x.velocity))
+
+    # Sorts tracks
+    # MIDI detokenized with one_token_stream contains tracks sorted by note occurrence
+    new_midi.instruments.sort(key=lambda x: (x.program, x.is_drum))
+
+    return new_midi
+
+
+def midis_equals(  # TODO replace this?
     midi1: MidiFile, midi2: MidiFile
 ) -> List[Tuple[int, str, List[Tuple[str, Union[Note, int], int]]]]:
     errors = []
@@ -58,7 +107,7 @@ def track_equals(
     return errors
 
 
-def notes_equals(note1: Note, note2: Note) -> str:
+def notes_equals(note1: Note, note2: Note) -> str:  # TODO replace this
     if note1.start != note2.start:
         return "start"
     elif note1.end != note2.end:
@@ -70,7 +119,7 @@ def notes_equals(note1: Note, note2: Note) -> str:
     return ""
 
 
-def tempo_changes_equals(
+def tempo_changes_equals(  # TODO replace this
     tempo_changes1: List[TempoChange], tempo_changes2: List[TempoChange]
 ) -> List[Tuple[str, Union[TempoChange, int], float]]:
     if len(tempo_changes1) != len(tempo_changes2):
@@ -84,7 +133,7 @@ def tempo_changes_equals(
     return errors
 
 
-def time_signature_changes_equals(
+def time_signature_changes_equals(  # TODO replace this
     time_sig_changes1: List[TimeSignature], time_sig_changes2: List[TimeSignature]
 ) -> List[Tuple[str, Union[TimeSignature, int], float]]:
     if len(time_sig_changes1) != len(time_sig_changes2):
@@ -102,7 +151,7 @@ def time_signature_changes_equals(
     return errors
 
 
-def pedal_equals(
+def pedal_equals(  # TODO replace this
     midi1: MidiFile, midi2: MidiFile
 ) -> List[List[Tuple[str, Union[Pedal, int], float]]]:
     errors = []
@@ -119,7 +168,7 @@ def pedal_equals(
     return errors
 
 
-def pitch_bend_equals(
+def pitch_bend_equals(  # TODO replace this
     midi1: MidiFile, midi2: MidiFile
 ) -> List[List[Tuple[str, Union[PitchBend, int], float]]]:
     errors = []
@@ -136,7 +185,7 @@ def pitch_bend_equals(
     return errors
 
 
-def tokenize_check_equals(
+def tokenize_and_check_equals(
     midi: MidiFile,
     tokenizer: miditok.MIDITokenizer,
     file_idx: Union[int, str],
@@ -156,10 +205,9 @@ def tokenize_check_equals(
         miditok.utils.get_midi_programs(midi),
         time_division=midi.ticks_per_beat,
     )
-    midi_decoded.instruments.sort(key=lambda x: (x.program, x.is_drum))
-    if tokenization == "MIDILike":
-        for track in midi_decoded.instruments:
-            track.notes.sort(key=lambda x: (x.start, x.pitch, x.end))
+    midi_decoded = prepare_midi_for_tests(
+        midi_decoded, sort_notes=tokenization == "MIDILike"
+    )
 
     # Checks types and values conformity following the rules
     err_tse = tokenizer.tokens_errors(tokens)
@@ -275,6 +323,12 @@ def adapt_tempo_changes_times(
 def adjust_pedal_durations(
     pedals: List[Pedal], tokenizer: miditok.MIDITokenizer, time_division: int
 ):
+    """Adapt pedal offset times so that they match the possible durations covered by a tokenizer.
+
+    :param pedals: list of Pedal objects to adapt.
+    :param tokenizer: tokenizer (needed for durations).
+    :param time_division: time division of the MIDI of origin.
+    """
     durations_in_tick = np.array(
         [
             (beat * res + pos) * time_division // res
@@ -286,15 +340,3 @@ def adjust_pedal_durations(
         beat, pos, res = tokenizer.durations[dur_index]
         dur_index_in_tick = (beat * res + pos) * time_division // res
         pedal.end = pedal.start + dur_index_in_tick
-        pedal.duration = pedal.end - pedal.start
-
-
-def remove_equal_successive_tempos(tempo_changes: List[TempoChange]):
-    current_tempo = -1
-    i = 0
-    while i < len(tempo_changes):
-        if tempo_changes[i].tempo == current_tempo:
-            del tempo_changes[i]
-            continue
-        current_tempo = tempo_changes[i].tempo
-        i += 1

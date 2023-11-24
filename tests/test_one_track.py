@@ -1,26 +1,26 @@
 #!/usr/bin/python3 python
 
 """One track test file
+TODO rename file test_tokenize
 """
 
 from copy import deepcopy
-from pathlib import Path, PurePath
-from time import time
-from typing import Union
+from pathlib import Path
+from typing import Sequence, Union
 
+import pytest
 from miditoolkit import MidiFile
-from tqdm import tqdm
 
 import miditok
 from miditok.constants import CHORD_MAPS
 
-from .tests_utils import (
+from .utils import (
     ALL_TOKENIZATIONS,
+    MIDI_PATHS_ONE_TRACK,
+    TEST_DIR,
     TIME_SIGNATURE_RANGE_TESTS,
-    adapt_tempo_changes_times,
-    adjust_pedal_durations,
-    remove_equal_successive_tempos,
-    tokenize_check_equals,
+    prepare_midi_for_tests,
+    tokenize_and_check_equals,
 )
 
 BEAT_RES_TEST = {(0, 16): 8}
@@ -50,118 +50,83 @@ TOKENIZER_PARAMS = {
 }
 
 
+@pytest.mark.parametrize("midi_path", MIDI_PATHS_ONE_TRACK)
 def test_one_track_midi_to_tokens_to_midi(
-    data_path: Union[str, Path, PurePath] = "./tests/One_track_MIDIs",
+    midi_path: Union[str, Path],
+    tokenizations: Sequence[str] = None,
     saving_erroneous_midis: bool = True,
 ):
-    r"""Reads a few MIDI files, convert them into token sequences, convert them back to MIDI files.
-    The converted back MIDI files should identical to original one, expect with note starting and ending
-    times quantized, and maybe a some duplicated notes removed
+    r"""Reads a MIDI file, converts it into tokens, convert it back to a MIDI object.
+    The decoded MIDI should be identical to the original one after downsampling, and potentially notes deduplication.
+    We only parametrize for midi files, as it would otherwise require to load them multiple times each.
+    # TODO test parametrize tokenization / params_set
 
-    :param data_path: root path to the data to test
-    :param saving_erroneous_midis: will save MIDIs converted back with errors, to be used to debug
+    :param tokenizations: sequence of tokenizer names to test.
+    :param midi_path: path to the MIDI file to test.
+    :param saving_erroneous_midis: will save MIDIs decoded with errors, to be used to debug.
     """
-    files = list(Path(data_path).glob("**/*.mid"))
+    if tokenizations is None:
+        tokenizations = ALL_TOKENIZATIONS
+    (out_path := TEST_DIR / "tokenization_errors").mkdir(exist_ok=True)
     at_least_one_error = False
-    t0 = time()
 
-    for i, file_path in enumerate(tqdm(files, desc="Testing One Track")):
-        # Reads the midi
-        midi = MidiFile(file_path)
-        # midi.instruments = [midi.instruments[0]]
-        # Will store the tracks tokenized / detokenized, to be saved in case of errors
-        for ti, track in enumerate(midi.instruments):
-            track.name = f"original {ti} not quantized"
-        tracks_with_errors = []
+    # Reads the midi
+    midi = MidiFile(midi_path)
+    # Will store the tracks tokenized / detokenized, to be saved in case of errors
+    for ti, track in enumerate(midi.instruments):
+        track.name = f"original {ti} not quantized"
+    tracks_with_errors = []
 
-        for tokenization in ALL_TOKENIZATIONS:
-            params = deepcopy(TOKENIZER_PARAMS)
-            # Special beat res for test, up to 64 beats so the duration and time-shift values are
-            # long enough for Structured, and with a single beat resolution
-            if tokenization == "Structured":
-                params["beat_res"] = {(0, 64): 8}
-            elif tokenization == "Octuple":
-                params["max_bar_embedding"] = 300
-                params["use_time_signatures"] = False  # because of time shifted
-            elif tokenization == "CPWord":
-                # Rests and time sig can mess up with CPWord, when a Rest that is crossing new bar is followed
-                # by a new TimeSig change, as TimeSig are carried with Bar tokens (and there is None is this case)
-                if params["use_time_signatures"] and params["use_rests"]:
-                    params["use_rests"] = False
+    for tok_i, tokenization in enumerate(tokenizations):
+        params = deepcopy(TOKENIZER_PARAMS)
+        # Special beat res for test, up to 64 beats so the duration and time-shift values are
+        # long enough for Structured, and with a single beat resolution
+        if tokenization == "Structured":
+            params["beat_res"] = {(0, 64): 8}
+        elif tokenization == "Octuple":
+            params["max_bar_embedding"] = 300
+            params["use_time_signatures"] = False  # because of time shifted
+        elif tokenization == "CPWord":
+            # Rests and time sig can mess up with CPWord, when a Rest that is crossing new bar is followed
+            # by a new TimeSig change, as TimeSig are carried with Bar tokens (and there is None is this case)
+            if params["use_time_signatures"] and params["use_rests"]:
+                params["use_rests"] = False
 
-            tokenizer_config = miditok.TokenizerConfig(**params)
-            tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
-                tokenizer_config=tokenizer_config
-            )
+        tokenizer_config = miditok.TokenizerConfig(**params)
+        tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
+            tokenizer_config=tokenizer_config
+        )
 
-            # Process the MIDI
-            # midi notes / tempos / time signature quantized with the line above
-            midi_to_compare = deepcopy(midi)
-            for track in midi_to_compare.instruments:
-                if track.is_drum:
-                    track.program = (
-                        0  # need to be done before sorting tracks per program
-                    )
+        # Process the MIDI
+        # preprocess_midi is also performed when tokenizing, but we need to call it here for following adaptations
+        midi_to_compare = prepare_midi_for_tests(midi, tokenizer=tokenizer)
+        # Store preprocessed track
+        if len(tracks_with_errors) == 0:
+            tracks_with_errors += midi_to_compare.instruments
+            for ti, track in enumerate(midi_to_compare.instruments):
+                track.name = f"original {ti} quantized"
 
-            # This step is also performed in preprocess_midi, but we need to call it here for the assertions below
-            tokenizer.preprocess_midi(midi_to_compare)
-            # For Octuple, as tempo is only carried at notes times, we need to adapt their times for comparison
-            # Same for CPWord which carries tempo with Position (for notes)
-            if tokenization in ["Octuple", "CPWord"]:
-                # We use the first track only, as it is the one for which tempos are decoded
-                adapt_tempo_changes_times(
-                    [midi_to_compare.instruments[0]], midi_to_compare.tempo_changes
-                )
-            # When the tokenizer only decoded tempo changes different from the last tempo val
-            if tokenization in ["CPWord"]:
-                remove_equal_successive_tempos(midi_to_compare.tempo_changes)
-            # Adjust pedal ends to the maximum possible value
-            if tokenizer.config.use_sustain_pedals:
-                for track in midi_to_compare.instruments:
-                    adjust_pedal_durations(track.pedals, tokenizer, midi.ticks_per_beat)
-            # Store preprocessed track
-            if len(tracks_with_errors) == 0:
-                tracks_with_errors += midi_to_compare.instruments
-                for ti, track in enumerate(midi_to_compare.instruments):
-                    track.name = f"original {ti} quantized"
+        # printing the tokenizer shouldn't fail
+        _ = str(tokenizer)
 
-            # printing the tokenizer shouldn't fail
-            _ = str(tokenizer)
+        # MIDI -> Tokens -> MIDI
+        decoded_midi, has_errors = tokenize_and_check_equals(
+            midi_to_compare, tokenizer, tok_i, midi_path.stem
+        )
 
-            # MIDI -> Tokens -> MIDI
-            decoded_midi, has_errors = tokenize_check_equals(
-                midi_to_compare, tokenizer, i, file_path.stem
-            )
+        # Add track to error list
+        if has_errors:
+            for ti, track in enumerate(decoded_midi.instruments):
+                track.name = f"{tok_i} encoded with {tokenization}"
+            tracks_with_errors += decoded_midi.instruments
 
-            # Add track to error list
-            if has_errors:
-                for ti, track in enumerate(decoded_midi.instruments):
-                    track.name = f"{ti} encoded with {tokenization}"
-                tracks_with_errors += decoded_midi.instruments
+    # > 1 as the first one is the preprocessed
+    if len(tracks_with_errors) > len(midi.instruments):
+        at_least_one_error = True
+        if saving_erroneous_midis:
+            midi.tempo_changes = midi_to_compare.tempo_changes
+            midi.time_signature_changes = midi_to_compare.time_signature_changes
+            midi.instruments += tracks_with_errors
+            midi.dump(out_path / midi_path.name)
 
-        # > 1 as the first one is the preprocessed
-        if len(tracks_with_errors) > len(midi.instruments):
-            at_least_one_error = True
-            if saving_erroneous_midis:
-                midi.tempo_changes = midi_to_compare.tempo_changes
-                midi.time_signature_changes = midi_to_compare.time_signature_changes
-                midi.instruments += tracks_with_errors
-                midi.dump(PurePath("tests", "test_results", file_path.name))
-
-    ttotal = time() - t0
-    print(f"Took {ttotal:.2f} seconds")
     assert not at_least_one_error
-
-
-if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(description="MIDI Encoding test")
-    parser.add_argument(
-        "--data",
-        type=str,
-        default="tests/One_track_MIDIs",
-        help="directory of MIDI files to use for test",
-    )
-    args = parser.parse_args()
-    test_one_track_midi_to_tokens_to_midi(args.data)
