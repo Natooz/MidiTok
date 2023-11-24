@@ -1,6 +1,5 @@
 """
 Test validation methods.
-# TODO make use of MidiFile __eq__?
 """
 
 from copy import deepcopy
@@ -14,9 +13,7 @@ from miditoolkit import (
     MidiFile,
     Note,
     Pedal,
-    PitchBend,
     TempoChange,
-    TimeSignature,
 )
 
 import miditok
@@ -81,18 +78,24 @@ def prepare_midi_for_tests(
     return new_midi
 
 
-def midis_equals(  # TODO replace this?
+def midis_notes_equals(
     midi1: MidiFile, midi2: MidiFile
 ) -> List[Tuple[int, str, List[Tuple[str, Union[Note, int], int]]]]:
+    """Checks if the notes from two MIDIs are all equal, and if not returns the list of errors.
+
+    :param midi1: first MIDI.
+    :param midi2: second MIDI.
+    :return: list of errors.
+    """
     errors = []
     for track1, track2 in zip(midi1.instruments, midi2.instruments):
-        track_errors = track_equals(track1, track2)
+        track_errors = tracks_notes_equals(track1, track2)
         if len(track_errors) > 0:
             errors.append((track1.program, track1.name, track_errors))
     return errors
 
 
-def track_equals(
+def tracks_notes_equals(
     track1: Instrument, track2: Instrument
 ) -> List[Tuple[str, Union[Note, int], int]]:
     if len(track1.notes) != len(track2.notes):
@@ -105,7 +108,7 @@ def track_equals(
     return errors
 
 
-def notes_equals(note1: Note, note2: Note) -> str:  # TODO replace this
+def notes_equals(note1: Note, note2: Note) -> str:
     if note1.start != note2.start:
         return "start"
     elif note1.end != note2.end:
@@ -117,70 +120,72 @@ def notes_equals(note1: Note, note2: Note) -> str:  # TODO replace this
     return ""
 
 
-def tempo_changes_equals(  # TODO replace this
-    tempo_changes1: List[TempoChange], tempo_changes2: List[TempoChange]
-) -> List[Tuple[str, Union[TempoChange, int], float]]:
-    if len(tempo_changes1) != len(tempo_changes2):
-        return [("len", len(tempo_changes2), len(tempo_changes1))]
-    errors = []
-    for tempo_change1, tempo_change2 in zip(tempo_changes1, tempo_changes2):
-        if tempo_change1.time != tempo_change2.time:
-            errors.append(("time", tempo_change1, tempo_change2.time))
-        if tempo_change1.tempo != tempo_change2.tempo:
-            errors.append(("tempo", tempo_change1, tempo_change2.tempo))
-    return errors
+def check_midis_equals(
+    midi1: MidiFile,
+    midi2: MidiFile,
+    check_tempos: bool = True,
+    check_time_signatures: bool = True,
+    check_pedals: bool = True,
+    check_pitch_bends: bool = True,
+    log_prefix: str = "",
+) -> Tuple[MidiFile, bool]:
+    has_errors = False
+    types_of_errors = []
 
+    # Checks notes and add markers if errors
+    errors = midis_notes_equals(midi1, midi2)
+    if len(errors) > 0:
+        has_errors = True
+        for e, track_err in enumerate(errors):
+            if track_err[-1][0][0] != "len":
+                for err, note, exp in track_err[-1]:
+                    midi2.markers.append(
+                        Marker(
+                            f"{e}: with note {err} (pitch {note.pitch})",
+                            note.start,
+                        )
+                    )
+        print(
+            f"{log_prefix} failed to encode/decode NOTES ({sum(len(t[2]) for t in errors)} errors)"
+        )
 
-def time_signature_changes_equals(  # TODO replace this
-    time_sig_changes1: List[TimeSignature], time_sig_changes2: List[TimeSignature]
-) -> List[Tuple[str, Union[TimeSignature, int], float]]:
-    if len(time_sig_changes1) != len(time_sig_changes2):
-        return [("len", len(time_sig_changes1), len(time_sig_changes2))]
-    errors = []
-    for time_sig_change1, time_sig_change2 in zip(time_sig_changes1, time_sig_changes2):
-        if time_sig_change1.time != time_sig_change2.time:
-            errors.append(("time", time_sig_change1, time_sig_change2.time))
-        if time_sig_change1.numerator != time_sig_change2.numerator:
-            errors.append(("numerator", time_sig_change1, time_sig_change2.numerator))
-        if time_sig_change1.denominator != time_sig_change2.denominator:
-            errors.append(
-                ("denominator", time_sig_change1, time_sig_change2.denominator)
-            )
-    return errors
+    # Check pedals
+    if check_pedals:
+        for inst1, inst2 in zip(midi1.instruments, midi2.instruments):
+            if inst1.pedals != inst2.pedals:
+                types_of_errors.append("PEDALS")
+                break
 
+    # Check pitch bends
+    if check_pitch_bends:
+        for inst1, inst2 in zip(midi1.instruments, midi2.instruments):
+            if inst1.pitch_bends != inst2.pitch_bends:
+                types_of_errors.append("PITCH BENDS")
+                break
 
-def pedal_equals(  # TODO replace this
-    midi1: MidiFile, midi2: MidiFile
-) -> List[List[Tuple[str, Union[Pedal, int], float]]]:
-    errors = []
-    for inst1, inst2 in zip(midi1.instruments, midi2.instruments):
-        if len(inst1.pedals) != len(inst2.pedals):
-            errors.append([("len", len(inst1.pedals), len(inst2.pedals))])
-            continue
-        errors.append([])
-        for pedal1, pedal2 in zip(inst1.pedals, inst2.pedals):
-            if pedal1.start != pedal2.start:
-                errors[-1].append(("start", pedal1, pedal2.start))
-            elif pedal1.end != pedal2.end:
-                errors[-1].append(("end", pedal1, pedal2.end))
-    return errors
+    """# Check control changes
+    if check_control_changes:
+        for inst1, inst2 in zip(midi1.instruments, midi2.instruments):
+            if inst1.control_changes != inst2.control_changes:
+                types_of_errors.append("CONTROL CHANGES")
+                break"""
 
+    # Checks tempos
+    if check_tempos:
+        if midi1.tempo_changes != midi2.tempo_changes:
+            types_of_errors.append("TEMPOS")
 
-def pitch_bend_equals(  # TODO replace this
-    midi1: MidiFile, midi2: MidiFile
-) -> List[List[Tuple[str, Union[PitchBend, int], float]]]:
-    errors = []
-    for inst1, inst2 in zip(midi1.instruments, midi2.instruments):
-        if len(inst1.pitch_bends) != len(inst2.pitch_bends):
-            errors.append([("len", len(inst1.pitch_bends), len(inst2.pitch_bends))])
-            continue
-        errors.append([])
-        for pitch_bend1, pitch_bend2 in zip(inst1.pitch_bends, inst2.pitch_bends):
-            if pitch_bend1.time != pitch_bend2.time:
-                errors[-1].append(("time", pitch_bend1, pitch_bend2.time))
-            elif pitch_bend1.pitch != pitch_bend2.pitch:
-                errors[-1].append(("pitch", pitch_bend1, pitch_bend2.pitch))
-    return errors
+    # Checks time signatures
+    if check_time_signatures:
+        if midi1.time_signature_changes != midi2.time_signature_changes:
+            types_of_errors.append("TIME SIGNATURES")
+
+    # Prints types of errors
+    has_errors = has_errors or len(types_of_errors) > 0
+    for err_type in types_of_errors:
+        print(f"{log_prefix} failed to encode/decode {err_type}")
+
+    return midi2, not has_errors
 
 
 def tokenize_and_check_equals(
@@ -189,14 +194,15 @@ def tokenize_and_check_equals(
     file_idx: Union[int, str],
     file_name: str,
 ) -> Tuple[MidiFile, bool]:
-    has_errors = False
     tokenization = type(tokenizer).__name__
+    log_prefix = f"MIDI {file_idx} - {file_name} / {tokenization}"
     midi.instruments.sort(key=lambda x: (x.program, x.is_drum))
     # merging is performed in preprocess only in one_token_stream mode
     # but in multi token stream, decoding will actually keep one track per program
     if tokenizer.config.use_programs:
         miditok.utils.merge_same_program_tracks(midi.instruments)
 
+    # Tokenize and detokenize
     tokens = tokenizer(midi)
     midi_decoded = tokenizer(
         tokens,
@@ -207,83 +213,26 @@ def tokenize_and_check_equals(
         midi_decoded, sort_notes=tokenization == "MIDILike"
     )
 
+    # Check decoded MIDI is identical
+    midi_decoded, no_error = check_midis_equals(
+        midi,
+        midi_decoded,
+        check_tempos=tokenizer.config.use_tempos and not tokenization == "MuMIDI",
+        check_time_signatures=tokenizer.config.use_time_signatures,
+        check_pedals=tokenizer.config.use_sustain_pedals,
+        check_pitch_bends=tokenizer.config.use_pitch_bends,
+        log_prefix=log_prefix,
+    )
+
     # Checks types and values conformity following the rules
     err_tse = tokenizer.tokens_errors(tokens)
     if isinstance(err_tse, list):
         err_tse = sum(err_tse)
     if err_tse != 0.0:
-        print(
-            f"Validation of tokens types / values successions failed with {tokenization}: {err_tse:.2f}"
-        )
+        no_error = False
+        print(f"{log_prefix} Validation of tokens types / values successions failed")
 
-    # Checks notes
-    errors = midis_equals(midi, midi_decoded)
-    if len(errors) > 0:
-        has_errors = True
-        for e, track_err in enumerate(errors):
-            if track_err[-1][0][0] != "len":
-                for err, note, exp in track_err[-1]:
-                    midi_decoded.markers.append(
-                        Marker(
-                            f"{e}: with note {err} (pitch {note.pitch})",
-                            note.start,
-                        )
-                    )
-        print(
-            f"MIDI {file_idx} - {file_name} / {tokenization} failed to encode/decode NOTES"
-            f"({sum(len(t[2]) for t in errors)} errors)"
-        )
-
-    # Checks tempos
-    if (
-        tokenizer.config.use_tempos and tokenization != "MuMIDI"
-    ):  # MuMIDI doesn't decode tempos
-        tempo_errors = tempo_changes_equals(
-            midi.tempo_changes, midi_decoded.tempo_changes
-        )
-        if len(tempo_errors) > 0:
-            has_errors = True
-            print(
-                f"MIDI {file_idx} - {file_name} / {tokenization} failed to encode/decode TEMPO changes"
-                f"({len(tempo_errors)} errors)"
-            )
-
-    # Checks time signatures
-    if tokenizer.config.use_time_signatures:
-        time_sig_errors = time_signature_changes_equals(
-            midi.time_signature_changes,
-            midi_decoded.time_signature_changes,
-        )
-        if len(time_sig_errors) > 0:
-            has_errors = True
-            print(
-                f"MIDI {file_idx} - {file_name} / {tokenization} failed to encode/decode TIME SIGNATURE changes"
-                f"({len(time_sig_errors)} errors)"
-            )
-
-    # Checks pedals
-    if tokenizer.config.use_sustain_pedals:
-        pedal_errors = pedal_equals(midi, midi_decoded)
-        if any(len(err) > 0 for err in pedal_errors):
-            has_errors = True
-            print(
-                f"MIDI {file_idx} - {file_name} / {tokenization} failed to encode/decode PEDALS"
-                f"({sum(len(err) for err in pedal_errors)} errors)"
-            )
-
-    # Checks pitch bends
-    if tokenizer.config.use_pitch_bends:
-        pitch_bend_errors = pitch_bend_equals(midi, midi_decoded)
-        if any(len(err) > 0 for err in pitch_bend_errors):
-            has_errors = True
-            print(
-                f"MIDI {file_idx} - {file_name} / {tokenization} failed to encode/decode PITCH BENDS"
-                f"({sum(len(err) for err in pitch_bend_errors)} errors)"
-            )
-
-    # TODO check control changes
-
-    return midi_decoded, has_errors
+    return midi_decoded, not no_error
 
 
 def adapt_tempo_changes_times(
