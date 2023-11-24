@@ -25,6 +25,7 @@ def data_augmentation_dataset(
     all_offset_combinations: bool = False,
     out_path: Union[Path, str] = None,
     copy_original_in_new_location: bool = True,
+    save_data_aug_report: bool = True,
 ):
     r"""Perform data augmentation on a whole dataset, on the pitch dimension.
     Drum tracks are not augmented.
@@ -54,8 +55,10 @@ def data_augmentation_dataset(
     :param out_path: output path to save the augmented files. Original (non-augmented) MIDIs will be
             saved to this location. If none is given, they will be saved in the same location an the
             data_path. (default: None)
-    :param copy_original_in_new_location: if given True, the orinal (non-augmented) MIDIs will be saved
+    :param copy_original_in_new_location: if given True, the original (non-augmented) MIDIs will be saved
             in the out_path location too. (default: True)
+    :param save_data_aug_report: will save numbers from the data augmentation in a ``data_augmentation_report.txt``
+            file in the output directory. (default: True)
     """
     if out_path is None:
         out_path = data_path
@@ -144,21 +147,18 @@ def data_augmentation_dataset(
                         if offset != 0
                     ]
                 )
-                if out_path is None:
-                    saving_path = file_path.parent
-                else:
-                    saving_path = out_path / file_path.parent.relative_to(data_path)
-                    saving_path.mkdir(parents=True, exist_ok=True)
+                saving_path = out_path / file_path.parent.relative_to(data_path)
+                saving_path.mkdir(parents=True, exist_ok=True)
                 saving_path /= f"{file_path.stem}{suffix}.json"
                 tokenizer.save_tokens(tracks_seq, saving_path, programs)
                 nb_augmentations += 1
                 nb_tracks_augmented += len(tracks_seq)
-            if copy_original_in_new_location and out_path is not None:
+            if copy_original_in_new_location and out_path != data_path:
                 if tokenizer.one_token_stream:
                     ids = ids[0]
                 saving_path = (
                     out_path
-                    / file_path.relative_to(data_path)
+                    / file_path.parent.relative_to(data_path)
                     / f"{file_path.stem}.json"
                 )
                 saving_path.parent.mkdir(parents=True, exist_ok=True)
@@ -197,36 +197,32 @@ def data_augmentation_dataset(
                         if offset != 0
                     ]
                 )
-                if out_path is None:
-                    saving_path = file_path.parent
-                else:
-                    saving_path = out_path / file_path.parent.relative_to(data_path)
-                    saving_path.mkdir(parents=True, exist_ok=True)
+                saving_path = out_path / file_path.parent.relative_to(data_path)
+                saving_path.mkdir(parents=True, exist_ok=True)
                 saving_path /= f"{file_path.stem}{suffix}.mid"
                 aug_midi.dump(saving_path)
                 nb_augmentations += 1
                 nb_tracks_augmented += len(aug_midi.instruments)
-            if (
-                copy_original_in_new_location and out_path is not None
-            ):  # copy original midi
+            if copy_original_in_new_location and out_path != data_path:
                 saving_path = (
                     out_path
-                    / file_path.relative_to(data_path)
+                    / file_path.parent.relative_to(data_path)
                     / f"{file_path.stem}.mid"
                 )
                 saving_path.parent.mkdir(parents=True, exist_ok=True)
                 midi.dump(saving_path)
 
     # Saves data augmentation report, json encoded with txt extension to not mess with others json files
-    with open(out_path / "data_augmentation.txt", "w") as outfile:
-        json.dump(
-            {
-                "nb_tracks_augmented": nb_tracks_augmented,
-                "nb_files_before": len(files_paths),
-                "nb_files_after": len(files_paths) + nb_augmentations,
-            },
-            outfile,
-        )
+    if save_data_aug_report:
+        with open(out_path / "data_augmentation_report.txt", "w") as outfile:
+            json.dump(
+                {
+                    "nb_tracks_augmented": nb_tracks_augmented,
+                    "nb_files_before": len(files_paths),
+                    "nb_files_after": len(files_paths) + nb_augmentations,
+                },
+                outfile,
+            )
 
 
 def get_offsets(
