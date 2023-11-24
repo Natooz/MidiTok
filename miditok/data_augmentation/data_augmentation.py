@@ -218,7 +218,7 @@ def data_augmentation_dataset(
                 midi.dump(saving_path)
 
     # Saves data augmentation report, json encoded with txt extension to not mess with others json files
-    with open(data_path / "data_augmentation.txt", "w") as outfile:
+    with open(out_path / "data_augmentation.txt", "w") as outfile:
         json.dump(
             {
                 "nb_tracks_augmented": nb_tracks_augmented,

@@ -21,7 +21,7 @@ from torch import (
 
 import miditok
 
-from .utils import MIDI_PATHS_ALL, TEST_DIR
+from .utils import HERE, MIDI_PATHS_ALL, TEST_DIR
 
 
 def test_convert_tensors():
@@ -53,7 +53,7 @@ def test_tokenize_datasets_file_tree(midi_paths: Sequence[Union[str, Path]] = No
     for json_path, midi_path in zip(json_paths, midi_paths):
         assert (
             json_path.relative_to(out_path).with_suffix(".test")
-            == midi_path.relative_to("./").with_suffix(".test")
+            == midi_path.relative_to(HERE).with_suffix(".test")
         ), f"The file tree has not been reproduced as it should, for the file {midi_path} tokenized {json_path}"
 
     # Just make sure the non-overwrite mode doesn't crash
