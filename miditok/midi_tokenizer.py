@@ -1950,7 +1950,12 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         # Perform data augmentation
         if data_augment_offsets is not None:
-            data_augmentation_dataset(out_dir, self, *data_augment_offsets)
+            data_augmentation_dataset(
+                out_dir,
+                self,
+                *data_augment_offsets,
+                copy_original_in_new_location=False,
+            )
 
         if apply_bpe and self.has_bpe:
             self.apply_bpe_to_dataset(out_dir)
