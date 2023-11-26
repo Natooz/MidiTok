@@ -1039,6 +1039,8 @@ class MIDITokenizer(ABC, HFHubMixin):
         :return: the sequence of corresponding tokens (str or Event).
         """
         tokens = []
+        if len(ids) == 0:
+            return tokens
         if isinstance(ids[0], list):  # multiple vocabularies
             for (
                 multi_ids
