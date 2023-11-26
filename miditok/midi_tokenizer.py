@@ -1017,6 +1017,8 @@ class MIDITokenizer(ABC, HFHubMixin):
         :param tokens: list of tokens (str) to convert.
         :return: list of corresponding ids (int).
         """
+        if len(tokens) == 0:
+            return []
         if isinstance(tokens[0], (list, tuple)):
             ids = []
             for seq in tokens:
@@ -1037,6 +1039,8 @@ class MIDITokenizer(ABC, HFHubMixin):
         :return: the sequence of corresponding tokens (str or Event).
         """
         tokens = []
+        if len(ids) == 0:
+            return tokens
         if isinstance(ids[0], list):  # multiple vocabularies
             for (
                 multi_ids
@@ -1065,6 +1069,8 @@ class MIDITokenizer(ABC, HFHubMixin):
         :return: the sequence of corresponding tokens (str).
         """
         tokens = []
+        if len(events) == 0:
+            return tokens
         if isinstance(events[0], list):  # multiple vocabularies
             for (
                 multi_event
@@ -1090,6 +1096,8 @@ class MIDITokenizer(ABC, HFHubMixin):
         :param as_one_str: will return the bytes all concatenated into one string. (default: False)
         :return: the tokens converted into strings of unique bytes.
         """
+        if len(ids) == 0:
+            return ""
         if isinstance(ids[0], list):
             return [self._ids_to_bytes(item, as_one_str) for item in ids]
         bytes_ = [self._vocab_base_id_to_byte[i] for i in ids]
@@ -1104,6 +1112,8 @@ class MIDITokenizer(ABC, HFHubMixin):
         :param as_str: return the events as string objects, otherwise Event objects (default: True)
         :return: the sequence of corresponding tokens (str).
         """
+        if len(bytes_) == 0:
+            return []
         if isinstance(bytes_[0], list):  # multiple vocabularies
             return [self._bytes_to_tokens(byte_) for byte_ in bytes_]
 
