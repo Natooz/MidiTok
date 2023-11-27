@@ -22,7 +22,7 @@ def test_push_and_load_to_hf_hub(hf_token: str):
         try:
             tokenizer.push_to_hub("Natooz/MidiTok-tests", private=True, token=hf_token)
         except HfHubHTTPError as e:
-            if e.response.status_code in [500, 412]:
+            if e.response.status_code in [500, 412, 429]:
                 num_tries += 1
                 sleep(NUM_SECONDS_RETRY)
             else:

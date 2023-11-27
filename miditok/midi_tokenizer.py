@@ -78,12 +78,12 @@ def convert_sequence_to_tokseq(
     # Deduce nb of subscripts / dims
     nb_io_dims = len(tokenizer.io_format)
     nb_seq_dims = 1
-    if isinstance(arg[1][0], list):
+    if len(arg[1]) > 0 and isinstance(arg[1][0], list):
         nb_seq_dims += 1
-        if len(arg[1][0]) == 0 and nb_seq_dims == nb_io_dims - 1:
-            # Special case where the sequence contains no tokens, we increment anyway
+        if len(arg[1][0]) > 0 and isinstance(arg[1][0][0], list):
             nb_seq_dims += 1
-        elif isinstance(arg[1][0][0], list):
+        elif len(arg[1][0]) == 0 and nb_seq_dims == nb_io_dims - 1:
+            # Special case where the sequence contains no tokens, we increment anyway
             nb_seq_dims += 1
 
     # Check the number of dimensions is good
