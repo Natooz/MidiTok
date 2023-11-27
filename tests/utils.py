@@ -17,16 +17,9 @@ from miditoolkit import (
 )
 
 import miditok
-from miditok.constants import TIME_SIGNATURE_RANGE
+from miditok.constants import CHORD_MAPS, TIME_SIGNATURE_RANGE
 
 SEED = 777
-ALL_TOKENIZATIONS = miditok.tokenizations.__all__
-TOKENIZATIONS_BPE = ["REMI", "MIDILike", "TSD", "MMM", "Structured"]
-
-TIME_SIGNATURE_RANGE_TESTS = TIME_SIGNATURE_RANGE
-TIME_SIGNATURE_RANGE_TESTS.update({2: [2, 3, 4]})
-TIME_SIGNATURE_RANGE_TESTS[4].append(8)
-# TODO centralize params?
 
 HERE = Path(__file__).parent
 MIDI_PATHS_ONE_TRACK = sorted((HERE / "MIDIs_one_track").rglob("*.mid"))
@@ -35,6 +28,27 @@ MIDI_PATHS_ALL = sorted(
     deepcopy(MIDI_PATHS_ONE_TRACK) + deepcopy(MIDI_PATHS_MULTITRACK)
 )
 TEST_LOG_DIR = HERE / "test_logs"
+
+# TOKENIZATIONS
+ALL_TOKENIZATIONS = miditok.tokenizations.__all__
+TOKENIZATIONS_BPE = ["REMI", "MIDILike", "TSD", "MMM", "Structured"]
+
+# TOK CONFIG PARAMS
+TIME_SIGNATURE_RANGE_TESTS = TIME_SIGNATURE_RANGE
+TIME_SIGNATURE_RANGE_TESTS.update({2: [2, 3, 4]})
+TIME_SIGNATURE_RANGE_TESTS[4].append(8)
+TOKENIZER_CONFIG_KWARGS = {
+    "beat_res": {(0, 16): 8},  # TODO multiple res
+    "beat_res_rest": {(0, 2): 4, (2, 12): 2},
+    "num_tempos": 32,
+    "tempo_range": (40, 250),
+    "time_signature_range": TIME_SIGNATURE_RANGE_TESTS,
+    "chord_maps": CHORD_MAPS,
+    "chord_tokens_with_root_note": True,  # Tokens will look as "Chord_C:maj"
+    "chord_unknown": (3, 6),
+    "delete_equal_successive_time_sig_changes": True,
+    "delete_equal_successive_tempo_changes": True,
+}
 
 
 def prepare_midi_for_tests(
@@ -59,7 +73,11 @@ def prepare_midi_for_tests(
         # For Octuple/CPWord, as tempo is only carried at notes times, we need to adapt their times for comparison
         # Set tempo changes at onset times of notes
         # We use the first track only, as it is the one for which tempos are decoded
-        if tokenizer.config.use_tempos and tokenization in ["Octuple", "CPWord"]:
+        if (
+            tokenizer.config.use_tempos
+            and tokenization in ["Octuple", "CPWord"]
+            and len(new_midi.instruments) > 0
+        ):
             adapt_tempo_changes_times([new_midi.instruments[0]], new_midi.tempo_changes)
 
     for track in new_midi.instruments:

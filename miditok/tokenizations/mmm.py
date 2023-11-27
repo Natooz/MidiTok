@@ -14,6 +14,7 @@ from ..constants import (
     TIME_SIGNATURE,
 )
 from ..midi_tokenizer import MIDITokenizer, _in_as_seq
+from ..utils import set_midi_max_tick
 
 
 class MMM(MIDITokenizer):
@@ -321,12 +322,7 @@ class MMM(MIDITokenizer):
         midi.instruments = instruments
         midi.tempo_changes = tempo_changes
         midi.time_signature_changes = time_signature_changes
-        midi.max_tick = max(
-            [
-                max([note.end for note in track.notes]) if len(track.notes) > 0 else 0
-                for track in midi.instruments
-            ]
-        )
+        set_midi_max_tick(midi)
         # Write MIDI file
         if output_path:
             Path(output_path).mkdir(parents=True, exist_ok=True)
@@ -436,6 +432,8 @@ class MMM(MIDITokenizer):
     ) -> float:
         tokens_to_check = cast(TokSequence, tokens_to_check)
         nb_tok_predicted = len(tokens_to_check)  # used to norm the score
+        if nb_tok_predicted == 0:
+            return 0
         if self.has_bpe:
             self.decode_bpe(tokens_to_check)
         self.complete_sequence(tokens_to_check)

@@ -13,6 +13,7 @@ from ..constants import (
     TIME_SIGNATURE,
 )
 from ..midi_tokenizer import MIDITokenizer, _in_as_seq
+from ..utils import set_midi_max_tick
 
 
 class Octuple(MIDITokenizer):
@@ -339,12 +340,8 @@ class Octuple(MIDITokenizer):
             midi.instruments = list(instruments.values())
         midi.tempo_changes = tempo_changes
         midi.time_signature_changes = time_signature_changes
-        midi.max_tick = max(
-            [
-                max([note.end for note in track.notes]) if len(track.notes) > 0 else 0
-                for track in midi.instruments
-            ]
-        )
+        set_midi_max_tick(midi)
+
         # Write MIDI file
         if output_path:
             Path(output_path).mkdir(parents=True, exist_ok=True)
@@ -429,6 +426,8 @@ class Octuple(MIDITokenizer):
         # If list of TokSequence -> recursive
         if isinstance(tokens, list):
             return [self.tokens_errors(tok_seq) for tok_seq in tokens]
+        if len(tokens) == 0:
+            return 0
 
         err = 0
         current_bar = current_pos = -1

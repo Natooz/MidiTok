@@ -9,6 +9,7 @@ from miditoolkit import Instrument, MidiFile, Note, TempoChange, TimeSignature
 from ..classes import Event, TokSequence
 from ..constants import MIDI_INSTRUMENTS, TEMPO, TIME_DIVISION, TIME_SIGNATURE
 from ..midi_tokenizer import MIDITokenizer, _in_as_seq
+from ..utils import set_midi_max_tick
 
 
 class CPWord(MIDITokenizer):
@@ -536,12 +537,7 @@ class CPWord(MIDITokenizer):
             midi.instruments = list(instruments.values())
         midi.tempo_changes = tempo_changes
         midi.time_signature_changes = time_signature_changes
-        midi.max_tick = max(
-            [
-                max([note.end for note in track.notes]) if len(track.notes) > 0 else 0
-                for track in midi.instruments
-            ]
-        )
+        set_midi_max_tick(midi)
         # Write MIDI file
         if output_path:
             Path(output_path).mkdir(parents=True, exist_ok=True)
@@ -675,6 +671,8 @@ class CPWord(MIDITokenizer):
         # If list of TokSequence -> recursive
         if isinstance(tokens, list):
             return [self.tokens_errors(tok_seq) for tok_seq in tokens]
+        if len(tokens) == 0:
+            return 0
 
         def cp_token_type(tok: List[int]) -> List[str]:
             family = self[0, tok[0]].split("_")[1]

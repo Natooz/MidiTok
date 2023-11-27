@@ -13,7 +13,7 @@ from ..constants import (
     TIME_DIVISION,
 )
 from ..midi_tokenizer import MIDITokenizer, _in_as_seq, _out_as_complete_seq
-from ..utils import detect_chords
+from ..utils import detect_chords, set_midi_max_tick
 
 
 class MuMIDI(MIDITokenizer):
@@ -351,6 +351,7 @@ class MuMIDI(MIDITokenizer):
                     )
                 )
             midi.instruments[-1].notes = notes
+        set_midi_max_tick(midi)
 
         # Write MIDI file
         if output_path:
@@ -462,6 +463,8 @@ class MuMIDI(MIDITokenizer):
         :param tokens: sequence of tokens to check
         :return: the error ratio (lower is better)
         """
+        if len(tokens) == 0:
+            return 0
         tokens = tokens.tokens
         err = 0
         previous_type = tokens[0][0].split("_")[0]

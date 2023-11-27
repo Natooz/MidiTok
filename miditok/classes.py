@@ -2,6 +2,7 @@
 Common classes.
 """
 import json
+import warnings
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,8 +21,8 @@ from .constants import (
     DELETE_EQUAL_SUCCESSIVE_TIME_SIG_CHANGES,
     LOG_TEMPOS,
     MAX_PITCH_INTERVAL,
-    NB_TEMPOS,
-    NB_VELOCITIES,
+    NUM_TEMPOS,
+    NUM_VELOCITIES,
     ONE_TOKEN_STREAM_FOR_PROGRAMS,
     PITCH_BEND_RANGE,
     PITCH_INTERVALS_MAX_TIME_DIST,
@@ -160,9 +161,9 @@ class TokenizerConfig:
             lengths / resolutions. Note: for tokenization with ``Position`` tokens, the total number of possible
             positions will be set at four times the maximum resolution given (``max(beat_res.values)``\).
             (default: ``{(0, 4): 8, (4, 12): 4}``)
-    :param nb_velocities: number of velocity bins. In the MIDI norm, velocities can take
+    :param num_velocities: number of velocity bins. In the MIDI norm, velocities can take
             up to 128 values (0 to 127). This parameter allows to reduce the number of velocity values.
-            The velocities of the MIDIs resolution will be downsampled to ``nb_velocities`` values, equally
+            The velocities of the MIDIs resolution will be downsampled to ``num_velocities`` values, equally
             separated between 0 and 127. (default: ``32``)
     :param special_tokens: list of special tokens. This must be given as a list of strings given
             only the names of the tokens. (default: ``["PAD", "BOS", "EOS", "MASK"]``\)
@@ -178,7 +179,7 @@ class TokenizerConfig:
             values to represent with the ``beat_res_rest`` argument. (default: ``False``)
     :param use_tempos: will use ``Tempo`` tokens, if the tokenizer is compatible.
             ``Tempo`` tokens will specify the current tempo. This allows to train a model to predict tempo changes.
-            Tempo values are quantized accordingly to the ``nb_tempos`` and ``tempo_range`` entries in the
+            Tempo values are quantized accordingly to the ``num_tempos`` and ``tempo_range`` entries in the
             ``additional_tokens`` dictionary (default is 32 tempos from 40 to 250). (default: ``False``)
     :param use_time_signatures: will use ``TimeSignature`` tokens, if the tokenizer is compatible.
             ``TimeSignature`` tokens will specify the current time signature. Note that :ref:`REMI` adds a
@@ -215,7 +216,7 @@ class TokenizerConfig:
     :param chord_unknown: range of number of notes to represent unknown chords.
             If you want to represent chords that does not match any combination in ``chord_maps``, use this argument.
             Leave ``None`` to not represent unknown chords. (default: ``None``)
-    :param nb_tempos: number of tempos "bins" to use. (default: ``32``)
+    :param num_tempos: number of tempos "bins" to use. (default: ``32``)
     :param tempo_range: range of minimum and maximum tempos within which the bins fall. (default: ``(40, 250)``)
     :param log_tempos: will use log scaled tempo values instead of linearly scaled. (default: ``False``)
     :param delete_equal_successive_tempo_changes: setting this option True will delete identical successive tempo
@@ -234,7 +235,7 @@ class TokenizerConfig:
             durations. If you use this parameter, make sure to configure ``beat_res`` to cover the durations you expect.
             (default: ``False``)
     :param pitch_bend_range: range of the pitch bend to consider, to be given as a tuple with the form
-            ``(lowest_value, highest_value, nb_of_values)``. There will be ``nb_of_values`` tokens equally spaced
+            ``(lowest_value, highest_value, num_of_values)``. There will be ``num_of_values`` tokens equally spaced
             between ``lowest_value` and `highest_value``. (default: ``(-8192, 8191, 32)``)
     :param delete_equal_successive_time_sig_changes: setting this option True will delete identical successive time
             signature changes when preprocessing a MIDI file after loading it. For examples, if a MIDI has two time
@@ -268,7 +269,7 @@ class TokenizerConfig:
         self,
         pitch_range: Tuple[int, int] = PITCH_RANGE,
         beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
-        nb_velocities: int = NB_VELOCITIES,
+        num_velocities: int = NUM_VELOCITIES,
         special_tokens: Sequence[str] = SPECIAL_TOKENS,
         use_chords: bool = USE_CHORDS,
         use_rests: bool = USE_RESTS,
@@ -282,7 +283,7 @@ class TokenizerConfig:
         chord_maps: Dict[str, Tuple] = CHORD_MAPS,
         chord_tokens_with_root_note: bool = CHORD_TOKENS_WITH_ROOT_NOTE,
         chord_unknown: Tuple[int, int] = CHORD_UNKNOWN,
-        nb_tempos: int = NB_TEMPOS,
+        num_tempos: int = NUM_TEMPOS,
         tempo_range: Tuple[int, int] = TEMPO_RANGE,
         log_tempos: bool = LOG_TEMPOS,
         delete_equal_successive_tempo_changes: bool = DELETE_EQUAL_SUCCESSIVE_TEMPO_CHANGES,
@@ -306,8 +307,8 @@ class TokenizerConfig:
                 f"(received {pitch_range})"
             )
             assert (
-                1 <= nb_velocities <= 127
-            ), f"nb_velocities must be within 1 and 127 (received {nb_velocities})"
+                1 <= num_velocities <= 127
+            ), f"num_velocities must be within 1 and 127 (received {num_velocities})"
             assert (
                 0 <= max_pitch_interval <= 127
             ), f"max_pitch_interval must be within 0 and 127 (received {max_pitch_interval})."
@@ -315,7 +316,7 @@ class TokenizerConfig:
         # Global parameters
         self.pitch_range: Tuple[int, int] = pitch_range
         self.beat_res: Dict[Tuple[int, int], int] = beat_res
-        self.nb_velocities: int = nb_velocities
+        self.num_velocities: int = num_velocities
         self.special_tokens: Sequence[str] = special_tokens
 
         # Additional token types params, enabling additional token types
@@ -339,7 +340,7 @@ class TokenizerConfig:
         self.chord_unknown: Tuple[int, int] = chord_unknown
 
         # Tempo params
-        self.nb_tempos: int = nb_tempos  # nb of tempo bins for additional tempo tokens, quantized like velocities
+        self.num_tempos: int = num_tempos
         self.tempo_range: Tuple[int, int] = tempo_range  # (min_tempo, max_tempo)
         self.log_tempos: bool = log_tempos
         self.delete_equal_successive_tempo_changes = (
@@ -371,6 +372,19 @@ class TokenizerConfig:
         # Pitch as interval tokens
         self.max_pitch_interval = max_pitch_interval
         self.pitch_intervals_max_time_dist = pitch_intervals_max_time_dist
+
+        # Pop legacy kwargs
+        legacy_args = (
+            ("nb_velocities", "num_velocities"),
+            ("nb_tempos", "num_tempos"),
+        )
+        for legacy_arg, new_arg in legacy_args:
+            if legacy_arg in kwargs:
+                setattr(self, new_arg, kwargs.pop(legacy_arg))
+                warnings.warn(
+                    f"Argument {legacy_arg} has been renamed {new_arg}, you should consider to update"
+                    f"your code with this new argument name."
+                )
 
         # Additional params
         self.additional_params = kwargs

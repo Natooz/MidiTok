@@ -45,6 +45,7 @@ from .utils import (
     get_midi_programs,
     merge_same_program_tracks,
     remove_duplicated_notes,
+    set_midi_max_tick,
 )
 
 
@@ -218,7 +219,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 self.config.pitch_range[0] >= 0 and self.config.pitch_range[1] <= 128
             ), "You must specify a pitch_range between 0 and 127 (included, i.e. range.stop at 128)"
             assert (
-                0 < self.config.nb_velocities < 128
+                0 < self.config.num_velocities < 128
             ), "You must specify a nb_velocities between 1 and 127 (included)"
 
         # Tweak the tokenizer's configuration and / or attributes before creating the vocabulary
@@ -233,7 +234,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         self.durations = self.__create_durations_tuples()
         # [1:] so that there is no velocity_0
         self.velocities = np.linspace(
-            0, 127, self.config.nb_velocities + 1, dtype=np.intc
+            0, 127, self.config.num_velocities + 1, dtype=np.intc
         )[1:]
         self._first_beat_res = list(self.config.beat_res.values())[0]
         for beat_range, res in self.config.beat_res.items():
@@ -388,20 +389,9 @@ class MIDITokenizer(ABC, HFHubMixin):
                 )
             # TODO quantize control changes
 
-        # Recalculate max_tick is this could have changed after notes quantization
-        if len(midi.instruments) > 0:
-            midi.max_tick = max(
-                [max([note.end for note in track.notes]) for track in midi.instruments]
-            )
-
         # Process tempo changes
         if self.config.use_tempos:
             self._quantize_tempos(midi.tempo_changes, midi.ticks_per_beat)
-            if len(midi.tempo_changes) > 0:
-                midi.max_tick = max(
-                    midi.max_tick,
-                    max(tempo.time for tempo in midi.tempo_changes),
-                )
 
         # Process time signature changes
         if len(midi.time_signature_changes) == 0:  # can sometimes happen
@@ -412,12 +402,11 @@ class MIDITokenizer(ABC, HFHubMixin):
             self._quantize_time_signatures(
                 midi.time_signature_changes, midi.ticks_per_beat
             )
-            midi.max_tick = max(
-                midi.max_tick,
-                max(ts.time for ts in midi.time_signature_changes),
-            )
 
-        # We do not change key signature changes, markers and lyrics here as they are not used by MidiTok
+        # We do not change key signature changes, markers and lyrics here as they are not used by MidiTok (yet)
+
+        # Recalculate max_tick is this could have changed after notes quantization
+        set_midi_max_tick(midi)
 
     def _quantize_notes(self, notes: List[Note], time_division: int):
         r"""Quantize the notes attributes: their pitch, velocity, start and end values.
@@ -1497,7 +1486,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         :return: the tempos.
         """
         tempo_fn = np.geomspace if self.config.log_tempos else np.linspace
-        tempos = tempo_fn(*self.config.tempo_range, self.config.nb_tempos).round(2)
+        tempos = tempo_fn(*self.config.tempo_range, self.config.num_tempos).round(2)
 
         return tempos
 
@@ -1998,6 +1987,8 @@ class MIDITokenizer(ABC, HFHubMixin):
         # If list of TokSequence -> recursive
         if isinstance(tokens, list):
             return [self.tokens_errors(tok_seq) for tok_seq in tokens]
+        elif len(tokens) == 0:
+            return 0
 
         nb_tok_predicted = len(tokens)  # used to norm the score
         if self.has_bpe:
@@ -2104,6 +2095,8 @@ class MIDITokenizer(ABC, HFHubMixin):
             self.complete_sequence(tokens)
             ids_bpe_encoded = tokens.ids_bpe_encoded
             ids = tokens.ids
+        elif isinstance(tokens, list) and len(tokens) == 0:
+            pass
         elif isinstance(tokens[0], TokSequence):
             ids_bpe_encoded = []
             for seq in tokens:

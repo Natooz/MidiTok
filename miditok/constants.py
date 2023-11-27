@@ -22,7 +22,7 @@ CHR_ID_START = 33
 PITCH_RANGE = (21, 109)
 BEAT_RES = {(0, 4): 8, (4, 12): 4}  # samples per beat
 # nb of velocity bins, velocities values from 0 to 127 will be quantized
-NB_VELOCITIES = 32
+NUM_VELOCITIES = 32
 # default special tokens
 SPECIAL_TOKENS = ["PAD", "BOS", "EOS", "MASK"]
 
@@ -70,7 +70,7 @@ UNKNOWN_CHORD_PREFIX = "ukn"  # only used in methods
 
 # Tempo params
 # nb of tempo bins for additional tempo tokens, quantized like velocities
-NB_TEMPOS = 32  # TODO raname num contractions
+NUM_TEMPOS = 32  # TODO raname num contractions
 TEMPO_RANGE = (40, 250)  # (min_tempo, max_tempo)
 LOG_TEMPOS = False  # log or linear scale tempos
 DELETE_EQUAL_SUCCESSIVE_TEMPO_CHANGES = False

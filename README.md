@@ -35,7 +35,7 @@ from miditoolkit import MidiFile
 from pathlib import Path
 
 # Creating a multitrack tokenizer configuration, read the doc to explore other parameters
-config = TokenizerConfig(nb_velocities=16, use_chords=True, use_programs=True)
+config = TokenizerConfig(num_velocities=16, use_chords=True, use_programs=True)
 tokenizer = REMI(config)
 
 # Loads a midi, converts to tokens, and back to a MIDI

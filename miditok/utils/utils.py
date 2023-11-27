@@ -391,6 +391,44 @@ def merge_same_program_tracks(tracks: List[Instrument]):
             del tracks[i]
 
 
+def set_midi_max_tick(midi: MidiFile):
+    midi.max_tick = 0
+
+    # Parse track events
+    if len(midi.instruments) > 0:
+        event_type_attr = (
+            ("notes", "end"),
+            ("pedals", "end"),
+            ("control_changes", "time"),
+            ("pitch_bends", "time"),
+        )
+        for track in midi.instruments:
+            for event_type, time_attr in event_type_attr:
+                if len(getattr(track, event_type)) > 0:
+                    midi.max_tick = max(
+                        midi.max_tick,
+                        max(
+                            [
+                                getattr(event, time_attr)
+                                for event in getattr(track, event_type)
+                            ]
+                        ),
+                    )
+
+    # Parse global MIDI events
+    for event_type in (
+        "tempo_changes",
+        "time_signature_changes",
+        "key_signature_changes",
+        "lyrics",
+    ):
+        if len(getattr(midi, event_type)) > 0:
+            midi.max_tick = max(
+                midi.max_tick,
+                max(event.time for event in getattr(midi, event_type)),
+            )
+
+
 def nb_bar_pos(
     seq: Sequence[int], bar_token: int, position_tokens: Sequence[int]
 ) -> Tuple[int, int]:
