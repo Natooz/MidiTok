@@ -7,7 +7,7 @@ import numpy as np
 from miditoolkit import Instrument, MidiFile, Note, TempoChange, TimeSignature
 
 from ..classes import Event, TokSequence
-from ..constants import MIDI_INSTRUMENTS, TEMPO, TIME_DIVISION, TIME_SIGNATURE
+from ..constants import MIDI_INSTRUMENTS, TIME_DIVISION, TIME_SIGNATURE
 from ..midi_tokenizer import MIDITokenizer, _in_as_seq
 from ..utils import set_midi_max_tick
 
@@ -92,9 +92,11 @@ class CPWord(MIDITokenizer):
         current_time_sig = TIME_SIGNATURE
         if self.config.log_tempos:
             # pick the closest to the default value
-            current_tempo = float(self.tempos[(np.abs(self.tempos - TEMPO)).argmin()])
+            current_tempo = float(
+                self.tempos[(np.abs(self.tempos - self._DEFAULT_TEMPO)).argmin()]
+            )
         else:
-            current_tempo = TEMPO
+            current_tempo = self._DEFAULT_TEMPO
         current_program = None
         ticks_per_bar = self._compute_ticks_per_bar(
             TimeSignature(*current_time_sig, 0), time_division
@@ -373,7 +375,7 @@ class CPWord(MIDITokenizer):
 
         # RESULTS
         instruments: Dict[int, Instrument] = {}
-        tempo_changes = [TempoChange(TEMPO, -1)]
+        tempo_changes = [TempoChange(self._DEFAULT_TEMPO, -1)]
         time_signature_changes = []
 
         def check_inst(prog: int):

@@ -15,7 +15,6 @@ from miditoolkit import (
 from ..classes import Event, TokSequence
 from ..constants import (
     MIDI_INSTRUMENTS,
-    TEMPO,
     TIME_DIVISION,
     TIME_SIGNATURE,
 )
@@ -143,7 +142,7 @@ class TSD(MIDITokenizer):
 
         # RESULTS
         instruments: Dict[int, Instrument] = {}
-        tempo_changes = [TempoChange(TEMPO, -1)]
+        tempo_changes = [TempoChange(self._DEFAULT_TEMPO, -1)]
         time_signature_changes = [TimeSignature(*TIME_SIGNATURE, 0)]
 
         def check_inst(prog: int):

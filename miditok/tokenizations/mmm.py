@@ -9,7 +9,6 @@ from ..classes import Event, TokSequence
 from ..constants import (
     MIDI_INSTRUMENTS,
     MMM_DENSITY_BINS_MAX,
-    TEMPO,
     TIME_DIVISION,
     TIME_SIGNATURE,
 )
@@ -224,7 +223,7 @@ class MMM(MIDITokenizer):
         # RESULTS
         instruments: List[Instrument] = []
         tempo_changes = [
-            TempoChange(TEMPO, -1)
+            TempoChange(self._DEFAULT_TEMPO, -1)
         ]  # mock the first tempo change to optimize below
         time_signature_changes = [
             TimeSignature(*TIME_SIGNATURE, 0)

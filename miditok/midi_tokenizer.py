@@ -34,6 +34,7 @@ from .constants import (
     DEFAULT_TOKENIZER_FILE_NAME,
     MIDI_FILES_EXTENSIONS,
     PITCH_CLASSES,
+    TEMPO,
     TIME_DIVISION,
     TIME_SIGNATURE,
     UNKNOWN_CHORD_PREFIX,
@@ -79,16 +80,18 @@ def convert_sequence_to_tokseq(
     nb_seq_dims = 1
     if isinstance(arg[1][0], list):
         nb_seq_dims += 1
-        if isinstance(arg[1][0][0], list):
+        if len(arg[1][0]) == 0 and nb_seq_dims == nb_io_dims - 1:
+            # Special case where the sequence contains no tokens, we increment anyway
+            nb_seq_dims += 1
+        elif isinstance(arg[1][0][0], list):
             nb_seq_dims += 1
 
     # Check the number of dimensions is good
     # In case of no one_token_stream and one dimension short --> unsqueeze
     if not tokenizer.one_token_stream and nb_seq_dims == nb_io_dims - 1:
         print(
-            f"The input sequence has one dimension less than expected ({nb_seq_dims} instead of "
-            f"{nb_io_dims}). It is being unsqueezed to conform with the tokenizer's i/o format "
-            f"({tokenizer.io_format})"
+            f"The input sequence has one dimension less than expected ({nb_seq_dims} instead of {nb_io_dims})."
+            f"It is being unsqueezed to conform with the tokenizer's i/o format ({tokenizer.io_format})"
         )
         arg = (arg[0], [arg[1]])
 
@@ -243,9 +246,15 @@ class MIDITokenizer(ABC, HFHubMixin):
                 break
 
         # Tempos
+        # _DEFAULT_TEMPO is useful when `log_tempos` is enabled
         self.tempos = np.zeros(1)
+        self._DEFAULT_TEMPO = TEMPO
         if self.config.use_tempos:
             self.tempos = self.__create_tempos()
+            if self.config.log_tempos:
+                self._DEFAULT_TEMPO = self.tempos[
+                    np.argmin(np.abs(self.tempos - TEMPO))
+                ]
 
         # Rests
         self.rests = []
@@ -618,6 +627,8 @@ class MIDITokenizer(ABC, HFHubMixin):
         # Create events list
         all_events = []
         if not self.one_token_stream:
+            if len(midi.instruments) == 0:
+                all_events.append([])
             for i in range(len(midi.instruments)):
                 all_events.append([])
 

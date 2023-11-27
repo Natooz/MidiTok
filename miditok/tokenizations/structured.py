@@ -7,7 +7,6 @@ from miditoolkit import Instrument, MidiFile, Note, TempoChange, TimeSignature
 from ..classes import Event, TokSequence
 from ..constants import (
     MIDI_INSTRUMENTS,
-    TEMPO,
     TIME_DIVISION,
     TIME_SIGNATURE,
 )
@@ -205,7 +204,7 @@ class Structured(MIDITokenizer):
 
         # RESULTS
         instruments: Dict[int, Instrument] = {}
-        tempo_changes = [TempoChange(TEMPO, 0)]
+        tempo_changes = [TempoChange(self._DEFAULT_TEMPO, 0)]
         time_signature_changes = [TimeSignature(*TIME_SIGNATURE, 0)]
 
         def check_inst(prog: int):

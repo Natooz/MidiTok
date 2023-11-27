@@ -105,13 +105,13 @@ def test_one_track_midi_to_tokens_to_midi(
 
         # Add track to error list
         if has_errors:
+            at_least_one_error = True
             for ti, track in enumerate(decoded_midi.instruments):
                 track.name = f"{tok_i} encoded with {tokenization}"
             tracks_with_errors += decoded_midi.instruments
 
     # > 1 as the first one is the preprocessed
     if len(tracks_with_errors) > len(midi.instruments):
-        at_least_one_error = True
         if saving_erroneous_midis:
             TEST_LOG_DIR.mkdir(exist_ok=True, parents=True)
             midi.tempo_changes = midi_to_compare.tempo_changes

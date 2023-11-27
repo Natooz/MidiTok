@@ -38,10 +38,12 @@ def convert_ids_tensors_to_list(ids: Any):
         # Recursively checks the content are ints (only check first item)
         el = ids[0]
         while isinstance(el, list):
-            el = el[0]
+            el = el[0] if len(el) > 0 else None
 
         # Check endpoint type
-        if not isinstance(el, int):
+        if el is None:
+            pass
+        elif not isinstance(el, int):
             # Recursively try to convert elements of the list
             for ei in range(len(ids)):
                 ids[ei] = convert_ids_tensors_to_list(ids[ei])

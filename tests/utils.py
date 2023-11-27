@@ -14,10 +14,11 @@ from miditoolkit import (
     Note,
     Pedal,
     TempoChange,
+    TimeSignature,
 )
 
 import miditok
-from miditok.constants import CHORD_MAPS, TIME_SIGNATURE_RANGE
+from miditok.constants import CHORD_MAPS, TIME_SIGNATURE, TIME_SIGNATURE_RANGE
 
 SEED = 777
 
@@ -73,12 +74,19 @@ def prepare_midi_for_tests(
         # For Octuple/CPWord, as tempo is only carried at notes times, we need to adapt their times for comparison
         # Set tempo changes at onset times of notes
         # We use the first track only, as it is the one for which tempos are decoded
+        if tokenizer.config.use_tempos and tokenization in ["Octuple", "CPWord"]:
+            if len(new_midi.instruments) > 0:
+                adapt_tempo_changes_times(
+                    [new_midi.instruments[0]], new_midi.tempo_changes
+                )
+            else:
+                new_midi.tempo_changes = [TempoChange(tokenizer._DEFAULT_TEMPO, 0)]
         if (
-            tokenizer.config.use_tempos
-            and tokenization in ["Octuple", "CPWord"]
-            and len(new_midi.instruments) > 0
+            tokenizer.config.use_time_signatures
+            and tokenization in ["Octuple", "CPWord", "MMM"]
+            and len(new_midi.instruments) == 0
         ):
-            adapt_tempo_changes_times([new_midi.instruments[0]], new_midi.tempo_changes)
+            new_midi.time_signature_changes = [TimeSignature(*TIME_SIGNATURE, 0)]
 
     for track in new_midi.instruments:
         # Adjust pedal ends to the maximum possible value
@@ -224,7 +232,7 @@ def tokenize_and_check_equals(
     tokens = tokenizer(midi)
     midi_decoded = tokenizer(
         tokens,
-        miditok.utils.get_midi_programs(midi),
+        miditok.utils.get_midi_programs(midi) if len(midi.instruments) > 0 else None,
         time_division=midi.ticks_per_beat,
     )
     midi_decoded = prepare_midi_for_tests(

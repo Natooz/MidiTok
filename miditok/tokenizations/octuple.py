@@ -8,7 +8,6 @@ from miditoolkit import Instrument, MidiFile, Note, TempoChange, TimeSignature
 from ..classes import Event, TokSequence
 from ..constants import (
     MIDI_INSTRUMENTS,
-    TEMPO,
     TIME_DIVISION,
     TIME_SIGNATURE,
 )
@@ -103,7 +102,7 @@ class Octuple(MIDITokenizer):
         current_pos = 0
         previous_tick = 0
         current_time_sig = TIME_SIGNATURE
-        current_tempo = TEMPO
+        current_tempo = self._DEFAULT_TEMPO
         current_program = None
         ticks_per_bar = self._compute_ticks_per_bar(
             TimeSignature(*current_time_sig, 0), time_division
@@ -215,7 +214,7 @@ class Octuple(MIDITokenizer):
 
         # RESULTS
         instruments: Dict[int, Instrument] = {}
-        tempo_changes = [TempoChange(TEMPO, -1)]
+        tempo_changes = [TempoChange(self._DEFAULT_TEMPO, -1)]
         time_signature_changes = []
 
         def check_inst(prog: int):

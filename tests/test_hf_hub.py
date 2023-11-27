@@ -10,6 +10,7 @@ from miditok import REMI, TSD
 
 
 def test_push_and_load_to_hf_hub(hf_token: str):
+    # TODO handle errors, retry if 500/412?
     tokenizer = REMI()
     tokenizer.push_to_hub("Natooz/MidiTok-tests", private=True, token=hf_token)
 
