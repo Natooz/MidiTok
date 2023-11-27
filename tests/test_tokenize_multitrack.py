@@ -17,6 +17,7 @@ from .utils import (
     MIDI_PATHS_MULTITRACK,
     TEST_LOG_DIR,
     TOKENIZER_CONFIG_KWARGS,
+    adjust_tok_params_for_tests,
     prepare_midi_for_tests,
     tokenize_and_check_equals,
 )
@@ -48,17 +49,7 @@ tokenizations_non_one_stream = [
 tokenizations_program_change = ["TSD", "REMI", "MIDILike"]
 for tokenization_ in ALL_TOKENIZATIONS:
     params_ = deepcopy(default_params)
-    # Increase the TimeShift voc for Structured as it doesn't support successive TimeShifts
-    if tokenization_ == "Structured":
-        params_["beat_res"] = {(0, 512): 8}
-    elif tokenization_ == "Octuple":
-        params_["max_bar_embedding"] = 300
-        params_["use_time_signatures"] = False  # because of time shifted
-    elif tokenization_ == "CPWord":
-        # Rests and time sig can mess up with CPWord, when a Rest that is crossing new bar is followed
-        # by a new TimeSig change, as TimeSig are carried with Bar tokens (and there is None is this case)
-        if params_["use_time_signatures"] and params_["use_rests"]:
-            params_["use_rests"] = False
+    adjust_tok_params_for_tests(tokenization_, params_)
     TOK_PARAMS_MULTITRACK.append((tokenization_, params_))
 
     if tokenization_ in tokenizations_non_one_stream:

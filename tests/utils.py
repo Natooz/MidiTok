@@ -4,7 +4,7 @@ Test validation methods.
 
 from copy import deepcopy
 from pathlib import Path
-from typing import List, Tuple, Union
+from typing import Any, Dict, List, Tuple, Union
 
 import numpy as np
 from miditoolkit import (
@@ -50,6 +50,27 @@ TOKENIZER_CONFIG_KWARGS = {
     "delete_equal_successive_time_sig_changes": True,
     "delete_equal_successive_tempo_changes": True,
 }
+
+
+def adjust_tok_params_for_tests(tokenization: str, params: Dict[str, Any]):
+    """Adjusts parameters (as dictionary for keyword arguments) depending on the tokenization.
+
+    :param tokenization: tokenization.
+    :param params: parameters as a dictionary of keyword arguments.
+    """
+    # Increase the TimeShift voc for Structured as it doesn't support successive TimeShifts.
+    if tokenization == "Structured":
+        params["beat_res"] = {(0, 512): 8}
+    # We don't test time signatures with Octuple as it can lead to time shifts, as the TS changes are only
+    # detectable at the onset times of the notes.
+    elif tokenization == "Octuple":
+        params["max_bar_embedding"] = 300
+        params["use_time_signatures"] = False
+    # Rests and time sig can mess up with CPWord, when a Rest that is crossing new bar is followed
+    # by a new TimeSig change, as TimeSig are carried with Bar tokens (and there is None is this case).
+    elif tokenization == "CPWord":
+        if params["use_time_signatures"] and params["use_rests"]:
+            params["use_rests"] = False
 
 
 def prepare_midi_for_tests(

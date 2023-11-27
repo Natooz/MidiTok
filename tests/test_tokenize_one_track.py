@@ -1,7 +1,6 @@
 #!/usr/bin/python3 python
 
 """One track test file
-TODO rename file test_tokenize
 """
 
 from copy import deepcopy
@@ -18,6 +17,7 @@ from .utils import (
     MIDI_PATHS_ONE_TRACK,
     TEST_LOG_DIR,
     TOKENIZER_CONFIG_KWARGS,
+    adjust_tok_params_for_tests,
     prepare_midi_for_tests,
     tokenize_and_check_equals,
 )
@@ -42,16 +42,7 @@ default_params.update(
 TOK_PARAMS_ONE_TRACK = []
 for tokenization_ in ALL_TOKENIZATIONS:
     params_ = deepcopy(default_params)
-    if tokenization_ == "Structured":
-        params_["beat_res"] = {(0, 64): 8}
-    elif tokenization_ == "Octuple":
-        params_["max_bar_embedding"] = 300
-        params_["use_time_signatures"] = False  # because of time shifted
-    elif tokenization_ == "CPWord":
-        # Rests and time sig can mess up with CPWord, when a Rest that is crossing new bar is followed
-        # by a new TimeSig change, as TimeSig are carried with Bar tokens (and there is None is this case)
-        if params_["use_time_signatures"] and params_["use_rests"]:
-            params_["use_rests"] = False
+    adjust_tok_params_for_tests(tokenization_, params_)
     TOK_PARAMS_ONE_TRACK.append((tokenization_, params_))
 
 
