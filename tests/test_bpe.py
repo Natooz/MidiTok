@@ -144,10 +144,11 @@ def test_bpe_conversion(
     for i, file_path in enumerate(tqdm(midi_paths, desc="Testing BPE batched")):
         # Reads the midi
         midi = MidiFile(file_path)
+        tokens_no_bpe = tokenizer(midi, apply_bpe_if_possible=False)
         if not tokenizer.one_token_stream:
-            samples_no_bpe.append(tokenizer(midi, apply_bpe_if_possible=False)[0])
+            samples_no_bpe.append(tokens_no_bpe[0])
         else:
-            samples_no_bpe.append(tokenizer(midi, apply_bpe_if_possible=False))
+            samples_no_bpe.append(tokens_no_bpe)
     samples_bpe = deepcopy(samples_no_bpe)
     t0 = time()
     tokenizer.apply_bpe(samples_bpe)

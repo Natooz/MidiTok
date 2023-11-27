@@ -150,6 +150,8 @@ class Structured(MIDITokenizer):
         all_events = []
 
         # Adds note tokens
+        if not self.one_token_stream and len(midi.instruments) == 0:
+            all_events.append([])
         for track in midi.instruments:
             note_events = self._create_track_events(track)
             if self.one_token_stream:

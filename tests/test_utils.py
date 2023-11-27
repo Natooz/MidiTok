@@ -86,21 +86,23 @@ def test_check_midi_equals(midi_path: Path):
             break
         i += 1
 
-    # Altering pedals
-    midi_copy = deepcopy(midi)
-    if len(midi_copy.instruments[0].pedals) == 0:
-        midi_copy.instruments[0].pedals.append(Pedal(0, 10))
-    else:
-        midi_copy.instruments[0].pedals[-1].end += 10
-    assert not check_midis_equals(midi, midi_copy)[1]
+    # Altering track events
+    if len(midi_copy.instruments) > 0:
+        # Altering pedals
+        midi_copy = deepcopy(midi)
+        if len(midi_copy.instruments[0].pedals) == 0:
+            midi_copy.instruments[0].pedals.append(Pedal(0, 10))
+        else:
+            midi_copy.instruments[0].pedals[-1].end += 10
+        assert not check_midis_equals(midi, midi_copy)[1]
 
-    # Altering pitch bends
-    midi_copy = deepcopy(midi)
-    if len(midi_copy.instruments[0].pitch_bends) == 0:
-        midi_copy.instruments[0].pitch_bends.append(PitchBend(50, 10))
-    else:
-        midi_copy.instruments[0].pitch_bends[-1].end += 10
-    assert not check_midis_equals(midi, midi_copy)[1]
+        # Altering pitch bends
+        midi_copy = deepcopy(midi)
+        if len(midi_copy.instruments[0].pitch_bends) == 0:
+            midi_copy.instruments[0].pitch_bends.append(PitchBend(50, 10))
+        else:
+            midi_copy.instruments[0].pitch_bends[-1].end += 10
+        assert not check_midis_equals(midi, midi_copy)[1]
 
     # Altering tempos
     midi_copy = deepcopy(midi)
