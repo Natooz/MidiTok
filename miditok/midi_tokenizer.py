@@ -521,7 +521,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         prev_ts = time_sigs[0]
         # If we delete the successive equal tempo changes, we need to sort them by time
         # Otherwise it is not required here as the tokens will be sorted by time
-        if self.config.delete_equal_successive_tempo_changes:
+        if self.config.delete_equal_successive_time_sig_changes:
             time_sigs.sort(key=lambda x: x.time)
 
         i = 1
