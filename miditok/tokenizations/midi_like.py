@@ -421,7 +421,7 @@ class MIDILike(MIDITokenizer):
             first_note_token_type = "NoteOn"
         dic["Velocity"] = [first_note_token_type, "TimeShift"]
         dic["NoteOff"] = ["NoteOff", first_note_token_type, "TimeShift"]
-        dic["TimeShift"] = ["NoteOff", first_note_token_type]
+        dic["TimeShift"] = ["NoteOff", first_note_token_type, "TimeShift"]
         if self.config.use_pitch_intervals:
             for token_type in ("PitchIntervalTime", "PitchIntervalChord"):
                 dic[token_type] = ["Velocity"]
@@ -616,7 +616,7 @@ class MIDILike(MIDITokenizer):
         )
 
         for i in range(1, len(events)):
-            # err_tokens = events[i - 4: i + 4]  # uncomment for debug
+            # err_tokens = events[i - 4 : i + 4]  # uncomment for debug
             # Good token type
             if events[i].type in self.tokens_types_graph[events[i - 1].type]:
                 if events[i].type in [

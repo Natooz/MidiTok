@@ -39,7 +39,7 @@ TIME_SIGNATURE_RANGE_TESTS = TIME_SIGNATURE_RANGE
 TIME_SIGNATURE_RANGE_TESTS.update({2: [2, 3, 4]})
 TIME_SIGNATURE_RANGE_TESTS[4].append(8)
 TOKENIZER_CONFIG_KWARGS = {
-    "beat_res": {(0, 16): 8},  # TODO multiple res
+    "beat_res": {(0, 4): 8, (4, 12): 4, (12, 16): 2},
     "beat_res_rest": {(0, 2): 4, (2, 12): 2},
     "num_tempos": 32,
     "tempo_range": (40, 250),
@@ -110,9 +110,11 @@ def prepare_midi_for_tests(
             new_midi.time_signature_changes = [TimeSignature(*TIME_SIGNATURE, 0)]
 
     for track in new_midi.instruments:
-        # Adjust pedal ends to the maximum possible value
-        if tokenizer is not None and tokenizer.config.use_sustain_pedals:
-            adjust_pedal_durations(track.pedals, tokenizer, midi.ticks_per_beat)
+        # Adjust notes and pedal ends to the maximum possible value
+        if tokenizer is not None:
+            adjust_notes_durations(track.notes, tokenizer, midi.ticks_per_beat)
+            if tokenizer.config.use_sustain_pedals:
+                adjust_pedal_durations(track.pedals, tokenizer, midi.ticks_per_beat)
         if track.is_drum:
             track.program = 0  # need to be done before sorting tracks per program
         if sort_notes:
@@ -312,6 +314,28 @@ def adapt_tempo_changes_times(
             del tempo_changes[tempo_idx - 1]
             continue
         tempo_idx += 1
+
+
+def adjust_notes_durations(
+    notes: List[Note], tokenizer: miditok.MIDITokenizer, time_division: int
+):
+    """Adapt notes offset times so that they match the possible durations covered by a tokenizer.
+
+    :param notes: list of Note objects to adapt.
+    :param tokenizer: tokenizer (needed for durations).
+    :param time_division: time division of the MIDI of origin.
+    """
+    durations_in_tick = np.array(
+        [
+            (beat * res + pos) * time_division // res
+            for beat, pos, res in tokenizer.durations
+        ]
+    )
+    for note in notes:
+        dur_index = np.argmin(np.abs(durations_in_tick - note.duration))
+        beat, pos, res = tokenizer.durations[dur_index]
+        dur_index_in_tick = (beat * res + pos) * time_division // res
+        note.end = note.start + dur_index_in_tick
 
 
 def adjust_pedal_durations(

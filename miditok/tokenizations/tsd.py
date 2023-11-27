@@ -367,7 +367,7 @@ class TSD(MIDITokenizer):
         dic["Pitch"] = ["Velocity"]
         dic["Velocity"] = ["Duration"]
         dic["Duration"] = [first_note_token_type, "TimeShift"]
-        dic["TimeShift"] = [first_note_token_type]
+        dic["TimeShift"] = [first_note_token_type, "TimeShift"]
         if self.config.use_pitch_intervals:
             for token_type in ("PitchIntervalTime", "PitchIntervalChord"):
                 dic[token_type] = ["Velocity"]
