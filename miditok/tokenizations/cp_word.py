@@ -7,8 +7,9 @@ import numpy as np
 from miditoolkit import Instrument, MidiFile, Note, TempoChange, TimeSignature
 
 from ..classes import Event, TokSequence
-from ..constants import MIDI_INSTRUMENTS, TEMPO, TIME_DIVISION, TIME_SIGNATURE
+from ..constants import MIDI_INSTRUMENTS, TIME_DIVISION, TIME_SIGNATURE
 from ..midi_tokenizer import MIDITokenizer, _in_as_seq
+from ..utils import set_midi_max_tick
 
 
 class CPWord(MIDITokenizer):
@@ -91,9 +92,11 @@ class CPWord(MIDITokenizer):
         current_time_sig = TIME_SIGNATURE
         if self.config.log_tempos:
             # pick the closest to the default value
-            current_tempo = float(self.tempos[(np.abs(self.tempos - TEMPO)).argmin()])
+            current_tempo = float(
+                self.tempos[(np.abs(self.tempos - self._DEFAULT_TEMPO)).argmin()]
+            )
         else:
-            current_tempo = TEMPO
+            current_tempo = self._DEFAULT_TEMPO
         current_program = None
         ticks_per_bar = self._compute_ticks_per_bar(
             TimeSignature(*current_time_sig, 0), time_division
@@ -372,7 +375,7 @@ class CPWord(MIDITokenizer):
 
         # RESULTS
         instruments: Dict[int, Instrument] = {}
-        tempo_changes = [TempoChange(TEMPO, -1)]
+        tempo_changes = [TempoChange(self._DEFAULT_TEMPO, -1)]
         time_signature_changes = []
 
         def check_inst(prog: int):
@@ -536,12 +539,7 @@ class CPWord(MIDITokenizer):
             midi.instruments = list(instruments.values())
         midi.tempo_changes = tempo_changes
         midi.time_signature_changes = time_signature_changes
-        midi.max_tick = max(
-            [
-                max([note.end for note in track.notes]) if len(track.notes) > 0 else 0
-                for track in midi.instruments
-            ]
-        )
+        set_midi_max_tick(midi)
         # Write MIDI file
         if output_path:
             Path(output_path).mkdir(parents=True, exist_ok=True)
@@ -675,6 +673,8 @@ class CPWord(MIDITokenizer):
         # If list of TokSequence -> recursive
         if isinstance(tokens, list):
             return [self.tokens_errors(tok_seq) for tok_seq in tokens]
+        if len(tokens) == 0:
+            return 0
 
         def cp_token_type(tok: List[int]) -> List[str]:
             family = self[0, tok[0]].split("_")[1]

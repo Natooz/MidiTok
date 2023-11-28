@@ -1,3 +1,8 @@
+"""
+Pytest configuration file.
+Doc: https://docs.pytest.org/en/latest/reference/reference.html
+"""
+
 import os
 
 import pytest

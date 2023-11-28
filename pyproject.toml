@@ -37,11 +37,10 @@ classifiers = [
 ]
 dependencies = [
     "numpy>=1.19",
-    "miditoolkit",  # TODO >=v1.0.1?
+    "miditoolkit",
     "tqdm",
     "tokenizers>=0.13.0",
     "huggingface_hub>=0.16.4",
-    "scipy",  # TODO remove when miditoolkit v1.0.1
 ]
 
 [project.optional-dependencies]

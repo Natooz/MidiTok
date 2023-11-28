@@ -15,12 +15,11 @@ from miditoolkit import (
 from ..classes import Event, TokSequence
 from ..constants import (
     MIDI_INSTRUMENTS,
-    TEMPO,
     TIME_DIVISION,
     TIME_SIGNATURE,
 )
 from ..midi_tokenizer import MIDITokenizer, _in_as_seq
-from ..utils import fix_offsets_overlapping_notes
+from ..utils import fix_offsets_overlapping_notes, set_midi_max_tick
 
 
 class MIDILike(MIDITokenizer):
@@ -174,7 +173,7 @@ class MIDILike(MIDITokenizer):
 
         # RESULTS
         instruments: Dict[int, Instrument] = {}
-        tempo_changes = [TempoChange(TEMPO, -1)]
+        tempo_changes = [TempoChange(self._DEFAULT_TEMPO, -1)]
         time_signature_changes = [TimeSignature(*TIME_SIGNATURE, 0)]
         active_notes = {p: {} for p in self.config.programs}
 
@@ -356,12 +355,7 @@ class MIDILike(MIDITokenizer):
             midi.instruments = list(instruments.values())
         midi.tempo_changes = tempo_changes
         midi.time_signature_changes = time_signature_changes
-        midi.max_tick = max(
-            [
-                max([note.end for note in track.notes]) if len(track.notes) > 0 else 0
-                for track in midi.instruments
-            ]
-        )
+        set_midi_max_tick(midi)
         # Write MIDI file
         if output_path:
             Path(output_path).mkdir(parents=True, exist_ok=True)
@@ -427,7 +421,7 @@ class MIDILike(MIDITokenizer):
             first_note_token_type = "NoteOn"
         dic["Velocity"] = [first_note_token_type, "TimeShift"]
         dic["NoteOff"] = ["NoteOff", first_note_token_type, "TimeShift"]
-        dic["TimeShift"] = ["NoteOff", first_note_token_type]
+        dic["TimeShift"] = ["NoteOff", first_note_token_type, "TimeShift"]
         if self.config.use_pitch_intervals:
             for token_type in ("PitchIntervalTime", "PitchIntervalChord"):
                 dic[token_type] = ["Velocity"]
@@ -594,6 +588,8 @@ class MIDILike(MIDITokenizer):
         # If list of TokSequence -> recursive
         if isinstance(tokens, list):
             return [self.tokens_errors(tok_seq) for tok_seq in tokens]
+        if len(tokens) == 0:
+            return 0
 
         nb_tok_predicted = len(tokens)  # used to norm the score
         if self.has_bpe:
@@ -620,7 +616,7 @@ class MIDILike(MIDITokenizer):
         )
 
         for i in range(1, len(events)):
-            # err_tokens = events[i - 4: i + 4]  # uncomment for debug
+            # err_tokens = events[i - 4 : i + 4]  # uncomment for debug
             # Good token type
             if events[i].type in self.tokens_types_graph[events[i - 1].type]:
                 if events[i].type in [

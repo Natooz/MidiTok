@@ -34,6 +34,7 @@ from .constants import (
     DEFAULT_TOKENIZER_FILE_NAME,
     MIDI_FILES_EXTENSIONS,
     PITCH_CLASSES,
+    TEMPO,
     TIME_DIVISION,
     TIME_SIGNATURE,
     UNKNOWN_CHORD_PREFIX,
@@ -45,6 +46,7 @@ from .utils import (
     get_midi_programs,
     merge_same_program_tracks,
     remove_duplicated_notes,
+    set_midi_max_tick,
 )
 
 
@@ -76,18 +78,20 @@ def convert_sequence_to_tokseq(
     # Deduce nb of subscripts / dims
     nb_io_dims = len(tokenizer.io_format)
     nb_seq_dims = 1
-    if isinstance(arg[1][0], list):
+    if len(arg[1]) > 0 and isinstance(arg[1][0], list):
         nb_seq_dims += 1
-        if isinstance(arg[1][0][0], list):
+        if len(arg[1][0]) > 0 and isinstance(arg[1][0][0], list):
+            nb_seq_dims += 1
+        elif len(arg[1][0]) == 0 and nb_seq_dims == nb_io_dims - 1:
+            # Special case where the sequence contains no tokens, we increment anyway
             nb_seq_dims += 1
 
     # Check the number of dimensions is good
     # In case of no one_token_stream and one dimension short --> unsqueeze
     if not tokenizer.one_token_stream and nb_seq_dims == nb_io_dims - 1:
         print(
-            f"The input sequence has one dimension less than expected ({nb_seq_dims} instead of "
-            f"{nb_io_dims}). It is being unsqueezed to conform with the tokenizer's i/o format "
-            f"({tokenizer.io_format})"
+            f"The input sequence has one dimension less than expected ({nb_seq_dims} instead of {nb_io_dims})."
+            f"It is being unsqueezed to conform with the tokenizer's i/o format ({tokenizer.io_format})"
         )
         arg = (arg[0], [arg[1]])
 
@@ -218,7 +222,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 self.config.pitch_range[0] >= 0 and self.config.pitch_range[1] <= 128
             ), "You must specify a pitch_range between 0 and 127 (included, i.e. range.stop at 128)"
             assert (
-                0 < self.config.nb_velocities < 128
+                0 < self.config.num_velocities < 128
             ), "You must specify a nb_velocities between 1 and 127 (included)"
 
         # Tweak the tokenizer's configuration and / or attributes before creating the vocabulary
@@ -233,7 +237,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         self.durations = self.__create_durations_tuples()
         # [1:] so that there is no velocity_0
         self.velocities = np.linspace(
-            0, 127, self.config.nb_velocities + 1, dtype=np.intc
+            0, 127, self.config.num_velocities + 1, dtype=np.intc
         )[1:]
         self._first_beat_res = list(self.config.beat_res.values())[0]
         for beat_range, res in self.config.beat_res.items():
@@ -242,9 +246,15 @@ class MIDITokenizer(ABC, HFHubMixin):
                 break
 
         # Tempos
+        # _DEFAULT_TEMPO is useful when `log_tempos` is enabled
         self.tempos = np.zeros(1)
+        self._DEFAULT_TEMPO = TEMPO
         if self.config.use_tempos:
             self.tempos = self.__create_tempos()
+            if self.config.log_tempos:
+                self._DEFAULT_TEMPO = self.tempos[
+                    np.argmin(np.abs(self.tempos - TEMPO))
+                ]
 
         # Rests
         self.rests = []
@@ -366,8 +376,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         if self.config.use_programs and self.one_token_stream:
             merge_same_program_tracks(midi.instruments)
 
-        t = 0
-        while t < len(midi.instruments):
+        for t in range(len(midi.instruments) - 1, -1, -1):
             # quantize notes attributes
             self._quantize_notes(midi.instruments[t].notes, midi.ticks_per_beat)
             # sort notes
@@ -388,17 +397,12 @@ class MIDITokenizer(ABC, HFHubMixin):
                     midi.instruments[t].pitch_bends, midi.ticks_per_beat
                 )
             # TODO quantize control changes
-            t += 1
 
-        # Recalculate max_tick is this could have changed after notes quantization
-        if len(midi.instruments) > 0:
-            midi.max_tick = max(
-                [max([note.end for note in track.notes]) for track in midi.instruments]
-            )
-
+        # Process tempo changes
         if self.config.use_tempos:
             self._quantize_tempos(midi.tempo_changes, midi.ticks_per_beat)
 
+        # Process time signature changes
         if len(midi.time_signature_changes) == 0:  # can sometimes happen
             midi.time_signature_changes.append(
                 TimeSignature(*TIME_SIGNATURE, 0)
@@ -407,6 +411,11 @@ class MIDITokenizer(ABC, HFHubMixin):
             self._quantize_time_signatures(
                 midi.time_signature_changes, midi.ticks_per_beat
             )
+
+        # We do not change key signature changes, markers and lyrics here as they are not used by MidiTok (yet)
+
+        # Recalculate max_tick is this could have changed after notes quantization
+        set_midi_max_tick(midi)
 
     def _quantize_notes(self, notes: List[Note], time_division: int):
         r"""Quantize the notes attributes: their pitch, velocity, start and end values.
@@ -464,6 +473,11 @@ class MIDITokenizer(ABC, HFHubMixin):
         """
         ticks_per_sample = int(time_division / max(self.config.beat_res.values()))
         prev_tempo = TempoChange(-1, -1)
+        # If we delete the successive equal tempo changes, we need to sort them by time
+        # Otherwise it is not required here as the tokens will be sorted by time
+        if self.config.delete_equal_successive_tempo_changes:
+            tempos.sort(key=lambda x: x.time)
+
         i = 0
         while i < len(tempos):
             # Quantize tempo value
@@ -505,6 +519,11 @@ class MIDITokenizer(ABC, HFHubMixin):
         )
         previous_tick = 0  # first time signature change is always at tick 0
         prev_ts = time_sigs[0]
+        # If we delete the successive equal tempo changes, we need to sort them by time
+        # Otherwise it is not required here as the tokens will be sorted by time
+        if self.config.delete_equal_successive_time_sig_changes:
+            time_sigs.sort(key=lambda x: x.time)
+
         i = 1
         while i < len(time_sigs):
             time_sig = time_sigs[i]
@@ -562,7 +581,6 @@ class MIDITokenizer(ABC, HFHubMixin):
             )
             if pedal.start == pedal.end:
                 pedal.end += ticks_per_sample
-            pedal.duration = pedal.end - pedal.start
 
     def _quantize_pitch_bends(self, pitch_bends: List[PitchBend], time_division: int):
         r"""Quantize the pitch bend events from a track. Their onset and offset times will be adjusted
@@ -609,6 +627,8 @@ class MIDITokenizer(ABC, HFHubMixin):
         # Create events list
         all_events = []
         if not self.one_token_stream:
+            if len(midi.instruments) == 0:
+                all_events.append([])
             for i in range(len(midi.instruments)):
                 all_events.append([])
 
@@ -778,7 +798,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
             # Pitch / interval
             add_absolute_pitch_token = True
-            if self.config.use_pitch_intervals:
+            if self.config.use_pitch_intervals and not track.is_drum:
                 if note.start != previous_note_onset:
                     if (
                         note.start - previous_note_onset <= max_time_interval
@@ -1487,7 +1507,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         :return: the tempos.
         """
         tempo_fn = np.geomspace if self.config.log_tempos else np.linspace
-        tempos = tempo_fn(*self.config.tempo_range, self.config.nb_tempos).round(2)
+        tempos = tempo_fn(*self.config.tempo_range, self.config.num_tempos).round(2)
 
         return tempos
 
@@ -1810,7 +1830,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     def tokenize_midi_dataset(
         self,
-        midi_paths: Union[str, Path, List[str], List[Path]],
+        midi_paths: Union[str, Path, Sequence[Union[str, Path]]],
         out_dir: Union[str, Path],
         overwrite_mode: bool = True,
         tokenizer_config_file_name: str = DEFAULT_TOKENIZER_FILE_NAME,
@@ -1854,7 +1874,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         out_dir.mkdir(parents=True, exist_ok=True)
 
         # User gave a path to a directory, we'll scan it to find MIDI files
-        if not isinstance(midi_paths, list):
+        if not isinstance(midi_paths, Sequence):
             if isinstance(midi_paths, str):
                 midi_paths = Path(midi_paths)
             root_dir = midi_paths
@@ -1988,6 +2008,8 @@ class MIDITokenizer(ABC, HFHubMixin):
         # If list of TokSequence -> recursive
         if isinstance(tokens, list):
             return [self.tokens_errors(tok_seq) for tok_seq in tokens]
+        elif len(tokens) == 0:
+            return 0
 
         nb_tok_predicted = len(tokens)  # used to norm the score
         if self.has_bpe:
@@ -2094,6 +2116,8 @@ class MIDITokenizer(ABC, HFHubMixin):
             self.complete_sequence(tokens)
             ids_bpe_encoded = tokens.ids_bpe_encoded
             ids = tokens.ids
+        elif isinstance(tokens, list) and len(tokens) == 0:
+            pass
         elif isinstance(tokens[0], TokSequence):
             ids_bpe_encoded = []
             for seq in tokens:

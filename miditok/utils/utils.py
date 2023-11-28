@@ -38,10 +38,12 @@ def convert_ids_tensors_to_list(ids: Any):
         # Recursively checks the content are ints (only check first item)
         el = ids[0]
         while isinstance(el, list):
-            el = el[0]
+            el = el[0] if len(el) > 0 else None
 
         # Check endpoint type
-        if not isinstance(el, int):
+        if el is None:
+            pass
+        elif not isinstance(el, int):
             # Recursively try to convert elements of the list
             for ei in range(len(ids)):
                 ids[ei] = convert_ids_tensors_to_list(ids[ei])
@@ -389,6 +391,44 @@ def merge_same_program_tracks(tracks: List[Instrument]):
         tracks[idx[0]].notes.sort(key=lambda note: (note.start, note.pitch))
         for i in list(reversed(idx[1:])):
             del tracks[i]
+
+
+def set_midi_max_tick(midi: MidiFile):
+    midi.max_tick = 0
+
+    # Parse track events
+    if len(midi.instruments) > 0:
+        event_type_attr = (
+            ("notes", "end"),
+            ("pedals", "end"),
+            ("control_changes", "time"),
+            ("pitch_bends", "time"),
+        )
+        for track in midi.instruments:
+            for event_type, time_attr in event_type_attr:
+                if len(getattr(track, event_type)) > 0:
+                    midi.max_tick = max(
+                        midi.max_tick,
+                        max(
+                            [
+                                getattr(event, time_attr)
+                                for event in getattr(track, event_type)
+                            ]
+                        ),
+                    )
+
+    # Parse global MIDI events
+    for event_type in (
+        "tempo_changes",
+        "time_signature_changes",
+        "key_signature_changes",
+        "lyrics",
+    ):
+        if len(getattr(midi, event_type)) > 0:
+            midi.max_tick = max(
+                midi.max_tick,
+                max(event.time for event in getattr(midi, event_type)),
+            )
 
 
 def nb_bar_pos(

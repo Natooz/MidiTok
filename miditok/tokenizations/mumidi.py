@@ -9,11 +9,10 @@ from ..classes import Event, TokSequence
 from ..constants import (
     DRUM_PITCH_RANGE,
     MIDI_INSTRUMENTS,
-    TEMPO,
     TIME_DIVISION,
 )
 from ..midi_tokenizer import MIDITokenizer, _in_as_seq, _out_as_complete_seq
-from ..utils import detect_chords
+from ..utils import detect_chords, set_midi_max_tick
 
 
 class MuMIDI(MIDITokenizer):
@@ -292,10 +291,10 @@ class MuMIDI(MIDITokenizer):
         midi = MidiFile(ticks_per_beat=time_division)
 
         # Tempos
-        if self.config.use_tempos:
+        if self.config.use_tempos and len(tokens) > 0:
             first_tempo = float(tokens.tokens[0][3].split("_")[1])
         else:
-            first_tempo = TEMPO
+            first_tempo = self._DEFAULT_TEMPO
         midi.tempo_changes.append(TempoChange(first_tempo, 0))
 
         ticks_per_sample = time_division // max(self.config.beat_res.values())
@@ -351,6 +350,7 @@ class MuMIDI(MIDITokenizer):
                     )
                 )
             midi.instruments[-1].notes = notes
+        set_midi_max_tick(midi)
 
         # Write MIDI file
         if output_path:
@@ -462,6 +462,8 @@ class MuMIDI(MIDITokenizer):
         :param tokens: sequence of tokens to check
         :return: the error ratio (lower is better)
         """
+        if len(tokens) == 0:
+            return 0
         tokens = tokens.tokens
         err = 0
         previous_type = tokens[0][0].split("_")[0]

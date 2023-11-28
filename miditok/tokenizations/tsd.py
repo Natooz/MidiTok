@@ -15,11 +15,11 @@ from miditoolkit import (
 from ..classes import Event, TokSequence
 from ..constants import (
     MIDI_INSTRUMENTS,
-    TEMPO,
     TIME_DIVISION,
     TIME_SIGNATURE,
 )
 from ..midi_tokenizer import MIDITokenizer, _in_as_seq
+from ..utils import set_midi_max_tick
 
 
 class TSD(MIDITokenizer):
@@ -142,7 +142,7 @@ class TSD(MIDITokenizer):
 
         # RESULTS
         instruments: Dict[int, Instrument] = {}
-        tempo_changes = [TempoChange(TEMPO, -1)]
+        tempo_changes = [TempoChange(self._DEFAULT_TEMPO, -1)]
         time_signature_changes = [TimeSignature(*TIME_SIGNATURE, 0)]
 
         def check_inst(prog: int):
@@ -304,12 +304,8 @@ class TSD(MIDITokenizer):
             midi.instruments = list(instruments.values())
         midi.tempo_changes = tempo_changes
         midi.time_signature_changes = time_signature_changes
-        midi.max_tick = max(
-            [
-                max([note.end for note in track.notes]) if len(track.notes) > 0 else 0
-                for track in midi.instruments
-            ]
-        )
+        set_midi_max_tick(midi)
+
         # Write MIDI file
         if output_path:
             Path(output_path).mkdir(parents=True, exist_ok=True)
@@ -371,7 +367,7 @@ class TSD(MIDITokenizer):
         dic["Pitch"] = ["Velocity"]
         dic["Velocity"] = ["Duration"]
         dic["Duration"] = [first_note_token_type, "TimeShift"]
-        dic["TimeShift"] = [first_note_token_type]
+        dic["TimeShift"] = [first_note_token_type, "TimeShift"]
         if self.config.use_pitch_intervals:
             for token_type in ("PitchIntervalTime", "PitchIntervalChord"):
                 dic[token_type] = ["Velocity"]

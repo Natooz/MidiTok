@@ -8,11 +8,11 @@ from miditoolkit import Instrument, MidiFile, Note, TempoChange, TimeSignature
 from ..classes import Event, TokSequence
 from ..constants import (
     MIDI_INSTRUMENTS,
-    TEMPO,
     TIME_DIVISION,
     TIME_SIGNATURE,
 )
 from ..midi_tokenizer import MIDITokenizer, _in_as_seq
+from ..utils import set_midi_max_tick
 
 
 class Octuple(MIDITokenizer):
@@ -102,7 +102,7 @@ class Octuple(MIDITokenizer):
         current_pos = 0
         previous_tick = 0
         current_time_sig = TIME_SIGNATURE
-        current_tempo = TEMPO
+        current_tempo = self._DEFAULT_TEMPO
         current_program = None
         ticks_per_bar = self._compute_ticks_per_bar(
             TimeSignature(*current_time_sig, 0), time_division
@@ -214,7 +214,7 @@ class Octuple(MIDITokenizer):
 
         # RESULTS
         instruments: Dict[int, Instrument] = {}
-        tempo_changes = [TempoChange(TEMPO, -1)]
+        tempo_changes = [TempoChange(self._DEFAULT_TEMPO, -1)]
         time_signature_changes = []
 
         def check_inst(prog: int):
@@ -339,12 +339,8 @@ class Octuple(MIDITokenizer):
             midi.instruments = list(instruments.values())
         midi.tempo_changes = tempo_changes
         midi.time_signature_changes = time_signature_changes
-        midi.max_tick = max(
-            [
-                max([note.end for note in track.notes]) if len(track.notes) > 0 else 0
-                for track in midi.instruments
-            ]
-        )
+        set_midi_max_tick(midi)
+
         # Write MIDI file
         if output_path:
             Path(output_path).mkdir(parents=True, exist_ok=True)
@@ -429,6 +425,8 @@ class Octuple(MIDITokenizer):
         # If list of TokSequence -> recursive
         if isinstance(tokens, list):
             return [self.tokens_errors(tok_seq) for tok_seq in tokens]
+        if len(tokens) == 0:
+            return 0
 
         err = 0
         current_bar = current_pos = -1
