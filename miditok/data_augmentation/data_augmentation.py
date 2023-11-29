@@ -78,7 +78,8 @@ def data_augmentation_dataset(
             with open(file_path) as json_file:
                 file = json.load(json_file)
                 ids = file["ids"]
-                programs = file["programs"] if "programs" in file else None
+                programs = file.get("programs", None)
+                ids_bpe = file.get("ids_bpe_encoded", False)
 
             if tokenizer.one_token_stream:
                 ids = [ids]
@@ -117,6 +118,7 @@ def data_augmentation_dataset(
                     tokenizer,
                     *corrected_offsets,
                     all_offset_combinations=all_offset_combinations,
+                    need_to_decode_bpe=ids_bpe,
                 )
                 if len(aug) == 0:
                     continue
@@ -436,6 +438,7 @@ def data_augmentation_tokens(
     velocity_offsets: List[int] = None,
     duration_offsets: List[int] = None,
     all_offset_combinations: bool = False,
+    need_to_decode_bpe: bool = None,
 ) -> List[Tuple[Tuple[int, int, int], List[int]]]:
     r"""Perform data augmentation on a sequence of tokens, on the pitch dimension.
     NOTE: token sequences with BPE will be decoded during the augmentation, this might take some time.
@@ -453,6 +456,9 @@ def data_augmentation_tokens(
     :param all_offset_combinations: will perform data augmentation on all the possible
             combinations of offsets. If set to False, will perform data augmentation
             only based on the original sample.
+    :param need_to_decode_bpe: specify if BPE has to be decoded from the tokens. If given None while the
+            tokenizer uses BPE, the method will detect if any token id is outside the base vocabulary, so encoded with
+            BPE. Giving this argument allows to skip this check. (default: None)
     :return: the several data augmentations that have been performed
     """
     augmented = []
@@ -460,10 +466,14 @@ def data_augmentation_tokens(
     # Decode BPE
     bpe_decoded = False
     if tokenizer.has_bpe:
-        tokens = tokenizer.decode_bpe(
-            tokens.tolist() if isinstance(tokens, np.ndarray) else tokens
-        )
-        bpe_decoded = True
+        if need_to_decode_bpe is None:
+            ids_arr = tokens if isinstance(tokens, np.ndarray) else np.array(tokens)
+            need_to_decode_bpe = np.any(ids_arr) >= len(tokenizer.vocab)
+        if need_to_decode_bpe:
+            tokens = tokenizer.decode_bpe(
+                tokens.tolist() if isinstance(tokens, np.ndarray) else tokens
+            )
+            bpe_decoded = True
 
     # Converts to np array if necessary
     if not isinstance(tokens, np.ndarray):
