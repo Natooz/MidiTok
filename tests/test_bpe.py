@@ -18,25 +18,19 @@ import miditok
 from .utils import (
     MIDI_PATHS_ONE_TRACK,
     SEED,
-    TIME_SIGNATURE_RANGE_TESTS,
     TOKENIZATIONS_BPE,
+    TOKENIZER_CONFIG_KWARGS,
+    adjust_tok_params_for_tests,
 )
 
-# Special beat res for test, up to 64 beats so the duration and time-shift values are
-# long enough for MIDI-Like and Structured encodings, and with a single beat resolution
-BEAT_RES_TEST = {(0, 4): 8, (4, 12): 4}
-TOKENIZER_PARAMS = {
-    "beat_res": BEAT_RES_TEST,
-    "use_chords": False,  # set false to speed up tests as it takes some time on maestro MIDIs
-    "use_rests": True,
-    "use_tempos": True,
-    "use_time_signatures": True,
-    "use_programs": False,
-    "beat_res_rest": {(0, 16): 4},
-    "nb_tempos": 32,
-    "tempo_range": (40, 250),
-    "time_signature_range": TIME_SIGNATURE_RANGE_TESTS,
-}
+default_params = deepcopy(TOKENIZER_CONFIG_KWARGS)
+default_params.update(
+    {
+        "use_rests": True,
+        "use_tempos": True,
+        "use_time_signatures": True,
+    }
+)
 
 
 @pytest.mark.parametrize("tokenization", TOKENIZATIONS_BPE)
@@ -60,9 +54,10 @@ def test_bpe_conversion(
 
     # Creates tokenizers and computes BPE (build voc)
     first_samples_bpe = []
-    tokenizer_config = miditok.TokenizerConfig(**TOKENIZER_PARAMS)
+    params_ = deepcopy(default_params)
+    adjust_tok_params_for_tests(tokenization, params_)
     tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
-        tokenizer_config=tokenizer_config
+        tokenizer_config=miditok.TokenizerConfig(**params_)
     )
     # Give a str to dir for coverage
     tokenizer.tokenize_midi_dataset(midi_paths, tmp_path)

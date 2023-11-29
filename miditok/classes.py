@@ -165,8 +165,10 @@ class TokenizerConfig:
             up to 128 values (0 to 127). This parameter allows to reduce the number of velocity values.
             The velocities of the MIDIs resolution will be downsampled to ``num_velocities`` values, equally
             separated between 0 and 127. (default: ``32``)
-    :param special_tokens: list of special tokens. This must be given as a list of strings given
-            only the names of the tokens. (default: ``["PAD", "BOS", "EOS", "MASK"]``\)
+    :param special_tokens: list of special tokens. This must be given as a list of strings, that should represent
+            either the token type alone (e.g. ``PAD``) or the token type and its value separated by an underscore
+            (e.g. ``Genre_rock``). If two or more underscores are given, all but the last one will be replaced with
+            dashes (-). (default: ``["PAD", "BOS", "EOS", "MASK"]``\)
     :param use_chords: will use ``Chord`` tokens, if the tokenizer is compatible.
             A ``Chord`` token indicates the presence of a chord at a certain time step.
             MidiTok uses a chord detection method based on onset times and duration. This allows MidiTok to detect
@@ -317,7 +319,18 @@ class TokenizerConfig:
         self.pitch_range: Tuple[int, int] = pitch_range
         self.beat_res: Dict[Tuple[int, int], int] = beat_res
         self.num_velocities: int = num_velocities
-        self.special_tokens: Sequence[str] = special_tokens
+        self.special_tokens: List[str] = []
+        for special_token in special_tokens:
+            parts = special_token.split("_")
+            if len(parts) == 1:
+                parts.append("None")
+            elif len(parts) > 2:
+                parts = ["-".join(parts[:-1]), parts[-1]]
+                warnings.warn(
+                    f"miditok.TokenizerConfig: special token {special_token} must contain one underscore (_)."
+                    f"This token will be saved as {'_'.join(parts)}."
+                )
+            self.special_tokens.append("_".join(parts))
 
         # Additional token types params, enabling additional token types
         self.use_chords: bool = use_chords

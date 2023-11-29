@@ -338,7 +338,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             return self._bpe_model.get_vocab()
 
     @property
-    def special_tokens(self) -> Sequence[str]:
+    def special_tokens(self) -> List[str]:
         r"""Returns the vocabulary learnt with BPE.
         In case the tokenizer has not been trained with BPE, it returns None.
 
@@ -1188,17 +1188,16 @@ class MIDITokenizer(ABC, HFHubMixin):
         This method is called at ``__init__``\.
         """
         vocab = self._create_base_vocabulary()
-        special_tokens = [f"{tok}_None" for tok in self.special_tokens]
 
         if isinstance(vocab[0], list):  # multi-voc
             self._vocab_base = [{} for _ in range(len(vocab))]
             self.__vocab_base_inv = [{} for _ in range(len(vocab))]
             for vid in range(len(vocab)):
-                vocab[vid] = special_tokens + vocab[vid]
+                vocab[vid] = self.special_tokens + vocab[vid]
                 for tok in vocab[vid]:
                     self.add_to_vocab(tok, vid)
         else:
-            vocab = special_tokens + vocab
+            vocab = self.special_tokens + vocab
             for tok in vocab:
                 self.add_to_vocab(tok)
 
@@ -1378,16 +1377,17 @@ class MIDITokenizer(ABC, HFHubMixin):
         """
         original_token_types = list(self.tokens_types_graph.keys())
         for special_token in self.config.special_tokens:
-            if special_token == "EOS":
+            special_token_type = special_token.split("_")[0]
+            if special_token_type == "EOS":
                 self.tokens_types_graph["EOS"] = []
             else:
-                self.tokens_types_graph[special_token] = original_token_types + list(
-                    self.config.special_tokens
+                self.tokens_types_graph[special_token_type] = (
+                    original_token_types + list(self.config.special_tokens)
                 )
 
-            if special_token != "BOS":
+            if special_token_type != "BOS":
                 for token_type in original_token_types:
-                    self.tokens_types_graph[token_type].append(special_token)
+                    self.tokens_types_graph[token_type].append(special_token_type)
 
     def __create_durations_tuples(self) -> List[Tuple[int, int, int]]:
         r"""Creates the possible durations in beat / position units, as tuple of the form:
@@ -1683,9 +1683,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         special_tokens_bytes = []
         if len(self.config.special_tokens) > 0:
             special_tokens_bytes = self._ids_to_bytes(
-                self._tokens_to_ids(
-                    [f"{tok}_None" for tok in self.config.special_tokens]
-                )
+                self._tokens_to_ids(self.config.special_tokens)
             )
         trainer = BpeTrainer(
             vocab_size=vocab_size,
