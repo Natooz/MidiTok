@@ -338,7 +338,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             return self._bpe_model.get_vocab()
 
     @property
-    def special_tokens(self) -> Sequence[str]:
+    def special_tokens(self) -> List[str]:
         r"""Returns the vocabulary learnt with BPE.
         In case the tokenizer has not been trained with BPE, it returns None.
 
@@ -1188,17 +1188,16 @@ class MIDITokenizer(ABC, HFHubMixin):
         This method is called at ``__init__``\.
         """
         vocab = self._create_base_vocabulary()
-        special_tokens = [f"{tok}_None" for tok in self.special_tokens]
 
         if isinstance(vocab[0], list):  # multi-voc
             self._vocab_base = [{} for _ in range(len(vocab))]
             self.__vocab_base_inv = [{} for _ in range(len(vocab))]
             for vid in range(len(vocab)):
-                vocab[vid] = special_tokens + vocab[vid]
+                vocab[vid] = self.special_tokens + vocab[vid]
                 for tok in vocab[vid]:
                     self.add_to_vocab(tok, vid)
         else:
-            vocab = special_tokens + vocab
+            vocab = self.special_tokens + vocab
             for tok in vocab:
                 self.add_to_vocab(tok)
 

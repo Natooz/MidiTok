@@ -317,7 +317,18 @@ class TokenizerConfig:
         self.pitch_range: Tuple[int, int] = pitch_range
         self.beat_res: Dict[Tuple[int, int], int] = beat_res
         self.num_velocities: int = num_velocities
-        self.special_tokens: Sequence[str] = special_tokens
+        self.special_tokens: List[str] = []
+        for special_token in special_tokens:
+            parts = special_token.split("_")
+            if len(parts) == 1:
+                parts.append("None")
+            elif len(parts) > 2:
+                parts = ["-".join(parts[:-1]), parts[-1]]
+                warnings.warn(
+                    f"miditok.TokenizerConfig: special token {special_token} must contain one underscore (_)."
+                    f"This token will be saved as {'_'.join(parts)}."
+                )
+            self.special_tokens.append("_".join(parts))
 
         # Additional token types params, enabling additional token types
         self.use_chords: bool = use_chords
