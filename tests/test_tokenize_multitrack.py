@@ -23,10 +23,11 @@ from .utils import (
 )
 
 default_params = deepcopy(TOKENIZER_CONFIG_KWARGS)
+# tempo decode fails without Rests for MIDILike because beat_res range is too short
 default_params.update(
     {
         "use_chords": True,
-        "use_rests": True,  # tempo decode fails when False for MIDILike because beat_res range is too short
+        "use_rests": True,
         "use_tempos": True,
         "use_time_signatures": True,
         "use_sustain_pedals": True,
@@ -55,7 +56,8 @@ for tokenization_ in ALL_TOKENIZATIONS:
     if tokenization_ in tokenizations_non_one_stream:
         params_tmp = deepcopy(params_)
         params_tmp["one_token_stream_for_programs"] = False
-        # Disable tempos for Octuple with one_token_stream_for_programs, as tempos are carried by note tokens
+        # Disable tempos for Octuple with one_token_stream_for_programs, as tempos are
+        # carried by note tokens
         if tokenization_ == "Octuple":
             params_tmp["use_tempos"] = False
         TOK_PARAMS_MULTITRACK.append((tokenization_, params_tmp))
@@ -72,13 +74,15 @@ def test_multitrack_midi_to_tokens_to_midi(
     saving_erroneous_midis: bool = False,
 ):
     r"""Reads a MIDI file, converts it into tokens, convert it back to a MIDI object.
-    The decoded MIDI should be identical to the original one after downsampling, and potentially notes deduplication.
-    We only parametrize for midi files, as it would otherwise require to load them multiple times each.
+    The decoded MIDI should be identical to the original one after downsampling, and
+    potentially notes deduplication. We only parametrize for midi files, as it would
+    otherwise require to load them multiple times each.
     # TODO test parametrize tokenization / params_set
 
     :param midi_path: path to the MIDI file to test.
     :param tok_params_sets: sequence of tokenizer and its parameters to run.
-    :param saving_erroneous_midis: will save MIDIs decoded with errors, to be used to debug.
+    :param saving_erroneous_midis: will save MIDIs decoded with errors, to be used to
+        debug.
     """
     if tok_params_sets is None:
         tok_params_sets = TOK_PARAMS_MULTITRACK

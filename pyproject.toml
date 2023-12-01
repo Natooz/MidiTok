@@ -62,3 +62,28 @@ path = "miditok/__init__.py"
 include = [
     "/miditok",
 ]
+
+[tool.ruff]
+target-version = "py38"
+extend-select = [
+    "A",
+    "B",
+    "E",
+    "F",
+    "G",
+    "I",
+    "N",
+    "PIE",
+    "Q",
+    "S",
+    "SIM",
+    "T",
+    "UP",
+    "W",
+]
+
+[tool.ruff.per-file-ignores]
+"tests/**" = [
+    "S101",  # allow assertions in tests
+    "T201",  # print allowed
+]

@@ -25,7 +25,8 @@ def test_data_augmentation_midi(
     data_path: Union[str, Path] = HERE / "MIDIs_multitrack",
     tokenization: str = "MIDILike",
 ):
-    # We only test data augmentation on MIDIs with one tokenization, as tokenizers does not play here
+    # We only test data augmentation on MIDIs with one tokenization, as tokenizers does
+    # not play here
 
     tokenizer = getattr(miditok, tokenization)()
     midi_aug_path = tmp_path / "Multitrack_MIDIs_aug" / tokenization
@@ -222,11 +223,15 @@ def test_data_augmentation_tokens(
                 # Reads the MIDI
                 try:
                     midi = MidiFile(Path(file_path))
-                except Exception:  # ValueError, OSError, FileNotFoundError, IOError, EOFError, mido.KeySignatureError
+                except MIDI_LOADING_EXCEPTION:
                     continue
 
-                offsets = miditok.data_augmentation.get_offsets(tokenizer, 2, 2, 2, midi=midi)
-                midis = miditok.data_augmentation.data_augmentation_midi(midi, tokenizer, *offsets)
+                offsets = miditok.data_augmentation.get_offsets(
+                    tokenizer, 2, 2, 2, midi=midi
+                )
+                midis = miditok.data_augmentation.data_augmentation_midi(
+                    midi, tokenizer, *offsets
+                )
                 for _, aug_mid in midis:
                     _ = tokenizer(aug_mid)
             tt = time() - t0
@@ -239,13 +244,17 @@ def test_data_augmentation_tokens(
                 # Reads the MIDI
                 try:
                     midi = MidiFile(Path(file_path))
-                except Exception:  # ValueError, OSError, FileNotFoundError, IOError, EOFError, mido.KeySignatureError
+                except MIDI_LOADING_EXCEPTION:
                     continue
 
                 tokens = tokenizer(midi)
                 for track_tokens in tokens:
-                    offsets = miditok.data_augmentation.get_offsets(tokenizer, 2, 2, 2, tokens=tokens)
-                    _ = miditok.data_augmentation.data_augmentation_tokens(track_tokens, tokenizer, *offsets)
+                    offsets = miditok.data_augmentation.get_offsets(
+                        tokenizer, 2, 2, 2, tokens=tokens
+                    )
+                    _ = miditok.data_augmentation.data_augmentation_tokens(
+                        track_tokens, tokenizer, *offsets
+                    )
             tt = time() - t0
             print(f'Opening midi -> tokenize midi -> augment tokens: took {tt:.2f} sec '
                   f'({tt / len(files):.2f} sec/file)')"""

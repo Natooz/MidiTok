@@ -1,6 +1,7 @@
 #!/usr/bin/python3 python
 
-"""Test the Hugging Face Hub integration: pushing and retrieving MidiTok tokenizers to and from the hub.
+"""Test the Hugging Face Hub integration: pushing and retrieving MidiTok tokenizers to
+and from the hub.
 
 """
 

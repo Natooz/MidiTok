@@ -1,5 +1,6 @@
 """
-PyTorch `Dataset` objects, to be used with PyTorch `DataLoaders` to load and send data during training.
+PyTorch `Dataset` objects, to be used with PyTorch `DataLoaders` to load and send data
+during training.
 """
 import json
 from abc import ABC
@@ -20,7 +21,8 @@ from ..constants import MIDI_FILES_EXTENSIONS
 def split_seq_in_subsequences(
     seq: Sequence[any], min_seq_len: int, max_seq_len: int
 ) -> List[Sequence[Any]]:
-    r"""Split a sequence of tokens into subsequences for which `min_seq_len <= len(sub_seq) <= max_seq_len`.
+    r"""Split a sequence of tokens into subsequences for which
+    ``min_seq_len <= len(sub_seq) <= max_seq_len``.
 
     :param seq: sequence to split.
     :param min_seq_len: minimum sequence length.
@@ -51,8 +53,9 @@ def split_dataset_to_subsequences(
     :param out_dir: output directory to save the subsequences.
     :param min_seq_len: minimum sequence length.
     :param max_seq_len: maximum sequence length.
-    :param one_token_stream: give False if the token files contains multiple tracks, i.e. the first dimension of
-        the value of the "ids" entry corresponds to several tracks. Otherwise, leave False. (default: True)
+    :param one_token_stream: give False if the token files contains multiple tracks,
+        i.e. the first dimension of the value of the "ids" entry corresponds to several
+        tracks. Otherwise, leave False. (default: True)
     """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -81,14 +84,16 @@ def split_dataset_to_subsequences(
 
 
 class _DatasetABC(Dataset, ABC):
-    r"""Abstract Dataset class, holding samples (and optionally labels) and implementing the basic magic methods.
+    r"""Abstract Dataset class, holding samples (and optionally labels) and
+    implementing the basic magic methods.
 
-    :param samples: sequence of input samples. It can directly be data, or a paths to files to be loaded.
+    :param samples: sequence of input samples. It can directly be data, or a paths to
+        files to be loaded.
     :param labels: sequence of labels associated with the samples. (default: None)
-    :param sample_key_name: name of the dictionary key containing the sample data when iterating the dataset.
-            (default: "input_ids")
-    :param labels_key_name: name of the dictionary key containing the labels data when iterating the dataset.
-            (default: "labels")
+    :param sample_key_name: name of the dictionary key containing the sample data when
+        iterating the dataset. (default: "input_ids")
+    :param labels_key_name: name of the dictionary key containing the labels data when
+        iterating the dataset. (default: "labels")
     """
 
     def __init__(
@@ -98,10 +103,10 @@ class _DatasetABC(Dataset, ABC):
         sample_key_name: str = "input_ids",
         labels_key_name: str = "labels",
     ):
-        if samples is not None and labels is not None:
-            assert len(samples) == len(
-                labels
-            ), "The number of samples must be the same as the number of labels"
+        if samples is not None and labels is not None and len(samples) != len(labels):
+            raise ValueError(
+                "The number of samples must be the same as the number of labels"
+            )
         self.samples = samples if samples is not None else []
         self.labels = labels
         self.sample_key_name = sample_key_name
@@ -147,40 +152,47 @@ class _DatasetABC(Dataset, ABC):
 
 
 class DatasetTok(_DatasetABC):
-    r"""Basic `Dataset` loading Json files of tokenized MIDIs, or MIDI files to tokenize, and
-    store the token ids in RAM. It outputs token sequences that can be used to train models.
+    r"""Basic `Dataset` loading Json files of tokenized MIDIs, or MIDI files to
+    tokenize, and store the token ids in RAM. It outputs token sequences that can be
+    used to train models.
 
     The tokens sequences being loaded will then be split into subsequences, of length
-    comprise between `min_seq_len` and `max_seq_len`.
-    For example, with `min_seq_len = 50` and `max_seq_len = 100`:
-    * a sequence of 650 tokens will be split into 6 subsequences of 100 tokens plus one subsequence of 50 tokens;
-    * a sequence of 620 tokens will be split into 6 subsequences of 100 tokens, the last 20 tokens will be discarded;
-    * a sequence of 670 tokens will be split into 6 subsequences of 100 tokens plus one subsequence of 50 tokens,
-        and the last 20 tokens will be discarded.
+    comprise between ``min_seq_len`` and ``max_seq_len``.
+    For example, with ``min_seq_len = 50`` and ``max_seq_len = 100``:
+    * a sequence of 650 tokens will be split into 6 subsequences of 100 tokens plus one
+        subsequence of 50 tokens;
+    * a sequence of 620 tokens will be split into 6 subsequences of 100 tokens, the
+        last 20 tokens will be discarded;
+    * a sequence of 670 tokens will be split into 6 subsequences of 100 tokens plus one
+        subsequence of 50 tokens, and the last 20 tokens will be discarded.
 
-    This `Dataset` class is well suited if you have enough RAM to store all the data, as it does not require you to
-    prior split the dataset into subsequences of the length you desire.
-    Note that if you directly load MIDI files, the loading can take some time as they will need to be tokenized.
-    You might want to tokenize them before once with the `tokenizer.tokenize_midi_dataset()` method.
+    This `Dataset` class is well suited if you have enough RAM to store all the data,
+    as it does not require you to prior split the dataset into subsequences of the
+    length you desire. Note that if you directly load MIDI files, the loading can take
+    some time as they will need to be tokenized. You might want to tokenize them before
+    once with the ``tokenizer.tokenize_midi_dataset()`` method.
 
-    Additionally, you can use the `func_to_get_labels` argument to provide a method allowing to use labels (one label
-    per file).
+    Additionally, you can use the `func_to_get_labels` argument to provide a method
+    allowing to use labels (one label per file).
 
     :param files_paths: list of paths to files to load.
     :param min_seq_len: minimum sequence length (in nb of tokens)
     :param max_seq_len: maximum sequence length (in nb of tokens)
-    :param tokenizer: tokenizer object, to use to load MIDIs instead of tokens. (default: None)
-    :param one_token_stream: give False if the token files contains multiple tracks, i.e. the first dimension of
-        the value of the "ids" entry corresponds to several tracks. Otherwise, leave False. (default: True)
-    :param func_to_get_labels: a function to retrieve the label of a file. The method must take two positional
-            arguments: the first is either a MidiFile or the tokens loaded from the json file, the second is the path
-            to the file just loaded. The method must return an integer which correspond to the label id (and not the
-            absolute value, e.g. if you are classifying 10 musicians, return the id from 0 to 9 included corresponding
-            to the musician).
-    :param sample_key_name: name of the dictionary key containing the sample data when iterating the dataset.
-            (default: "input_ids")
-    :param labels_key_name: name of the dictionary key containing the labels data when iterating the dataset.
-            (default: "labels")
+    :param tokenizer: tokenizer object, to use to load MIDIs instead of tokens.
+        (default: None)
+    :param one_token_stream: give False if the token files contains multiple tracks,
+        i.e. the first dimension of the value of the "ids" entry corresponds to
+        several tracks. Otherwise, leave False. (default: True)
+    :param func_to_get_labels: a function to retrieve the label of a file. The method
+        must take two positional arguments: the first is either a MidiFile or the
+        tokens loaded from the json file, the second is the path to the file just
+        loaded. The method must return an integer which correspond to the label id
+        (and not the absolute value, e.g. if you are classifying 10 musicians, return
+        the id from 0 to 9 included corresponding to the musician).
+    :param sample_key_name: name of the dictionary key containing the sample data when
+        iterating the dataset. (default: "input_ids")
+    :param labels_key_name: name of the dictionary key containing the labels data when
+        iterating the dataset. (default: "labels")
     """
 
     def __init__(
@@ -246,19 +258,22 @@ class DatasetTok(_DatasetABC):
 
 
 class DatasetJsonIO(_DatasetABC):
-    r"""Basic `Dataset` loading Json files of tokenized MIDIs on the fly.
-    When executing `dataset[idx]`, this class will load the `files_paths[idx]` json file and return the token ids,
-    that can be used to train generative models.
+    r"""Basic ``Dataset`` loading Json files of tokenized MIDIs on the fly.
+    When executing ``dataset[idx]``, this class will load the ``files_paths[idx]`` json
+    file and return the token ids, that can be used to train generative models.
     **This class is only compatible with tokens saved as a single stream of tokens
-    (** `tokenizer.one_token_stream` **).** If you plan to use it with token files containing multiple token streams,
-    you should first it with `miditok.pytorch_data.split_dataset_to_subsequences()`.
+    (** ``tokenizer.one_token_stream`` **).** If you plan to use it with token files
+    containing multiple token streams, you should first it with
+    ``miditok.pytorch_data.split_dataset_to_subsequences()``.
 
-    It allows to reduce the sequence length up to a `max_seq_len` limit, but will not split the sequences into
-    subsequences. If your dataset contains sequences with lengths largely varying, you might want to first split it
-    into subsequences with the `miditok.pytorch_data.split_dataset_to_subsequences()` method before loading it to avoid
-    losing data.
+    It allows to reduce the sequence length up to a `max_seq_len` limit, but will not
+    split the sequences into subsequences. If your dataset contains sequences with
+    lengths largely varying, you might want to first split it into subsequences with
+    the ``miditok.pytorch_data.split_dataset_to_subsequences()`` method before loading
+    it to avoid losing data.
 
-    This `Dataset` class is well suited if you are using a large dataset, or have access to limited RAM resources.
+    This `Dataset` class is well suited if you are using a large dataset, or have
+    access to limited RAM resources.
 
     :param files_paths: list of paths to files to load.
     :param max_seq_len: maximum sequence length (in nb of tokens). (default: None)
@@ -277,6 +292,5 @@ class DatasetJsonIO(_DatasetABC):
             token_ids = json.load(json_file)["ids"]
         if self.max_seq_len is not None and len(token_ids) > self.max_seq_len:
             token_ids = token_ids[: self.max_seq_len]
-        item = {"input_ids": LongTensor(token_ids)}
 
-        return item
+        return {"input_ids": LongTensor(token_ids)}

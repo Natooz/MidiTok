@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.abspath(".."))
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = "MidiTok"
-copyright = "2023, Nathan Fradet"
+copyright = "2023, Nathan Fradet"  # noqa: A001
 author = "Nathan Fradet"
 release = "2.1.7"
 

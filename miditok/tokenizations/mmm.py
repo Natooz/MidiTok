@@ -17,19 +17,22 @@ from ..utils import set_midi_max_tick
 
 
 class MMM(MIDITokenizer):
-    r"""MMM, standing for `[Multi-Track Music Machine](https://arxiv.org/abs/2008.06048)`_, is a multitrack tokenization
-    primarily designed for music inpainting and infilling.
+    r"""MMM, standing for `[Multi-Track Music Machine](https://arxiv.org/abs/2008.06048)`_,
+    is a multitrack tokenization primarily designed for music inpainting and infilling.
     Tracks are tokenized independently and concatenated into a single token sequence.
-    ``Bar_Fill`` tokens are used to specify the bars to fill (or inpaint, or rewrite), the new tokens are then
-    autoregressively generated.
-    Note that *this implementation represents note durations with ``Duration`` tokens* instead of the ``NoteOff``
-    strategy of the `[original paper](https://arxiv.org/abs/2008.06048)`_. The reason being that ``NoteOff`` tokens
-    perform poorer for generation with causal models.
+    ``Bar_Fill`` tokens are used to specify the bars to fill (or inpaint, or rewrite),
+    the new tokens are then autoregressively generated.
+    Note that *this implementation represents note durations with ``Duration`` tokens*
+    instead of the ``NoteOff`` strategy of the `[original paper](https://arxiv.org/abs/2008.06048)`_.
+    The reason being that ``NoteOff`` tokens perform poorer for generation with causal
+    models.
 
-    **Add a `density_bins_max` entry in the config, mapping to a tuple specifying the number of density bins, and the
-    maximum density in notes per beat to consider. (default: (10, 20))**
+    **Add a `density_bins_max` entry in the config, mapping to a tuple specifying the
+    number of density bins, and the maximum density in notes per beat to consider.
+    (default: (10, 20))**
 
-    **Note:** When decoding tokens with tempos, only the tempos of the first track will be decoded.
+    **Note:** When decoding tokens with tempos, only the tempos of the first track
+    will be decoded.
     """
 
     def _tweak_config_before_creating_voc(self):
@@ -39,7 +42,8 @@ class MMM(MIDITokenizer):
         self.config.use_rests = False
         self.config.use_sustain_pedals = False
         self.config.use_pitch_bends = False
-        # Recreate densities here just in case density_bins_max was loaded from params (list to np array)
+        # Recreate densities here just in case density_bins_max was loaded from params
+        # (list to np array)
         if "density_bins_max" not in self.config.additional_params:
             self.config.additional_params["density_bins_max"] = MMM_DENSITY_BINS_MAX
         if "note_densities" in self.config.additional_params:
@@ -59,8 +63,9 @@ class MMM(MIDITokenizer):
 
     def _add_time_events(self, events: List[Event]) -> List[Event]:
         r"""
-        Takes a sequence of note events (containing optionally Chord, Tempo and TimeSignature tokens),
-        and insert (not inplace) time tokens (TimeShift, Rest) to complete the sequence.
+        Takes a sequence of note events (containing optionally Chord, Tempo and
+        TimeSignature tokens), and insert (not inplace) time tokens (TimeShift, Rest)
+        to complete the sequence.
 
         :param events: note events to complete.
         :return: the same events, with time events inserted.
@@ -170,7 +175,7 @@ class MMM(MIDITokenizer):
         # Adds track tokens
         # Disable use_programs so that _create_track_events do not add Program events
         self.config.use_programs = False
-        for ti, track in enumerate(midi.instruments):
+        for track in midi.instruments:
             note_density = len(track.notes) / self._current_midi_metadata["max_tick"]
             note_density = int(np.argmin(np.abs(note_density_bins - note_density)))
             all_events += [
@@ -207,17 +212,21 @@ class MMM(MIDITokenizer):
     ) -> MidiFile:
         r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
 
-        :param tokens: tokens to convert. Can be either a list of :class:`miditok.TokSequence`,
+        :param tokens: tokens to convert. Can be either a list of
+            :class:`miditok.TokSequence`,
         :param _: unused, to match parent method signature
         :param output_path: path to save the file. (default: None)
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create).
+        :param time_division: MIDI time division / resolution, in ticks/beat (of the
+            MIDI to create).
         :return: the midi object (:class:`miditoolkit.MidiFile`).
         """
         tokens = cast(TokSequence, tokens)
         midi = MidiFile(ticks_per_beat=time_division)
-        assert (
-            time_division % max(self.config.beat_res.values()) == 0
-        ), f"Invalid time division, please give one divisible by {max(self.config.beat_res.values())}"
+        if time_division % max(self.config.beat_res.values()) != 0:
+            raise ValueError(
+                f"Invalid time division, please give one divisible by"
+                f"{max(self.config.beat_res.values())}"
+            )
         tokens = cast(List[str], tokens.tokens)  # for reducing type errors
 
         # RESULTS
@@ -256,7 +265,7 @@ class MMM(MIDITokenizer):
                 current_tick = 0
                 current_bar = -1
                 previous_note_end = 0
-            elif token == "Bar_Start":
+            elif token == "Bar_Start":  # noqa: S105
                 current_bar += 1
                 if current_bar > 0:
                     current_tick = tick_at_current_bar + ticks_per_bar
@@ -269,8 +278,9 @@ class MMM(MIDITokenizer):
             elif (
                 first_program is None or current_program == first_program
             ) and tok_type == "Tempo":
-                # If the tokenizer includes tempo tokens, each Position token should be followed by
-                # a tempo token, but if it is not the case this method will skip this step
+                # If the tokenizer includes tempo tokens, each Position token should be
+                # followed by a tempo token, but if it is not the case this method will
+                # skip this step
                 tempo = float(token.split("_")[1])
                 if current_tick != tempo_changes[-1].time:
                     tempo_changes.append(TempoChange(tempo, current_tick))
@@ -290,7 +300,8 @@ class MMM(MIDITokenizer):
                     pitch = int(tok_val)
                     previous_pitch_onset = pitch
                     previous_pitch_chord = pitch
-                # We update previous_pitch_onset and previous_pitch_chord even if the try fails.
+                # We update previous_pitch_onset and previous_pitch_chord even if the
+                # try fails.
                 elif tok_type == "PitchIntervalTime":
                     pitch = previous_pitch_onset + int(tok_val)
                     previous_pitch_onset = pitch
@@ -309,7 +320,8 @@ class MMM(MIDITokenizer):
                         previous_note_end = max(previous_note_end, current_tick + dur)
                 except IndexError:
                     # A well constituted sequence should not raise an exception
-                    # However with generated sequences this can happen, or if the sequence isn't finished
+                    # However with generated sequences this can happen, or if the
+                    # sequence isn't finished
                     pass
         if len(tempo_changes) > 1:
             del tempo_changes[0]  # delete mocked tempo change
@@ -330,12 +342,12 @@ class MMM(MIDITokenizer):
 
     def _create_base_vocabulary(self) -> List[str]:
         r"""Creates the vocabulary, as a list of string tokens.
-        Each token as to be given as the form of "Type_Value", separated with an underscore.
-        Example: Pitch_58
-        The :class:`miditok.MIDITokenizer` main class will then create the "real" vocabulary as
-        a dictionary.
-        Special tokens have to be given when creating the tokenizer, and
-        will be added to the vocabulary by :class:`miditok.MIDITokenizer`.
+        Each token as to be given as the form of "Type_Value", separated with an
+        underscore. Example: Pitch_58
+        The :class:`miditok.MIDITokenizer` main class will then create the "real"
+        vocabulary as a dictionary. Special tokens have to be given when creating the
+        tokenizer, and will be added to the vocabulary by
+        :class:`miditok.MIDITokenizer`.
 
         :return: the vocabulary as a list of string.
         """
@@ -454,7 +466,7 @@ class MMM(MIDITokenizer):
             pitch_val = int(tokens[0].split("_")[1])
             current_pitches.append(pitch_val)
 
-        for i, token in enumerate(tokens[1:]):
+        for token in tokens[1:]:
             # err_tokens = tokens[i - 4 : i + 4]  # uncomment for debug
             event_type, event_value = token.split("_")[0], token.split("_")[1]
 

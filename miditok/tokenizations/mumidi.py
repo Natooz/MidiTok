@@ -33,11 +33,12 @@ class MuMIDI(MIDITokenizer):
 
     The output hidden states of the model will then be fed to several output layers
     (one per token type). This means that the training requires to add multiple losses.
-    For generation, the decoding implies sample from several distributions, which can be
-    very delicate. Hence, we do not recommend this tokenization for generation with small models.
+    For generation, the decoding implies sample from several distributions, which can
+    be very delicate. Hence, we do not recommend this tokenization for generation with
+    small models.
 
-    **Add a `drum_pitch_range` entry in the config, mapping to a tuple of values to restrict the range of drum pitches
-    to use.**
+    **Add a `drum_pitch_range` entry in the config, mapping to a tuple of values to
+    restrict the range of drum pitches to use.**
 
     **Notes:**
         * Tokens are first sorted by time, then track, then pitch values.
@@ -57,7 +58,7 @@ class MuMIDI(MIDITokenizer):
         if "drum_pitch_range" not in self.config.additional_params:
             self.config.additional_params["drum_pitch_range"] = DRUM_PITCH_RANGE
         if "max_bar_embedding" not in self.config.additional_params:
-            # this attribute might increase over tokenizations, if the tokenizer encounter longer MIDIs
+            # this attribute might increase if the tokenizer encounter longer MIDIs
             self.config.additional_params["max_bar_embedding"] = 60
 
         self.vocab_types_idx = {
@@ -123,23 +124,22 @@ class MuMIDI(MIDITokenizer):
         ].tempo
         for note_token in note_tokens:
             # (Tempo) update tempo values current_tempo
-            if self.config.use_tempos:
-                # If the current tempo is not the last one
-                if current_tempo_idx + 1 < len(
-                    self._current_midi_metadata["tempo_changes"]
-                ):
-                    # Will loop over incoming tempo changes
-                    for tempo_change in self._current_midi_metadata["tempo_changes"][
-                        current_tempo_idx + 1 :
-                    ]:
-                        # If this tempo change happened before the current moment
-                        if tempo_change.time <= note_token[0].time:
-                            current_tempo = tempo_change.tempo
-                            current_tempo_idx += (
-                                1  # update tempo value (might not change) and index
-                            )
-                        elif tempo_change.time > note_token[0].time:
-                            break  # this tempo change is beyond the current time step, we break the loop
+            # If the current tempo is not the last one
+            if self.config.use_tempos and current_tempo_idx + 1 < len(
+                self._current_midi_metadata["tempo_changes"]
+            ):
+                # Will loop over incoming tempo changes
+                for tempo_change in self._current_midi_metadata["tempo_changes"][
+                    current_tempo_idx + 1 :
+                ]:
+                    # If this tempo change happened before the current moment
+                    if tempo_change.time <= note_token[0].time:
+                        current_tempo = tempo_change.tempo
+                        current_tempo_idx += (
+                            1  # update tempo value (might not change) and index
+                        )
+                    elif tempo_change.time > note_token[0].time:
+                        break  # this tempo change is beyond the current time step
             # Positions and bars pos enc
             if note_token[0].time != current_tick:
                 pos_index = int((note_token[0].time % ticks_per_bar) / ticks_per_sample)
@@ -191,17 +191,18 @@ class MuMIDI(MIDITokenizer):
         return TokSequence(tokens=tokens)
 
     def _track_to_tokens(self, track: Instrument) -> List[List[Union[Event, str]]]:
-        r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens (:class:`miditok.TokSequence`).
-        For each note, it creates a time step as a list of tokens where (list index: token type):
-        * 0: Pitch (as an Event object for sorting purpose afterwards)
+        r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
+        (:class:`miditok.TokSequence`). For each note, it creates a time step as a
+        list of tokens where (list index: token type):
+        * 0: Pitch (as an Event object for sorting purpose afterward)
         * 1: Velocity
         * 2: Duration
 
         :param track: track object to convert.
         :return: sequence of corresponding tokens.
         """
-        # Make sure the notes are sorted first by their onset (start) times, second by pitch
-        # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
+        # Make sure the notes are sorted first by their onset (start) times, second by
+        # pitch: notes.sort(key=lambda x: (x.start, x.pitch)) (done in midi_to_tokens)
         dur_bins = self._durations_ticks[self._current_midi_metadata["time_division"]]
 
         tokens = []
@@ -266,7 +267,8 @@ class MuMIDI(MIDITokenizer):
     ) -> MidiFile:
         r"""Override the parent class method
         Convert multiple sequences of tokens into a multitrack MIDI and save it.
-        The tokens will be converted to event objects and then to a miditoolkit.MidiFile object.
+        The tokens will be converted to event objects and then to a
+        miditoolkit.MidiFile object.
         A time step is a list of tokens where (list index: token type):
         * 0: Pitch / DrumPitch / Position / Bar / Program / (Chord) / (Rest)
         * 1: BarPosEnc
@@ -275,19 +277,22 @@ class MuMIDI(MIDITokenizer):
         * -2: Velocity
         * -1: Duration
 
-        :param tokens: tokens to convert. Can be either a Tensor (PyTorch and Tensorflow are supported),
-                a numpy array, a Python list or a TokSequence.
+        :param tokens: tokens to convert. Can be either a Tensor (PyTorch and
+            Tensorflow are supported), a numpy array, a Python list or a TokSequence.
         :param tokens: list of lists of tokens to convert, each list inside the
-                       first list corresponds to a track
+            first list corresponds to a track
         :param _: unused, to match parent method signature
         :param output_path: path to save the file (with its name, e.g. music.mid),
-                        leave None to not save the file
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create)
+            leave None to not save the file
+        :param time_division: MIDI time division / resolution, in ticks/beat (of the
+            MIDI to create)
         :return: the midi object (miditoolkit.MidiFile)
         """
-        assert (
-            time_division % max(self.config.beat_res.values()) == 0
-        ), f"Invalid time division, please give one divisible by {max(self.config.beat_res.values())}"
+        if time_division % max(self.config.beat_res.values()) != 0:
+            raise ValueError(
+                f"Invalid time division, please give one divisible by"
+                f"{max(self.config.beat_res.values())}"
+            )
         midi = MidiFile(ticks_per_beat=time_division)
 
         # Tempos
@@ -360,12 +365,12 @@ class MuMIDI(MIDITokenizer):
 
     def _create_base_vocabulary(self) -> List[List[str]]:
         r"""Creates the vocabulary, as a list of string tokens.
-        Each token as to be given as the form of "Type_Value", separated with an underscore.
-        Example: Pitch_58
-        The :class:`miditok.MIDITokenizer` main class will then create the "real" vocabulary as
-        a dictionary.
-        Special tokens have to be given when creating the tokenizer, and
-        will be added to the vocabulary by :class:`miditok.MIDITokenizer`.
+        Each token as to be given as the form of "Type_Value", separated with an
+        underscore. Example: Pitch_58
+        The :class:`miditok.MIDITokenizer` main class will then create the "real"
+        vocabulary as a dictionary. Special tokens have to be given when creating the
+        tokenizer, and will be added to the vocabulary by
+        :class:`miditok.MIDITokenizer`.
 
         For MUMIDI, token index 0 is used as a padding index for training.
         * 0: Pitch / DrumPitch / Position / Bar / Program / (Chord) / (Rest)
@@ -455,9 +460,11 @@ class MuMIDI(MIDITokenizer):
         r"""Checks if a sequence of tokens is made of good token types
         successions and returns the error ratio (lower is better).
         The Pitch and Position values are also analyzed:
-            - a bar token value cannot be < to the current bar (it would go back in time)
+            - a bar token value cannot be < to the current bar (it would go back in
+                time)
             - same for positions
-            - a pitch token should not be present if the same pitch is already played at the current position
+            - a pitch token should not be present if the same pitch is already played
+                at the current position
 
         :param tokens: sequence of tokens to check
         :return: the error ratio (lower is better)
@@ -473,7 +480,6 @@ class MuMIDI(MIDITokenizer):
         current_pos = int(current_pos) if current_pos != "None" else -1
 
         for token in tokens[1:]:
-            # debug = {j: self.tokens_to_events([tokens[1:][j]])[0] for j in range(i - 4, min(i + 4, len(tokens[1:])))}
             bar_value = int(token[1].split("_")[1])
             pos_value = token[2].split("_")[1]
             pos_value = int(pos_value) if pos_value != "None" else -1
@@ -485,22 +491,22 @@ class MuMIDI(MIDITokenizer):
 
             # Good token type
             if token_type in self.tokens_types_graph[previous_type]:
-                if token_type == "Bar":  # reset
+                if token_type == "Bar":  # noqa: S105
                     current_bar += 1
                     current_pos = -1
                     current_pitches = []
-                elif token_type == "Pitch":
+                elif token_type == "Pitch":  # noqa: S105
                     if int(token_value) in current_pitches:
                         err += 1  # pitch already played at current position
                     else:
                         current_pitches.append(int(token_value))
-                elif token_type == "Position":
+                elif token_type == "Position":  # noqa: S105
                     if int(token_value) <= current_pos or int(token_value) != pos_value:
                         err += 1  # token position value <= to the current position
                     else:
                         current_pos = int(token_value)
                         current_pitches = []
-                elif token_type == "Program":
+                elif token_type == "Program":  # noqa: S105
                     current_pitches = []
 
                 if pos_value < current_pos or bar_value < current_bar:

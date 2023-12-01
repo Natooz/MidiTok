@@ -22,22 +22,26 @@ class DataCollator:
         inputs_kwarg_name: str = "input_ids",
         labels_kwarg_name: str = "labels",
     ):
-        r"""Multifunction data collator, applying padding (right or left), allowing to add `BOS` and `EOS` tokens.
-        It will also add an "attention_mask" entry to the batch, following the padding applied.
+        r"""Multifunction data collator, applying padding (right or left), allowing to
+        add ``BOS`` and ``EOS`` tokens. It will also add an "attention_mask" entry to
+        the batch, following the padding applied.
 
         :param pad_token_id: padding token id.
         :param bos_token_id: BOS token id. (default: None)
         :param eos_token_id: EOS token id. (default: None)
-        :param pad_on_left: if given True, it will pad the sequences on the left. This can be required when using
-            some libraries expecting padding on left, for example when generating with Hugging Face Transformers.
-            (default: False)
-        :param copy_inputs_as_labels: will add a labels entry (`inputs_kwarg_name`) to the batch
-            (or replace the existing one), which is a copy to the input entry (`labels_kwarg_name`). (default: False)
-        :param shift_labels: will shift inputs and labels for autoregressive training / teacher forcing.
-            (default: False)
+        :param pad_on_left: if given True, it will pad the sequences on the left. This
+            can be required when using some libraries expecting padding on left, for
+            example when generating with Hugging Face Transformers. (default: False)
+        :param copy_inputs_as_labels: will add a labels entry (`inputs_kwarg_name`) to
+            the batch (or replace the existing one), which is a copy to the input entry
+            (`labels_kwarg_name`). (default: False)
+        :param shift_labels: will shift inputs and labels for autoregressive
+            training/teacher forcing. (default: False)
         :param labels_pad_idx: padding id for labels. (default: -100)
-        :param inputs_kwarg_name: name of dict / kwarg key for inputs. (default: "input_ids")
-        :param labels_kwarg_name: name of dict / kwarg key for inputs. (default: "labels")
+        :param inputs_kwarg_name: name of dict / kwarg key for inputs.
+            (default: "input_ids")
+        :param labels_kwarg_name: name of dict / kwarg key for inputs.
+            (default: "labels")
         """
         self.pad_token = pad_token_id
         self.bos_token = bos_token_id
@@ -92,8 +96,10 @@ class DataCollator:
                 y = y[:, 1:]
             else:
                 warnings.warn(
-                    "MidiTok DataCollator: You set shift_labels=True, but provided int labels"
-                    "(for sequence classification tasks) which is suited for. Skipping label shifting."
+                    "MidiTok DataCollator: You set shift_labels=True, but provided int"
+                    "labels (for sequence classification tasks) which is suited for."
+                    "Skipping label shifting.",
+                    stacklevel=2,
                 )
 
         # Add inputs / labels to output batch
@@ -157,9 +163,9 @@ def _pad_batch(
 
     :param batch: batch as a list of Tensors.
     :param pad_token_id: padding token id.
-    :param pad_on_left: if given True, it will pad the sequences on the left. This can be required when using
-        some libraries expecting padding on left, for example when generating with Hugging Face Transformers.
-        (default: False)
+    :param pad_on_left: if given True, it will pad the sequences on the left. This can
+        be required when using some libraries expecting padding on left, for example
+        when generating with Hugging Face Transformers. (default: False)
     :return: the batch sequences, padded into a unique Tensor.
     """
     length_of_first = batch[0].size(0)
@@ -179,8 +185,9 @@ def _pad_batch(
 
 
 def _pad_left(batch: List[LongTensor], pad_token_id: int) -> LongTensor:
-    r"""Here the sequences are padded to the left, so that the last token along the time dimension
-    is always the last token of each seq, allowing to efficiently generate by batch
+    r"""Here the sequences are padded to the left, so that the last token along the
+    time dimension is always the last token of each seq, allowing to efficiently
+    generate by batch.
 
     :param batch: batch as a list of Tensors.
     :param pad_token_id: padding token id.
@@ -190,5 +197,4 @@ def _pad_left(batch: List[LongTensor], pad_token_id: int) -> LongTensor:
     batch = torch.nn.utils.rnn.pad_sequence(
         batch, batch_first=True, padding_value=pad_token_id
     )  # (N,T)
-    batch = torch.flip(batch, dims=(1,)).long()
-    return batch
+    return torch.flip(batch, dims=(1,)).long()

@@ -18,7 +18,7 @@ import miditok
 # long enough for MIDI-Like and Structured encodings, and with a single beat resolution
 BEAT_RES_TEST = {(0, 4): 8, (4, 12): 4}
 ADDITIONAL_TOKENS_TEST = {
-    "Chord": False,  # set false to speed up tests as it takes some time on maestro MIDIs
+    "Chord": False,  # false to speed up tests as it takes some time on maestro MIDIs
     "Rest": True,
     "Tempo": True,
     "TimeSignature": True,
@@ -31,9 +31,10 @@ ADDITIONAL_TOKENS_TEST = {
 
 
 def bpe_benchmark(data_path: Union[str, Path, PurePath] = "./tests/Maestro"):
-    r"""Reads a few MIDI files, convert them into token sequences, convert them back to MIDI files.
-    The converted back MIDI files should identical to original one, expect with note starting and ending
-    times quantized, and maybe a some duplicated notes removed
+    r"""Reads a few MIDI files, convert them into token sequences, convert them back
+    to MIDI files. The converted back MIDI files should identical to original one,
+    expect with note starting and ending times quantized, and maybe a some duplicated
+    notes removed
 
     :param data_path: root path to the data to test
     """
@@ -118,7 +119,8 @@ def bpe_benchmark(data_path: Union[str, Path, PurePath] = "./tests/Maestro"):
             mean_time = sum(tok_times) / len(tok_times)
             row[2 + b] = f"{mean_time:.3f}"
             print(
-                f"Fast BPE encoding for {tokenization} and batch size of {batch_size} took {mean_time:.3f} sec"
+                f"Fast BPE encoding for {tokenization} and batch size of {batch_size}"
+                f"took {mean_time:.3f} sec"
             )
 
         t.add_row(row)

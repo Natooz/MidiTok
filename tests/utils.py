@@ -54,35 +54,44 @@ TOKENIZER_CONFIG_KWARGS = {
 
 
 def adjust_tok_params_for_tests(tokenization: str, params: Dict[str, Any]):
-    """Adjusts parameters (as dictionary for keyword arguments) depending on the tokenization.
+    """Adjusts parameters (as dictionary for keyword arguments) depending on the
+    tokenization.
 
     :param tokenization: tokenization.
     :param params: parameters as a dictionary of keyword arguments.
     """
-    # Increase the TimeShift voc for Structured as it doesn't support successive TimeShifts.
+    # Increase the TimeShift voc for Structured as it doesn't support successive
+    # TimeShifts.
     if tokenization == "Structured":
         params["beat_res"] = {(0, 512): 8}
-    # We don't test time signatures with Octuple as it can lead to time shifts, as the TS changes are only
+    # We don't test time signatures with Octuple as it can lead to time shifts, as the
+    # TS changes are only
     # detectable at the onset times of the notes.
     elif tokenization == "Octuple":
         params["max_bar_embedding"] = 300
         params["use_time_signatures"] = False
-    # Rests and time sig can mess up with CPWord, when a Rest that is crossing new bar is followed
-    # by a new TimeSig change, as TimeSig are carried with Bar tokens (and there is None is this case).
-    elif tokenization == "CPWord":
-        if params["use_time_signatures"] and params["use_rests"]:
-            params["use_rests"] = False
+    # Rests and time sig can mess up with CPWord, when a Rest that is crossing new bar
+    # is followed by a new TimeSig change, as TimeSig are carried with Bar tokens (and
+    # there is None is this case).
+    elif (
+        tokenization == "CPWord"
+        and params["use_time_signatures"]
+        and params["use_rests"]
+    ):
+        params["use_rests"] = False
 
 
 def prepare_midi_for_tests(
     midi: MidiFile, sort_notes: bool = False, tokenizer: miditok.MIDITokenizer = None
 ) -> MidiFile:
-    """Prepares a midi for test by returning a copy with tracks sorted, and optionally notes.
-    It also
+    """Prepares a midi for test by returning a copy with tracks sorted, and optionally
+    notes. It also preprocesses the MIDI if the tokenizer is given, and make some
+    adaptation depending on the tokenization (adjust tempo times ...).
 
     :param midi: midi reference.
-    :param sort_notes: whether to sort the notes. This is not necessary before tokenizing a MIDI, as the sorting
-        will be performed by the tokenizer. (default: False)
+    :param sort_notes: whether to sort the notes. This is not necessary before
+        tokenizing a MIDI, as the sorting will be performed by the tokenizer.
+        (default: False)
     :param tokenizer: in order to downsample the MIDI before sorting its content.
     :return: a new MIDI object with track (and notes) sorted.
     """
@@ -93,8 +102,8 @@ def prepare_midi_for_tests(
     if tokenizer is not None:
         tokenizer.preprocess_midi(new_midi)
 
-        # For Octuple/CPWord, as tempo is only carried at notes times, we need to adapt their times for comparison
-        # Set tempo changes at onset times of notes
+        # For Octuple/CPWord, as tempo is only carried at notes times, we need to adapt
+        # their times for comparison. Set tempo changes at onset times of notes.
         # We use the first track only, as it is the one for which tempos are decoded
         if tokenizer.config.use_tempos and tokenization in ["Octuple", "CPWord"]:
             if len(new_midi.instruments) > 0:
@@ -131,7 +140,8 @@ def prepare_midi_for_tests(
 def midis_notes_equals(
     midi1: MidiFile, midi2: MidiFile
 ) -> List[Tuple[int, str, List[Tuple[str, Union[Note, int], int]]]]:
-    """Checks if the notes from two MIDIs are all equal, and if not returns the list of errors.
+    """Checks if the notes from two MIDIs are all equal, and if not returns the list of
+    errors.
 
     :param midi1: first MIDI.
     :param midi2: second MIDI.
@@ -191,12 +201,14 @@ def check_midis_equals(
                 for err, note, exp in track_err[-1]:
                     midi2.markers.append(
                         Marker(
-                            f"{e}: with note {err} (pitch {note.pitch})",
+                            f"{e}: with note {err} (pitch {note.pitch}), expected"
+                            f"{exp}",
                             note.start,
                         )
                     )
         print(
-            f"{log_prefix} failed to encode/decode NOTES ({sum(len(t[2]) for t in errors)} errors)"
+            f"{log_prefix} failed to encode/decode NOTES"
+            f"({sum(len(t[2]) for t in errors)} errors)"
         )
 
     # Check pedals
@@ -221,14 +233,15 @@ def check_midis_equals(
                 break"""
 
     # Checks tempos
-    if check_tempos:
-        if midi1.tempo_changes != midi2.tempo_changes:
-            types_of_errors.append("TEMPOS")
+    if check_tempos and midi1.tempo_changes != midi2.tempo_changes:
+        types_of_errors.append("TEMPOS")
 
     # Checks time signatures
-    if check_time_signatures:
-        if midi1.time_signature_changes != midi2.time_signature_changes:
-            types_of_errors.append("TIME SIGNATURES")
+    if (
+        check_time_signatures
+        and midi1.time_signature_changes != midi2.time_signature_changes
+    ):
+        types_of_errors.append("TIME SIGNATURES")
 
     # Prints types of errors
     has_errors = has_errors or len(types_of_errors) > 0
@@ -267,7 +280,7 @@ def tokenize_and_check_equals(
     midi_decoded, no_error = check_midis_equals(
         midi,
         midi_decoded,
-        check_tempos=tokenizer.config.use_tempos and not tokenization == "MuMIDI",
+        check_tempos=tokenizer.config.use_tempos and tokenization != "MuMIDI",
         check_time_signatures=tokenizer.config.use_time_signatures,
         check_pedals=tokenizer.config.use_sustain_pedals,
         check_pitch_bends=tokenizer.config.use_pitch_bends,
@@ -320,7 +333,8 @@ def adapt_tempo_changes_times(
 def adjust_notes_durations(
     notes: List[Note], tokenizer: miditok.MIDITokenizer, time_division: int
 ):
-    """Adapt notes offset times so that they match the possible durations covered by a tokenizer.
+    """Adapt notes offset times so that they match the possible durations covered by a
+    tokenizer.
 
     :param notes: list of Note objects to adapt.
     :param tokenizer: tokenizer (needed for durations).
@@ -342,7 +356,8 @@ def adjust_notes_durations(
 def adjust_pedal_durations(
     pedals: List[Pedal], tokenizer: miditok.MIDITokenizer, time_division: int
 ):
-    """Adapt pedal offset times so that they match the possible durations covered by a tokenizer.
+    """Adapt pedal offset times so that they match the possible durations covered by a
+    tokenizer.
 
     :param pedals: list of Pedal objects to adapt.
     :param tokenizer: tokenizer (needed for durations).
