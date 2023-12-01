@@ -64,7 +64,7 @@ def data_augmentation_dataset(
         ``data_augmentation_report.txt`` file in the output directory. (default: True)
     """
     if out_path is None:
-        out_path = data_path
+        out_path = Path(data_path)
     else:
         if isinstance(out_path, str):
             out_path = Path(out_path)
@@ -78,7 +78,7 @@ def data_augmentation_dataset(
     nb_augmentations, nb_tracks_augmented = 0, 0
     for file_path in tqdm(files_paths, desc="Performing data augmentation"):
         if as_tokens:
-            with Path.open(file_path) as json_file:
+            with file_path.open() as json_file:
                 file = json.load(json_file)
                 ids = file["ids"]
                 programs = file.get("programs", None)

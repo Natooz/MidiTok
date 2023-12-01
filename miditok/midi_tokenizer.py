@@ -2203,7 +2203,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         if "ids_bpe_encoded" not in kwargs and ids_bpe_encoded is not None:
             kwargs["ids_bpe_encoded"] = ids_bpe_encoded
 
-        with Path.open(path, "w") as outfile:
+        with Path(path).open("w") as outfile:
             dic = {"ids": ids, **kwargs}
             if programs is not None:
                 dic["programs"] = programs
@@ -2216,7 +2216,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         :param path: path of the file to load.
         :return: the tokens, with the associated information saved with.
         """
-        with Path.open(path) as file:
+        with Path(path).open() as file:
             return json.load(file)
 
     def _save_pretrained(self, *args, **kwargs):
@@ -2271,7 +2271,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         if out_path.is_dir() or "." not in out_path.name:
             out_path /= filename
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        with Path.open(out_path, "w") as outfile:
+        with out_path.open("w") as outfile:
             json.dump(params, outfile, indent=4)
 
     @classmethod
@@ -2319,7 +2319,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         :param config_file_path: path to the tokenizer config file (encoded as json).
         """
-        with Path.open(config_file_path) as param_file:
+        with Path(config_file_path).open() as param_file:
             params = json.load(param_file)
 
         # Grab config, or creates one with default parameters (for retro-compatibility

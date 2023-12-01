@@ -61,7 +61,7 @@ def split_dataset_to_subsequences(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     for file_path in files_paths:
-        with Path.open(file_path) as json_file:
+        with Path(file_path).open() as json_file:
             tokens = json.load(json_file)
 
         # Split sequence(s)
@@ -77,7 +77,7 @@ def split_dataset_to_subsequences(
         # Save subsequences
         for i, subseq in enumerate(subseqs):
             path = out_dir / f"{file_path.name}_{i}.json"
-            with Path.open(path, "w") as outfile:
+            with path.open("w") as outfile:
                 new_tok = deepcopy(tokens)
                 new_tok["ids"] = subseq
                 json.dump(tokens, outfile)
@@ -234,7 +234,7 @@ class DatasetTok(_DatasetABC):
                     tokens_ids = [seq.ids for seq in tokens_ids]
             # Loading json tokens
             else:
-                with Path.open(file_path) as json_file:
+                with file_path.open() as json_file:
                     tokens = json.load(json_file)
                 if func_to_get_labels is not None:
                     label = func_to_get_labels(tokens, file_path)
@@ -290,7 +290,7 @@ class DatasetJsonIO(_DatasetABC):
         super().__init__(files_paths)
 
     def __getitem__(self, idx) -> Mapping[str, LongTensor]:
-        with Path.open(self.samples[idx]) as json_file:
+        with self.samples[idx].open() as json_file:
             token_ids = json.load(json_file)["ids"]
         if self.max_seq_len is not None and len(token_ids) > self.max_seq_len:
             token_ids = token_ids[: self.max_seq_len]
