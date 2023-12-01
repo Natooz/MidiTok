@@ -6,7 +6,7 @@ import json
 from abc import ABC
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Callable, List, Mapping, Sequence, Union
+from typing import Any, Callable, List, Mapping, Optional, Sequence, Union
 
 from miditoolkit import MidiFile
 from torch import LongTensor, randint
@@ -61,7 +61,7 @@ def split_dataset_to_subsequences(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     for file_path in files_paths:
-        with open(file_path) as json_file:
+        with Path.open(file_path) as json_file:
             tokens = json.load(json_file)
 
         # Split sequence(s)
@@ -77,7 +77,7 @@ def split_dataset_to_subsequences(
         # Save subsequences
         for i, subseq in enumerate(subseqs):
             path = out_dir / f"{file_path.name}_{i}.json"
-            with open(path, "w") as outfile:
+            with Path.open(path, "w") as outfile:
                 new_tok = deepcopy(tokens)
                 new_tok["ids"] = subseq
                 json.dump(tokens, outfile)
@@ -98,8 +98,8 @@ class _DatasetABC(Dataset, ABC):
 
     def __init__(
         self,
-        samples: Sequence[Any] = None,
-        labels: Sequence[Any] = None,
+        samples: Optional[Sequence[Any]] = None,
+        labels: Optional[Sequence[Any]] = None,
         sample_key_name: str = "input_ids",
         labels_key_name: str = "labels",
     ):
@@ -202,7 +202,9 @@ class DatasetTok(_DatasetABC):
         max_seq_len: int,
         tokenizer: MIDITokenizer = None,
         one_token_stream: bool = True,
-        func_to_get_labels: Callable[[Union[MidiFile, Sequence], Path], int] = None,
+        func_to_get_labels: Optional[
+            Callable[[Union[MidiFile, Sequence], Path], int]
+        ] = None,
         sample_key_name: str = "input_ids",
         labels_key_name: str = "labels",
     ):
@@ -232,7 +234,7 @@ class DatasetTok(_DatasetABC):
                     tokens_ids = [seq.ids for seq in tokens_ids]
             # Loading json tokens
             else:
-                with open(file_path) as json_file:
+                with Path.open(file_path) as json_file:
                     tokens = json.load(json_file)
                 if func_to_get_labels is not None:
                     label = func_to_get_labels(tokens, file_path)
@@ -282,13 +284,13 @@ class DatasetJsonIO(_DatasetABC):
     def __init__(
         self,
         files_paths: Sequence[Path],
-        max_seq_len: int = None,
+        max_seq_len: Optional[int] = None,
     ):
         self.max_seq_len = max_seq_len
         super().__init__(files_paths)
 
     def __getitem__(self, idx) -> Mapping[str, LongTensor]:
-        with open(self.samples[idx]) as json_file:
+        with Path.open(self.samples[idx]) as json_file:
             token_ids = json.load(json_file)["ids"]
         if self.max_seq_len is not None and len(token_ids) > self.max_seq_len:
             token_ids = token_ids[: self.max_seq_len]

@@ -146,7 +146,7 @@ def _in_as_seq(complete: bool = True, decode_bpe: bool = True):
         completing the sequence.
     """
 
-    def decorator(function: Callable = None):
+    def decorator(function: Optional[Callable] = None):
         def wrapper(*args, **kwargs):
             tokenizer = args[0]
             seq = args[1]
@@ -199,7 +199,7 @@ class MIDITokenizer(ABC, HFHubMixin):
     def __init__(
         self,
         tokenizer_config: TokenizerConfig = None,
-        params: Union[str, Path] = None,
+        params: Optional[Union[str, Path]] = None,
     ):
         # Initialize params
         self.config = deepcopy(tokenizer_config)
@@ -247,7 +247,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         self.velocities = np.linspace(
             0, 127, self.config.num_velocities + 1, dtype=np.intc
         )[1:]
-        self._first_beat_res = list(self.config.beat_res.values())[0]
+        self._first_beat_res = next(iter(self.config.beat_res.values()))
         for beat_range, res in self.config.beat_res.items():
             if 0 in beat_range:
                 self._first_beat_res = res
@@ -635,9 +635,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             else:
                 i += 1
 
-    def _midi_to_tokens(
-        self, midi: MidiFile, *args, **kwargs
-    ) -> Union[TokSequence, List[TokSequence]]:
+    def _midi_to_tokens(self, midi: MidiFile) -> Union[TokSequence, List[TokSequence]]:
         r"""Converts a preprocessed MIDI object to a sequence of tokens.
         The workflow of this method is as follows: the events (*Pitch*, *Velocity*,
         *Tempo*, *TimeSignature*...) are gathered into a list, then the time events
@@ -655,7 +653,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             if len(midi.instruments) == 0:
                 all_events.append([])
             else:
-                all_events = [[]] * len(midi.instruments)
+                all_events = [[] for _ in range(len(midi.instruments))]
 
         # Global events (Tempo, TimeSignature)
         global_events = self._create_midi_events(midi)
@@ -957,27 +955,27 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         # First adds time signature tokens if specified
         if self.config.use_time_signatures:
-            for time_signature_change in midi.time_signature_changes:
-                events.append(
-                    Event(
-                        type="TimeSig",
-                        value=f"{time_signature_change.numerator}/"
-                        f"{time_signature_change.denominator}",
-                        time=time_signature_change.time,
-                    )
+            events += [
+                Event(
+                    type="TimeSig",
+                    value=f"{time_signature_change.numerator}/"
+                    f"{time_signature_change.denominator}",
+                    time=time_signature_change.time,
                 )
+                for time_signature_change in midi.time_signature_changes
+            ]
 
         # Adds tempo events if specified
         if self.config.use_tempos:
-            for tempo_change in midi.tempo_changes:
-                events.append(
-                    Event(
-                        type="Tempo",
-                        value=tempo_change.tempo,
-                        time=tempo_change.time,
-                        desc=tempo_change.tempo,
-                    )
+            events += [
+                Event(
+                    type="Tempo",
+                    value=tempo_change.tempo,
+                    time=tempo_change.time,
+                    desc=tempo_change.tempo,
                 )
+                for tempo_change in midi.tempo_changes
+            ]
 
         return events
 
@@ -1071,9 +1069,9 @@ class MIDITokenizer(ABC, HFHubMixin):
         if len(tokens) == 0:
             return []
         if isinstance(tokens[0], (list, tuple)):
-            ids = []
-            for seq in tokens:
-                ids.append([self.vocab[i][token] for i, token in enumerate(seq)])
+            ids = [
+                [self.vocab[i][token] for i, token in enumerate(seq)] for seq in tokens
+            ]
         else:
             ids = [self.vocab[token] for token in tokens]
         return ids
@@ -1124,14 +1122,8 @@ class MIDITokenizer(ABC, HFHubMixin):
         if len(events) == 0:
             return tokens
         if isinstance(events[0], list):  # multiple vocabularies
-            for (
-                multi_event
-            ) in events:  # cannot use recursion here because of the vocabulary type id
-                multi_token = []
-                for event in multi_event:
-                    multi_token.append(str(event))
-                tokens.append(multi_token)
-            return tokens
+            # cannot use recursion here because of the vocabulary type id
+            return [[str(event) for event in multi_event] for multi_event in events]
 
         return [str(event) for event in events]
 
@@ -1303,7 +1295,9 @@ class MIDITokenizer(ABC, HFHubMixin):
         else:
             self._token_types_indexes = create_for_dict(self._vocab_base)
 
-    def token_ids_of_type(self, token_type: str, vocab_id: int = None) -> List[int]:
+    def token_ids_of_type(
+        self, token_type: str, vocab_id: Optional[int] = None
+    ) -> List[int]:
         r"""Returns the list of token ids of the given type.
 
         :param token_type: token type to get the associated token ids.
@@ -1323,8 +1317,8 @@ class MIDITokenizer(ABC, HFHubMixin):
     def add_to_vocab(
         self,
         token: Union[str, Event],
-        vocab_idx: int = None,
-        byte_: str = None,
+        vocab_idx: Optional[int] = None,
+        byte_: Optional[str] = None,
         add_to_bpe_model: bool = False,
     ):
         r"""Adds an event to the vocabulary. Its index (int) will be the length of the
@@ -1394,7 +1388,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         return tokens
 
-    def token_id_type(self, id_: int, vocab_id: int = None) -> str:
+    def token_id_type(self, id_: int, vocab_id: Optional[int] = None) -> str:
         r"""Returns the type of the given token id.
 
         :param id_: token id to get the type.
@@ -1483,7 +1477,7 @@ class MIDITokenizer(ABC, HFHubMixin):
     def _ticks_to_duration_tokens(
         self,
         duration: int,
-        time_division: int = None,
+        time_division: Optional[int] = None,
         rest: bool = False,
     ) -> Tuple[List[Tuple[int, int, int]], List[int]]:
         r"""Converts a duration in ticks into a sequence of
@@ -1631,8 +1625,8 @@ class MIDITokenizer(ABC, HFHubMixin):
     def learn_bpe(
         self,
         vocab_size: int,
-        iterator: Iterable = None,
-        tokens_paths: List[Union[Path, str]] = None,
+        iterator: Optional[Iterable] = None,
+        tokens_paths: Optional[List[Union[Path, str]]] = None,
         start_from_empty_voc: bool = False,
         **kwargs,
     ):
@@ -1824,7 +1818,9 @@ class MIDITokenizer(ABC, HFHubMixin):
             seq.ids_bpe_encoded = True
 
     def apply_bpe_to_dataset(
-        self, dataset_path: Union[Path, str], out_path: Union[Path, str] = None
+        self,
+        dataset_path: Union[Path, str],
+        out_path: Optional[Union[Path, str]] = None,
     ):
         r"""Applies BPE to an already tokenized dataset (with no BPE).
 
@@ -1898,10 +1894,10 @@ class MIDITokenizer(ABC, HFHubMixin):
         out_dir: Union[str, Path],
         overwrite_mode: bool = True,
         tokenizer_config_file_name: str = DEFAULT_TOKENIZER_FILE_NAME,
-        validation_fn: Callable[[MidiFile], bool] = None,
+        validation_fn: Optional[Callable[[MidiFile], bool]] = None,
         data_augment_offsets=None,
         apply_bpe: bool = True,
-        save_programs: bool = None,
+        save_programs: Optional[bool] = None,
         logging: bool = True,
     ):
         r"""Converts a dataset / list of MIDI files, into their token version and save
@@ -2173,7 +2169,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         self,
         tokens: Union[TokSequence, List, np.ndarray, Any],
         path: Union[str, Path],
-        programs: List[Tuple[int, bool]] = None,
+        programs: Optional[List[Tuple[int, bool]]] = None,
         **kwargs,
     ):
         r"""Saves tokens as a JSON file.
@@ -2207,7 +2203,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         if "ids_bpe_encoded" not in kwargs and ids_bpe_encoded is not None:
             kwargs["ids_bpe_encoded"] = ids_bpe_encoded
 
-        with open(path, "w") as outfile:
+        with Path.open(path, "w") as outfile:
             dic = {"ids": ids, **kwargs}
             if programs is not None:
                 dic["programs"] = programs
@@ -2220,7 +2216,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         :param path: path of the file to load.
         :return: the tokens, with the associated information saved with.
         """
-        with open(path) as file:
+        with Path.open(path) as file:
             return json.load(file)
 
     def _save_pretrained(self, *args, **kwargs):
@@ -2275,7 +2271,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         if out_path.is_dir() or "." not in out_path.name:
             out_path /= filename
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(out_path, "w") as outfile:
+        with Path.open(out_path, "w") as outfile:
             json.dump(params, outfile, indent=4)
 
     @classmethod
@@ -2323,7 +2319,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         :param config_file_path: path to the tokenizer config file (encoded as json).
         """
-        with open(config_file_path) as param_file:
+        with Path.open(config_file_path) as param_file:
             params = json.load(param_file)
 
         # Grab config, or creates one with default parameters (for retro-compatibility
@@ -2524,7 +2520,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             return self.__get_from_voc(item)
 
     def __get_from_voc(
-        self, item: Union[int, str], vocab_id: int = None
+        self, item: Union[int, str], vocab_id: Optional[int] = None
     ) -> Union[int, str]:
         r"""Get element from the vocabulary.
         The method handles both token (int) <--> event (str) ways.

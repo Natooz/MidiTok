@@ -139,11 +139,11 @@ def test_data_augmentation_tokens(
                     offsets[pos] = int(offset_str[1:])
 
         # Loads tokens to compare
-        with open(aug_token_path) as json_file:
+        with Path.open(aug_token_path) as json_file:
             file = json.load(json_file)
             aug_tokens = file["ids"]
 
-        with open(tokens_path / f"{original_stem}.json") as json_file:
+        with Path.open(tokens_path / f"{original_stem}.json") as json_file:
             file = json.load(json_file)
             original_tokens = file["ids"]
             original_programs = file["programs"] if "programs" in file else None

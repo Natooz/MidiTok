@@ -5,7 +5,7 @@
 
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Dict, Sequence, Tuple, Union
+from typing import Any, Dict, Optional, Sequence, Tuple, Union
 
 import pytest
 from miditoolkit import MidiFile
@@ -49,7 +49,7 @@ for tokenization_ in ALL_TOKENIZATIONS:
 @pytest.mark.parametrize("midi_path", MIDI_PATHS_ONE_TRACK)
 def test_one_track_midi_to_tokens_to_midi(
     midi_path: Union[str, Path],
-    tok_params_sets: Sequence[Tuple[str, Dict[str, Any]]] = None,
+    tok_params_sets: Optional[Sequence[Tuple[str, Dict[str, Any]]]] = None,
     saving_erroneous_midis: bool = True,
 ):
     r"""Reads a MIDI file, converts it into tokens, convert it back to a MIDI object.

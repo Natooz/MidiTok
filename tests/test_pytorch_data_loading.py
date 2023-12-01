@@ -5,7 +5,7 @@ Test classes and methods from the pytorch_data module.
 """
 
 from pathlib import Path
-from typing import Sequence, Union
+from typing import Optional, Sequence, Union
 
 from miditoolkit import MidiFile
 from torch import randint
@@ -30,8 +30,8 @@ def test_split_seq():
 
 def test_dataset_ram(
     tmp_path: Path,
-    midi_paths_one_track: Sequence[Union[str, Path]] = None,
-    midi_paths_multitrack: Sequence[Union[str, Path]] = None,
+    midi_paths_one_track: Optional[Sequence[Union[str, Path]]] = None,
+    midi_paths_multitrack: Optional[Sequence[Union[str, Path]]] = None,
 ):
     if midi_paths_one_track is None:
         midi_paths_one_track = MIDI_PATHS_ONE_TRACK[:3]
@@ -102,7 +102,9 @@ def test_dataset_ram(
     )
 
 
-def test_dataset_io(tmp_path: Path, midi_path: Sequence[Union[str, Path]] = None):
+def test_dataset_io(
+    tmp_path: Path, midi_path: Optional[Sequence[Union[str, Path]]] = None
+):
     if midi_path is None:
         midi_path = MIDI_PATHS_MULTITRACK[:3]
     tokens_os_dir = tmp_path / "multitrack_tokens_os"
@@ -126,7 +128,7 @@ def test_dataset_io(tmp_path: Path, midi_path: Sequence[Union[str, Path]] = None
 
 def test_split_dataset_to_subsequences(
     tmp_path: Path,
-    midi_path: Sequence[Union[str, Path]] = None,
+    midi_path: Optional[Sequence[Union[str, Path]]] = None,
 ):
     if midi_path is None:
         midi_path = MIDI_PATHS_MULTITRACK[:3]

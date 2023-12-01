@@ -156,9 +156,7 @@ class Octuple(MIDITokenizer):
 
         return all_events
 
-    def _midi_to_tokens(
-        self, midi: MidiFile, *args, **kwargs
-    ) -> Union[TokSequence, List[TokSequence]]:
+    def _midi_to_tokens(self, midi: MidiFile) -> Union[TokSequence, List[TokSequence]]:
         r"""Converts a preprocessed MIDI object to a sequence of tokens.
         The workflow of this method is as follows: the events (Pitch, Velocity, Tempo,
         TimeSignature...) are gathered into a list, then the time events are added. If
@@ -186,7 +184,7 @@ class Octuple(MIDITokenizer):
                 self.add_to_vocab(f"Bar_{i}", 4)
             self.config.additional_params["max_bar_embedding"] = nb_bars
 
-        return super()._midi_to_tokens(midi, *args, **kwargs)
+        return super()._midi_to_tokens(midi)
 
     @_in_as_seq()
     def tokens_to_midi(

@@ -5,7 +5,7 @@
 """
 
 from pathlib import Path
-from typing import Sequence, Union
+from typing import Optional, Sequence, Union
 
 from tensorflow import Tensor as tfTensor
 from tensorflow import convert_to_tensor
@@ -37,7 +37,7 @@ def test_convert_tensors():
 
 
 def test_tokenize_datasets_file_tree(
-    tmp_path: Path, midi_paths: Sequence[Union[str, Path]] = None
+    tmp_path: Path, midi_paths: Optional[Sequence[Union[str, Path]]] = None
 ):
     if midi_paths is None:
         midi_paths = MIDI_PATHS_ALL

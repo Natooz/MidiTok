@@ -138,9 +138,7 @@ class Structured(MIDITokenizer):
 
         return all_events
 
-    def _midi_to_tokens(
-        self, midi: MidiFile, *args, **kwargs
-    ) -> Union[TokSequence, List[TokSequence]]:
+    def _midi_to_tokens(self, midi: MidiFile) -> Union[TokSequence, List[TokSequence]]:
         r"""Converts a preprocessed MIDI object to a sequence of tokens.
         We override the parent method to handle the "non-program" case where
         `TimeShift` events have already been added by `_notes_to_events`.

@@ -156,7 +156,7 @@ class MMM(MIDITokenizer):
         ]
         return all_events
 
-    def _midi_to_tokens(self, midi: MidiFile, *args, **kwargs) -> TokSequence:
+    def _midi_to_tokens(self, midi: MidiFile) -> TokSequence:
         r"""Converts a preprocessed MIDI object to a sequence of tokens.
         Tokenization treating all tracks as a single token sequence might
         override this method, e.g. Octuple or PopMAG.

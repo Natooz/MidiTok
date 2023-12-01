@@ -59,7 +59,7 @@ class REMI(MIDITokenizer):
         self,
         tokenizer_config: TokenizerConfig = None,
         max_bar_embedding: Optional[int] = None,
-        params: Union[str, Path] = None,
+        params: Optional[Union[str, Path]] = None,
     ):
         if (
             tokenizer_config is not None

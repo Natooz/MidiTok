@@ -5,7 +5,7 @@ import json
 import warnings
 from copy import deepcopy
 from pathlib import Path
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 from warnings import warn
 
 import numpy as np
@@ -18,14 +18,14 @@ from ..constants import MIDI_LOADING_EXCEPTION
 def data_augmentation_dataset(
     data_path: Union[Path, str],
     tokenizer=None,
-    nb_octave_offset: int = None,
-    nb_vel_offset: int = None,
-    nb_dur_offset: int = None,
+    nb_octave_offset: Optional[int] = None,
+    nb_vel_offset: Optional[int] = None,
+    nb_dur_offset: Optional[int] = None,
     octave_directions: Tuple[bool, bool] = (True, True),
     vel_directions: Tuple[bool, bool] = (True, True),
     dur_directions: Tuple[bool, bool] = (True, True),
     all_offset_combinations: bool = False,
-    out_path: Union[Path, str] = None,
+    out_path: Optional[Union[Path, str]] = None,
     copy_original_in_new_location: bool = True,
     save_data_aug_report: bool = True,
 ):
@@ -78,7 +78,7 @@ def data_augmentation_dataset(
     nb_augmentations, nb_tracks_augmented = 0, 0
     for file_path in tqdm(files_paths, desc="Performing data augmentation"):
         if as_tokens:
-            with open(file_path) as json_file:
+            with Path.open(file_path) as json_file:
                 file = json.load(json_file)
                 ids = file["ids"]
                 programs = file.get("programs", None)
@@ -221,7 +221,7 @@ def data_augmentation_dataset(
     # Saves data augmentation report, json encoded with txt extension to not mess with
     # others json files
     if save_data_aug_report:
-        with open(out_path / "data_augmentation_report.txt", "w") as outfile:
+        with Path.open(out_path / "data_augmentation_report.txt", "w") as outfile:
             json.dump(
                 {
                     "nb_tracks_augmented": nb_tracks_augmented,
@@ -234,14 +234,14 @@ def data_augmentation_dataset(
 
 def get_offsets(
     tokenizer=None,
-    nb_octave_offset: int = None,
-    nb_vel_offset: int = None,
-    nb_dur_offset: int = None,
+    nb_octave_offset: Optional[int] = None,
+    nb_vel_offset: Optional[int] = None,
+    nb_dur_offset: Optional[int] = None,
     octave_directions: Tuple[bool, bool] = (True, True),
     vel_directions: Tuple[bool, bool] = (True, True),
     dur_directions: Tuple[bool, bool] = (True, True),
     midi: MidiFile = None,
-    ids: List[Union[int, List[int]]] = None,
+    ids: Optional[List[Union[int, List[int]]]] = None,
 ) -> List[List[int]]:
     r"""Build the offsets in absolute value for data augmentation.
     TODO some sort of limit for velocity and duration values (min / max as for octaves)
@@ -341,9 +341,9 @@ def get_offsets(
 def data_augmentation_midi(
     midi: MidiFile,
     tokenizer,
-    pitch_offsets: List[int] = None,
-    velocity_offsets: List[int] = None,
-    duration_offsets: List[int] = None,
+    pitch_offsets: Optional[List[int]] = None,
+    velocity_offsets: Optional[List[int]] = None,
+    duration_offsets: Optional[List[int]] = None,
     all_offset_combinations: bool = False,
 ) -> List[Tuple[Tuple[int, int, int], MidiFile]]:
     r"""Perform data augmentation on a MIDI object.
@@ -453,11 +453,11 @@ def data_augmentation_midi(
 def data_augmentation_tokens(
     tokens: Union[np.ndarray, List[int]],
     tokenizer,
-    pitch_offsets: List[int] = None,
-    velocity_offsets: List[int] = None,
-    duration_offsets: List[int] = None,
+    pitch_offsets: Optional[List[int]] = None,
+    velocity_offsets: Optional[List[int]] = None,
+    duration_offsets: Optional[List[int]] = None,
     all_offset_combinations: bool = False,
-    need_to_decode_bpe: bool = None,
+    need_to_decode_bpe: Optional[bool] = None,
 ) -> List[Tuple[Tuple[int, int, int], List[int]]]:
     r"""Perform data augmentation on a sequence of tokens, on the pitch dimension.
     NOTE: token sequences with BPE will be decoded during the augmentation, this might

@@ -3,7 +3,7 @@
 """
 import warnings
 from collections import Counter
-from typing import Any, Dict, List, Sequence, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 from miditoolkit import Instrument, MidiFile, Note
@@ -111,11 +111,11 @@ def detect_chords(
     notes: Sequence[Note],
     time_division: int,
     chord_maps: Dict[str, Sequence[int]],
-    program: int = None,
+    program: Optional[int] = None,
     specify_root_note: bool = True,
     beat_res: int = 4,
     onset_offset: int = 1,
-    unknown_chords_nb_notes_range: Tuple[int, int] = None,
+    unknown_chords_nb_notes_range: Optional[Tuple[int, int]] = None,
     simul_notes_limit: int = 10,
 ) -> List[Event]:
     r"""Chord detection method. Make sure to sort notes by start time then pitch
@@ -156,10 +156,9 @@ def detect_chords(
             "Setting it to 5.",
             stacklevel=2,
         )
-    tuples = []
-    for note in notes:
-        tuples.append((note.pitch, int(note.start), int(note.end)))
-    notes = np.asarray(tuples)  # (N,3)
+    notes = np.asarray(
+        [(note.pitch, int(note.start), int(note.end)) for note in notes]
+    )  # (N,3)
 
     time_div_half = time_division // 2
     onset_offset = time_division * onset_offset / beat_res
@@ -229,10 +228,10 @@ def detect_chords(
 
 def merge_tracks_per_class(
     midi: MidiFile,
-    classes_to_merge: List[int] = None,
-    new_program_per_class: Dict[int, int] = None,
-    max_nb_of_tracks_per_inst_class: Dict[int, int] = None,
-    valid_programs: List[int] = None,
+    classes_to_merge: Optional[List[int]] = None,
+    new_program_per_class: Optional[Dict[int, int]] = None,
+    max_nb_of_tracks_per_inst_class: Optional[Dict[int, int]] = None,
+    valid_programs: Optional[List[int]] = None,
     filter_pitches: bool = True,
 ):
     r"""Merges per instrument class the tracks which are in the class in

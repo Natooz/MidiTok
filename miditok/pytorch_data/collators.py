@@ -3,7 +3,7 @@ Collator objects for PyTorch `DataLoader`s.
 """
 import warnings
 from copy import deepcopy
-from typing import Any, List, Mapping
+from typing import Any, List, Mapping, Optional
 
 import torch
 from torch import LongTensor
@@ -13,8 +13,8 @@ class DataCollator:
     def __init__(
         self,
         pad_token_id: int,
-        bos_token_id: int = None,
-        eos_token_id: int = None,
+        bos_token_id: Optional[int] = None,
+        eos_token_id: Optional[int] = None,
         pad_on_left: bool = False,
         copy_inputs_as_labels: bool = False,
         shift_labels: bool = False,
@@ -120,8 +120,8 @@ class DataCollator:
 
 def _add_bos_eos_tokens_to_batch(
     batch: List[LongTensor],
-    bos_tok_id: int = None,
-    eos_tok_id: int = None,
+    bos_tok_id: Optional[int] = None,
+    eos_tok_id: Optional[int] = None,
 ):
     """Adds (inplace) BOS and EOS tokens to inputs.
 

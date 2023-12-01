@@ -66,15 +66,21 @@ include = [
 [tool.ruff]
 target-version = "py38"
 extend-select = [
+    "ARG",
     "A",
     "B",
     "E",
     "F",
     "G",
     "I",
+    "INT",
     "N",
+    "NPY",
+    "PERF",
+    "PTH",
     "PIE",
     "Q",
+    "RUF",
     "S",
     "SIM",
     "T",

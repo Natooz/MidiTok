@@ -80,7 +80,7 @@ class MuMIDI(MIDITokenizer):
             self.vocab_types_idx["Tempo"] = -3
 
     @_out_as_complete_seq
-    def _midi_to_tokens(self, midi: MidiFile, *args, **kwargs) -> TokSequence:
+    def _midi_to_tokens(self, midi: MidiFile) -> TokSequence:
         r"""Tokenize a MIDI file.
         Each pooled token will be a list of the form (index: Token type):
         * 0: Pitch / DrumPitch / Position / Bar / Program / (Chord) / (Rest)

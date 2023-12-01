@@ -11,6 +11,14 @@ from ..constants import MIDI_INSTRUMENTS, TIME_DIVISION, TIME_SIGNATURE
 from ..midi_tokenizer import MIDITokenizer, _in_as_seq
 from ..utils import set_midi_max_tick
 
+_ADD_TOK_ATTRIBUTES = [
+    "use_programs",
+    "use_chords",
+    "use_rests",
+    "use_tempos",
+    "use_time_signatures",
+]
+
 
 class CPWord(MIDITokenizer):
     r"""Introduced with the
@@ -269,15 +277,15 @@ class CPWord(MIDITokenizer):
         self,
         time: int,
         bar: bool = False,
-        pos: int = None,
-        pitch: int = None,
-        vel: int = None,
-        dur: str = None,
-        chord: str = None,
-        rest: str = None,
-        tempo: float = None,
-        time_signature: str = None,
-        program: int = None,
+        pos: Optional[int] = None,
+        pitch: Optional[int] = None,
+        vel: Optional[int] = None,
+        dur: Optional[str] = None,
+        chord: Optional[str] = None,
+        rest: Optional[str] = None,
+        tempo: Optional[float] = None,
+        time_signature: Optional[str] = None,
+        program: Optional[int] = None,
         desc: str = "",
     ) -> List[Event]:
         r"""Create a CP Word token, with the following structure:
@@ -322,15 +330,11 @@ class CPWord(MIDITokenizer):
             Event(type="Ignore", value="None", time=time, desc=desc),
             Event(type="Ignore", value="None", time=time, desc=desc),
         ]
-        for add_tok_attr in [
-            "use_programs",
-            "use_chords",
-            "use_rests",
-            "use_tempos",
-            "use_time_signatures",
-        ]:
-            if getattr(self.config, add_tok_attr):
-                cp_token.append(create_event("Ignore", "None"))
+        cp_token += [
+            create_event("Ignore", "None")
+            for add_tok_attr in _ADD_TOK_ATTRIBUTES
+            if getattr(self.config, add_tok_attr)
+        ]
 
         if bar:
             cp_token[1] = create_event("Bar", "None")
@@ -615,7 +619,7 @@ class CPWord(MIDITokenizer):
 
         # CHORD
         if self.config.use_chords:
-            vocab += [["Ignore_None"] + self._create_chords_tokens()]
+            vocab.append(["Ignore_None", *self._create_chords_tokens()])
 
         # REST
         if self.config.use_rests:

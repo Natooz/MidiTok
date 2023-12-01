@@ -8,7 +8,7 @@ import random
 from copy import deepcopy
 from pathlib import Path
 from time import time
-from typing import Sequence, Union
+from typing import Optional, Sequence, Union
 
 import pytest
 from miditoolkit import MidiFile
@@ -38,7 +38,7 @@ default_params.update(
 def test_bpe_conversion(
     tokenization: str,
     tmp_path: Path,
-    midi_paths: Sequence[Union[str, Path]] = None,
+    midi_paths: Optional[Sequence[Union[str, Path]]] = None,
     seed: int = SEED,
 ):
     r"""Reads a few MIDI files, convert them into token sequences, convert them back

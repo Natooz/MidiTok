@@ -10,14 +10,14 @@ CURRENT_MIDITOK_VERSION = version("miditok")
 CURRENT_TOKENIZERS_VERSION = version("tokenizers")
 
 MIDI_FILES_EXTENSIONS = [".mid", ".midi", ".MID", ".MIDI"]
-MIDI_LOADING_EXCEPTION = [
+MIDI_LOADING_EXCEPTION = (
     ValueError,
     OSError,
     FileNotFoundError,
     IOError,
     EOFError,
     KeySignatureError,
-]
+)
 DEFAULT_TOKENIZER_FILE_NAME = "tokenizer.conf"
 
 # Starting id of chr() method for BPE, as the 5 (0 to 4 included) firsts are ignored by

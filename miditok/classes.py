@@ -534,7 +534,7 @@ class TokenizerConfig:
             }
         dict_config["miditok_version"] = CURRENT_MIDITOK_VERSION
 
-        with open(out_path, "w") as outfile:
+        with Path.open(out_path, "w") as outfile:
             json.dump(dict_config, outfile, indent=4)
 
     @classmethod
@@ -547,7 +547,7 @@ class TokenizerConfig:
         if isinstance(config_file_path, str):
             config_file_path = Path(config_file_path)
 
-        with open(config_file_path) as param_file:
+        with Path.open(config_file_path) as param_file:
             dict_config = json.load(param_file)
 
         for beat_res_key in ["beat_res", "beat_res_rest"]:

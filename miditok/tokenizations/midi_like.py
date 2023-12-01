@@ -121,9 +121,7 @@ class MIDILike(MIDITokenizer):
 
         return all_events
 
-    def _midi_to_tokens(
-        self, midi: MidiFile, *args, **kwargs
-    ) -> Union[TokSequence, List[TokSequence]]:
+    def _midi_to_tokens(self, midi: MidiFile) -> Union[TokSequence, List[TokSequence]]:
         r"""Converts a preprocessed MIDI object to a sequence of tokens.
         Overridden to call fix_offsets_overlapping_notes before.
 
@@ -136,7 +134,7 @@ class MIDILike(MIDITokenizer):
             # Fix offsets overlapping notes
             fix_offsets_overlapping_notes(track.notes)
 
-        return super()._midi_to_tokens(midi, *args, **kwargs)
+        return super()._midi_to_tokens(midi)
 
     @_in_as_seq()
     def tokens_to_midi(
@@ -148,7 +146,7 @@ class MIDILike(MIDITokenizer):
         programs: Optional[List[Tuple[int, bool]]] = None,
         output_path: Optional[str] = None,
         time_division: int = TIME_DIVISION,
-        default_duration: int = None,
+        default_duration: Optional[int] = None,
     ) -> MidiFile:
         r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
 
