@@ -5,63 +5,66 @@ import json
 import warnings
 from copy import deepcopy
 from pathlib import Path
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 from warnings import warn
 
 import numpy as np
 from miditoolkit import MidiFile
 from tqdm import tqdm
 
+from ..constants import MIDI_LOADING_EXCEPTION
+
 
 def data_augmentation_dataset(
     data_path: Union[Path, str],
     tokenizer=None,
-    nb_octave_offset: int = None,
-    nb_vel_offset: int = None,
-    nb_dur_offset: int = None,
+    nb_octave_offset: Optional[int] = None,
+    nb_vel_offset: Optional[int] = None,
+    nb_dur_offset: Optional[int] = None,
     octave_directions: Tuple[bool, bool] = (True, True),
     vel_directions: Tuple[bool, bool] = (True, True),
     dur_directions: Tuple[bool, bool] = (True, True),
     all_offset_combinations: bool = False,
-    out_path: Union[Path, str] = None,
+    out_path: Optional[Union[Path, str]] = None,
     copy_original_in_new_location: bool = True,
     save_data_aug_report: bool = True,
 ):
-    r"""Perform data augmentation on a whole dataset, on the pitch dimension.
-    Drum tracks are not augmented.
-    The new created files have names in two parts, separated with a '§' character.
-    Make sure your files do not have '§' in their names if you intend to reuse the information of the
-    second part in some script.
-    For note duration augmentation, only the duration, i.e. the ending / offset times of the notes are altered,
-    while starting / onset times are unchanged.
-    **Note: data augmentation on note durations is not implemented at the moment for MIDI files. Duration offsets will
-    be skipped. Alternatively, you can perform data augmentation on note duration on JSON token files.**
+    r"""Perform data augmentation on a whole dataset, on the pitch dimension. Drum
+    tracks are not augmented. The new created files have names in two parts, separated
+    with a '§' character. Make sure your files do not have '§' in their names if you
+    intend to reuse the information of the second part in some script.
+    For note duration augmentation, only the duration, i.e. the ending / offset times
+    of the notes are altered, while starting / onset times are unchanged.
+    **Note: data augmentation on note durations is not implemented at the moment for
+    MIDI files. Duration offsets will be skipped. Alternatively, you can perform data
+    augmentation on note duration on JSON token files.**
 
     :param data_path: root path to the folder containing tokenized json files.
-    :param tokenizer: tokenizer, needs to have 'Pitch' or 'NoteOn' tokens. Has to be given
-            if performing augmentation on tokens (default: None).
-    :param nb_octave_offset: number of pitch octaves offset to perform data augmentation.
+    :param tokenizer: tokenizer, needs to have 'Pitch' or 'NoteOn' tokens. Has to be
+        given if performing augmentation on tokens (default: None).
+    :param nb_octave_offset: number of pitch octaves offset to perform data
+        augmentation.
     :param nb_vel_offset: number of velocity values
     :param nb_dur_offset: number of pitch octaves offset to perform data augmentation.
     :param octave_directions: directions to shift the pitch augmentation, for up / down
-            as a tuple of two booleans. (default: (True, True))
+        as a tuple of two booleans. (default: (True, True))
     :param vel_directions: directions to shift the velocity augmentation, for up / down
-            as a tuple of two booleans. (default: (True, True))
+        as a tuple of two booleans. (default: (True, True))
     :param dur_directions: directions to shift the duration augmentation, for up / down
-            as a tuple of two booleans. (default: (True, True))
+        as a tuple of two booleans. (default: (True, True))
     :param all_offset_combinations: will perform data augmentation on all the possible
-            combinations of offsets. If set to False, will perform data augmentation
-            only based on the original sample.
-    :param out_path: output path to save the augmented files. Original (non-augmented) MIDIs will be
-            saved to this location. If none is given, they will be saved in the same location an the
-            data_path. (default: None)
-    :param copy_original_in_new_location: if given True, the original (non-augmented) MIDIs will be saved
-            in the out_path location too. (default: True)
-    :param save_data_aug_report: will save numbers from the data augmentation in a ``data_augmentation_report.txt``
-            file in the output directory. (default: True)
+        combinations of offsets. If set to False, will perform data augmentation only
+        based on the original sample. (default: False)
+    :param out_path: output path to save the augmented files. Original (non-augmented)
+        MIDIs will be saved to this location. If none is given, they will be saved in
+        the same location as the data_path. (default: None)
+    :param copy_original_in_new_location: if given True, the original (non-augmented)
+        MIDIs will be saved in the out_path location too. (default: True)
+    :param save_data_aug_report: will save numbers from the data augmentation in a
+        ``data_augmentation_report.txt`` file in the output directory. (default: True)
     """
     if out_path is None:
-        out_path = data_path
+        out_path = Path(data_path)
     else:
         if isinstance(out_path, str):
             out_path = Path(out_path)
@@ -75,7 +78,7 @@ def data_augmentation_dataset(
     nb_augmentations, nb_tracks_augmented = 0, 0
     for file_path in tqdm(files_paths, desc="Performing data augmentation"):
         if as_tokens:
-            with open(file_path) as json_file:
+            with file_path.open() as json_file:
                 file = json.load(json_file)
                 ids = file["ids"]
                 programs = file.get("programs", None)
@@ -100,13 +103,15 @@ def data_augmentation_dataset(
             ] = {}
             for ti, track in enumerate(ids):
                 # we dont augment drums
-                if programs is not None and programs[ti][1]:  # drums
-                    continue
-                elif (
-                    tokenizer.one_token_stream
-                    and programs is not None
-                    and all(p[1] for p in programs)
-                ):
+                if (
+                    programs is not None
+                    and programs[ti][1]
+                    or (
+                        tokenizer.one_token_stream
+                        and programs is not None
+                        and all(p[1] for p in programs)
+                    )
+                ):  # drums
                     continue
                 corrected_offsets = deepcopy(offsets)
                 vel_dim = int(128 / len(tokenizer.velocities))
@@ -169,8 +174,7 @@ def data_augmentation_dataset(
         else:  # as midi
             try:
                 midi = MidiFile(file_path)
-            except Exception:
-                # ValueError, OSError, FileNotFoundError, IOError, EOFError, mido.KeySignatureError
+            except MIDI_LOADING_EXCEPTION:
                 continue
 
             offsets = get_offsets(
@@ -214,9 +218,10 @@ def data_augmentation_dataset(
                 saving_path.parent.mkdir(parents=True, exist_ok=True)
                 midi.dump(saving_path)
 
-    # Saves data augmentation report, json encoded with txt extension to not mess with others json files
+    # Saves data augmentation report, json encoded with txt extension to not mess with
+    # others json files
     if save_data_aug_report:
-        with open(out_path / "data_augmentation_report.txt", "w") as outfile:
+        with Path.open(out_path / "data_augmentation_report.txt", "w") as outfile:
             json.dump(
                 {
                     "nb_tracks_augmented": nb_tracks_augmented,
@@ -229,28 +234,29 @@ def data_augmentation_dataset(
 
 def get_offsets(
     tokenizer=None,
-    nb_octave_offset: int = None,
-    nb_vel_offset: int = None,
-    nb_dur_offset: int = None,
+    nb_octave_offset: Optional[int] = None,
+    nb_vel_offset: Optional[int] = None,
+    nb_dur_offset: Optional[int] = None,
     octave_directions: Tuple[bool, bool] = (True, True),
     vel_directions: Tuple[bool, bool] = (True, True),
     dur_directions: Tuple[bool, bool] = (True, True),
     midi: MidiFile = None,
-    ids: List[Union[int, List[int]]] = None,
+    ids: Optional[List[Union[int, List[int]]]] = None,
 ) -> List[List[int]]:
     r"""Build the offsets in absolute value for data augmentation.
     TODO some sort of limit for velocity and duration values (min / max as for octaves)
 
     :param tokenizer: tokenizer, needs to have 'Pitch' tokens.
-    :param nb_octave_offset: number of pitch octaves offset to perform data augmentation.
+    :param nb_octave_offset: number of pitch octaves offset to perform data
+        augmentation.
     :param nb_vel_offset: number of velocity values
     :param nb_dur_offset: number of pitch octaves offset to perform data augmentation.
     :param octave_directions: directions to shift the pitch augmentation, for up / down
-            as a tuple of two booleans. (default: (True, True))
+        as a tuple of two booleans. (default: (True, True))
     :param vel_directions: directions to shift the velocity augmentation, for up / down
-            as a tuple of two booleans. (default: (True, True))
+        as a tuple of two booleans. (default: (True, True))
     :param dur_directions: directions to shift the duration augmentation, for up / down
-            as a tuple of two booleans. (default: (True, True))
+        as a tuple of two booleans. (default: (True, True))
     :param midi: midi object to augment (default: None)
     :param ids: token ids as a list of tracks (default: None)
     :return: the offsets of pitch, velocity and duration features, in "absolute" value
@@ -335,15 +341,16 @@ def get_offsets(
 def data_augmentation_midi(
     midi: MidiFile,
     tokenizer,
-    pitch_offsets: List[int] = None,
-    velocity_offsets: List[int] = None,
-    duration_offsets: List[int] = None,
+    pitch_offsets: Optional[List[int]] = None,
+    velocity_offsets: Optional[List[int]] = None,
+    duration_offsets: Optional[List[int]] = None,
     all_offset_combinations: bool = False,
 ) -> List[Tuple[Tuple[int, int, int], MidiFile]]:
     r"""Perform data augmentation on a MIDI object.
     Drum tracks are not augmented, but copied as original in augmented MIDIs.
-    **Note: data augmentation on note durations is not implemented at the moment for MIDI files. Duration offsets will
-    be skipped. Alternatively, you can perform data augmentation on note duration on JSON token files.**
+    **Note: data augmentation on note durations is not implemented at the moment for
+    MIDI files. Duration offsets will be skipped. Alternatively, you can perform data
+    augmentation on note duration on JSON token files.**
 
     :param midi: midi object to augment
     :param tokenizer: tokenizer, needs to have 'Pitch' tokens.
@@ -351,8 +358,8 @@ def data_augmentation_midi(
     :param velocity_offsets: list of velocity offsets for augmentation.
     :param duration_offsets: list of duration offsets for augmentation.
     :param all_offset_combinations: will perform data augmentation on all the possible
-            combinations of offsets. If set to False, will perform data augmentation
-            only based on the original sample.
+        combinations of offsets. If set to False, will perform data augmentation only
+        based on the original sample.
     :return: augmented MIDI objects.
     """
     augmented = []
@@ -400,16 +407,27 @@ def data_augmentation_midi(
     # Duration augmentation
     if duration_offsets is not None:
         warnings.warn(
-            "You provided duration offsets for data augmentation on MIDI files. Data augmentation on note"
-            "durations is not implemented in MidiTok at the moment. Your duration offsets will be skipped."
-            "Alternatively, you can perform data augmentation on note duration on JSON token files."
+            "You provided duration offsets for data augmentation on MIDI files. Data"
+            "augmentation on note durations is not implemented in MidiTok at the"
+            "moment. Your duration offsets will be skipped. Alternatively, you can"
+            "perform data augmentation on note duration on JSON token files.",
+            stacklevel=2,
         )
         # TODO implement it, and remove warning above + update doc
-        """tokenizer.durations_ticks[midi.ticks_per_beat] = np.array([(beat * res + pos) * midi.ticks_per_beat // res
-                                                                           for beat, pos, res in tokenizer.durations])
-        def augment_dur(midi_: MidiFile, offsets_: Tuple[int, int, int]) -> List[Tuple[Tuple[int, int, int], MidiFile]]:
+        """tokenizer.durations_ticks[midi.ticks_per_beat] = np.array(
+            [
+                (beat * res + pos) * midi.ticks_per_beat // res
+                for beat, pos, res in tokenizer.durations
+            ]
+        )
+
+        def augment_dur(
+            midi_: MidiFile, offsets_: Tuple[int, int, int]
+        ) -> List[Tuple[Tuple[int, int, int], MidiFile]]:
             aug_ = []
-            dur_bins = tokenizer.durations_ticks[tokenizer.current_midi_metadata['time_division']]
+            dur_bins = tokenizer.durations_ticks[
+                tokenizer.current_midi_metadata["time_division"]
+            ]
 
             for offset_ in dur_offsets:
                 midi_aug_ = deepcopy(midi_)
@@ -425,7 +443,8 @@ def data_augmentation_midi(
         if all_offset_combinations:
             for i in range(len(augmented)):
                 offsets, midi_aug = augmented[i]
-                augmented += augment_dur(midi_aug, offsets)  # for already augmented midis
+                # for already augmented midis
+                augmented += augment_dur(midi_aug, offsets)
         augmented += augment_dur(midi, (0, 0, 0))  # for original midi"""
 
     return augmented
@@ -434,15 +453,17 @@ def data_augmentation_midi(
 def data_augmentation_tokens(
     tokens: Union[np.ndarray, List[int]],
     tokenizer,
-    pitch_offsets: List[int] = None,
-    velocity_offsets: List[int] = None,
-    duration_offsets: List[int] = None,
+    pitch_offsets: Optional[List[int]] = None,
+    velocity_offsets: Optional[List[int]] = None,
+    duration_offsets: Optional[List[int]] = None,
     all_offset_combinations: bool = False,
-    need_to_decode_bpe: bool = None,
+    need_to_decode_bpe: Optional[bool] = None,
 ) -> List[Tuple[Tuple[int, int, int], List[int]]]:
     r"""Perform data augmentation on a sequence of tokens, on the pitch dimension.
-    NOTE: token sequences with BPE will be decoded during the augmentation, this might take some time.
-    NOTE 2: the tokenizer must have a vocabulary in which the pitch values increase with the token index,
+    NOTE: token sequences with BPE will be decoded during the augmentation, this might
+    take some time.
+    NOTE 2: the tokenizer must have a vocabulary in which the pitch values increase
+    with the token index,
     e.g. Pitch_48: token 64, Pitch_49: token65 ...
     The same goes for durations.
     MIDILike is not compatible with data augmentation on durations.
@@ -454,11 +475,12 @@ def data_augmentation_tokens(
     :param velocity_offsets: list of velocity offsets for augmentation.
     :param duration_offsets: list of duration offsets for augmentation.
     :param all_offset_combinations: will perform data augmentation on all the possible
-            combinations of offsets. If set to False, will perform data augmentation
-            only based on the original sample.
-    :param need_to_decode_bpe: specify if BPE has to be decoded from the tokens. If given None while the
-            tokenizer uses BPE, the method will detect if any token id is outside the base vocabulary, so encoded with
-            BPE. Giving this argument allows to skip this check. (default: None)
+        combinations of offsets. If set to False, will perform data augmentation only
+        based on the original sample.
+    :param need_to_decode_bpe: specify if BPE has to be decoded from the tokens. If
+        given None while the tokenizer uses BPE, the method will detect if any token id
+        is outside the base vocabulary, so encoded with BPE. Giving this argument
+        allows to skip this check. (default: None)
     :return: the several data augmentations that have been performed
     """
     augmented = []
@@ -556,7 +578,9 @@ def data_augmentation_tokens(
     # Duration augmentation
     if duration_offsets is not None and type(tokenizer).__name__ == "MIDILike":
         warn(
-            f"{type(tokenizer).__name__} is not compatible with data augmentation on duration at token level"
+            f"{type(tokenizer).__name__} is not compatible with data augmentation on"
+            f"duration at token level",
+            stacklevel=2,
         )
     elif duration_offsets is not None:
         dur_voc_idx = (

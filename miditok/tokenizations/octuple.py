@@ -33,19 +33,23 @@ class Octuple(MIDITokenizer):
     Its considerably reduces the sequence lengths, while handling multitrack.
     The output hidden states of the model will then be fed to several output layers
     (one per token type). This means that the training requires to add multiple losses.
-    For generation, the decoding implies sample from several distributions, which can be
-    very delicate. Hence, we do not recommend this tokenization for generation with small models.
+    For generation, the decoding implies sample from several distributions, which can
+    be very delicate. Hence, we do not recommend this tokenization for generation with
+    small models.
 
     **Notes:**
-    * As the time signature is carried simultaneously with the note tokens, if a Time Signature change occurs and that
-        the following bar do not contain any note, the time will be shifted by one or multiple bars depending on the
-        previous time signature numerator and time gap between the last and current note. Octuple cannot represent
-        time signature accurately, hence some unavoidable errors of conversion can happen. **For this reason, Octuple
-        is implemented with Time Signature but tested without.**
+    * As the time signature is carried simultaneously with the note tokens, if a Time
+        Signature change occurs and that the following bar do not contain any note, the
+        time will be shifted by one or multiple bars depending on the previous time
+        signature numerator and time gap between the last and current note. Octuple
+        cannot represent time signature accurately, hence some unavoidable errors of
+        conversion can happen. **For this reason, Octuple is implemented with Time
+        Signature but tested without.**
     * Tokens are first sorted by time, then track, then pitch values.
     * Tracks with the same *Program* will be merged.
-    * When decoding multiple token sequences (of multiple tracks), i.e. when `config.use_programs` is False,
-    only the tempos and time signatures of the first sequence will be decoded for the whole MIDI.
+    * When decoding multiple token sequences (of multiple tracks), i.e. when
+        `config.use_programs` is False, only the tempos and time signatures of the
+        first sequence will be decoded for the whole MIDI.
     """
 
     def _tweak_config_before_creating_voc(self):
@@ -58,7 +62,7 @@ class Octuple(MIDITokenizer):
         self.config.program_changes = False
 
         # used in place of positional encoding
-        # This attribute might increase over tokenizations, if the tokenizer encounter longer MIDIs
+        # This attribute might increase if the tokenizer encounter longer MIDIs
         if "max_bar_embedding" not in self.config.additional_params:
             self.config.additional_params["max_bar_embedding"] = 60
 
@@ -75,8 +79,9 @@ class Octuple(MIDITokenizer):
 
     def _add_time_events(self, events: List[Event]) -> List[List[Event]]:
         r"""
-        Takes a sequence of note events (containing optionally Chord, Tempo and TimeSignature tokens),
-        and insert (not inplace) time tokens (TimeShift, Rest) to complete the sequence.
+        Takes a sequence of note events (containing optionally Chord, Tempo and
+        TimeSignature tokens), and insert (not inplace) time tokens (TimeShift, Rest)
+        to complete the sequence.
         A time step is a list of tokens where:
             (list index: token type)
             0: Pitch
@@ -109,8 +114,8 @@ class Octuple(MIDITokenizer):
         )
         for e, event in enumerate(events):
             # Set current bar and position
-            # This is done first, as we need to compute these values with the current ticks_per_bar,
-            # which might change if the current event is a TimeSig
+            # This is done first, as we need to compute these values with the current
+            # ticks_per_bar, which might change if the current event is a TimeSig
             if event.time != previous_tick:
                 elapsed_tick = event.time - current_tick_from_ts_time
                 current_bar = current_bar_from_ts_time + elapsed_tick // ticks_per_bar
@@ -151,13 +156,12 @@ class Octuple(MIDITokenizer):
 
         return all_events
 
-    def _midi_to_tokens(
-        self, midi: MidiFile, *args, **kwargs
-    ) -> Union[TokSequence, List[TokSequence]]:
+    def _midi_to_tokens(self, midi: MidiFile) -> Union[TokSequence, List[TokSequence]]:
         r"""Converts a preprocessed MIDI object to a sequence of tokens.
-        The workflow of this method is as follows: the events (Pitch, Velocity, Tempo, TimeSignature...) are
-        gathered into a list, then the time events are added. If `one_token_stream` is true, all events of all tracks
-        are treated all at once, otherwise the events of each track are treated independently.
+        The workflow of this method is as follows: the events (Pitch, Velocity, Tempo,
+        TimeSignature...) are gathered into a list, then the time events are added. If
+        ``one_token_stream`` is true, all events of all tracks are treated all at once,
+        otherwise the events of each track are treated independently.
 
         A time step is a list of tokens where:
             (list index: token type)
@@ -180,7 +184,7 @@ class Octuple(MIDITokenizer):
                 self.add_to_vocab(f"Bar_{i}", 4)
             self.config.additional_params["max_bar_embedding"] = nb_bars
 
-        return super()._midi_to_tokens(midi, *args, **kwargs)
+        return super()._midi_to_tokens(midi)
 
     @_in_as_seq()
     def tokens_to_midi(
@@ -195,10 +199,13 @@ class Octuple(MIDITokenizer):
     ) -> MidiFile:
         r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
 
-        :param tokens: tokens to convert. Can be either a list of :class:`miditok.TokSequence`,
-        :param programs: programs of the tracks. If none is given, will default to piano, program 0. (default: None)
+        :param tokens: tokens to convert. Can be either a list of
+            :class:`miditok.TokSequence`,
+        :param programs: programs of the tracks. If none is given, will default to
+            piano, program 0. (default: None)
         :param output_path: path to save the file. (default: None)
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create).
+        :param time_division: MIDI time division / resolution, in ticks/beat (of the
+            MIDI to create).
         :return: the midi object (:class:`miditoolkit.MidiFile`).
         """
         # Unsqueeze tokens in case of one_token_stream
@@ -207,9 +214,11 @@ class Octuple(MIDITokenizer):
         for i in range(len(tokens)):
             tokens[i] = tokens[i].tokens
         midi = MidiFile(ticks_per_beat=time_division)
-        assert (
-            time_division % max(self.config.beat_res.values()) == 0
-        ), f"Invalid time division, please give one divisible by {max(self.config.beat_res.values())}"
+        if time_division % max(self.config.beat_res.values()) != 0:
+            raise ValueError(
+                f"Invalid time division, please give one divisible by"
+                f"{max(self.config.beat_res.values())}"
+            )
         ticks_per_sample = time_division // max(self.config.beat_res.values())
 
         # RESULTS
@@ -218,7 +227,7 @@ class Octuple(MIDITokenizer):
         time_signature_changes = []
 
         def check_inst(prog: int):
-            if prog not in instruments.keys():
+            if prog not in instruments:
                 instruments[prog] = Instrument(
                     program=0 if prog == -1 else prog,
                     is_drum=prog == -1,
@@ -259,7 +268,8 @@ class Octuple(MIDITokenizer):
                 if any(
                     tok.split("_")[1] == "None" for tok in time_step[:nb_tok_to_check]
                 ):
-                    continue  # Either padding, mask: error of prediction or end of sequence anyway
+                    # Padding or mask: error of prediction or end of sequence anyway
+                    continue
 
                 # Note attributes
                 pitch = int(time_step[0].split("_")[1])
@@ -349,12 +359,12 @@ class Octuple(MIDITokenizer):
 
     def _create_base_vocabulary(self) -> List[List[str]]:
         r"""Creates the vocabulary, as a list of string tokens.
-        Each token as to be given as the form of "Type_Value", separated with an underscore.
-        Example: Pitch_58
-        The :class:`miditok.MIDITokenizer` main class will then create the "real" vocabulary as
-        a dictionary.
-        Special tokens have to be given when creating the tokenizer, and
-        will be added to the vocabulary by :class:`miditok.MIDITokenizer`.
+        Each token as to be given as the form of "Type_Value", separated with an
+        underscore. Example: Pitch_58
+        The :class:`miditok.MIDITokenizer` main class will then create the "real"
+        vocabulary as a dictionary. Special tokens have to be given when creating the
+        tokenizer, and will be added to the vocabulary by
+        :class:`miditok.MIDITokenizer`.
 
         :return: the vocabulary as a list of string.
         """
@@ -415,9 +425,11 @@ class Octuple(MIDITokenizer):
         returns the error ratio (lower is better).
         The token types are always the same in Octuple so this methods only checks
         if their values are correct:
-            - a bar token value cannot be < to the current bar (it would go back in time)
+            - a bar token value cannot be < to the current bar (it would go back in
+                time)
             - same for positions
-            - a pitch token should not be present if the same pitch is already played at the current position
+            - a pitch token should not be present if the same pitch is already played
+                at the current position
 
         :param tokens: sequence of tokens to check
         :return: the error ratio (lower is better)

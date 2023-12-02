@@ -14,7 +14,7 @@ import miditok
 from .utils import ALL_TOKENIZATIONS
 
 ADDITIONAL_TOKENS_TEST = {
-    "use_chords": False,  # set False to speed up tests as it takes some time on maestro MIDIs
+    "use_chords": False,  # False to speed up tests
     "use_rests": True,
     "use_tempos": True,
     "use_time_signatures": True,

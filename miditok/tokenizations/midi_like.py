@@ -26,20 +26,24 @@ class MIDILike(MIDITokenizer):
     r"""Introduced in `This time with feeling (Oore et al.) <https://arxiv.org/abs/1808.03715>`_
     and later used with `Music Transformer (Huang et al.) <https://openreview.net/forum?id=rJe4ShAcF7>`_
     and `MT3 (Gardner et al.) <https://openreview.net/forum?id=iMSjopcOn0p>`_,
-    this tokenization simply converts MIDI messages (*NoteOn*, *NoteOff*, *TimeShift*...)
-    as tokens, hence the name "MIDI-Like".
-    If you specify `use_programs` as `True` in the config file, the tokenizer will add `Program` tokens before
-    each `Pitch` tokens to specify its instrument, and will treat all tracks as a single stream of tokens.
+    this tokenization simply converts MIDI messages (*NoteOn*, *NoteOff*,
+    *TimeShift*...) as tokens, hence the name "MIDI-Like".
+    If you specify `use_programs` as `True` in the config file, the tokenizer will add
+    ``Program`` tokens before each `Pitch` tokens to specify its instrument, and will
+    treat all tracks as a single stream of tokens.
 
     **Note:** as `MIDILike` uses *TimeShifts* events to move the time from note to
     note, it could be unsuited for tracks with long pauses. In such case, the
-    maximum *TimeShift* value will be used. Also, the `MIDILike` tokenizer might alter the durations of overlapping
-    notes. If two notes of the same instrument with the same pitch are overlapping, i.e. a first one is still being
-    played when a second one is also played, the offset time of the first will be set to the onset time of the second.
-    This is done to prevent unwanted duration alterations that could happen in such case, as the `NoteOff` token
-    associated to the first note will also end the second one.
-    **Note:** When decoding multiple token sequences (of multiple tracks), i.e. when `config.use_programs` is False,
-    only the tempos and time signatures of the first sequence will be decoded for the whole MIDI.
+    maximum *TimeShift* value will be used. Also, the `MIDILike` tokenizer might alter
+    the durations of overlapping notes. If two notes of the same instrument with the
+    same pitch are overlapping, i.e. a first one is still being played when a second
+    one is also played, the offset time of the first will be set to the onset time of
+    the second. This is done to prevent unwanted duration alterations that could happen
+    in such case, as the `NoteOff` token associated to the first note will also end the
+    second one.
+    **Note:** When decoding multiple token sequences (of multiple tracks), i.e. when
+    ``config.use_programs`` is False, only the tempos and time signatures of the first
+    sequence will be decoded for the whole MIDI.
     """
 
     def _tweak_config_before_creating_voc(self):
@@ -47,8 +51,9 @@ class MIDILike(MIDITokenizer):
 
     def _add_time_events(self, events: List[Event]) -> List[Event]:
         r"""
-        Takes a sequence of note events (containing optionally Chord, Tempo and TimeSignature tokens),
-        and insert (not inplace) time tokens (TimeShift, Rest) to complete the sequence.
+        Takes a sequence of note events (containing optionally Chord, Tempo and
+        TimeSignature tokens), and insert (not inplace) time tokens (TimeShift, Rest)
+        to complete the sequence.
 
         :param events: note events to complete.
         :return: the same events, with time events inserted.
@@ -58,7 +63,7 @@ class MIDILike(MIDITokenizer):
         all_events = []
         previous_tick = 0
         previous_note_end = 0
-        for e, event in enumerate(events):
+        for event in events:
             # No time shift
             if event.time != previous_tick:
                 # (Rest)
@@ -116,22 +121,20 @@ class MIDILike(MIDITokenizer):
 
         return all_events
 
-    def _midi_to_tokens(
-        self, midi: MidiFile, *args, **kwargs
-    ) -> Union[TokSequence, List[TokSequence]]:
+    def _midi_to_tokens(self, midi: MidiFile) -> Union[TokSequence, List[TokSequence]]:
         r"""Converts a preprocessed MIDI object to a sequence of tokens.
         Overridden to call fix_offsets_overlapping_notes before.
 
         :param midi: the MIDI object to convert.
-        :return: a :class:`miditok.TokSequence` if `tokenizer.one_token_stream` is true, else a list of
-                :class:`miditok.TokSequence` objects.
+        :return: a :class:`miditok.TokSequence` if `tokenizer.one_token_stream` is
+            true, else a list of :class:`miditok.TokSequence` objects.
         """
         # Adds note tokens
         for track in midi.instruments:
             # Fix offsets overlapping notes
             fix_offsets_overlapping_notes(track.notes)
 
-        return super()._midi_to_tokens(midi, *args, **kwargs)
+        return super()._midi_to_tokens(midi)
 
     @_in_as_seq()
     def tokens_to_midi(
@@ -143,16 +146,20 @@ class MIDILike(MIDITokenizer):
         programs: Optional[List[Tuple[int, bool]]] = None,
         output_path: Optional[str] = None,
         time_division: int = TIME_DIVISION,
-        default_duration: int = None,
+        default_duration: Optional[int] = None,
     ) -> MidiFile:
         r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
 
-        :param tokens: tokens to convert. Can be either a list of :class:`miditok.TokSequence`,
-        :param programs: programs of the tracks. If none is given, will default to piano, program 0. (default: None)
+        :param tokens: tokens to convert. Can be either a list of
+            :class:`miditok.TokSequence`,
+        :param programs: programs of the tracks. If none is given, will default to
+            piano, program 0. (default: None)
         :param output_path: path to save the file. (default: None)
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create).
-        :param default_duration: default duration (in ticks) in case a Note On event occurs without its associated
-                note off event. Leave None to discard Note On with no Note Off event.
+        :param time_division: MIDI time division / resolution, in ticks/beat (of the
+            MIDI to create).
+        :param default_duration: default duration (in ticks) in case a Note On event
+            occurs without its associated note off event. Leave None to discard Note On
+            with no Note Off event.
         :return: the midi object (:class:`miditoolkit.MidiFile`).
         """
         # Unsqueeze tokens in case of one_token_stream
@@ -161,9 +168,11 @@ class MIDILike(MIDITokenizer):
         for i in range(len(tokens)):
             tokens[i] = tokens[i].tokens
         midi = MidiFile(ticks_per_beat=time_division)
-        assert (
-            time_division % max(self.config.beat_res.values()) == 0
-        ), f"Invalid time division, please give one divisible by {max(self.config.beat_res.values())}"
+        if time_division % max(self.config.beat_res.values()) != 0:
+            raise ValueError(
+                f"Invalid time division, please give one divisible by"
+                f"{max(self.config.beat_res.values())}"
+            )
         if time_division in self._durations_ticks:
             max_duration_tok_tick = max(self._durations_ticks[time_division])
         else:
@@ -178,7 +187,7 @@ class MIDILike(MIDITokenizer):
         active_notes = {p: {} for p in self.config.programs}
 
         def check_inst(prog: int):
-            if prog not in instruments.keys():
+            if prog not in instruments:
                 instruments[prog] = Instrument(
                     program=0 if prog == -1 else prog,
                     is_drum=prog == -1,
@@ -243,7 +252,8 @@ class MIDILike(MIDITokenizer):
                     "PitchIntervalTime",
                     "PitchIntervalChord",
                 ]:
-                    # We update previous_pitch_onset and previous_pitch_chord even if the try fails.
+                    # We update previous_pitch_onset and previous_pitch_chord even if
+                    # the try fails.
                     if tok_type == "PitchIntervalTime":
                         pitch = previous_pitch_onset[current_program] + int(tok_val)
                         previous_pitch_onset[current_program] = pitch
@@ -256,7 +266,8 @@ class MIDILike(MIDITokenizer):
                         if tok_type == "NoteOn":
                             previous_pitch_onset[current_program] = pitch
                             previous_pitch_chord[current_program] = pitch
-                    # if NoteOn and already active, end the active note here, but this shouldn't happen
+                    # if NoteOn and already active, end the active note here, but this
+                    # shouldn't happen
                     if pitch in active_notes[current_program]:
                         note_onset_tick, vel = active_notes[current_program][pitch]
                         offset_tick = current_tick
@@ -278,8 +289,9 @@ class MIDILike(MIDITokenizer):
                 elif tok_type == "Program":
                     current_program = int(tok_val)
                 elif tok_type == "Tempo":
-                    # If your encoding include tempo tokens, each Position token should be followed by
-                    # a tempo token, but if it is not the case this method will skip this step
+                    # If your encoding include tempo tokens, each Position token should
+                    # be followed by a tempo token, but if it is not the case this
+                    # method will skip this step.
                     tempo = float(tok_val)
                     if si == 0 and current_tick != tempo_changes[-1].time:
                         tempo_changes.append(TempoChange(tempo, current_tick))
@@ -302,7 +314,8 @@ class MIDILike(MIDITokenizer):
                             duration = self._token_duration_to_ticks(
                                 seq[ti + 1].split("_")[1], time_division
                             )
-                            # Add instrument if it doesn't exist, can happen for the first tokens
+                            # Add instrument if it doesn't exist, can happen for the
+                            # first tokens
                             new_pedal = Pedal(current_tick, current_tick + duration)
                             if self.one_token_stream:
                                 check_inst(pedal_prog)
@@ -364,12 +377,12 @@ class MIDILike(MIDITokenizer):
 
     def _create_base_vocabulary(self) -> List[str]:
         r"""Creates the vocabulary, as a list of string tokens.
-        Each token as to be given as the form of "Type_Value", separated with an underscore.
-        Example: Pitch_58
-        The :class:`miditok.MIDITokenizer` main class will then create the "real" vocabulary as
-        a dictionary.
-        Special tokens have to be given when creating the tokenizer, and
-        will be added to the vocabulary by :class:`miditok.MIDITokenizer`.
+        Each token as to be given as the form of "Type_Value", separated with an
+        underscore. Example: Pitch_58
+        The :class:`miditok.MIDITokenizer` main class will then create the "real"
+        vocabulary as a dictionary. Special tokens have to be given when creating the
+        tokenizer, and will be added to the vocabulary by
+        :class:`miditok.MIDITokenizer`.
 
         :return: the vocabulary as a list of string.
         """
@@ -418,7 +431,7 @@ class MIDILike(MIDITokenizer):
             )
             dic["Program"] = ["NoteOn", "NoteOff"]
         else:
-            first_note_token_type = "NoteOn"
+            first_note_token_type = "NoteOn"  # noqa: S105
         dic["Velocity"] = [first_note_token_type, "TimeShift"]
         dic["NoteOff"] = ["NoteOff", first_note_token_type, "TimeShift"]
         dic["TimeShift"] = ["NoteOff", first_note_token_type, "TimeShift"]
@@ -579,7 +592,8 @@ class MIDILike(MIDITokenizer):
         r"""Checks if a sequence of tokens is made of good token types
         successions and returns the error ratio (lower is better).
         The Pitch and Position values are also analyzed:
-            - a NoteOn token should not be present if the same pitch is already being played
+            - a NoteOn token should not be present if the same pitch is already being
+                played
             - a NoteOff token should not be present the note is not being played
 
         :param tokens: sequence of tokens to check

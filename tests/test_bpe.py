@@ -1,13 +1,14 @@
 #!/usr/bin/python3 python
 
-"""Tests Fast BPE encoding - decoding, as well as saving and loading tokenizers with BPE.
+"""Tests Fast BPE encoding - decoding, as well as saving and loading tokenizers with
+BPE.
 """
 
 import random
 from copy import deepcopy
 from pathlib import Path
 from time import time
-from typing import Sequence, Union
+from typing import Optional, Sequence, Union
 
 import pytest
 from miditoolkit import MidiFile
@@ -37,12 +38,13 @@ default_params.update(
 def test_bpe_conversion(
     tokenization: str,
     tmp_path: Path,
-    midi_paths: Sequence[Union[str, Path]] = None,
+    midi_paths: Optional[Sequence[Union[str, Path]]] = None,
     seed: int = SEED,
 ):
-    r"""Reads a few MIDI files, convert them into token sequences, convert them back to MIDI files.
-    The converted back MIDI files should identical to original one, expect with note starting and ending
-    times quantized, and maybe a some duplicated notes removed
+    r"""Reads a few MIDI files, convert them into token sequences, convert them back
+    to MIDI files. The converted back MIDI files should identical to original one,
+    expect with note starting and ending times quantized, and maybe a some duplicated
+    notes removed
 
     :param tokenization: name of the tokenizer class to test.
     :param midi_paths: list of paths of MIDI files to use for the tests.
@@ -75,7 +77,7 @@ def test_bpe_conversion(
     vocab_inv = {v: k for k, v in tokenizer._vocab_base.items()}
     assert (
         test_id_to_token == vocab_inv
-    ), "Vocabulary inversion failed, something might be wrong with the way they are built"
+    ), "Vocabulary inversion failed, something is wrong with the way they are built"
 
     for file_path in tqdm(
         midi_paths, desc=f"Checking BPE tok / detok ({tokenization})"
@@ -88,7 +90,10 @@ def test_bpe_conversion(
         to_by = tokenizer._ids_to_bytes(to_id, as_one_str=True)
         assert all(
             [to_by == tokens.bytes, to_tok == tokens.tokens, to_id == tokens.ids]
-        ), "Conversion between tokens / bytes / ids failed, something might be wrong in vocabularies"
+        ), (
+            "Conversion between tokens / bytes / ids failed, something is wrong in"
+            "vocabularies"
+        )
 
         tokenizer.apply_bpe(tokens)
         first_samples_bpe.append(tokens)
@@ -97,9 +102,10 @@ def test_bpe_conversion(
     tokenizer_reloaded = getattr(miditok, tokenization)(
         params=tmp_path / "bpe_config.txt"
     )
-    assert (
-        tokenizer_reloaded == tokenizer
-    ), "Saving and reloading tokenizer failed. The reloaded tokenizer is different from the first one."
+    assert tokenizer_reloaded == tokenizer, (
+        "Saving and reloading tokenizer failed. The reloaded tokenizer is different"
+        "from the first one."
+    )
 
     # Unbatched BPE
     at_least_one_error = False
@@ -126,17 +132,19 @@ def test_bpe_conversion(
         if tokens_no_bpe != tokens_bpe_decoded:
             at_least_one_error = True
             print(
-                f"Error with BPE for {tokenization} and {file_path.name}: encoding - decoding test failed"
+                f"Error with BPE for {tokenization} and {file_path.name}: encoding -"
+                f"decoding test failed"
             )
     print(
-        f"BPE encoding time un-batched: {tok_time:.2f} (mean: {tok_time / len(midi_paths):.4f})"
+        f"BPE encoding time un-batched: {tok_time:.2f} (mean:"
+        f"{tok_time / len(midi_paths):.4f})"
     )
     assert not at_least_one_error
 
     # Batched BPE
     at_least_one_error = False
     samples_no_bpe = []
-    for i, file_path in enumerate(tqdm(midi_paths, desc="Testing BPE batched")):
+    for file_path in tqdm(midi_paths, desc="Testing BPE batched"):
         # Reads the midi
         midi = MidiFile(file_path)
         tokens_no_bpe = tokenizer(midi, apply_bpe_if_possible=False)
@@ -154,13 +162,15 @@ def test_bpe_conversion(
         if sample_bpe != sample_bpe_first:
             at_least_one_error = True
             print(
-                f"Error with BPE for {tokenization}: BPE encoding failed after tokenizer reload"
+                f"Error with BPE for {tokenization}: BPE encoding failed after"
+                f"tokenizer reload"
             )
     for sample_no_bpe, sample_bpe_decoded in zip(samples_no_bpe, samples_bpe_decoded):
         if sample_no_bpe != sample_bpe_decoded:
             at_least_one_error = True
             print(f"Error with BPE for {tokenization}: encoding - decoding test failed")
     print(
-        f"BPE encoding time batched: {tok_time:.2f} (mean: {tok_time / len(midi_paths):.4f})"
+        f"BPE encoding time batched: {tok_time:.2f} (mean:"
+        f"{tok_time / len(midi_paths):.4f})"
     )
     assert not at_least_one_error

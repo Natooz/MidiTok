@@ -5,7 +5,7 @@
 """
 
 from pathlib import Path
-from typing import Sequence, Union
+from typing import Optional, Sequence, Union
 
 from tensorflow import Tensor as tfTensor
 from tensorflow import convert_to_tensor
@@ -30,17 +30,14 @@ def test_convert_tensors():
 
     tokenizer = miditok.TSD()
     for type_ in types:
-        if type_ == tfTensor:
-            tensor = convert_to_tensor(original)
-        else:
-            tensor = type_(original)
+        tensor = convert_to_tensor(original) if type_ == tfTensor else type_(original)
         tokenizer(tensor)  # to make sure it passes as decorator
         as_list = miditok.midi_tokenizer.convert_ids_tensors_to_list(tensor)
         assert as_list == original
 
 
 def test_tokenize_datasets_file_tree(
-    tmp_path: Path, midi_paths: Sequence[Union[str, Path]] = None
+    tmp_path: Path, midi_paths: Optional[Sequence[Union[str, Path]]] = None
 ):
     if midi_paths is None:
         midi_paths = MIDI_PATHS_ALL
@@ -52,10 +49,12 @@ def test_tokenize_datasets_file_tree(
     json_paths.sort(key=lambda x: x.stem)
     midi_paths.sort(key=lambda x: x.stem)
     for json_path, midi_path in zip(json_paths, midi_paths):
-        assert (
-            json_path.relative_to(tmp_path).with_suffix(".test")
-            == midi_path.relative_to(HERE).with_suffix(".test")
-        ), f"The file tree has not been reproduced as it should, for the file {midi_path} tokenized {json_path}"
+        assert json_path.relative_to(tmp_path).with_suffix(
+            ".test"
+        ) == midi_path.relative_to(HERE).with_suffix(".test"), (
+            f"The file tree has not been reproduced as it should, for the file"
+            f"{midi_path} tokenized {json_path}"
+        )
 
     # Just make sure the non-overwrite mode doesn't crash
     tokenizer.tokenize_midi_dataset(midi_paths, tmp_path, overwrite_mode=False)

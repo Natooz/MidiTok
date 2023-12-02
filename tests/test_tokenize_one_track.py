@@ -5,7 +5,7 @@
 
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Dict, Sequence, Tuple, Union
+from typing import Any, Dict, Optional, Sequence, Tuple, Union
 
 import pytest
 from miditoolkit import MidiFile
@@ -25,7 +25,7 @@ from .utils import (
 default_params = deepcopy(TOKENIZER_CONFIG_KWARGS)
 default_params.update(
     {
-        "use_chords": False,  # set false to speed up tests as it takes some time on maestro MIDIs
+        "use_chords": False,  # set false to speed up tests
         "use_rests": True,
         "use_tempos": True,
         "use_time_signatures": True,
@@ -49,17 +49,19 @@ for tokenization_ in ALL_TOKENIZATIONS:
 @pytest.mark.parametrize("midi_path", MIDI_PATHS_ONE_TRACK)
 def test_one_track_midi_to_tokens_to_midi(
     midi_path: Union[str, Path],
-    tok_params_sets: Sequence[Tuple[str, Dict[str, Any]]] = None,
+    tok_params_sets: Optional[Sequence[Tuple[str, Dict[str, Any]]]] = None,
     saving_erroneous_midis: bool = True,
 ):
     r"""Reads a MIDI file, converts it into tokens, convert it back to a MIDI object.
-    The decoded MIDI should be identical to the original one after downsampling, and potentially notes deduplication.
-    We only parametrize for midi files, as it would otherwise require to load them multiple times each.
-    # TODO test parametrize tokenization / params_set, if faster --> unique method for test tok (one+multi)
+    The decoded MIDI should be identical to the original one after downsampling, and
+    potentially notes deduplication. We only parametrize for midi files, as it would
+    otherwise require to load them multiple times each.
+    # TODO test parametrize params_set --> unique method for test tok (one+multi)
 
     :param midi_path: path to the MIDI file to test.
     :param tok_params_sets: sequence of tokenizer and its parameters to run.
-    :param saving_erroneous_midis: will save MIDIs decoded with errors, to be used to debug.
+    :param saving_erroneous_midis: will save MIDIs decoded with errors, to be used to
+        debug.
     """
     if tok_params_sets is None:
         tok_params_sets = TOK_PARAMS_ONE_TRACK
@@ -78,7 +80,8 @@ def test_one_track_midi_to_tokens_to_midi(
         )
 
         # Process the MIDI
-        # preprocess_midi is also performed when tokenizing, but we need to call it here for following adaptations
+        # preprocess_midi is also performed when tokenizing, but we need to call it here
+        # for following adaptations
         midi_to_compare = prepare_midi_for_tests(midi, tokenizer=tokenizer)
         # Store preprocessed track
         if len(tracks_with_errors) == 0:
@@ -97,17 +100,16 @@ def test_one_track_midi_to_tokens_to_midi(
         # Add track to error list
         if has_errors:
             at_least_one_error = True
-            for ti, track in enumerate(decoded_midi.instruments):
+            for track in decoded_midi.instruments:
                 track.name = f"{tok_i} encoded with {tokenization}"
             tracks_with_errors += decoded_midi.instruments
 
     # > 1 as the first one is the preprocessed
-    if len(tracks_with_errors) > len(midi.instruments):
-        if saving_erroneous_midis:
-            TEST_LOG_DIR.mkdir(exist_ok=True, parents=True)
-            midi.tempo_changes = midi_to_compare.tempo_changes
-            midi.time_signature_changes = midi_to_compare.time_signature_changes
-            midi.instruments += tracks_with_errors
-            midi.dump(TEST_LOG_DIR / midi_path.name)
+    if len(tracks_with_errors) > len(midi.instruments) and saving_erroneous_midis:
+        TEST_LOG_DIR.mkdir(exist_ok=True, parents=True)
+        midi.tempo_changes = midi_to_compare.tempo_changes
+        midi.time_signature_changes = midi_to_compare.time_signature_changes
+        midi.instruments += tracks_with_errors
+        midi.dump(TEST_LOG_DIR / midi_path.name)
 
     assert not at_least_one_error

@@ -45,10 +45,10 @@ We use GitHub issues to track public bugs. Report a bug by [opening a new issue]
 
 ### Tests
 
-We use `pytest` for testing and `pytest-cov` for measuring coverage. In the test script, we use `torch` and `tensorflow` to check functionalities related to token-tensor conversion:
+We use `pytest` for testing and `pytest-cov` for measuring coverage. In the test scripts, we use `torch` and `tensorflow` to check functionalities related to token-tensor conversion. You can discard these tests, and thus installing these libraries, if your modifications does not impact them.
 
 ```bash
-pip install setuptools pytest coverage torch tensorflow
+pip install setuptools pytest coverage
 coverage run -m pytest
 ```
 
@@ -58,11 +58,15 @@ We use the [ruff](https://github.com/astral-sh/ruff) formatter for Python in thi
 
 ### Pre-commit lints
 
-Linting is configured via [pre-commit](https://www.pre-commit.com/).
+Linting is configured via [pre-commit](https://www.pre-commit.com/). You can set up pre-commit by running:
 
-Run `pre-commit install` to install the pre-commit Git hook.
+```bash
+pip install pre-commit
+pre-commit install  # installs pre-commit Git hook in the repository
+```
 
-If you don't care to do that, you can also run `pre-commit run`.
+When your changes are finished and the tests are passing, you can run `pre-commit run` to check if your code lints according to our ruff rules.
+If errors are found, we encourage you to fix them to follow the best code practices. If you struggle with this step, don't hesitate to ask for help, and to even commit and push anyway. Contributors will be able to help you.
 
 ## License
 

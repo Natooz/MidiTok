@@ -26,56 +26,63 @@ from ..utils import set_midi_max_tick
 class REMI(MIDITokenizer):
     r"""REMI, standing for Revamped MIDI and introduced with the
     `Pop Music Transformer (Huang and Yang) <https://dl.acm.org/doi/10.1145/3394171.3413671>`_,
-    is a tokenization that represents notes as successions of *Pitch*, *Velocity* and *Duration*
-    tokens, and time with *Bar* and *Position* tokens. A *Bar* token indicate that a new bar
-    is beginning, and *Position* the current position within the current bar. The number of
-    positions is determined by the ``beat_res`` argument, the maximum value will be used as
-    resolution.
-    With the `Program` and `TimeSignature` additional tokens enables, this class is equivalent to REMI+.
-    REMI+ is an extended version of :ref:`REMI` (Huang and Yang) for general
-    multi-track, multi-signature symbolic music sequences, introduced in
-    `FIGARO (Rütte et al.) <https://arxiv.org/abs/2201.10936>`, which handle multiple instruments by
-    adding `Program` tokens before the `Pitch` ones.
+    is a tokenization that represents notes as successions of *Pitch*, *Velocity* and
+    *Duration* tokens, and time with *Bar* and *Position* tokens. A *Bar* token
+    indicate that a new bar is beginning, and *Position* the current position within
+    the current bar. The number of positions is determined by the ``beat_res``
+    argument, the maximum value will be used as resolution.
+    With the *Program* and *TimeSignature* additional tokens enables, this class is
+    equivalent to REMI+. REMI+ is an extended version of :ref:`REMI` (Huang and Yang)
+    for general multi-track, multi-signature symbolic music sequences, introduced in
+    `FIGARO (Rütte et al.) <https://arxiv.org/abs/2201.10936>`, which handle multiple
+    instruments by adding *Program* tokens before the *Pitch* ones.
 
-    **Note:** in the original paper, the tempo information is represented as the succession
-    of two token types: a *TempoClass* indicating if the tempo is fast or slow, and a
-    *TempoValue* indicating its value. MidiTok only uses one *Tempo* token for its value
-    (see :ref:`Additional tokens`).
-    **Note:** When decoding multiple token sequences (of multiple tracks), i.e. when `config.use_programs` is False,
-    only the tempos and time signatures of the first sequence will be decoded for the whole MIDI.
+    **Note:** in the original paper, the tempo information is represented as the
+    succession of two token types: a *TempoClass* indicating if the tempo is fast or
+    slow, and a *TempoValue* indicating its value. MidiTok only uses one *Tempo* token
+    for its value (see :ref:`Additional tokens`).
+    **Note:** When decoding multiple token sequences (of multiple tracks), i.e. when
+    `config.use_programs` is False, only the tempos and time signatures of the first
+    sequence will be decoded for the whole MIDI.
 
-    :param tokenizer_config: the tokenizer's configuration, as a :class:`miditok.classes.TokenizerConfig` object.
-    :param max_bar_embedding: Maximum number of bars ("Bar_0", "Bar_1",...,"Bar_{num_bars-1}").
-            If None passed, creates "Bar_None" token only in vocabulary for Bar token.
-    :param params: path to a tokenizer config file. This will override other arguments and
-            load the tokenizer based on the config file. This is particularly useful if the
-            tokenizer learned Byte Pair Encoding. (default: None)
+    :param tokenizer_config: the tokenizer's configuration, as a
+        :class:`miditok.classes.TokenizerConfig` object.
+    :param max_bar_embedding: Maximum number of bars ("Bar_0", "Bar_1",...,
+        "Bar_{num_bars-1}"). If None passed, creates "Bar_None" token only in
+        vocabulary for Bar token.
+    :param params: path to a tokenizer config file. This will override other arguments
+        and load the tokenizer based on the config file. This is particularly useful
+        if the tokenizer learned Byte Pair Encoding. (default: None)
     """
 
     def __init__(
         self,
         tokenizer_config: TokenizerConfig = None,
         max_bar_embedding: Optional[int] = None,
-        params: Union[str, Path] = None,
+        params: Optional[Union[str, Path]] = None,
     ):
         if (
             tokenizer_config is not None
             and "max_bar_embedding" not in tokenizer_config.additional_params
         ):
-            # If used, this attribute might increase over tokenizations, if the tokenizer encounter longer MIDIs
+            # If used, this attribute might increase if the tokenizer encounter longer
+            # MIDIs
             tokenizer_config.additional_params["max_bar_embedding"] = max_bar_embedding
         super().__init__(tokenizer_config, params)
 
     def _tweak_config_before_creating_voc(self):
-        # In case the tokenizer has been created without specifying any config or params file path
+        # In case the tokenizer has been created without specifying any config or
+        # params file path
         if "max_bar_embedding" not in self.config.additional_params:
-            # If used, this attribute might increase over tokenizations, if the tokenizer encounter longer MIDIs
+            # If used, this attribute might increase over tokenizations, if the
+            # tokenizer encounter longer MIDIs
             self.config.additional_params["max_bar_embedding"] = None
 
     def _add_time_events(self, events: List[Event]) -> List[Event]:
         r"""
-        Takes a sequence of note events (containing optionally Chord, Tempo and TimeSignature tokens),
-        and insert (not inplace) time tokens (TimeShift, Rest) to complete the sequence.
+        Takes a sequence of note events (containing optionally Chord, Tempo and
+        TimeSignature tokens), and insert (not inplace) time tokens (TimeShift, Rest)
+        to complete the sequence.
 
         :param events: note events to complete.
         :return: the same events, with time events inserted.
@@ -94,7 +101,8 @@ class REMI(MIDITokenizer):
         ticks_per_bar = self._compute_ticks_per_bar(
             TimeSignature(*current_time_sig, 0), time_division
         )
-        # First look for a TimeSig token, if any is given at tick 0, to update current_time_sig
+        # First look for a TimeSig token, if any is given at tick 0, to update
+        # current_time_sig
         if self.config.use_time_signatures:
             for event in events:
                 if event.type == "TimeSig":
@@ -112,7 +120,7 @@ class REMI(MIDITokenizer):
                 ]:
                     break
         # Add the time events
-        for e, event in enumerate(events):
+        for event in events:
             if event.time != previous_tick:
                 # (Rest)
                 if (
@@ -134,7 +142,8 @@ class REMI(MIDITokenizer):
                             )
                         )
                         previous_tick += dur_ticks
-                    # We update current_bar and tick_at_current_bar here without creating Bar tokens
+                    # We update current_bar and tick_at_current_bar here without
+                    # creating Bar tokens
                     real_current_bar = (
                         bar_at_last_ts_change
                         + (previous_tick - tick_at_last_ts_change) // ticks_per_bar
@@ -164,7 +173,8 @@ class REMI(MIDITokenizer):
                                 desc=0,
                             )
                         )
-                        # Add a TimeSignature token, except for the last new Bar token if the current event is a TS
+                        # Add a TimeSignature token, except for the last new Bar token
+                        # if the current event is a TS
                         if self.config.use_time_signatures and not (
                             event.type == "TimeSig" and i + 1 == nb_new_bars
                         ):
@@ -208,7 +218,8 @@ class REMI(MIDITokenizer):
                 ticks_per_bar = self._compute_ticks_per_bar(
                     TimeSignature(*current_time_sig, event.time), time_division
                 )
-                # We decrease the previous tick so that a Position token is enforced for the next event
+                # We decrease the previous tick so that a Position token is enforced
+                # for the next event
                 previous_tick -= 1
 
             all_events.append(event)
@@ -242,10 +253,13 @@ class REMI(MIDITokenizer):
     ) -> MidiFile:
         r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
 
-        :param tokens: tokens to convert. Can be either a list of :class:`miditok.TokSequence`,
-        :param programs: programs of the tracks. If none is given, will default to piano, program 0. (default: None)
+        :param tokens: tokens to convert. Can be either a list of
+            :class:`miditok.TokSequence`,
+        :param programs: programs of the tracks. If none is given, will default to
+            piano, program 0. (default: None)
         :param output_path: path to save the file. (default: None)
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create).
+        :param time_division: MIDI time division / resolution, in ticks/beat (of the
+            MIDI to create).
         :return: the midi object (:class:`miditoolkit.MidiFile`).
         """
         # Unsqueeze tokens in case of one_token_stream
@@ -254,9 +268,11 @@ class REMI(MIDITokenizer):
         for i in range(len(tokens)):
             tokens[i] = tokens[i].tokens
         midi = MidiFile(ticks_per_beat=time_division)
-        assert (
-            time_division % max(self.config.beat_res.values()) == 0
-        ), f"Invalid time division, please give one divisible by {max(self.config.beat_res.values())}"
+        if time_division % max(self.config.beat_res.values()) != 0:
+            raise ValueError(
+                f"Invalid time division, please give one divisible by"
+                f"{max(self.config.beat_res.values())}"
+            )
         ticks_per_sample = time_division // max(self.config.beat_res.values())
 
         # RESULTS
@@ -265,7 +281,7 @@ class REMI(MIDITokenizer):
         time_signature_changes = []
 
         def check_inst(prog: int):
-            if prog not in instruments.keys():
+            if prog not in instruments:
                 instruments[prog] = Instrument(
                     program=0 if prog == -1 else prog,
                     is_drum=prog == -1,
@@ -352,7 +368,8 @@ class REMI(MIDITokenizer):
                         pitch = int(tok_val)
                         previous_pitch_onset[current_program] = pitch
                         previous_pitch_chord[current_program] = pitch
-                    # We update previous_pitch_onset and previous_pitch_chord even if the try fails.
+                    # We update previous_pitch_onset and previous_pitch_chord even if
+                    # the try fails.
                     elif tok_type == "PitchIntervalTime":
                         pitch = previous_pitch_onset[current_program] + int(tok_val)
                         previous_pitch_onset[current_program] = pitch
@@ -378,13 +395,15 @@ class REMI(MIDITokenizer):
                             )
                     except IndexError:
                         # A well constituted sequence should not raise an exception
-                        # However with generated sequences this can happen, or if the sequence isn't finished
+                        # However with generated sequences this can happen, or if the
+                        # sequence isn't finished
                         pass
                 elif tok_type == "Program":
                     current_program = int(tok_val)
                 elif tok_type == "Tempo":
-                    # If your encoding include tempo tokens, each Position token should be followed by
-                    # a tempo token, but if it is not the case this method will skip this step
+                    # If your encoding include tempo tokens, each Position token should
+                    # be followed by a tempo token, but if it is not the case this
+                    # method will skip this step
                     tempo = float(tok_val)
                     if si == 0 and current_tick != tempo_changes[-1].time:
                         tempo_changes.append(TempoChange(tempo, current_tick))
@@ -412,7 +431,8 @@ class REMI(MIDITokenizer):
                             duration = self._token_duration_to_ticks(
                                 seq[ti + 1].split("_")[1], time_division
                             )
-                            # Add instrument if it doesn't exist, can happen for the first tokens
+                            # Add instrument if it doesn't exist, can happen for the
+                            # first tokens
                             new_pedal = Pedal(current_tick, current_tick + duration)
                             if self.one_token_stream:
                                 check_inst(pedal_prog)
@@ -467,12 +487,12 @@ class REMI(MIDITokenizer):
 
     def _create_base_vocabulary(self) -> List[str]:
         r"""Creates the vocabulary, as a list of string tokens.
-        Each token as to be given as the form of "Type_Value", separated with an underscore.
-        Example: Pitch_58
-        The :class:`miditok.MIDITokenizer` main class will then create the "real" vocabulary as
-        a dictionary.
-        Special tokens have to be given when creating the tokenizer, and
-        will be added to the vocabulary by :class:`miditok.MIDITokenizer`.
+        Each token as to be given as the form of "Type_Value", separated with an
+        underscore. Example: Pitch_58
+        The :class:`miditok.MIDITokenizer` main class will then create the "real"
+        vocabulary as a dictionary. Special tokens have to be given when creating the
+        tokenizer, and will be added to the vocabulary by
+        :class:`miditok.MIDITokenizer`.
 
         :return: the vocabulary as a list of string.
         """
@@ -524,7 +544,7 @@ class REMI(MIDITokenizer):
             )
             dic["Program"] = ["Pitch"]
         else:
-            first_note_token_type = "Pitch"
+            first_note_token_type = "Pitch"  # noqa: S105
         dic["Pitch"] = ["Velocity"]
         dic["Velocity"] = ["Duration"]
         dic["Duration"] = [first_note_token_type, "Position", "Bar"]

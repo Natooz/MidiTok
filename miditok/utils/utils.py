@@ -1,9 +1,9 @@
 """Useful methods
 
 """
-
+import warnings
 from collections import Counter
-from typing import Any, Dict, List, Sequence, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 from miditoolkit import Instrument, MidiFile, Note
@@ -31,7 +31,8 @@ def convert_ids_tensors_to_list(ids: Any):
             ids = ids.numpy()
         if not isinstance(ids, np.ndarray):
             raise TypeError(
-                "The tokens must be given as a list of integers, np.ndarray, or PyTorch / Tensorflow tensor"
+                "The tokens must be given as a list of integers, np.ndarray, or"
+                "PyTorch/Tensorflow tensor"
             )
         ids = ids.astype(int).tolist()
     else:
@@ -62,14 +63,16 @@ def get_midi_programs(midi: MidiFile) -> List[Tuple[int, bool]]:
 
 
 def remove_duplicated_notes(notes: List[Note], filter_by_starting_tick: bool = True):
-    r"""Removes (inplace) possible duplicated notes, i.e. with the same pitch, starting and ending times.
-    Before running this method make sure the notes has been sorted by start then pitch then end values:
+    r"""Removes (inplace) possible duplicated notes, i.e. with the same pitch, starting
+    and ending times. Before running this method make sure the notes has been sorted by
+    start then pitch then end values:
     `notes.sort(key=lambda x: (x.start, x.pitch, x.end))`
 
     :param notes: notes to analyse
-    :param filter_by_starting_tick: will remove identical notes being played at the same onset time regardless of their
-        duration / offset time. If this argument is disabled, only 100% identical notes will be deduplicated,
-        i.e. with the same duration too. (default: True)
+    :param filter_by_starting_tick: will remove identical notes being played at the
+        same onset time regardless of their duration / offset time. If this argument is
+        disabled, only 100% identical notes will be deduplicated, i.e. with the same
+        duration too. (default: True)
     """
     i = 0
     while i + 1 < len(notes):
@@ -87,9 +90,9 @@ def remove_duplicated_notes(notes: List[Note], filter_by_starting_tick: bool = T
 
 
 def fix_offsets_overlapping_notes(notes: List[Note]):
-    r"""Reduces the durations of overlapping notes, so that when a note starts, if it was previously being played,
-    th previous note will end.
-    Before running this method make sure the notes has been sorted by start then pitch then end values:
+    r"""Reduces the durations of overlapping notes, so that when a note starts, if it
+    was previously being played, the previous note will end. Before running this
+    method make sure the notes has been sorted by start then pitch then end values:
     `notes.sort(key=lambda x: (x.start, x.pitch, x.end))`
 
     :param notes: notes to fix.
@@ -99,7 +102,7 @@ def fix_offsets_overlapping_notes(notes: List[Note]):
         while j < len(notes) and notes[j].start <= notes[i].end:
             if notes[i].pitch == notes[j].pitch:
                 notes[i].end = notes[j].start
-                # Break here as it will not encounter other notes with .start before this one
+                # Breaks here as no other notes with .start before this one
                 break
             j += 1
 
@@ -108,47 +111,54 @@ def detect_chords(
     notes: Sequence[Note],
     time_division: int,
     chord_maps: Dict[str, Sequence[int]],
-    program: int = None,
+    program: Optional[int] = None,
     specify_root_note: bool = True,
     beat_res: int = 4,
     onset_offset: int = 1,
-    unknown_chords_nb_notes_range: Tuple[int, int] = None,
+    unknown_chords_nb_notes_range: Optional[Tuple[int, int]] = None,
     simul_notes_limit: int = 10,
 ) -> List[Event]:
-    r"""Chord detection method. Make sure to sort notes by start time then pitch before:
-    ``notes.sort(key=lambda x: (x.start, x.pitch))``.
+    r"""Chord detection method. Make sure to sort notes by start time then pitch
+    before: ``notes.sort(key=lambda x: (x.start, x.pitch))``.
     **On very large tracks with high note density this method can be slow.**
     If you plan to use it with the Maestro or GiantMIDI datasets, it can take up to
     hundreds of seconds per MIDI depending on your cpu.
-    This method works by iterating over each note, find if it played with other notes, and if it
-    forms a chord from the chord maps. **It does not consider chord inversion.**
+    This method works by iterating over each note, find if it played with other notes,
+    and if it forms a chord from the chord maps. **It does not consider chord
+    inversion.**
 
-    :param notes: notes to analyse (sorted by starting time, them pitch)
-    :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI being parsed)
-    :param chord_maps: list of chord maps, to be given as a dictionary where keys are chord qualities
-            (e.g. "maj") and values pitch maps as tuples of integers (e.g. (0, 4, 7)).
-            You can use ``miditok.constants.CHORD_MAPS`` as an example.
-    :param program: program of the track of the notes. Used to specify the program when creating the Event object.
-            (default: None)
-    :param specify_root_note: the root note of each chord will be specified in Events / tokens.
-            Tokens will look as "Chord_C:maj". (default: True)
+    :param notes: notes to analyse (sorted by starting time, them pitch).
+    :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI
+        being parsed).
+    :param chord_maps: list of chord maps, to be given as a dictionary where keys are
+        chord qualities (e.g. "maj") and values pitch maps as tuples of integers
+        (e.g. (0, 4, 7)). You can use ``miditok.constants.CHORD_MAPS`` as an example.
+    :param program: program of the track of the notes. Used to specify the program when
+        creating the Event object. (default: None)
+    :param specify_root_note: the root note of each chord will be specified in
+        Events/tokens. Tokens will look as "Chord_C:maj". (default: True)
     :param beat_res: beat resolution, i.e. nb of samples per beat (default 4).
-    :param onset_offset: maximum offset (in samples) ∈ N separating notes starts to consider them
-            starting at the same time / onset (default is 1).
-    :param unknown_chords_nb_notes_range: range of number of notes to represent unknown chords.
-            If you want to represent chords that does not match any combination in ``chord_maps``, use this argument.
-            Leave ``None`` to not represent unknown chords. (default: None)
-    :param simul_notes_limit: nb of simultaneous notes being processed when looking for a chord
-            this parameter allows to speed up the chord detection, and must be >= 5 (default 10).
+    :param onset_offset: maximum offset (in samples) ∈ N separating notes starts to
+        consider them starting at the same time / onset (default is 1).
+    :param unknown_chords_nb_notes_range: range of number of notes to represent unknown
+        chords. If you want to represent chords that does not match any combination in
+        ``chord_maps``, use this argument. Leave ``None`` to not represent unknown
+        chords. (default: None)
+    :param simul_notes_limit: nb of simultaneous notes being processed when looking for
+        a chord this parameter allows to speed up the chord detection, and must be >= 5
+        (default 10).
     :return: the detected chords as Event objects.
     """
-    assert (
-        simul_notes_limit >= 5
-    ), "simul_notes_limit must be higher than 5, chords can be made up to 5 notes"
-    tuples = []
-    for note in notes:
-        tuples.append((note.pitch, int(note.start), int(note.end)))
-    notes = np.asarray(tuples)  # (N,3)
+    if simul_notes_limit < 5:
+        simul_notes_limit = 5
+        warnings.warn(
+            "`simul_notes_limit` must be >= 5, chords can be made up to 5 notes."
+            "Setting it to 5.",
+            stacklevel=2,
+        )
+    notes = np.asarray(
+        [(note.pitch, int(note.start), int(note.end)) for note in notes]
+    )  # (N,3)
 
     time_div_half = time_division // 2
     onset_offset = time_division * onset_offset / beat_res
@@ -180,7 +190,8 @@ def detect_chords(
             np.where(onset_notes[:, 2] - onset_notes[0, 2] <= time_div_half)
         ]
 
-        # Creates the "chord map" and see if it has a "known" quality, append a chord event if it is valid
+        # Creates the "chord map" and see if it has a "known" quality, append a chord
+        # event if it is valid
         chord_map = tuple(chord[:, 0] - chord[0, 0])
         if (
             3 <= len(chord_map) <= 5 and chord_map[-1] <= 24
@@ -217,33 +228,34 @@ def detect_chords(
 
 def merge_tracks_per_class(
     midi: MidiFile,
-    classes_to_merge: List[int] = None,
-    new_program_per_class: Dict[int, int] = None,
-    max_nb_of_tracks_per_inst_class: Dict[int, int] = None,
-    valid_programs: List[int] = None,
+    classes_to_merge: Optional[List[int]] = None,
+    new_program_per_class: Optional[Dict[int, int]] = None,
+    max_nb_of_tracks_per_inst_class: Optional[Dict[int, int]] = None,
+    valid_programs: Optional[List[int]] = None,
     filter_pitches: bool = True,
 ):
-    r"""Merges per instrument class the tracks which are in the class in classes_to_merge.
-    Example, a list of tracks / programs [0, 3, 8, 10, 11, 24, 25, 44, 47] will become [0, 8, 24, 25, 40] if
-    classes_to_merge is [0, 1, 5].
+    r"""Merges per instrument class the tracks which are in the class in
+    ``classes_to_merge``.
+    Example, a list of tracks / programs `[0, 3, 8, 10, 11, 24, 25, 44, 47]`` will
+    become ``[0, 8, 24, 25, 40]`` if ``classes_to_merge`` is ``[0, 1, 5]``.
     The classes are in ``miditok.constants.INSTRUMENT_CLASSES``.
 
     **Note:** programs of drum tracks will be set to -1.
 
     :param midi: MIDI object to merge tracks
     :param classes_to_merge: instrument classes to merge, to give as list of indexes
-            (see miditok.constants.INSTRUMENT_CLASSES). Give None to merge nothing,
-            the function will still remove non-valid programs / tracks if given (default: None)
-    :param new_program_per_class: new program of the final merged tracks, to be given per
-            instrument class as a dict {class_id: program}
+        (see miditok.constants.INSTRUMENT_CLASSES). Give None to merge nothing, the
+        function will still remove non-valid programs/tracks if given. (default: None)
+    :param new_program_per_class: new program of the final merged tracks, to be given
+        per instrument class as a dict ``{class_id: program}``.
     :param max_nb_of_tracks_per_inst_class: max number of tracks per instrument class,
-            if the limit is exceeded for one class only the tracks with the maximum notes
-            will be kept, give None for no limit (default: None)
+        if the limit is exceeded for one class only the tracks with the maximum notes
+        will be kept, give None for no limit. (default: None)
     :param valid_programs: valid program ids to keep, others will be deleted, give None
-            for keep all programs (default None)
-    :param filter_pitches: after merging, will remove notes whose pitches are out the recommended
-            range defined by the GM2 specs (default: True)
-    :return: True if the MIDI is valid, else False
+        for keep all programs. (default None)
+    :param filter_pitches: after merging, will remove notes whose pitches are out the
+        recommended range defined by the GM2 specs. (default: True)
+    :return: True if the MIDI is valid, else False.
     """
     # remove non-valid tracks (instruments)
     if valid_programs is not None:
@@ -274,9 +286,9 @@ def merge_tracks_per_class(
             for cla, program in new_program_per_class.items():
                 if program not in INSTRUMENT_CLASSES[cla]["program_range"]:
                     raise ValueError(
-                        f"Error in program value, got {program} for instrument class {cla} "
-                        f'({INSTRUMENT_CLASSES[cla]["name"]}), required value in '
-                        f'{INSTRUMENT_CLASSES[cla]["program_range"]}'
+                        f"Error in program value, got {program} for instrument class"
+                        f"{cla} ({INSTRUMENT_CLASSES[cla]['name']}), required value in"
+                        f"{INSTRUMENT_CLASSES[cla]['program_range']}"
                     )
 
         for ci in classes_to_merge:
@@ -320,19 +332,17 @@ def merge_tracks_per_class(
 def merge_tracks(
     tracks: Union[List[Instrument], MidiFile], effects: bool = False
 ) -> Instrument:
-    r"""Merge several miditoolkit Instrument objects, from a list of Instruments or a MidiFile object.
-    All the tracks will be merged into the first Instrument object (notes concatenated and sorted),
-    beware of giving tracks with the same program (no assessment is performed).
-    The other tracks will be deleted.
+    r"""Merge several miditoolkit Instrument objects, from a list of Instruments or a
+    ``MidiFile`` object. All the tracks will be merged into the first Instrument object
+    (notes concatenated and sorted), beware of giving tracks with the same program (no
+    assessment is performed). The other tracks will be deleted.
 
     :param tracks: list of tracks to merge, or MidiFile object
-    :param effects: will also merge effects, i.e. control changes, sustain pedals and pitch bends
+    :param effects: will also merge effects, i.e. control changes, sustain pedals and
+        pitch bends
     :return: the merged track
     """
-    if isinstance(tracks, MidiFile):
-        tracks_ = tracks.instruments
-    else:
-        tracks_ = tracks
+    tracks_ = tracks.instruments if isinstance(tracks, MidiFile) else tracks
 
     # Change name
     tracks_[0].name += "".join([" / " + t.name for t in tracks_[1:]])
@@ -434,15 +444,15 @@ def set_midi_max_tick(midi: MidiFile):
 def nb_bar_pos(
     seq: Sequence[int], bar_token: int, position_tokens: Sequence[int]
 ) -> Tuple[int, int]:
-    r"""Returns the number of bars and the last position of a sequence of tokens. This method
-    is compatible with tokenizations representing time with *Bar* and *Position* tokens, such as
-    :py:class:`miditok.REMI`.
+    r"""Returns the number of bars and the last position of a sequence of tokens. This
+    method is compatible with tokenizations representing time with *Bar* and *Position*
+    tokens, such as :py:class:`miditok.REMI`.
 
     :param seq: sequence of tokens
     :param bar_token: the bar token value
     :param position_tokens: position tokens values
-    :return: the current bar, current position within the bar, current pitches played at this position,
-            and if a chord token has been predicted at this position
+    :return: the current bar, current position within the bar, current pitches played
+        at this position, and if a chord token has been predicted at this position.
     """
     # Current bar
     bar_idx = [i for i, token in enumerate(seq) if token == bar_token]

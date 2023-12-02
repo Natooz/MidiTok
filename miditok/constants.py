@@ -4,14 +4,25 @@
 
 from importlib.metadata import version
 
+from mido.midifiles import KeySignatureError
+
 CURRENT_MIDITOK_VERSION = version("miditok")
 CURRENT_TOKENIZERS_VERSION = version("tokenizers")
 
 MIDI_FILES_EXTENSIONS = [".mid", ".midi", ".MID", ".MIDI"]
+MIDI_LOADING_EXCEPTION = (
+    ValueError,
+    OSError,
+    FileNotFoundError,
+    IOError,
+    EOFError,
+    KeySignatureError,
+)
 DEFAULT_TOKENIZER_FILE_NAME = "tokenizer.conf"
 
-# Starting id of chr() method for BPE, as the 5 (0 to 4 included) firsts are ignored by 🤗tokenizers
-# We also skip the 32nd (0x20) (space) as it causes issues when loading a BPE model with spaces in merged
+# Starting id of chr() method for BPE, as the 5 (0 to 4 included) firsts are ignored by
+# 🤗tokenizers. We also skip the 32nd (0x20) (space) as it causes issues when loading a
+# BPE model with spaces in merged.
 # Issue for reference: https://github.com/huggingface/tokenizers/issues/566
 # List of unicode characters: https://www.fileformat.info/info/charset/UTF-8/list.htm
 CHR_ID_START = 33
@@ -24,7 +35,9 @@ BEAT_RES = {(0, 4): 8, (4, 12): 4}  # samples per beat
 # nb of velocity bins, velocities values from 0 to 127 will be quantized
 NUM_VELOCITIES = 32
 # default special tokens
-SPECIAL_TOKENS = ["PAD", "BOS", "EOS", "MASK"]
+BOS_TOKEN_NAME = "BOS"  # noqa: S105
+EOS_TOKEN_NAME = "EOS"  # noqa: S105
+SPECIAL_TOKENS = ["PAD", BOS_TOKEN_NAME, EOS_TOKEN_NAME, "MASK"]
 
 USE_CHORDS = False
 USE_RESTS = False
@@ -43,8 +56,8 @@ PITCH_INTERVALS_MAX_TIME_DIST = 1
 BEAT_RES_REST = {(0, 1): 8, (1, 2): 4, (2, 12): 2}
 
 # Chord params
-# "chord_unknown" specifies the range of number of notes that can form "unknown" chords (that do not fit
-# in "chord_maps") to add in tokens
+# "chord_unknown" specifies the range of number of notes that can form "unknown" chords
+# (that do not fit in "chord_maps") to add in tokens.
 # Known chord maps, with 0 as root note
 CHORD_MAPS = {
     "min": (0, 3, 7),
@@ -94,7 +107,8 @@ PROGRAM_CHANGES = False
 
 # Tokenizers specific parameters
 # For MuMIDI, recommended range from the GM2 specs
-# note: we ignore the "Applause" at pitch 88 of the orchestra drum set, increase to 89 if you need it
+# Note: we ignore the "Applause" at pitch 88 of the orchestra drum set, increase to 89
+# if you need it.
 DRUM_PITCH_RANGE = (27, 88)
 MMM_DENSITY_BINS_MAX = (10, 20)
 
@@ -255,33 +269,33 @@ MIDI_INSTRUMENTS = [
     {"name": "Tinkle Bell", "pitch_range": range(72, 85)},
     {"name": "Agogo", "pitch_range": range(60, 73)},
     {"name": "Steel Drums", "pitch_range": range(52, 77)},
-    {"name": "Woodblock", "pitch_range": range(0, 128)},
-    {"name": "Taiko Drum", "pitch_range": range(0, 128)},
-    {"name": "Melodic Tom", "pitch_range": range(0, 128)},
-    {"name": "Synth Drum", "pitch_range": range(0, 128)},
-    {"name": "Reverse Cymbal", "pitch_range": range(0, 128)},
+    {"name": "Woodblock", "pitch_range": range(128)},
+    {"name": "Taiko Drum", "pitch_range": range(128)},
+    {"name": "Melodic Tom", "pitch_range": range(128)},
+    {"name": "Synth Drum", "pitch_range": range(128)},
+    {"name": "Reverse Cymbal", "pitch_range": range(128)},
     # SFX
-    {"name": "Guitar Fret Noise, Guitar Cutting Noise", "pitch_range": range(0, 128)},
-    {"name": "Breath Noise, Flute Key Click", "pitch_range": range(0, 128)},
+    {"name": "Guitar Fret Noise, Guitar Cutting Noise", "pitch_range": range(128)},
+    {"name": "Breath Noise, Flute Key Click", "pitch_range": range(128)},
     {
         "name": "Seashore, Rain, Thunder, Wind, Stream, Bubbles",
-        "pitch_range": range(0, 128),
+        "pitch_range": range(128),
     },
-    {"name": "Bird Tweet, Dog, Horse Gallop", "pitch_range": range(0, 128)},
+    {"name": "Bird Tweet, Dog, Horse Gallop", "pitch_range": range(128)},
     {
         "name": "Telephone Ring, Door Creaking, Door, Scratch, Wind Chime",
-        "pitch_range": range(0, 128),
+        "pitch_range": range(128),
     },
-    {"name": "Helicopter, Car Sounds", "pitch_range": range(0, 128)},
+    {"name": "Helicopter, Car Sounds", "pitch_range": range(128)},
     {
         "name": "Applause, Laughing, Screaming, Punch, Heart Beat, Footstep",
-        "pitch_range": range(0, 128),
+        "pitch_range": range(128),
     },
-    {"name": "Gunshot, Machine Gun, Lasergun, Explosion", "pitch_range": range(0, 128)},
+    {"name": "Gunshot, Machine Gun, Lasergun, Explosion", "pitch_range": range(128)},
 ]
 
 INSTRUMENT_CLASSES = [
-    {"name": "Piano", "program_range": range(0, 8)},  # 0
+    {"name": "Piano", "program_range": range(8)},  # 0
     {"name": "Chromatic Percussion", "program_range": range(8, 16)},
     {"name": "Organ", "program_range": range(16, 24)},
     {"name": "Guitar", "program_range": range(24, 32)},

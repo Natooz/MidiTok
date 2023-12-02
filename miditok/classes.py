@@ -1,6 +1,7 @@
 """
 Common classes.
 """
+
 import json
 import warnings
 from copy import deepcopy
@@ -54,17 +55,20 @@ class Event:
     to be sorted by time.
     """
 
-    type: str
+    type: str  # noqa: A003
     value: Union[str, int]
     time: Union[int, float] = None
     program: int = None
     desc: Any = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.type}_{self.value}"
 
-    def __repr__(self):
-        return f"Event(type={self.type}, value={self.value}, time={self.time}, desc={self.desc})"
+    def __repr__(self) -> str:
+        return (
+            f"Event(type={self.type}, value={self.value}, time={self.time},"
+            f" desc={self.desc})"
+        )
 
 
 @dataclass
@@ -74,8 +78,10 @@ class TokSequence:
 
     * tokens (list of str): tokens as sequence of strings.
     * ids (list of int), these are the one to be fed to models.
-    * events (list of Event): Event objects that can carry time or other information useful for debugging.
-    * bytes (str): ids are converted into unique bytes, all joined together in a single string.
+    * events (list of Event): Event objects that can carry time or other information
+        useful for debugging.
+    * bytes (str): ids are converted into unique bytes, all joined together in a single
+        string.
 
     Bytes are used internally by MidiTok for Byte Pair Encoding.
     The ``ids_are_bpe_encoded`` attribute tells if ``ids`` is encoded with BPE.
@@ -85,7 +91,7 @@ class TokSequence:
 
     tokens: List[Union[str, List[str]]] = None
     ids: List[Union[int, List[int]]] = None  # BPE can be applied on ids
-    bytes: str = None
+    bytes: str = None  # noqa: A003
     events: List[Union[Event, List[Event]]] = None
     ids_bpe_encoded: bool = False
     _ids_no_bpe: List[Union[int, List[int]]] = None
@@ -103,7 +109,8 @@ class TokSequence:
             return len(self._ids_no_bpe)
         else:
             raise ValueError(
-                "This TokSequence seems to not be initialized, all its attributes are None."
+                "This TokSequence seems to not be initialized, all its attributes are"
+                " None."
             )
 
     def __getitem__(self, item):
@@ -119,14 +126,15 @@ class TokSequence:
             return self._ids_no_bpe[item]
         else:
             raise ValueError(
-                "This TokSequence seems to not be initialized, all its attributes are None."
+                "This TokSequence seems to not be initialized, all its attributes are"
+                " None."
             )
 
     def __eq__(self, other) -> bool:
         r"""Checks if too sequences are equal.
         This is performed by comparing their attributes (ids, tokens...).
-        **Both sequences must have at least one common attribute initialized (not None) for this method to work,
-        otherwise it will return False.**
+        **Both sequences must have at least one common attribute initialized (not None)
+        for this method to work, otherwise it will return False.**
 
         :param other: other sequence to compare.
         :return: True if the sequences have equal attributes.
@@ -145,126 +153,167 @@ class TokSequence:
 
 class TokenizerConfig:
     r"""
-    MIDI tokenizer base class, containing common methods and attributes for all tokenizers.
+    MIDI tokenizer base class, containing common methods and attributes for all
+    tokenizers.
 
-    :param pitch_range: range of MIDI pitches to use. Pitches can take
-            values between 0 and 127 (included).
-            The `General MIDI 2 (GM2) specifications <https://www.midi.org/specifications-old/item/general-midi-2>`_
-            indicate the **recommended** ranges of pitches per MIDI program (instrument).
-            These recommended ranges can also be found in ``miditok.constants``.
-            In all cases, the range from 21 to 108 (included) covers all the recommended values. When processing a
-            MIDI, the notes with pitches under or above this range can be discarded. (default: ``(21, 109)``)
+    :param pitch_range: range of MIDI pitches to use. Pitches can take values between
+        0 and 127 (included). The `General MIDI 2 (GM2) specifications
+        <https://www.midi.org/specifications-old/item/general-midi-2>`_ indicate the
+        **recommended** ranges of pitches per MIDI program (instrument). These
+        recommended ranges can also be found in ``miditok.constants``. In all cases,
+        the range from 21 to 108 (included) covers all the recommended values. When
+        processing a MIDI, the notes with pitches under or above this range can be
+        discarded. (default: ``(21, 109)``)
     :param beat_res: beat resolutions, as a dictionary in the form:
-            ``{(beat_x1, beat_x2): beat_res_1, (beat_x2, beat_x3): beat_res_2, ...}``. The keys are tuples indicating
-            a range of beats, ex 0 to 3 for the first bar, and the values are the resolution (in samples per beat) to
-            apply to the ranges, ex 8. This allows to use ``Duration`` / ``TimeShift`` tokens of different
-            lengths / resolutions. Note: for tokenization with ``Position`` tokens, the total number of possible
-            positions will be set at four times the maximum resolution given (``max(beat_res.values)``\).
-            (default: ``{(0, 4): 8, (4, 12): 4}``)
-    :param num_velocities: number of velocity bins. In the MIDI norm, velocities can take
-            up to 128 values (0 to 127). This parameter allows to reduce the number of velocity values.
-            The velocities of the MIDIs resolution will be downsampled to ``num_velocities`` values, equally
-            separated between 0 and 127. (default: ``32``)
-    :param special_tokens: list of special tokens. This must be given as a list of strings, that should represent
-            either the token type alone (e.g. ``PAD``) or the token type and its value separated by an underscore
-            (e.g. ``Genre_rock``). If two or more underscores are given, all but the last one will be replaced with
-            dashes (-). (default: ``["PAD", "BOS", "EOS", "MASK"]``\)
-    :param use_chords: will use ``Chord`` tokens, if the tokenizer is compatible.
-            A ``Chord`` token indicates the presence of a chord at a certain time step.
-            MidiTok uses a chord detection method based on onset times and duration. This allows MidiTok to detect
-            precisely chords without ambiguity, whereas most chord detection methods in symbolic music based on
-            chroma features can't. Note that using chords will increase the tokenization time, especially if you
-            are working on music with a high "note density". (default: ``False``)
+        ``{(beat_x1, beat_x2): beat_res_1, (beat_x2, beat_x3): beat_res_2, ...}``.
+        The keys are tuples indicating a range of beats, ex 0 to 3 for the first bar,
+        and the values are the resolution (in samples per beat) to apply to the ranges,
+        ex 8. This allows to use ``Duration`` / ``TimeShift`` tokens of different
+        lengths / resolutions. Note: for tokenization with ``Position`` tokens, the
+        total number of possible positions will be set at four times the maximum
+        resolution given (``max(beat_res.values)``\).
+        (default: ``{(0, 4): 8, (4, 12): 4}``)
+    :param num_velocities: number of velocity bins. In the MIDI norm, velocities can
+        take up to 128 values (0 to 127). This parameter allows to reduce the number
+        of velocity values. The velocities of the MIDIs resolution will be downsampled
+        to ``num_velocities`` values, equally separated between 0 and 127.
+        (default: ``32``)
+    :param special_tokens: list of special tokens. This must be given as a list of
+        strings, that should represent either the token type alone (e.g. ``PAD``) or
+        the token type and its value separated by an underscore (e.g. ``Genre_rock``).
+        If two or more underscores are given, all but the last one will be replaced
+        with dashes (-). (default: ``["PAD", "BOS", "EOS", "MASK"]``\)
+    :param use_chords: will use ``Chord`` tokens, if the tokenizer is compatible. A
+        ``Chord`` token indicates the presence of a chord at a certain time step.
+        MidiTok uses a chord detection method based on onset times and duration. This
+        allows MidiTok to detect precisely chords without ambiguity, whereas most chord
+        detection methods in symbolic music based on chroma features can't. Note that
+        using chords will increase the tokenization time, especially if you are working
+        on music with a high "note density". (default: ``False``)
     :param use_rests: will use ``Rest`` tokens, if the tokenizer is compatible.
-            ``Rest`` tokens will be placed whenever a portion of time is silent, i.e. no note is being played.
-            This token type is decoded as a ``TimeShift`` event. You can choose the minimum and maximum rests
-            values to represent with the ``beat_res_rest`` argument. (default: ``False``)
+        ``Rest`` tokens will be placed whenever a portion of time is silent, i.e. no
+        note is being played. This token type is decoded as a ``TimeShift`` event. You
+        can choose the minimum and maximum rests values to represent with the
+        ``beat_res_rest`` argument. (default: ``False``)
     :param use_tempos: will use ``Tempo`` tokens, if the tokenizer is compatible.
-            ``Tempo`` tokens will specify the current tempo. This allows to train a model to predict tempo changes.
-            Tempo values are quantized accordingly to the ``num_tempos`` and ``tempo_range`` entries in the
-            ``additional_tokens`` dictionary (default is 32 tempos from 40 to 250). (default: ``False``)
-    :param use_time_signatures: will use ``TimeSignature`` tokens, if the tokenizer is compatible.
-            ``TimeSignature`` tokens will specify the current time signature. Note that :ref:`REMI` adds a
-            ``TimeSignature`` token at the beginning of each Bar (i.e. after ``Bar`` tokens), while :ref:`TSD` and
-            :ref:`MIDI-Like` will only represent time signature changes (MIDI messages) as they come. If you want more
-            "recalls" of the current time signature within your token sequences, you can preprocess your MIDI file to
-            add more ``TimeSignatureChange`` objects. (default: ``False``)
-    :param use_sustain_pedals: will use ``Pedal`` tokens to represent the sustain pedal events. In multitrack setting,
-            The value of each ``Pedal`` token will be equal to the program of the track. (default: ``False``)
-    :param use_pitch_bends: will use ``PitchBend`` tokens. In multitrack setting, a ``Program`` token will be added
-            before each ``PitchBend` token. (default: ``False``)
-    :param use_pitch_intervals: if given True, will represent the pitch of the notes with pitch intervals tokens.
-            This way, successive and simultaneous notes will be represented with respectively ``PitchIntervalTime`` and
-            ``PitchIntervalChord`` tokens. A good example is depicted in :ref:`Additional tokens`. This option is to be
-            used with the ``max_pitch_interval`` and ``pitch_intervals_max_time_dist`` arguments. (default: False)
-    :param use_programs: will use ``Program`` tokens to specify the instrument / MIDI program of the notes, if the
-            tokenizer is compatible (:ref:`TSD`, :ref:`REMI`, :ref:`MIDI-Like`, :ref:`Structured` and :ref:`CPWord`).
-            Use this parameter with the ``programs``, ``one_token_stream_for_programs`` and `program_changes` arguments.
-            By default, it will prepend a ``Program`` tokens before each ``Pitch`` / ``NoteOn`` token to
-            indicate its associated instrument, and will treat all the tracks of a MIDI as a single sequence of tokens.
-            :ref:`CPWord`, :ref:`Octuple` and :ref:`MuMIDI` add a ``Program`` tokens with the stacks of ``Pitch``,
-            ``Velocity`` and ``Duration`` tokens. The :ref:`Octuple`, :ref:`MMM` and :ref:`MuMIDI` tokenizers
-            use natively ``Program`` tokens, this option is always enabled. (default: ``False``)
-    :param beat_res_rest: the beat resolution of ``Rest`` tokens. It follows the same data pattern as the ``beat_res``
-            argument, however the maximum resolution for rests cannot be higher than the highest "global" resolution
-            (``beat_res``). Rests are considered complementary to other time tokens (``TimeShift``, ``Bar`` and
-            ``Position``). If in a given situation, ``Rest`` tokens cannot represent time with the exact precision,
-            other time times will complement them. (default: ``{(0, 1): 8, (1, 2): 4, (2, 12): 2}``)
-    :param chord_maps: list of chord maps, to be given as a dictionary where keys are chord qualities
-            (e.g. "maj") and values pitch maps as tuples of integers (e.g. ``(0, 4, 7)``).
-            You can use ``miditok.constants.CHORD_MAPS`` as an example. (default: ``miditok.constants.CHORD_MAPS``)
-    :param chord_tokens_with_root_note: to specify the root note of each chord in ``Chord`` tokens.
-            Tokens will look like ``Chord_C:maj``. (default: ``False``)
-    :param chord_unknown: range of number of notes to represent unknown chords.
-            If you want to represent chords that does not match any combination in ``chord_maps``, use this argument.
-            Leave ``None`` to not represent unknown chords. (default: ``None``)
+        ``Tempo`` tokens will specify the current tempo. This allows to train a model
+        to predict tempo changes. Tempo values are quantized accordingly to the
+        ``num_tempos`` and ``tempo_range`` entries in the ``additional_tokens``
+        dictionary (default is 32 tempos from 40 to 250). (default: ``False``)
+    :param use_time_signatures: will use ``TimeSignature`` tokens, if the tokenizer is
+        compatible. ``TimeSignature`` tokens will specify the current time signature.
+        Note that :ref:`REMI` adds a ``TimeSignature`` token at the beginning of each
+        Bar (i.e. after ``Bar`` tokens), while :ref:`TSD` and :ref:`MIDI-Like` will
+        only represent time signature changes (MIDI messages) as they come. If you want
+        more "recalls" of the current time signature within your token sequences, you
+        can preprocess your MIDI file to add more ``TimeSignatureChange`` objects.
+        (default: ``False``)
+    :param use_sustain_pedals: will use ``Pedal`` tokens to represent the sustain pedal
+        events. In multitrack setting, The value of each ``Pedal`` token will be equal
+        to the program of the track. (default: ``False``)
+    :param use_pitch_bends: will use ``PitchBend`` tokens. In multitrack setting, a
+        ``Program`` token will be added before each ``PitchBend` token.
+        (default: ``False``)
+    :param use_pitch_intervals: if given True, will represent the pitch of the notes
+        with pitch intervals tokens. This way, successive and simultaneous notes will
+        be represented with respectively ``PitchIntervalTime`` and
+        ``PitchIntervalChord`` tokens. A good example is depicted in
+        :ref:`Additional tokens`. This option is to be used with the
+        ``max_pitch_interval`` and ``pitch_intervals_max_time_dist`` arguments.
+        (default: False)
+    :param use_programs: will use ``Program`` tokens to specify the instrument/MIDI
+        program of the notes, if the tokenizer is compatible (:ref:`TSD`, :ref:`REMI`,
+        :ref:`MIDI-Like`, :ref:`Structured` and :ref:`CPWord`). Use this parameter with
+        the ``programs``, ``one_token_stream_for_programs`` and `program_changes`
+        arguments. By default, it will prepend a ``Program`` tokens before each
+        ``Pitch``/``NoteOn`` token to indicate its associated instrument, and will
+        treat all the tracks of a MIDI as a single sequence of tokens. :ref:`CPWord`,
+        :ref:`Octuple` and :ref:`MuMIDI` add a ``Program`` tokens with the stacks of
+        ``Pitch``, ``Velocity`` and ``Duration`` tokens. The :ref:`Octuple`, :ref:`MMM`
+        and :ref:`MuMIDI` tokenizers use natively ``Program`` tokens, this option is
+        always enabled. (default: ``False``)
+    :param beat_res_rest: the beat resolution of ``Rest`` tokens. It follows the same
+        data pattern as the ``beat_res`` argument, however the maximum resolution for
+        rests cannot be higher than the highest "global" resolution (``beat_res``).
+        Rests are considered complementary to other time tokens (``TimeShift``, ``Bar``
+        and ``Position``). If in a given situation, ``Rest`` tokens cannot represent
+        time with the exact precision, other time times will complement them.
+        (default: ``{(0, 1): 8, (1, 2): 4, (2, 12): 2}``)
+    :param chord_maps: list of chord maps, to be given as a dictionary where keys are
+        chord qualities (e.g. "maj") and values pitch maps as tuples of integers (e.g.
+        ``(0, 4, 7)``). You can use ``miditok.constants.CHORD_MAPS`` as an example.
+        (default: ``miditok.constants.CHORD_MAPS``)
+    :param chord_tokens_with_root_note: to specify the root note of each chord in
+    ``Chord`` tokens. Tokens will look like ``Chord_C:maj``. (default: ``False``)
+    :param chord_unknown: range of number of notes to represent unknown chords. If you
+        want to represent chords that does not match any combination in ``chord_maps``,
+        use this argument. Leave ``None`` to not represent unknown chords.
+        (default: ``None``)
     :param num_tempos: number of tempos "bins" to use. (default: ``32``)
-    :param tempo_range: range of minimum and maximum tempos within which the bins fall. (default: ``(40, 250)``)
-    :param log_tempos: will use log scaled tempo values instead of linearly scaled. (default: ``False``)
-    :param delete_equal_successive_tempo_changes: setting this option True will delete identical successive tempo
-            changes when preprocessing a MIDI file after loading it. For examples, if a MIDI has two tempo changes
-            for tempo 120 at tick 1000 and the next one is for tempo 121 at tick 1200, during preprocessing the tempo
-            values are likely to be downsampled and become identical (120 or 121). If that's the case, the second
-            tempo change will be deleted and not tokenized. This parameter doesn't apply for tokenizations that natively
-            inject the tempo information at recurrent timings (e.g. :ref:`Octuple`). For others, note that setting it
-            True might reduce the number of ``Tempo`` tokens and in turn the recurrence of this information. Leave it
-            False if you want to have recurrent ``Tempo`` tokens, that you might inject yourself by adding
-            ``TempoChange`` objects to your MIDIs. (default: ``False``)
-    :param time_signature_range: range as a dictionary ``{denom_i: [num_i1, ..., num_in] / (min_num_i, max_num_i)}``.
-            (default: ``{8: [3, 12, 6], 4: [5, 6, 3, 2, 1, 4]}``)
-    :param sustain_pedal_duration: by default, the tokenizer will use ``PedalOff`` tokens to mark the offset times of
-            pedals. By setting this parameter True, it will instead use ``Duration`` tokens to explicitly express their
-            durations. If you use this parameter, make sure to configure ``beat_res`` to cover the durations you expect.
-            (default: ``False``)
-    :param pitch_bend_range: range of the pitch bend to consider, to be given as a tuple with the form
-            ``(lowest_value, highest_value, num_of_values)``. There will be ``num_of_values`` tokens equally spaced
-            between ``lowest_value` and `highest_value``. (default: ``(-8192, 8191, 32)``)
-    :param delete_equal_successive_time_sig_changes: setting this option True will delete identical successive time
-            signature changes when preprocessing a MIDI file after loading it. For examples, if a MIDI has two time
-            signature changes for 4/4 at tick 1000 and the next one is also 4/4 at tick 1200, the second time signature
-            change will be deleted and not tokenized. This parameter doesn't apply for tokenizations that natively
-            inject the time signature information at recurrent timings (e.g. :ref:`Octuple`). For others, note that
-            setting it ``True`` might reduce the number of ``TimeSig`` tokens and in turn the recurrence of this
-            information. Leave it ``False`` if you want to have recurrent ``TimeSig`` tokens, that you might inject
-            yourself by adding ``TimeSignatureChange`` objects to your MIDIs. (default: ``False``)
-    :param programs: sequence of MIDI programs to use. Note that ``-1`` is used and reserved for drums tracks.
-            (default: ``list(range(-1, 128))``, from -1 to 127 included)
-    :param one_token_stream_for_programs: when using programs (``use_programs``), this parameters will make the
-            tokenizer treat all the tracks of a MIDI as a single stream of tokens. A ``Program`` token will prepend each
-            ``Pitch``, ``NoteOn`` and ``NoteOff`` tokens to indicate their associated program / instrument. Note that
-            this parameter is always set to True for :ref:`MuMIDI` and :ref:`MMM`. Setting it to False will make the
-            tokenizer not use ``Programs``, but will allow to still have ``Program`` tokens in the vocabulary.
-            (default: ``True``)
-    :param program_changes: to be used with ``use_programs``. If given True, the tokenizer will place ``Program``
-            tokens whenever a note is being played by an instrument different from the last one. This mimics the
-            ProgramChange MIDI messages. If given False, a ``Program`` token will precede each note tokens instead.
-            This parameter only apply for :ref:`REMI`, :ref:`TSD` and :ref:`MIDI-Like`. If you set it True while your
-            tokenizer is not int ``one_token_stream`` mode, a ``Program`` token at the beginning of each track token
-            sequence. (default: ``False``)
-    :param max_pitch_interval: sets the maximum pitch interval that can be represented. (default: 16)
-    :param pitch_intervals_max_time_dist: sets the default maximum time interval in beats between two consecutive
-            notes to be represented with pitch intervals (default: 1)
-    :param kwargs: additional parameters that will be saved in ``config.additional_params``.
+    :param tempo_range: range of minimum and maximum tempos within which the bins fall.
+        (default: ``(40, 250)``)
+    :param log_tempos: will use log scaled tempo values instead of linearly scaled.
+        (default: ``False``)
+    :param delete_equal_successive_tempo_changes: setting this option True will delete
+        identical successive tempo changes when preprocessing a MIDI file after loading
+        it. For examples, if a MIDI has two tempo changes for tempo 120 at tick 1000
+        and the next one is for tempo 121 at tick 1200, during preprocessing the tempo
+        values are likely to be downsampled and become identical (120 or 121). If
+        that's the case, the second tempo change will be deleted and not tokenized.
+        This parameter doesn't apply for tokenizations that natively inject the tempo
+        information at recurrent timings (e.g. :ref:`Octuple`). For others, note that
+        setting it True might reduce the number of ``Tempo`` tokens and in turn the
+        recurrence of this information. Leave it False if you want to have recurrent
+        ``Tempo`` tokens, that you might inject yourself by adding ``TempoChange``
+        objects to your MIDIs. (default: ``False``)
+    :param time_signature_range: range as a dictionary
+        ``{denom_i: [num_i1, ..., num_in]/(min_num_i, max_num_i)}``.
+        (default: ``{8: [3, 12, 6], 4: [5, 6, 3, 2, 1, 4]}``)
+    :param sustain_pedal_duration: by default, the tokenizer will use ``PedalOff``
+        tokens to mark the offset times of pedals. By setting this parameter True, it
+        will instead use ``Duration`` tokens to explicitly express their durations. If
+        you use this parameter, make sure to configure ``beat_res`` to cover the
+        durations you expect. (default: ``False``)
+    :param pitch_bend_range: range of the pitch bend to consider, to be given as a
+        tuple with the form ``(lowest_value, highest_value, num_of_values)``. There
+        will be ``num_of_values`` tokens equally spaced between ``lowest_value` and
+        `highest_value``. (default: ``(-8192, 8191, 32)``)
+    :param delete_equal_successive_time_sig_changes: setting this option True will
+        delete identical successive time signature changes when preprocessing a MIDI
+        file after loading it. For examples, if a MIDI has two time signature changes
+        for 4/4 at tick 1000 and the next one is also 4/4 at tick 1200, the second time
+        signature change will be deleted and not tokenized. This parameter doesn't
+        apply for tokenizations that natively inject the time signature information at
+        recurrent timings (e.g. :ref:`Octuple`). For others, note that setting it
+        ``True`` might reduce the number of ``TimeSig`` tokens and in turn the
+        recurrence of this information. Leave it ``False`` if you want to have
+        recurrent ``TimeSig`` tokens, that you might inject yourself by adding
+        ``TimeSignatureChange`` objects to your MIDIs. (default: ``False``)
+    :param programs: sequence of MIDI programs to use. Note that ``-1`` is used and
+        reserved for drums tracks. (default: ``list(range(-1, 128))``, from -1 to 127
+        included)
+    :param one_token_stream_for_programs: when using programs (``use_programs``), this
+        parameters will make the tokenizer treat all the tracks of a MIDI as a single
+        stream of tokens. A ``Program`` token will prepend each ``Pitch``, ``NoteOn``
+        and ``NoteOff`` tokens to indicate their associated program / instrument. Note
+        that this parameter is always set to True for :ref:`MuMIDI` and :ref:`MMM`.
+        Setting it to False will make the tokenizer not use ``Programs``, but will
+        allow to still have ``Program`` tokens in the vocabulary. (default: ``True``)
+    :param program_changes: to be used with ``use_programs``. If given True, the
+        tokenizer will place ``Program`` tokens whenever a note is being played by an
+        instrument different from the last one. This mimics the ProgramChange MIDI
+        messages. If given False, a ``Program`` token will precede each note tokens
+        instead. This parameter only apply for :ref:`REMI`, :ref:`TSD` and
+        :ref:`MIDI-Like`. If you set it True while your tokenizer is not int
+        ``one_token_stream`` mode, a ``Program`` token at the beginning of each track
+        token sequence. (default: ``False``)
+    :param max_pitch_interval: sets the maximum pitch interval that can be represented.
+        (default: 16)
+    :param pitch_intervals_max_time_dist: sets the default maximum time interval in
+        beats between two consecutive notes to be represented with pitch intervals.
+        (default: 1)
+    :param kwargs: additional parameters that will be saved in
+        ``config.additional_params``.
     """
 
     def __init__(
@@ -288,13 +337,13 @@ class TokenizerConfig:
         num_tempos: int = NUM_TEMPOS,
         tempo_range: Tuple[int, int] = TEMPO_RANGE,
         log_tempos: bool = LOG_TEMPOS,
-        delete_equal_successive_tempo_changes: bool = DELETE_EQUAL_SUCCESSIVE_TEMPO_CHANGES,
+        delete_equal_successive_tempo_changes: bool = DELETE_EQUAL_SUCCESSIVE_TEMPO_CHANGES,  # noqa: E501
         time_signature_range: Dict[
             int, Union[List[int], Tuple[int, int]]
         ] = TIME_SIGNATURE_RANGE,
         sustain_pedal_duration: bool = SUSTAIN_PEDAL_DURATION,
         pitch_bend_range: Tuple[int, int, int] = PITCH_BEND_RANGE,
-        delete_equal_successive_time_sig_changes: bool = DELETE_EQUAL_SUCCESSIVE_TIME_SIG_CHANGES,
+        delete_equal_successive_time_sig_changes: bool = DELETE_EQUAL_SUCCESSIVE_TIME_SIG_CHANGES,  # noqa: E501
         programs: Sequence[int] = PROGRAMS,
         one_token_stream_for_programs: bool = ONE_TOKEN_STREAM_FOR_PROGRAMS,
         program_changes: bool = PROGRAM_CHANGES,
@@ -304,16 +353,21 @@ class TokenizerConfig:
     ):
         # Checks
         if max_pitch_interval:
-            assert 0 <= pitch_range[0] < pitch_range[1] <= 127, (
-                f"pitch_range must be within 0 and 127, and an first value greater than the second "
-                f"(received {pitch_range})"
-            )
-            assert (
-                1 <= num_velocities <= 127
-            ), f"num_velocities must be within 1 and 127 (received {num_velocities})"
-            assert (
-                0 <= max_pitch_interval <= 127
-            ), f"max_pitch_interval must be within 0 and 127 (received {max_pitch_interval})."
+            if not 0 <= pitch_range[0] < pitch_range[1] <= 127:
+                raise ValueError(
+                    "`pitch_range` must be within 0 and 127, and an first value"
+                    f" greater than the second (received {pitch_range})"
+                )
+            if not 1 <= num_velocities <= 127:
+                raise ValueError(
+                    "`num_velocities` must be within 1 and 127 (received"
+                    f" {num_velocities})"
+                )
+            if not 0 <= max_pitch_interval <= 127:
+                raise ValueError(
+                    "`max_pitch_interval` must be within 0 and 127 (received"
+                    f" {max_pitch_interval})."
+                )
 
         # Global parameters
         self.pitch_range: Tuple[int, int] = pitch_range
@@ -327,8 +381,10 @@ class TokenizerConfig:
             elif len(parts) > 2:
                 parts = ["-".join(parts[:-1]), parts[-1]]
                 warnings.warn(
-                    f"miditok.TokenizerConfig: special token {special_token} must contain one underscore (_)."
-                    f"This token will be saved as {'_'.join(parts)}."
+                    f"miditok.TokenizerConfig: special token {special_token} must"
+                    " contain one underscore (_).This token will be saved as"
+                    f" {'_'.join(parts)}.",
+                    stacklevel=2,
                 )
             self.special_tokens.append("_".join(parts))
 
@@ -344,6 +400,16 @@ class TokenizerConfig:
 
         # Rest params
         self.beat_res_rest: Dict[Tuple[int, int], int] = beat_res_rest
+        if self.use_rests:
+            max_rest_res = max(self.beat_res_rest.values())
+            max_global_res = max(self.beat_res.values())
+            if max_rest_res > max_global_res:
+                raise ValueError(
+                    "The maximum resolution of the rests must be inferior or equal to"
+                    "the maximum resolution of the global beat resolution"
+                    f"(``config.beat_res``). Expected <= {max_global_res},"
+                    f"{max_rest_res} was given."
+                )
 
         # Chord params
         self.chord_maps: Dict[str, Tuple] = chord_maps
@@ -362,9 +428,11 @@ class TokenizerConfig:
 
         # Time signature params
         self.time_signature_range: Dict[int, List[int]] = {
-            beat_res: list(range(beats[0], beats[1] + 1))
-            if isinstance(beats, tuple)
-            else beats
+            beat_res: (
+                list(range(beats[0], beats[1] + 1))
+                if isinstance(beats, tuple)
+                else beats
+            )
             for beat_res, beats in time_signature_range.items()
         }
         self.delete_equal_successive_time_sig_changes = (
@@ -395,8 +463,9 @@ class TokenizerConfig:
             if legacy_arg in kwargs:
                 setattr(self, new_arg, kwargs.pop(legacy_arg))
                 warnings.warn(
-                    f"Argument {legacy_arg} has been renamed {new_arg}, you should consider to update"
-                    f"your code with this new argument name."
+                    f"Argument {legacy_arg} has been renamed {new_arg}, you should"
+                    " consider to updateyour code with this new argument name.",
+                    stacklevel=2,
                 )
 
         # Additional params
@@ -405,25 +474,30 @@ class TokenizerConfig:
     @classmethod
     def from_dict(cls, input_dict: Dict[str, Any], **kwargs):
         r"""
-        Instantiates an ``AdditionalTokensConfig`` from a Python dictionary of parameters.
+        Instantiates an ``AdditionalTokensConfig`` from a Python dictionary of
+        parameters.
 
-        :param input_dict: Dictionary that will be used to instantiate the configuration object.
-        :param kwargs: Additional parameters from which to initialize the configuration object.
-        :returns: ``AdditionalTokensConfig``: The configuration object instantiated from those parameters.
+        :param input_dict: Dictionary that will be used to instantiate the
+            configuration object.
+        :param kwargs: Additional parameters from which to initialize the
+            configuration object.
+        :returns: ``AdditionalTokensConfig``: The configuration object instantiated
+            from those parameters.
         """
         input_dict.update(**input_dict["additional_params"])
         input_dict.pop("additional_params")
         if "miditok_version" in input_dict:
             input_dict.pop("miditok_version")
-        config = cls(**input_dict, **kwargs)
-        return config
+        return cls(**input_dict, **kwargs)
 
     def to_dict(self, serialize: bool = False) -> Dict[str, Any]:
         r"""
         Serializes this instance to a Python dictionary.
 
-        :param serialize: will serialize the dictionary before returning it, so it can be saved to a JSON file.
-        :return: Dictionary of all the attributes that make up this configuration instance.
+        :param serialize: will serialize the dictionary before returning it, so it can
+            be saved to a JSON file.
+        :return: Dictionary of all the attributes that make up this configuration
+            instance.
         """
         dict_config = deepcopy(self.__dict__)
         if serialize:
@@ -444,7 +518,8 @@ class TokenizerConfig:
 
     def save_to_json(self, out_path: Union[str, Path]):
         r"""
-        Saves a tokenizer configuration object to the `out_path` path, so that it can be re-loaded later.
+        Saves a tokenizer configuration object to the `out_path` path, so that it can
+        be re-loaded later.
 
         :param out_path: path to the output configuration JSON file.
         """
@@ -459,7 +534,7 @@ class TokenizerConfig:
             }
         dict_config["miditok_version"] = CURRENT_MIDITOK_VERSION
 
-        with open(out_path, "w") as outfile:
+        with out_path.open("w") as outfile:
             json.dump(dict_config, outfile, indent=4)
 
     @classmethod
@@ -472,7 +547,7 @@ class TokenizerConfig:
         if isinstance(config_file_path, str):
             config_file_path = Path(config_file_path)
 
-        with open(config_file_path) as param_file:
+        with config_file_path.open() as param_file:
             dict_config = json.load(param_file)
 
         for beat_res_key in ["beat_res", "beat_res_rest"]:
@@ -489,8 +564,9 @@ class TokenizerConfig:
         return cls.from_dict(dict_config)
 
     def __eq__(self, other):
-        # We don't use the == operator as it yields False when comparing lists and tuples containing the same elements
-        # Note: this is not recursive and only checks the first level of iterable values / attributes
+        # We don't use the == operator as it yields False when comparing lists and
+        # tuples containing the same elements. This method is not recursive and only
+        # checks the first level of iterable values / attributes
         other_dict = other.to_dict()
         for key, value in self.to_dict().items():
             if key not in other_dict:

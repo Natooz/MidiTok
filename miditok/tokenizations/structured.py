@@ -17,16 +17,17 @@ from ..utils import set_midi_max_tick
 class Structured(MIDITokenizer):
     r"""Introduced with the `Piano Inpainting Application <https://arxiv.org/abs/2002.00212>`_,
     it is similar to :ref:`TSD` but is based on a consistent token type successions.
-    Token types always follow the same pattern: *Pitch* -> *Velocity* -> *Duration* -> *TimeShift*.
-    The latter is set to 0 for simultaneous notes.
-    To keep this property, no additional token can be inserted in MidiTok's implementation,
-    except *Program* that can optionally be added preceding `Pitch` tokens.
-    If you specify `use_programs` as `True` in the config file, the tokenizer will add `Program` tokens before
-    each `Pitch` tokens to specify its instrument, and will treat all tracks as a single stream of tokens.
+    Token types always follow the same pattern: *Pitch* -> *Velocity* -> *Duration* ->
+    *TimeShift*. The latter is set to 0 for simultaneous notes. To keep this property,
+    no additional token can be inserted in MidiTok's implementation, except *Program*
+    that can optionally be added preceding `Pitch` tokens. If you specify
+    ``use_programs`` as ``True`` in the config file, the tokenizer will add *Program*
+    tokens before each *Pitch* tokens to specify its instrument, and will treat all
+    tracks as a single stream of tokens.
 
-    **Note:** as `Structured` uses *TimeShifts* events to move the time from note to
-    note, it can be unsuited for tracks with pauses longer than the maximum `TimeShift` value. In such cases, the
-    maximum *TimeShift* value will be used.
+    **Note:** as ``Structured`` uses *TimeShifts* events to move the time from note to
+    note, it can be unsuited for tracks with pauses longer than the maximum *TimeShift*
+    value. In such cases, the maximum *TimeShift* value will be used.
     """
 
     def _tweak_config_before_creating_voc(self):
@@ -40,23 +41,24 @@ class Structured(MIDITokenizer):
         self.config.program_changes = False
 
     def _create_track_events(self, track: Instrument) -> List[Event]:
-        r"""Extract the tokens / events of individual tracks: `Pitch`, `Velocity`, `Duration`, `NoteOn`, `NoteOff` and
-        optionally `Chord`, from a track (``miditoolkit.Instrument``).
+        r"""Extract the tokens / events of individual tracks: *Pitch*, *Velocity*,
+        *Duration*, *NoteOn*, *NoteOff* and optionally *Chord*, from a track
+        (``miditoolkit.Instrument``).
 
-        :param track: MIDI track to convert
-        :return: sequence of corresponding Events
+        :param track: MIDI track to convert.
+        :return: sequence of corresponding Events.
         """
-        # Make sure the notes are sorted first by their onset (start) times, second by pitch
-        # notes.sort(key=lambda x: (x.start, x.pitch))  # done in midi_to_tokens
+        # Make sure the notes are sorted first by their onset (start) times, second by
+        # pitch: notes.sort(key=lambda x: (x.start, x.pitch)) done in midi_to_tokens
         dur_bins = self._durations_ticks[self._current_midi_metadata["time_division"]]
         program = track.program if not track.is_drum else -1
         events = []
 
         # Creates the Note On, Note Off and Velocity events
         previous_tick = 0
-        for n, note in enumerate(track.notes):
-            # In this case, we directly add TimeShift events here so we don't have to call __add_time_note_events
-            # and avoid delay cause by event sorting
+        for note in track.notes:
+            # In this case, we directly add TimeShift events here so we don't have to
+            # call __add_time_note_events and avoid delay cause by event sorting
             if not self.one_token_stream:
                 time_shift = note.start - previous_tick
                 index = np.argmin(np.abs(dur_bins - time_shift))
@@ -102,8 +104,9 @@ class Structured(MIDITokenizer):
 
     def _add_time_events(self, events: List[Event]) -> List[Event]:
         r"""
-        Takes a sequence of note events (containing optionally Chord, Tempo and TimeSignature tokens),
-        and insert (not inplace) time tokens (TimeShift, Rest) to complete the sequence.
+        Takes a sequence of note events (containing optionally Chord, Tempo and
+        TimeSignature tokens), and insert (not inplace) time tokens (TimeShift,
+        Rest) to complete the sequence.
 
         :param events: note events to complete.
         :return: the same events, with time events inserted.
@@ -114,7 +117,7 @@ class Structured(MIDITokenizer):
 
         # Add "TimeShift" tokens before each "Pitch" tokens
         previous_tick = 0
-        for e, event in enumerate(events):
+        for event in events:
             if event.type == token_type_to_check:
                 # Time shift
                 time_shift = event.time - previous_tick
@@ -135,16 +138,14 @@ class Structured(MIDITokenizer):
 
         return all_events
 
-    def _midi_to_tokens(
-        self, midi: MidiFile, *args, **kwargs
-    ) -> Union[TokSequence, List[TokSequence]]:
+    def _midi_to_tokens(self, midi: MidiFile) -> Union[TokSequence, List[TokSequence]]:
         r"""Converts a preprocessed MIDI object to a sequence of tokens.
-        We override the parent method to handle the "non-program" case where `TimeShift` events have already been
-        added by `_notes_to_events`.
+        We override the parent method to handle the "non-program" case where
+        `TimeShift` events have already been added by `_notes_to_events`.
 
         :param midi: the MIDI object to convert.
-        :return: a :class:`miditok.TokSequence` if `tokenizer.one_token_stream` is true, else a list of
-                :class:`miditok.TokSequence` objects.
+        :return: a :class:`miditok.TokSequence` if `tokenizer.one_token_stream` is
+            true, else a list of :class:`miditok.TokSequence` objects.
         """
         # Convert each track to tokens
         all_events = []
@@ -188,10 +189,13 @@ class Structured(MIDITokenizer):
     ) -> MidiFile:
         r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
 
-        :param tokens: tokens to convert. Can be either a list of :class:`miditok.TokSequence`,
-        :param programs: programs of the tracks. If none is given, will default to piano, program 0. (default: None)
+        :param tokens: tokens to convert. Can be either a list of
+            :class:`miditok.TokSequence`,
+        :param programs: programs of the tracks. If none is given, will default to
+            piano, program 0. (default: None)
         :param output_path: path to save the file. (default: None)
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI to create).
+        :param time_division: MIDI time division / resolution, in ticks/beat (of the
+            MIDI to create).
         :return: the midi object (:class:`miditoolkit.MidiFile`).
         """
         # Unsqueeze tokens in case of one_token_stream
@@ -200,9 +204,11 @@ class Structured(MIDITokenizer):
         for i in range(len(tokens)):
             tokens[i] = tokens[i].tokens
         midi = MidiFile(ticks_per_beat=time_division)
-        assert (
-            time_division % max(self.config.beat_res.values()) == 0
-        ), f"Invalid time division, please give one divisible by {max(self.config.beat_res.values())}"
+        if time_division % max(self.config.beat_res.values()) != 0:
+            raise ValueError(
+                f"Invalid time division, please give one divisible by"
+                f"{max(self.config.beat_res.values())}"
+            )
 
         # RESULTS
         instruments: Dict[int, Instrument] = {}
@@ -210,7 +216,7 @@ class Structured(MIDITokenizer):
         time_signature_changes = [TimeSignature(*TIME_SIGNATURE, 0)]
 
         def check_inst(prog: int):
-            if prog not in instruments.keys():
+            if prog not in instruments:
                 instruments[prog] = Instrument(
                     program=0 if prog == -1 else prog,
                     is_drum=prog == -1,
@@ -260,10 +266,11 @@ class Structured(MIDITokenizer):
                                 instruments[current_program].notes.append(new_note)
                             else:
                                 current_instrument.notes.append(new_note)
-                    except (
-                        IndexError
-                    ):  # A well constituted sequence should not raise an exception
-                        pass  # However with generated sequences this can happen, or if the sequence isn't finished
+                    except IndexError:
+                        # A well constituted sequence should not raise an exception,
+                        # however with generated sequences this can happen, or if the
+                        # sequence isn't finished
+                        pass
                 elif token.split("_")[0] == "Program":
                     current_program = int(token.split("_")[1])
 
@@ -286,12 +293,12 @@ class Structured(MIDITokenizer):
 
     def _create_base_vocabulary(self) -> List[str]:
         r"""Creates the vocabulary, as a list of string tokens.
-        Each token as to be given as the form of "Type_Value", separated with an underscore.
-        Example: Pitch_58
-        The :class:`miditok.MIDITokenizer` main class will then create the "real" vocabulary as
-        a dictionary.
-        Special tokens have to be given when creating the tokenizer, and
-        will be added to the vocabulary by :class:`miditok.MIDITokenizer`.
+        Each token as to be given as the form of "Type_Value", separated with an
+        underscore. Example: Pitch_58
+        The :class:`miditok.MIDITokenizer` main class will then create the "real"
+        vocabulary as a dictionary. Special tokens have to be given when creating the
+        tokenizer, and will be added to the vocabulary by
+        :class:`miditok.MIDITokenizer`.
 
         :return: the vocabulary as a list of string.
         """
