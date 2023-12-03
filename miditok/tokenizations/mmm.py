@@ -17,13 +17,13 @@ from ..utils import set_midi_max_tick
 
 
 class MMM(MIDITokenizer):
-    r"""MMM, standing for `[Multi-Track Music Machine](https://arxiv.org/abs/2008.06048)`_,
+    r"""MMM, standing for `Multi-Track Music Machine <https://arxiv.org/abs/2008.06048>`_,
     is a multitrack tokenization primarily designed for music inpainting and infilling.
     Tracks are tokenized independently and concatenated into a single token sequence.
     ``Bar_Fill`` tokens are used to specify the bars to fill (or inpaint, or rewrite),
     the new tokens are then autoregressively generated.
     Note that *this implementation represents note durations with ``Duration`` tokens*
-    instead of the ``NoteOff`` strategy of the `[original paper](https://arxiv.org/abs/2008.06048)`_.
+    instead of the ``NoteOff`` strategy of the `original paper <https://arxiv.org/abs/2008.06048>`_.
     The reason being that ``NoteOff`` tokens perform poorer for generation with causal
     models.
 

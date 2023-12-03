@@ -6,7 +6,7 @@
 import sys
 from pathlib import Path
 
-sys.path.insert(0, Path.resolve(".."))
+sys.path.insert(0, str(Path("..").resolve()))
 
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information

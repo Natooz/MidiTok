@@ -244,7 +244,7 @@ class TokenizerConfig:
         ``(0, 4, 7)``). You can use ``miditok.constants.CHORD_MAPS`` as an example.
         (default: ``miditok.constants.CHORD_MAPS``)
     :param chord_tokens_with_root_note: to specify the root note of each chord in
-    ``Chord`` tokens. Tokens will look like ``Chord_C:maj``. (default: ``False``)
+        ``Chord`` tokens. Tokens will look like ``Chord_C:maj``. (default: ``False``)
     :param chord_unknown: range of number of notes to represent unknown chords. If you
         want to represent chords that does not match any combination in ``chord_maps``,
         use this argument. Leave ``None`` to not represent unknown chords.

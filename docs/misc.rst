@@ -12,11 +12,13 @@ You can still use the latest versions of MidiTok with Python 3.7, but it will re
 You first need to manually install ``importlib``:
 
 ..  code-block:: bash
+
     pip install importlib-metadata
 
 Then to edit its import in the `constants.py <https://github.com/Natooz/MidiTok/blob/main/miditok/constants.py>`_ file:
 
 ..  code-block:: python
+
     # Replace:
     # from importlib.metadata import version
     # with:
@@ -25,4 +27,5 @@ Then to edit its import in the `constants.py <https://github.com/Natooz/MidiTok/
 And finally to install MidiTok locally:
 
 ..  code-block:: bash
+
     pip install .
