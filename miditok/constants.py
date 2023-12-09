@@ -4,8 +4,6 @@
 
 from importlib.metadata import version
 
-from mido.midifiles import KeySignatureError
-
 CURRENT_MIDITOK_VERSION = version("miditok")
 CURRENT_TOKENIZERS_VERSION = version("tokenizers")
 CURRENT_SYMUSIC_VERSION = version("symusic")
@@ -17,7 +15,6 @@ MIDI_LOADING_EXCEPTION = (
     FileNotFoundError,
     IOError,
     EOFError,
-    KeySignatureError,
 )
 # TODO make sure it is not saved in the save dir of dataset tokenization
 DEFAULT_TOKENIZER_FILE_NAME = "tokenizer.json"
@@ -140,7 +137,7 @@ PITCH_CLASSES = [
 # https://www.midi.org/specifications
 
 # index i = program i+1 in the GM2 specs (7. Appendix A)
-# index i = program i as retrieved by packages like mido or miditoolkit
+# index i = program i as retrieved by packages
 MIDI_INSTRUMENTS = [
     {"name": "Acoustic Grand Piano", "pitch_range": range(21, 109)},
     {"name": "Bright Acoustic Piano", "pitch_range": range(21, 109)},
@@ -324,7 +321,7 @@ CLASS_OF_INST = [
 ]
 
 # index i = program i+1 in the GM2 specs (8. Appendix B)
-# index i = program i as retrieved by packages like mido or miditoolkit
+# index i = program i retrieved by packages
 DRUM_SETS = {
     0: "Standard",
     8: "Room",

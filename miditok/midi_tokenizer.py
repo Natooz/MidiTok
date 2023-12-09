@@ -426,7 +426,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         # Process time signature changes
         if len(midi.time_signatures) == 0:  # can sometimes happen
             midi.time_signatures.append(
-                TimeSignature(*TIME_SIGNATURE, 0)
+                TimeSignature(0, *TIME_SIGNATURE)
             )  # 4/4 by default in this case
         if self.config.use_time_signatures:
             self._quantize_time_signatures(midi.time_signatures, midi.ticks_per_quarter)
@@ -2055,8 +2055,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             if logging
             else midi_paths
         ):
-            # Some MIDIs can contain errors that are raised by Mido, if so the loop
-            # continues
+            # Some MIDIs can contain errors, if so the loop continues
             midi_path = Path(midi_path)
             try:
                 midi = Score(midi_path)

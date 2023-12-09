@@ -98,7 +98,7 @@ class REMI(MIDITokenizer):
         tick_at_last_ts_change = tick_at_current_bar = 0
         current_time_sig = TIME_SIGNATURE
         ticks_per_bar = self._compute_ticks_per_bar(
-            TimeSignature(*current_time_sig, 0), time_division
+            TimeSignature(0, *current_time_sig), time_division
         )
         # First look for a TimeSig token, if any is given at tick 0, to update
         # current_time_sig
@@ -107,7 +107,7 @@ class REMI(MIDITokenizer):
                 if event.type == "TimeSig":
                     current_time_sig = list(map(int, event.value.split("/")))
                     ticks_per_bar = self._compute_ticks_per_bar(
-                        TimeSignature(*current_time_sig, event.time), time_division
+                        TimeSignature(event.time, *current_time_sig), time_division
                     )
                     break
                 elif event.type in [
@@ -215,7 +215,7 @@ class REMI(MIDITokenizer):
                 ) // ticks_per_bar
                 tick_at_last_ts_change = event.time
                 ticks_per_bar = self._compute_ticks_per_bar(
-                    TimeSignature(*current_time_sig, event.time), time_division
+                    TimeSignature(event.time, *current_time_sig), time_division
                 )
                 # We decrease the previous tick so that a Position token is enforced
                 # for the next event

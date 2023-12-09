@@ -311,7 +311,7 @@ def del_invalid_time_sig(
     :param time_sigs: time signatures to filter
     :param time_sigs_tokenizer:
     """
-    idx = 1
+    idx = 0
     while idx < len(time_sigs):
         if (
             time_sigs[idx].numerator,

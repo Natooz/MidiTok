@@ -4,7 +4,7 @@
 
 """
 
-from copy import deepcopy
+from copy import copy
 from pathlib import Path
 from typing import Union
 
@@ -20,7 +20,7 @@ from symusic import (
 )
 from symusic.core import PedalTick
 
-from miditok import REMI
+from miditok import REMI, TokenizerConfig
 from miditok.constants import CLASS_OF_INST
 from miditok.utils import (
     merge_same_program_tracks,
@@ -29,7 +29,13 @@ from miditok.utils import (
     nb_bar_pos,
 )
 
-from .utils import MIDI_PATHS_MULTITRACK, MIDI_PATHS_ONE_TRACK, check_midis_equals
+from .utils import (
+    MIDI_PATHS_MULTITRACK,
+    MIDI_PATHS_ONE_TRACK,
+    TOKENIZER_CONFIG_KWARGS,
+    check_midis_equals,
+    del_invalid_time_sig,
+)
 
 
 def test_containers_assertions():
@@ -79,7 +85,7 @@ def test_containers_assertions():
 @pytest.mark.parametrize("midi_path", MIDI_PATHS_ONE_TRACK)
 def test_check_midi_equals(midi_path: Path):
     midi = Score(midi_path)
-    midi_copy = deepcopy(midi)
+    midi_copy = copy(midi)
 
     # Check when midi is untouched
     assert check_midis_equals(midi, midi_copy)[1]
@@ -96,7 +102,7 @@ def test_check_midi_equals(midi_path: Path):
     # Altering track events
     if len(midi_copy.tracks) > 0:
         # Altering pedals
-        midi_copy = deepcopy(midi)
+        midi_copy = copy(midi)
         if len(midi_copy.tracks[0].pedals) == 0:
             midi_copy.tracks[0].pedals.append(PedalTick(0, 10))
         else:
@@ -104,7 +110,7 @@ def test_check_midi_equals(midi_path: Path):
         assert not check_midis_equals(midi, midi_copy)[1]
 
         # Altering pitch bends
-        midi_copy = deepcopy(midi)
+        midi_copy = copy(midi)
         if len(midi_copy.tracks[0].pitch_bends) == 0:
             midi_copy.tracks[0].pitch_bends.append(PitchBend(50, 10))
         else:
@@ -112,7 +118,7 @@ def test_check_midi_equals(midi_path: Path):
         assert not check_midis_equals(midi, midi_copy)[1]
 
     # Altering tempos
-    midi_copy = deepcopy(midi)
+    midi_copy = copy(midi)
     if len(midi_copy.tempos) == 0:
         midi_copy.tempos.append(Tempo(50, 10))
     else:
@@ -120,7 +126,7 @@ def test_check_midi_equals(midi_path: Path):
     assert not check_midis_equals(midi, midi_copy)[1]
 
     # Altering time signatures
-    midi_copy = deepcopy(midi)
+    midi_copy = copy(midi)
     if len(midi_copy.time_signatures) == 0:
         midi_copy.time_signatures.append(TimeSignature(10, 4, 4))
     else:
@@ -136,8 +142,8 @@ def test_merge_tracks(
     midi.tracks = [midi.tracks[0]]
 
     # Duplicate the track and merge it
-    original_track = deepcopy(midi.tracks[0])
-    midi.tracks.append(deepcopy(midi.tracks[0]))
+    original_track = copy(midi.tracks[0])
+    midi.tracks.append(copy(midi.tracks[0]))
 
     # Test merge with effects
     merge_tracks(midi, effects=True)
@@ -155,7 +161,7 @@ def test_merge_same_program_tracks_and_by_class(midi_path: Union[str, Path]):
             track.program = -1
 
     # Test merge same program
-    midi_copy = deepcopy(midi)
+    midi_copy = copy(midi)
     programs = [track.program for track in midi_copy.tracks]
     unique_programs = list(set(programs))
     merge_same_program_tracks(midi_copy.tracks)
@@ -165,7 +171,7 @@ def test_merge_same_program_tracks_and_by_class(midi_path: Union[str, Path]):
     assert new_programs == unique_programs
 
     # Test merge same class
-    midi_copy = deepcopy(midi)
+    midi_copy = copy(midi)
     merge_tracks_per_class(
         midi_copy,
         CLASS_OF_INST,
@@ -175,9 +181,12 @@ def test_merge_same_program_tracks_and_by_class(midi_path: Union[str, Path]):
 
 
 def test_nb_pos():
-    tokenizer = REMI()
+    (tok_conf := TokenizerConfig(**TOKENIZER_CONFIG_KWARGS)).use_time_signatures = True
+    tokenizer = REMI(tok_conf)
+    midi = Score(MIDI_PATHS_ONE_TRACK[0])
+    del_invalid_time_sig(midi.time_signatures, tokenizer.time_signatures)
     _ = nb_bar_pos(
-        tokenizer(MIDI_PATHS_ONE_TRACK[0])[0].ids,
+        tokenizer.midi_to_tokens(midi)[0].ids,
         tokenizer["Bar_None"],
         tokenizer.token_ids_of_type("Position"),
     )
