@@ -1,16 +1,15 @@
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
-from miditoolkit import (
-    Instrument,
-    MidiFile,
+from symusic import (
     Note,
-    Pedal,
     PitchBend,
-    TempoChange,
+    Score,
+    Tempo,
     TimeSignature,
+    Track,
 )
+from symusic.core import PedalTick
 
 from ..classes import Event, TokSequence
 from ..constants import (
@@ -18,8 +17,7 @@ from ..constants import (
     TIME_DIVISION,
     TIME_SIGNATURE,
 )
-from ..midi_tokenizer import MIDITokenizer, _in_as_seq
-from ..utils import set_midi_max_tick
+from ..midi_tokenizer import MIDITokenizer
 
 
 class TSD(MIDITokenizer):
@@ -114,24 +112,21 @@ class TSD(MIDITokenizer):
 
         return all_events
 
-    @_in_as_seq()
-    def tokens_to_midi(
+    def _tokens_to_midi(
         self,
         tokens: Union[
             Union[TokSequence, List, np.ndarray, Any],
             List[Union[TokSequence, List, np.ndarray, Any]],
         ],
         programs: Optional[List[Tuple[int, bool]]] = None,
-        output_path: Optional[str] = None,
         time_division: int = TIME_DIVISION,
-    ) -> MidiFile:
+    ) -> Score:
         r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
 
         :param tokens: tokens to convert. Can be either a list of
             :class:`miditok.TokSequence`,
         :param programs: programs of the tracks. If none is given, will default to
             piano, program 0. (default: None)
-        :param output_path: path to save the file. (default: None)
         :param time_division: MIDI time division / resolution, in ticks/beat (of the
             MIDI to create).
         :return: the midi object (:class:`miditoolkit.MidiFile`).
@@ -141,7 +136,7 @@ class TSD(MIDITokenizer):
             tokens = [tokens]
         for i in range(len(tokens)):
             tokens[i] = tokens[i].tokens
-        midi = MidiFile(ticks_per_beat=time_division)
+        midi = Score(ticks_per_quarter=time_division)
         if time_division % max(self.config.beat_res.values()) != 0:
             raise ValueError(
                 f"Invalid time division, please give one divisible by"
@@ -149,13 +144,13 @@ class TSD(MIDITokenizer):
             )
 
         # RESULTS
-        instruments: Dict[int, Instrument] = {}
-        tempo_changes = [TempoChange(self._DEFAULT_TEMPO, -1)]
-        time_signature_changes = [TimeSignature(*TIME_SIGNATURE, 0)]
+        tracks: Dict[int, Track] = {}
+        tempo_changes = [Track(self._DEFAULT_TEMPO, -1)]
+        time_signature_changes = [TimeSignature(0, *TIME_SIGNATURE)]
 
         def check_inst(prog: int):
-            if prog not in instruments:
-                instruments[prog] = Instrument(
+            if prog not in tracks:
+                tracks[prog] = Track(
                     program=0 if prog == -1 else prog,
                     is_drum=prog == -1,
                     name="Drums" if prog == -1 else MIDI_INSTRUMENTS[prog]["name"],
@@ -176,7 +171,7 @@ class TSD(MIDITokenizer):
                 is_drum = False
                 if programs is not None:
                     current_program, is_drum = programs[si]
-                current_instrument = Instrument(
+                current_instrument = Track(
                     program=current_program,
                     is_drum=is_drum,
                     name="Drums"
@@ -217,7 +212,7 @@ class TSD(MIDITokenizer):
                             )
                             if self.one_token_stream:
                                 check_inst(current_program)
-                                instruments[current_program].notes.append(new_note)
+                                tracks[current_program].notes.append(new_note)
                             else:
                                 current_instrument.notes.append(new_note)
                             previous_note_end = max(
@@ -236,7 +231,7 @@ class TSD(MIDITokenizer):
                     # method will skip this step
                     tempo = float(tok_val)
                     if si == 0 and current_tick != tempo_changes[-1].time:
-                        tempo_changes.append(TempoChange(tempo, current_tick))
+                        tempo_changes.append(Tempo(current_tick, tempo))
                 elif si == 0 and tok_type == "TimeSig":
                     num, den = self._parse_token_time_signature(tok_val)
                     current_time_signature = time_signature_changes[-1]
@@ -245,7 +240,7 @@ class TSD(MIDITokenizer):
                         or den != current_time_signature.denominator
                     ):
                         time_signature_changes.append(
-                            TimeSignature(num, den, current_tick)
+                            TimeSignature(current_tick, num, den)
                         )
                 elif tok_type == "Pedal":
                     pedal_prog = (
@@ -258,10 +253,10 @@ class TSD(MIDITokenizer):
                             )
                             # Add instrument if it doesn't exist, can happen for the
                             # first tokens
-                            new_pedal = Pedal(current_tick, current_tick + duration)
+                            new_pedal = PedalTick(current_tick, duration)
                             if self.one_token_stream:
                                 check_inst(pedal_prog)
-                                instruments[pedal_prog].pedals.append(new_pedal)
+                                tracks[pedal_prog].pedals.append(new_pedal)
                             else:
                                 current_instrument.pedals.append(new_pedal)
                     else:
@@ -272,11 +267,17 @@ class TSD(MIDITokenizer):
                         int(tok_val) if self.config.use_programs else current_program
                     )
                     if pedal_prog in active_pedals:
-                        new_pedal = Pedal(active_pedals[pedal_prog], current_tick)
+                        new_pedal = PedalTick(
+                            active_pedals[pedal_prog],
+                            current_tick - active_pedals[pedal_prog],
+                        )
                         if self.one_token_stream:
                             check_inst(pedal_prog)
-                            instruments[pedal_prog].pedals.append(
-                                Pedal(active_pedals[pedal_prog], current_tick)
+                            tracks[pedal_prog].pedals.append(
+                                PedalTick(
+                                    active_pedals[pedal_prog],
+                                    current_tick - active_pedals[pedal_prog],
+                                )
                             )
                         else:
                             current_instrument.pedals.append(new_pedal)
@@ -285,7 +286,7 @@ class TSD(MIDITokenizer):
                     new_pitch_bend = PitchBend(int(tok_val), current_tick)
                     if self.one_token_stream:
                         check_inst(current_program)
-                        instruments[current_program].pitch_bends.append(new_pitch_bend)
+                        tracks[current_program].pitch_bends.append(new_pitch_bend)
                     else:
                         current_instrument.pitch_bends.append(new_pitch_bend)
 
@@ -302,7 +303,7 @@ class TSD(MIDITokenizer):
 
             # Add current_inst to midi and handle notes still active
             if not self.one_token_stream:
-                midi.instruments.append(current_instrument)
+                midi.tracks.append(current_instrument)
 
         if len(tempo_changes) > 1:
             del tempo_changes[0]  # delete mocked tempo change
@@ -313,15 +314,10 @@ class TSD(MIDITokenizer):
 
         # create MidiFile
         if self.one_token_stream:
-            midi.instruments = list(instruments.values())
-        midi.tempo_changes = tempo_changes
-        midi.time_signature_changes = time_signature_changes
-        set_midi_max_tick(midi)
+            midi.tracks = list(tracks.values())
+        midi.tempos = tempo_changes
+        midi.time_signatures = time_signature_changes
 
-        # Write MIDI file
-        if output_path:
-            Path(output_path).mkdir(parents=True, exist_ok=True)
-            midi.dump(output_path)
         return midi
 
     def _create_base_vocabulary(self) -> List[str]:

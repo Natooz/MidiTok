@@ -1,15 +1,13 @@
 import warnings
 from math import ceil
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
-from miditoolkit import Instrument, MidiFile, Note, TempoChange, TimeSignature
+from symusic import Note, Score, Tempo, TimeSignature, Track
 
 from ..classes import Event, TokSequence
 from ..constants import MIDI_INSTRUMENTS, TIME_DIVISION, TIME_SIGNATURE
 from ..midi_tokenizer import MIDITokenizer, _in_as_seq
-from ..utils import set_midi_max_tick
 
 _ADD_TOK_ATTRIBUTES = [
     "use_programs",
@@ -362,24 +360,21 @@ class CPWord(MIDITokenizer):
 
         return cp_token
 
-    @_in_as_seq()
-    def tokens_to_midi(
+    def _tokens_to_midi(
         self,
         tokens: Union[
             Union[TokSequence, List, np.ndarray, Any],
             List[Union[TokSequence, List, np.ndarray, Any]],
         ],
         programs: Optional[List[Tuple[int, bool]]] = None,
-        output_path: Optional[str] = None,
         time_division: int = TIME_DIVISION,
-    ) -> MidiFile:
+    ) -> Score:
         r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
 
         :param tokens: tokens to convert. Can be either a list of
             :class:`miditok.TokSequence`,
         :param programs: programs of the tracks. If none is given, will default to
             piano, program 0. (default: None)
-        :param output_path: path to save the file. (default: None)
         :param time_division: MIDI time division / resolution, in ticks/beat (of the
             MIDI to create).
         :return: the midi object (:class:`miditoolkit.MidiFile`).
@@ -389,7 +384,7 @@ class CPWord(MIDITokenizer):
             tokens = [tokens]
         for i in range(len(tokens)):
             tokens[i] = tokens[i].tokens
-        midi = MidiFile(ticks_per_beat=time_division)
+        midi = Score(ticks_per_quarter=time_division)
         if time_division % max(self.config.beat_res.values()) != 0:
             raise ValueError(
                 f"Invalid time division, please give one divisible by"
@@ -398,13 +393,13 @@ class CPWord(MIDITokenizer):
         ticks_per_sample = time_division // max(self.config.beat_res.values())
 
         # RESULTS
-        instruments: Dict[int, Instrument] = {}
-        tempo_changes = [TempoChange(self._DEFAULT_TEMPO, -1)]
+        tracks: Dict[int, Track] = {}
+        tempo_changes = [Tempo(-1, self._DEFAULT_TEMPO)]
         time_signature_changes = []
 
         def check_inst(prog: int):
-            if prog not in instruments:
-                instruments[prog] = Instrument(
+            if prog not in tracks:
+                tracks[prog] = Track(
                     program=0 if prog == -1 else prog,
                     is_drum=prog == -1,
                     name="Drums" if prog == -1 else MIDI_INSTRUMENTS[prog]["name"],
@@ -431,13 +426,13 @@ class CPWord(MIDITokenizer):
                                     ].split("_")[1]
                                 )
                                 time_signature_changes.append(
-                                    TimeSignature(num, den, 0)
+                                    TimeSignature(0, num, den)
                                 )
                                 break
                         else:
                             break
                 if len(time_signature_changes) == 0:
-                    time_signature_changes.append(TimeSignature(*TIME_SIGNATURE, 0))
+                    time_signature_changes.append(TimeSignature(0, *TIME_SIGNATURE))
             current_time_sig = time_signature_changes[0]
             ticks_per_bar = self._compute_ticks_per_bar(current_time_sig, time_division)
             # Set track / sequence program if needed
@@ -449,7 +444,7 @@ class CPWord(MIDITokenizer):
                 is_drum = False
                 if programs is not None:
                     current_program, is_drum = programs[si]
-                current_instrument = Instrument(
+                current_instrument = Track(
                     program=current_program,
                     is_drum=is_drum,
                     name="Drums"
@@ -474,10 +469,10 @@ class CPWord(MIDITokenizer):
                     )
                     if self.config.use_programs:
                         current_program = int(compound_token[5].split("_")[1])
-                    new_note = Note(vel, pitch, current_tick, current_tick + duration)
+                    new_note = Note(current_tick, duration, pitch, vel)
                     if self.one_token_stream:
                         check_inst(current_program)
-                        instruments[current_program].notes.append(new_note)
+                        tracks[current_program].notes.append(new_note)
                     else:
                         current_instrument.notes.append(new_note)
                     previous_note_end = max(previous_note_end, current_tick + duration)
@@ -527,7 +522,7 @@ class CPWord(MIDITokenizer):
                                 tempo != tempo_changes[-1].tempo
                                 and current_tick != tempo_changes[-1].time
                             ):
-                                tempo_changes.append(TempoChange(tempo, current_tick))
+                                tempo_changes.append(Tempo(current_tick, tempo))
                     elif (
                         self.config.use_rests
                         and compound_token[self.vocab_types_idx["Rest"]].split("_")[1]
@@ -552,7 +547,7 @@ class CPWord(MIDITokenizer):
 
             # Add current_inst to midi and handle notes still active
             if not self.one_token_stream:
-                midi.instruments.append(current_instrument)
+                midi.tracks.append(current_instrument)
 
         if len(tempo_changes) > 1:
             del tempo_changes[0]  # delete mocked tempo change
@@ -560,14 +555,10 @@ class CPWord(MIDITokenizer):
 
         # create MidiFile
         if self.one_token_stream:
-            midi.instruments = list(instruments.values())
-        midi.tempo_changes = tempo_changes
-        midi.time_signature_changes = time_signature_changes
-        set_midi_max_tick(midi)
-        # Write MIDI file
-        if output_path:
-            Path(output_path).mkdir(parents=True, exist_ok=True)
-            midi.dump(output_path)
+            midi.tracks = list(tracks.values())
+        midi.tempos = tempo_changes
+        midi.time_signatures = time_signature_changes
+
         return midi
 
     def _create_base_vocabulary(self) -> List[List[str]]:

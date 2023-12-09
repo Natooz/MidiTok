@@ -1,9 +1,8 @@
 from math import ceil
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
-from miditoolkit import Instrument, MidiFile, Note, TempoChange, TimeSignature
+from symusic import Note, Score, Tempo, TimeSignature, Track
 
 from ..classes import Event, TokSequence
 from ..constants import (
@@ -12,7 +11,7 @@ from ..constants import (
     TIME_SIGNATURE,
 )
 from ..midi_tokenizer import MIDITokenizer, _in_as_seq
-from ..utils import set_midi_max_tick
+from ..utils import get_midi_max_tick
 
 
 class Octuple(MIDITokenizer):
@@ -156,7 +155,7 @@ class Octuple(MIDITokenizer):
 
         return all_events
 
-    def _midi_to_tokens(self, midi: MidiFile) -> Union[TokSequence, List[TokSequence]]:
+    def _midi_to_tokens(self, midi: Score) -> Union[TokSequence, List[TokSequence]]:
         r"""Converts a preprocessed MIDI object to a sequence of tokens.
         The workflow of this method is as follows: the events (Pitch, Velocity, Tempo,
         TimeSignature...) are gathered into a list, then the time events are added. If
@@ -178,7 +177,7 @@ class Octuple(MIDITokenizer):
         :return: sequences of tokens
         """
         # Check bar embedding limit, update if needed
-        nb_bars = ceil(midi.max_tick / (midi.ticks_per_beat * 4))
+        nb_bars = ceil(get_midi_max_tick(midi) / (midi.ticks_per_quarter * 4))
         if self.config.additional_params["max_bar_embedding"] < nb_bars:
             for i in range(self.config.additional_params["max_bar_embedding"], nb_bars):
                 self.add_to_vocab(f"Bar_{i}", 4)
@@ -186,24 +185,21 @@ class Octuple(MIDITokenizer):
 
         return super()._midi_to_tokens(midi)
 
-    @_in_as_seq()
-    def tokens_to_midi(
+    def _tokens_to_midi(
         self,
         tokens: Union[
             Union[TokSequence, List, np.ndarray, Any],
             List[Union[TokSequence, List, np.ndarray, Any]],
         ],
         programs: Optional[List[Tuple[int, bool]]] = None,
-        output_path: Optional[str] = None,
         time_division: int = TIME_DIVISION,
-    ) -> MidiFile:
+    ) -> Score:
         r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
 
         :param tokens: tokens to convert. Can be either a list of
             :class:`miditok.TokSequence`,
         :param programs: programs of the tracks. If none is given, will default to
             piano, program 0. (default: None)
-        :param output_path: path to save the file. (default: None)
         :param time_division: MIDI time division / resolution, in ticks/beat (of the
             MIDI to create).
         :return: the midi object (:class:`miditoolkit.MidiFile`).
@@ -213,7 +209,7 @@ class Octuple(MIDITokenizer):
             tokens = [tokens]
         for i in range(len(tokens)):
             tokens[i] = tokens[i].tokens
-        midi = MidiFile(ticks_per_beat=time_division)
+        midi = Score(ticks_per_quarter=time_division)
         if time_division % max(self.config.beat_res.values()) != 0:
             raise ValueError(
                 f"Invalid time division, please give one divisible by"
@@ -222,13 +218,13 @@ class Octuple(MIDITokenizer):
         ticks_per_sample = time_division // max(self.config.beat_res.values())
 
         # RESULTS
-        instruments: Dict[int, Instrument] = {}
-        tempo_changes = [TempoChange(self._DEFAULT_TEMPO, -1)]
+        tracks: Dict[int, Track] = {}
+        tempo_changes = [Tempo(-1, self._DEFAULT_TEMPO)]
         time_signature_changes = []
 
         def check_inst(prog: int):
-            if prog not in instruments:
-                instruments[prog] = Instrument(
+            if prog not in tracks:
+                tracks[prog] = Track(
                     program=0 if prog == -1 else prog,
                     is_drum=prog == -1,
                     name="Drums" if prog == -1 else MIDI_INSTRUMENTS[prog]["name"],
@@ -244,9 +240,9 @@ class Octuple(MIDITokenizer):
                 num, den = self._parse_token_time_signature(
                     seq[0][self.vocab_types_idx["TimeSig"]].split("_")[1]
                 )
-                time_signature_changes.append(TimeSignature(num, den, 0))
+                time_signature_changes.append(TimeSignature(0, num, den))
             else:
-                time_signature_changes.append(TimeSignature(*TIME_SIGNATURE, 0))
+                time_signature_changes.append(TimeSignature(0, *TIME_SIGNATURE))
             current_time_sig = time_signature_changes[0]
             ticks_per_bar = self._compute_ticks_per_bar(current_time_sig, time_division)
             # Set track / sequence program if needed
@@ -254,7 +250,7 @@ class Octuple(MIDITokenizer):
                 is_drum = False
                 if programs is not None:
                     current_program, is_drum = programs[si]
-                current_instrument = Instrument(
+                current_instrument = Track(
                     program=current_program,
                     is_drum=is_drum,
                     name="Drums"
@@ -290,10 +286,10 @@ class Octuple(MIDITokenizer):
                 )
 
                 # Append the created note
-                new_note = Note(vel, pitch, current_tick, current_tick + duration)
+                new_note = Note(current_tick, duration, pitch, vel)
                 if self.one_token_stream:
                     check_inst(current_program)
-                    instruments[current_program].notes.append(new_note)
+                    tracks[current_program].notes.append(new_note)
                 else:
                     current_instrument.notes.append(new_note)
 
@@ -307,7 +303,7 @@ class Octuple(MIDITokenizer):
                         time_step[self.vocab_types_idx["Tempo"]].split("_")[1]
                     )
                     if tempo != tempo_changes[-1].tempo:
-                        tempo_changes.append(TempoChange(tempo, current_tick))
+                        tempo_changes.append(Tempo(current_tick, tempo))
 
                 # Time Signature, adds a TimeSignatureChange if necessary
                 if (
@@ -327,7 +323,7 @@ class Octuple(MIDITokenizer):
                             event_bar - bar_at_last_ts_change
                         ) * ticks_per_bar
                         current_time_sig = TimeSignature(
-                            num, den, tick_at_last_ts_change
+                            tick_at_last_ts_change, num, den
                         )
                         if si == 0:
                             time_signature_changes.append(current_time_sig)
@@ -338,7 +334,7 @@ class Octuple(MIDITokenizer):
 
             # Add current_inst to midi and handle notes still active
             if not self.one_token_stream:
-                midi.instruments.append(current_instrument)
+                midi.tracks.append(current_instrument)
 
         if len(tempo_changes) > 1:
             del tempo_changes[0]  # delete mocked tempo change
@@ -346,15 +342,10 @@ class Octuple(MIDITokenizer):
 
         # create MidiFile
         if self.one_token_stream:
-            midi.instruments = list(instruments.values())
-        midi.tempo_changes = tempo_changes
-        midi.time_signature_changes = time_signature_changes
-        set_midi_max_tick(midi)
+            midi.tracks = list(tracks.values())
+        midi.tempos = tempo_changes
+        midi.time_signatures = time_signature_changes
 
-        # Write MIDI file
-        if output_path:
-            Path(output_path).mkdir(parents=True, exist_ok=True)
-            midi.dump(output_path)
         return midi
 
     def _create_base_vocabulary(self) -> List[List[str]]:

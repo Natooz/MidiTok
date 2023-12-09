@@ -11,7 +11,7 @@ from time import time
 from typing import Optional, Sequence, Union
 
 import pytest
-from miditoolkit import MidiFile
+from symusic import Score
 from tqdm import tqdm
 
 import miditok
@@ -111,7 +111,7 @@ def test_bpe_conversion(
     at_least_one_error = False
     tok_time = 0
     for i, file_path in enumerate(tqdm(midi_paths, desc="Testing BPE unbatched")):
-        midi = MidiFile(file_path)
+        midi = Score(file_path)
         tokens_no_bpe = tokenizer(deepcopy(midi), apply_bpe_if_possible=False)
         if not tokenizer.one_token_stream:
             tokens_no_bpe = tokens_no_bpe[0]
@@ -146,7 +146,7 @@ def test_bpe_conversion(
     samples_no_bpe = []
     for file_path in tqdm(midi_paths, desc="Testing BPE batched"):
         # Reads the midi
-        midi = MidiFile(file_path)
+        midi = Score(file_path)
         tokens_no_bpe = tokenizer(midi, apply_bpe_if_possible=False)
         if not tokenizer.one_token_stream:
             samples_no_bpe.append(tokens_no_bpe[0])

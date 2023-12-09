@@ -8,6 +8,7 @@ from mido.midifiles import KeySignatureError
 
 CURRENT_MIDITOK_VERSION = version("miditok")
 CURRENT_TOKENIZERS_VERSION = version("tokenizers")
+CURRENT_SYMUSIC_VERSION = version("symusic")
 
 MIDI_FILES_EXTENSIONS = [".mid", ".midi", ".MID", ".MIDI"]
 MIDI_LOADING_EXCEPTION = (
@@ -18,7 +19,8 @@ MIDI_LOADING_EXCEPTION = (
     EOFError,
     KeySignatureError,
 )
-DEFAULT_TOKENIZER_FILE_NAME = "tokenizer.conf"
+# TODO make sure it is not saved in the save dir of dataset tokenization
+DEFAULT_TOKENIZER_FILE_NAME = "tokenizer.json"
 
 # Starting id of chr() method for BPE, as the 5 (0 to 4 included) firsts are ignored by
 # 🤗tokenizers. We also skip the 32nd (0x20) (space) as it causes issues when loading a

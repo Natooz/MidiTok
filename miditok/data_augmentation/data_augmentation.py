@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Tuple, Union
 from warnings import warn
 
 import numpy as np
-from miditoolkit import MidiFile
+from symusic import Score
 from tqdm import tqdm
 
 from ..constants import MIDI_LOADING_EXCEPTION
@@ -173,7 +173,7 @@ def data_augmentation_dataset(
 
         else:  # as midi
             try:
-                midi = MidiFile(file_path)
+                midi = Score(file_path)
             except MIDI_LOADING_EXCEPTION:
                 continue
 
@@ -194,7 +194,7 @@ def data_augmentation_dataset(
                 all_offset_combinations=all_offset_combinations,
             )
             for aug_offsets, aug_midi in augmented_midis:
-                if len(aug_midi.instruments) == 0:
+                if len(aug_midi.tracks) == 0:
                     continue
                 suffix = "§" + "_".join(
                     [
@@ -208,7 +208,7 @@ def data_augmentation_dataset(
                 saving_path /= f"{file_path.stem}{suffix}.mid"
                 aug_midi.dump(saving_path)
                 nb_augmentations += 1
-                nb_tracks_augmented += len(aug_midi.instruments)
+                nb_tracks_augmented += len(aug_midi.tracks)
             if copy_original_in_new_location and out_path != data_path:
                 saving_path = (
                     out_path
@@ -240,7 +240,7 @@ def get_offsets(
     octave_directions: Tuple[bool, bool] = (True, True),
     vel_directions: Tuple[bool, bool] = (True, True),
     dur_directions: Tuple[bool, bool] = (True, True),
-    midi: MidiFile = None,
+    midi: Score = None,
     ids: Optional[List[Union[int, List[int]]]] = None,
 ) -> List[List[int]]:
     r"""Build the offsets in absolute value for data augmentation.
@@ -267,7 +267,7 @@ def get_offsets(
         # Get the maximum and lowest pitch in original track
         all_pitches = []
         if midi is not None:
-            for track in midi.instruments:
+            for track in midi.tracks:
                 if not track.is_drum:
                     all_pitches += [note.pitch for note in track.notes]
             max_pitch, min_pitch = max(all_pitches), min(all_pitches)
@@ -339,13 +339,13 @@ def get_offsets(
 
 
 def data_augmentation_midi(
-    midi: MidiFile,
+    midi: Score,
     tokenizer,
     pitch_offsets: Optional[List[int]] = None,
     velocity_offsets: Optional[List[int]] = None,
     duration_offsets: Optional[List[int]] = None,
     all_offset_combinations: bool = False,
-) -> List[Tuple[Tuple[int, int, int], MidiFile]]:
+) -> List[Tuple[Tuple[int, int, int], Score]]:
     r"""Perform data augmentation on a MIDI object.
     Drum tracks are not augmented, but copied as original in augmented MIDIs.
     **Note: data augmentation on note durations is not implemented at the moment for
@@ -368,7 +368,7 @@ def data_augmentation_midi(
     if pitch_offsets is not None:
         for offset in pitch_offsets:
             midi_augmented = deepcopy(midi)
-            for track in midi_augmented.instruments:
+            for track in midi_augmented.tracks:
                 if not track.is_drum:
                     for note in track.notes:
                         note.pitch += offset
@@ -378,12 +378,12 @@ def data_augmentation_midi(
     if velocity_offsets is not None:
 
         def augment_vel(
-            midi_: MidiFile, offsets_: Tuple[int, int, int]
-        ) -> List[Tuple[Tuple[int, int, int], MidiFile]]:
+            midi_: Score, offsets_: Tuple[int, int, int]
+        ) -> List[Tuple[Tuple[int, int, int], Score]]:
             aug_ = []
             for offset_ in velocity_offsets:
                 midi_aug_ = deepcopy(midi_)
-                for track_ in midi_aug_.instruments:
+                for track_ in midi_aug_.tracks:
                     for note_ in track_.notes:
                         if offset_ < 0:
                             note_.velocity = max(
@@ -414,9 +414,9 @@ def data_augmentation_midi(
             stacklevel=2,
         )
         # TODO implement it, and remove warning above + update doc
-        """tokenizer.durations_ticks[midi.ticks_per_beat] = np.array(
+        """tokenizer.durations_ticks[midi.ticks_per_quarter] = np.array(
             [
-                (beat * res + pos) * midi.ticks_per_beat // res
+                (beat * res + pos) * midi.ticks_per_quarter // res
                 for beat, pos, res in tokenizer.durations
             ]
         )

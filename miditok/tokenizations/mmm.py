@@ -1,9 +1,8 @@
 from copy import deepcopy
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Union, cast
+from typing import Any, Dict, List, Union, cast
 
 import numpy as np
-from miditoolkit import Instrument, MidiFile, Note, TempoChange, TimeSignature
+from symusic import Note, Score, Tempo, TimeSignature, Track
 
 from ..classes import Event, TokSequence
 from ..constants import (
@@ -13,7 +12,6 @@ from ..constants import (
     TIME_SIGNATURE,
 )
 from ..midi_tokenizer import MIDITokenizer, _in_as_seq
-from ..utils import set_midi_max_tick
 
 
 class MMM(MIDITokenizer):
@@ -156,7 +154,7 @@ class MMM(MIDITokenizer):
         ]
         return all_events
 
-    def _midi_to_tokens(self, midi: MidiFile) -> TokSequence:
+    def _midi_to_tokens(self, midi: Score) -> TokSequence:
         r"""Converts a preprocessed MIDI object to a sequence of tokens.
         Tokenization treating all tracks as a single token sequence might
         override this method, e.g. Octuple or PopMAG.
@@ -175,8 +173,8 @@ class MMM(MIDITokenizer):
         # Adds track tokens
         # Disable use_programs so that _create_track_events do not add Program events
         self.config.use_programs = False
-        for track in midi.instruments:
-            note_density = len(track.notes) / self._current_midi_metadata["max_tick"]
+        for track in midi.tracks:
+            note_density = len(track.notes) / midi.ticks_per_quarter
             note_density = int(np.argmin(np.abs(note_density_bins - note_density)))
             all_events += [
                 Event("Track", "Start", 0),
@@ -202,26 +200,23 @@ class MMM(MIDITokenizer):
         self.complete_sequence(tok_sequence)
         return tok_sequence
 
-    @_in_as_seq()
-    def tokens_to_midi(
+    def _tokens_to_midi(
         self,
         tokens: Union[TokSequence, List, np.ndarray, Any],
         _=None,
-        output_path: Optional[str] = None,
         time_division: int = TIME_DIVISION,
-    ) -> MidiFile:
+    ) -> Score:
         r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
 
         :param tokens: tokens to convert. Can be either a list of
             :class:`miditok.TokSequence`,
         :param _: unused, to match parent method signature
-        :param output_path: path to save the file. (default: None)
         :param time_division: MIDI time division / resolution, in ticks/beat (of the
             MIDI to create).
         :return: the midi object (:class:`miditoolkit.MidiFile`).
         """
         tokens = cast(TokSequence, tokens)
-        midi = MidiFile(ticks_per_beat=time_division)
+        midi = Score(ticks_per_quarter=time_division)
         if time_division % max(self.config.beat_res.values()) != 0:
             raise ValueError(
                 f"Invalid time division, please give one divisible by"
@@ -230,12 +225,12 @@ class MMM(MIDITokenizer):
         tokens = cast(List[str], tokens.tokens)  # for reducing type errors
 
         # RESULTS
-        instruments: List[Instrument] = []
+        tracks: List[Track] = []
         tempo_changes = [
-            TempoChange(self._DEFAULT_TEMPO, -1)
+            Tempo(-1, self._DEFAULT_TEMPO)
         ]  # mock the first tempo change to optimize below
         time_signature_changes = [
-            TimeSignature(*TIME_SIGNATURE, 0)
+            TimeSignature(0, *TIME_SIGNATURE)
         ]  # mock the first time signature change to optimize below
         ticks_per_bar = self._compute_ticks_per_bar(
             time_signature_changes[0], time_division
@@ -251,8 +246,8 @@ class MMM(MIDITokenizer):
             tok_type, tok_val = token.split("_")
             if tok_type == "Program":
                 current_program = int(tok_val)
-                instruments.append(
-                    Instrument(
+                tracks.append(
+                    Track(
                         program=0 if current_program == -1 else current_program,
                         is_drum=current_program == -1,
                         name="Drums"
@@ -283,7 +278,7 @@ class MMM(MIDITokenizer):
                 # skip this step
                 tempo = float(token.split("_")[1])
                 if current_tick != tempo_changes[-1].time:
-                    tempo_changes.append(TempoChange(tempo, current_tick))
+                    tempo_changes.append(Tempo(current_tick, tempo))
             elif tok_type == "TimeSig":
                 num, den = self._parse_token_time_signature(token.split("_")[1])
                 current_time_signature = time_signature_changes[-1]
@@ -291,7 +286,7 @@ class MMM(MIDITokenizer):
                     num != current_time_signature.numerator
                     or den != current_time_signature.denominator
                 ):
-                    time_signature_changes.append(TimeSignature(num, den, current_tick))
+                    time_signature_changes.append(TimeSignature(current_tick, num, den))
                     ticks_per_bar = self._compute_ticks_per_bar(
                         time_signature_changes[-1], time_division
                     )
@@ -314,8 +309,8 @@ class MMM(MIDITokenizer):
                     dur_type, dur = tokens[ti + 2].split("_")
                     if vel_type == "Velocity" and dur_type == "Duration":
                         dur = self._token_duration_to_ticks(dur, time_division)
-                        instruments[-1].notes.append(
-                            Note(int(vel), pitch, current_tick, current_tick + dur)
+                        tracks[-1].notes.append(
+                            Note(current_tick, dur, pitch, int(vel))
                         )
                         previous_note_end = max(previous_note_end, current_tick + dur)
                 except IndexError:
@@ -330,14 +325,10 @@ class MMM(MIDITokenizer):
             del time_signature_changes[0]  # delete mocked time signature change
         time_signature_changes[0].time = 0
         # create MidiFile
-        midi.instruments = instruments
-        midi.tempo_changes = tempo_changes
-        midi.time_signature_changes = time_signature_changes
-        set_midi_max_tick(midi)
-        # Write MIDI file
-        if output_path:
-            Path(output_path).mkdir(parents=True, exist_ok=True)
-            midi.dump(output_path)
+        midi.tracks = tracks
+        midi.tempos = tempo_changes
+        midi.time_signatures = time_signature_changes
+
         return midi
 
     def _create_base_vocabulary(self) -> List[str]:

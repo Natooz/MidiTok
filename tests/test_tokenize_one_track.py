@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Sequence, Tuple, Union
 
 import pytest
-from miditoolkit import MidiFile
+from symusic import Score
 
 import miditok
 
@@ -68,9 +68,9 @@ def test_one_track_midi_to_tokens_to_midi(
     at_least_one_error = False
 
     # Reads the midi
-    midi = MidiFile(midi_path)
+    midi = Score(midi_path)
     # Will store the tracks tokenized / detokenized, to be saved in case of errors
-    for ti, track in enumerate(midi.instruments):
+    for ti, track in enumerate(midi.tracks):
         track.name = f"original {ti} not quantized"
     tracks_with_errors = []
 
@@ -85,8 +85,8 @@ def test_one_track_midi_to_tokens_to_midi(
         midi_to_compare = prepare_midi_for_tests(midi, tokenizer=tokenizer)
         # Store preprocessed track
         if len(tracks_with_errors) == 0:
-            tracks_with_errors += midi_to_compare.instruments
-            for ti, track in enumerate(midi_to_compare.instruments):
+            tracks_with_errors += midi_to_compare.tracks
+            for ti, track in enumerate(midi_to_compare.tracks):
                 track.name = f"original {ti} quantized"
 
         # printing the tokenizer shouldn't fail
@@ -100,16 +100,16 @@ def test_one_track_midi_to_tokens_to_midi(
         # Add track to error list
         if has_errors:
             at_least_one_error = True
-            for track in decoded_midi.instruments:
+            for track in decoded_midi.tracks:
                 track.name = f"{tok_i} encoded with {tokenization}"
-            tracks_with_errors += decoded_midi.instruments
+            tracks_with_errors += decoded_midi.tracks
 
     # > 1 as the first one is the preprocessed
-    if len(tracks_with_errors) > len(midi.instruments) and saving_erroneous_midis:
+    if len(tracks_with_errors) > len(midi.tracks) and saving_erroneous_midis:
         TEST_LOG_DIR.mkdir(exist_ok=True, parents=True)
-        midi.tempo_changes = midi_to_compare.tempo_changes
-        midi.time_signature_changes = midi_to_compare.time_signature_changes
-        midi.instruments += tracks_with_errors
+        midi.tempo_changes = midi_to_compare.tempos
+        midi.time_signature_changes = midi_to_compare.time_signatures
+        midi.tracks += tracks_with_errors
         midi.dump(TEST_LOG_DIR / midi_path.name)
 
     assert not at_least_one_error

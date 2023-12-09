@@ -1,9 +1,8 @@
 from math import ceil
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
-from miditoolkit import Instrument, MidiFile, Note, TempoChange
+from symusic import Note, Score, Tempo, Track
 
 from ..classes import Event, TokSequence
 from ..constants import (
@@ -12,7 +11,7 @@ from ..constants import (
     TIME_DIVISION,
 )
 from ..midi_tokenizer import MIDITokenizer, _in_as_seq, _out_as_complete_seq
-from ..utils import detect_chords, set_midi_max_tick
+from ..utils import detect_chords, get_midi_max_tick
 
 
 class MuMIDI(MIDITokenizer):
@@ -80,7 +79,7 @@ class MuMIDI(MIDITokenizer):
             self.vocab_types_idx["Tempo"] = -3
 
     @_out_as_complete_seq
-    def _midi_to_tokens(self, midi: MidiFile) -> TokSequence:
+    def _midi_to_tokens(self, midi: Score) -> TokSequence:
         r"""Tokenize a MIDI file.
         Each pooled token will be a list of the form (index: Token type):
         * 0: Pitch / DrumPitch / Position / Bar / Program / (Chord) / (Rest)
@@ -94,7 +93,7 @@ class MuMIDI(MIDITokenizer):
         :return: sequences of tokens
         """
         # Check bar embedding limit, update if needed
-        nb_bars = ceil(midi.max_tick / (midi.ticks_per_beat * 4))
+        nb_bars = ceil(get_midi_max_tick(midi) / (midi.ticks_per_quarter * 4))
         if self.config.additional_params["max_bar_embedding"] < nb_bars:
             for i in range(self.config.additional_params["max_bar_embedding"], nb_bars):
                 self.add_to_vocab(f"BarPosEnc_{i}", 1)
@@ -102,7 +101,7 @@ class MuMIDI(MIDITokenizer):
 
         # Convert each track to tokens (except first pos to track time)
         note_tokens = []
-        for track in midi.instruments:
+        for track in midi.tracks:
             if track.program in self.config.programs:
                 note_tokens += self._track_to_tokens(track)
 
@@ -110,8 +109,8 @@ class MuMIDI(MIDITokenizer):
             key=lambda x: (x[0].time, x[0].desc)
         )  # Sort by time then track
 
-        ticks_per_sample = midi.ticks_per_beat / max(self.config.beat_res.values())
-        ticks_per_bar = midi.ticks_per_beat * 4
+        ticks_per_sample = midi.ticks_per_quarter / max(self.config.beat_res.values())
+        ticks_per_bar = midi.ticks_per_quarter * 4
         tokens = []
 
         current_tick = -1
@@ -190,7 +189,7 @@ class MuMIDI(MIDITokenizer):
 
         return TokSequence(tokens=tokens)
 
-    def _track_to_tokens(self, track: Instrument) -> List[List[Union[Event, str]]]:
+    def _track_to_tokens(self, track: Track) -> List[List[Union[Event, str]]]:
         r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
         (:class:`miditok.TokSequence`). For each note, it creates a time step as a
         list of tokens where (list index: token type):
@@ -257,14 +256,12 @@ class MuMIDI(MIDITokenizer):
 
         return tokens
 
-    @_in_as_seq()
-    def tokens_to_midi(
+    def _tokens_to_midi(
         self,
         tokens: Union[TokSequence, List, np.ndarray, Any],
         _=None,
-        output_path: Optional[str] = None,
         time_division: Optional[int] = TIME_DIVISION,
-    ) -> MidiFile:
+    ) -> Score:
         r"""Override the parent class method
         Convert multiple sequences of tokens into a multitrack MIDI and save it.
         The tokens will be converted to event objects and then to a
@@ -282,7 +279,6 @@ class MuMIDI(MIDITokenizer):
         :param tokens: list of lists of tokens to convert, each list inside the
             first list corresponds to a track
         :param _: unused, to match parent method signature
-        :param output_path: path to save the file (with its name, e.g. music.mid),
             leave None to not save the file
         :param time_division: MIDI time division / resolution, in ticks/beat (of the
             MIDI to create)
@@ -293,14 +289,14 @@ class MuMIDI(MIDITokenizer):
                 f"Invalid time division, please give one divisible by"
                 f"{max(self.config.beat_res.values())}"
             )
-        midi = MidiFile(ticks_per_beat=time_division)
+        midi = Score(ticks_per_quarter=time_division)
 
         # Tempos
         if self.config.use_tempos and len(tokens) > 0:
             first_tempo = float(tokens.tokens[0][3].split("_")[1])
         else:
             first_tempo = self._DEFAULT_TEMPO
-        midi.tempo_changes.append(TempoChange(first_tempo, 0))
+        midi.tempos.append(Tempo(0, first_tempo))
 
         ticks_per_sample = time_division // max(self.config.beat_res.values())
         tracks = {}
@@ -334,33 +330,24 @@ class MuMIDI(MIDITokenizer):
                 vel = int(vel)
                 duration = self._token_duration_to_ticks(duration, time_division)
 
-                tracks[current_track].append(
-                    Note(vel, pitch, current_tick, current_tick + duration)
-                )
+                tracks[current_track].append(Note(current_tick, duration, pitch, vel))
 
             # Decode tempo if required
             if self.config.use_tempos:
                 tempo_val = float(time_step[3].split("_")[1])
-                if tempo_val != midi.tempo_changes[-1].tempo:
-                    midi.tempo_changes.append(TempoChange(tempo_val, current_tick))
+                if tempo_val != midi.tempos[-1].tempo:
+                    midi.tempos.append(Tempo(current_tick, tempo_val))
 
         # Appends created notes to MIDI object
         for program, notes in tracks.items():
             if int(program) == -1:
-                midi.instruments.append(Instrument(0, True, "Drums"))
+                midi.tracks.append(Track(0, True, "Drums"))
             else:
-                midi.instruments.append(
-                    Instrument(
-                        int(program), False, MIDI_INSTRUMENTS[int(program)]["name"]
-                    )
+                midi.tracks.append(
+                    Track(int(program), False, MIDI_INSTRUMENTS[int(program)]["name"])
                 )
-            midi.instruments[-1].notes = notes
-        set_midi_max_tick(midi)
+            midi.tracks[-1].notes = notes
 
-        # Write MIDI file
-        if output_path:
-            Path(output_path).mkdir(parents=True, exist_ok=True)
-            midi.dump(output_path)
         return midi
 
     def _create_base_vocabulary(self) -> List[List[str]]:

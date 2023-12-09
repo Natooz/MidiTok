@@ -18,6 +18,8 @@ from .constants import (
     CHORD_TOKENS_WITH_ROOT_NOTE,
     CHORD_UNKNOWN,
     CURRENT_MIDITOK_VERSION,
+    CURRENT_SYMUSIC_VERSION,
+    CURRENT_TOKENIZERS_VERSION,
     DELETE_EQUAL_SUCCESSIVE_TEMPO_CHANGES,
     DELETE_EQUAL_SUCCESSIVE_TIME_SIG_CHANGES,
     LOG_TEMPOS,
@@ -533,6 +535,8 @@ class TokenizerConfig:
                 f"{k1}_{k2}": v for (k1, k2), v in dict_config[beat_res_key].items()
             }
         dict_config["miditok_version"] = CURRENT_MIDITOK_VERSION
+        dict_config["symusic_version"] = CURRENT_SYMUSIC_VERSION
+        dict_config["hf_tokenizers_version"] = CURRENT_TOKENIZERS_VERSION
 
         with out_path.open("w") as outfile:
             json.dump(dict_config, outfile, indent=4)

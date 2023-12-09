@@ -69,8 +69,6 @@ Finally, we learn :ref:`Byte Pair Encoding (BPE)` on the tokenized dataset, and 
     def midi_valid(midi) -> bool:
         if any(ts.numerator != 4 for ts in midi.time_signature_changes):
             return False  # time signature different from 4/*, 4 beats per bar
-        if midi.max_tick < 10 * midi.ticks_per_beat:
-            return False  # this MIDI is too short
         return True
 
     # Converts MIDI files to tokens saved as JSON files

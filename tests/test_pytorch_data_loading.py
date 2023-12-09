@@ -7,7 +7,7 @@ Test classes and methods from the pytorch_data module.
 from pathlib import Path
 from typing import Optional, Sequence, Union
 
-from miditoolkit import MidiFile
+from symusic import Score
 from torch import randint
 
 import miditok
@@ -48,8 +48,8 @@ def test_dataset_ram(
     def get_labels_one_track(_: Sequence, file_path: Path) -> int:
         return dummy_labels[file_path.name.split("_")[0]]
 
-    def get_labels_multitrack(midi: MidiFile, _: Path) -> int:
-        return len(midi.instruments)
+    def get_labels_multitrack(midi: Score, _: Path) -> int:
+        return len(midi.tracks)
 
     def get_labels_multitrack_one_stream(tokens: Sequence, _: Path) -> int:
         return len(tokens) // 4

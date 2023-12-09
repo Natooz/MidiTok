@@ -8,7 +8,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any, Callable, List, Mapping, Optional, Sequence, Union
 
-from miditoolkit import MidiFile
+from symusic import Score
 from torch import LongTensor, randint
 from torch.utils.data import Dataset
 from tqdm import tqdm
@@ -203,7 +203,7 @@ class DatasetTok(_DatasetABC):
         tokenizer: MIDITokenizer = None,
         one_token_stream: bool = True,
         func_to_get_labels: Optional[
-            Callable[[Union[MidiFile, Sequence], Path], int]
+            Callable[[Union[Score, Sequence], Path], int]
         ] = None,
         sample_key_name: str = "input_ids",
         labels_key_name: str = "labels",
@@ -222,12 +222,10 @@ class DatasetTok(_DatasetABC):
             label = None
             # Loading a MIDI file
             if file_path.suffix in MIDI_FILES_EXTENSIONS:
-                midi = MidiFile(file_path)
+                midi = Score(file_path)
                 if func_to_get_labels is not None:
                     label = func_to_get_labels(midi, file_path)
-                for _ in range(len(midi.instruments) - 1):
-                    del midi.instruments[1]  # removes all tracks except first one
-                tokens_ids = tokenizer.midi_to_tokens(midi)
+                tokens_ids = tokenizer(midi)
                 if one_token_stream:
                     tokens_ids = tokens_ids.ids
                 else:

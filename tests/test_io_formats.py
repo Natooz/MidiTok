@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, Tuple, Union
 
 import pytest
-from miditoolkit import MidiFile
+from symusic import Score
 
 import miditok
 
@@ -70,7 +70,7 @@ for tokenization_ in ALL_TOKENIZATIONS:
             TOK_PARAMS_IO.append((tokenization_, params_tmp))
 
 
-def encode_decode_and_check(tokenizer: miditok.MIDITokenizer, midi: MidiFile) -> bool:
+def encode_decode_and_check(tokenizer: miditok.MIDITokenizer, midi: Score) -> bool:
     """Tests if a
 
     :param tokenizer:
@@ -78,17 +78,17 @@ def encode_decode_and_check(tokenizer: miditok.MIDITokenizer, midi: MidiFile) ->
     :return:
     """
     # Process the MIDI
-    midi_to_compare = prepare_midi_for_tests(midi)
+    midi_to_compare = prepare_midi_for_tests(midi, tokenizer=tokenizer)
 
     # Convert the midi to tokens, and keeps the ids (integers)
-    tokens = tokenizer(midi_to_compare)
+    tokens = tokenizer.midi_to_tokens(midi_to_compare)  # TODO __call__
     if tokenizer.one_token_stream:
         tokens = tokens.ids
     else:
         tokens = [stream.ids for stream in tokens]
 
     # Convert back token ids to a MIDI object
-    kwargs = {"time_division": midi.ticks_per_beat}
+    kwargs = {"time_division": midi.ticks_per_quarter}
     if not tokenizer.one_token_stream:
         kwargs["programs"] = miditok.utils.get_midi_programs(midi_to_compare)
     try:
@@ -115,7 +115,7 @@ def test_io_formats(
     :param tok_params_set: tokenizer and its parameters to run.
     :param midi_path: path to the MIDI file to test.
     """
-    midi = MidiFile(midi_path)
+    midi = Score(midi_path)
     tokenization, params = tok_params_set
     tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
         tokenizer_config=miditok.TokenizerConfig(**params)

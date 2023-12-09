@@ -12,15 +12,25 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tupl
 import numpy as np
 from huggingface_hub import ModelHubMixin as HFHubMixin
 from huggingface_hub import hf_hub_download
-from miditoolkit import (
-    Instrument,
-    MidiFile,
-    Note,
-    Pedal,
-    PitchBend,
-    TempoChange,
+from symusic import (
+    Score,
+    Tempo,
     TimeSignature,
+    Track,
 )
+from symusic.core import (
+    NoteTickList,
+    PedalTickList,
+    PitchBendTickList,
+    ScoreTick,
+    TempoTickList,
+    TimeSignatureTickList,
+)
+
+try:
+    from miditoolkit import MidiFile
+except ImportError:
+    MidiFile = None
 from tokenizers import Tokenizer as TokenizerFast
 from tokenizers.models import BPE
 from tokenizers.trainers import BpeTrainer
@@ -31,6 +41,7 @@ from .constants import (
     BOS_TOKEN_NAME,
     CHR_ID_START,
     CURRENT_MIDITOK_VERSION,
+    CURRENT_SYMUSIC_VERSION,
     CURRENT_TOKENIZERS_VERSION,
     DEFAULT_TOKENIZER_FILE_NAME,
     EOS_TOKEN_NAME,
@@ -49,7 +60,6 @@ from .utils import (
     get_midi_programs,
     merge_same_program_tracks,
     remove_duplicated_notes,
-    set_midi_max_tick,
 )
 
 
@@ -373,7 +383,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         else:
             return self._rests_ticks[self._current_midi_metadata["time_division"]][0]
 
-    def preprocess_midi(self, midi: MidiFile):
+    def preprocess_midi(self, midi: Score):
         r"""Pre-process (in place) a MIDI file to quantize its time and note attributes
         before tokenizing it. Its notes attribute (times, pitches, velocities) will be
         quantized and sorted, duplicated notes removed, as well as tempos. Empty tracks
@@ -385,51 +395,46 @@ class MIDITokenizer(ABC, HFHubMixin):
         # Merge instruments of the same program / inst before preprocessing them
         # This allows to avoid potential duplicated notes in some multitrack settings
         if self.config.use_programs and self.one_token_stream:
-            merge_same_program_tracks(midi.instruments)
+            merge_same_program_tracks(midi.tracks)
 
-        for t in range(len(midi.instruments) - 1, -1, -1):
+        for t in range(len(midi.tracks) - 1, -1, -1):
             # quantize notes attributes
-            self._quantize_notes(midi.instruments[t].notes, midi.ticks_per_beat)
+            self._quantize_notes(midi.tracks[t].notes, midi.ticks_per_quarter)
             # sort notes
-            midi.instruments[t].notes.sort(key=lambda x: (x.start, x.pitch, x.end))
+            midi.tracks[t].notes.sort(key=lambda x: (x.start, x.pitch, x.end))
             # remove possible duplicated notes
-            remove_duplicated_notes(midi.instruments[t].notes)
-            if len(midi.instruments[t].notes) == 0:
-                del midi.instruments[t]
+            remove_duplicated_notes(midi.tracks[t].notes)
+            if len(midi.tracks[t].notes) == 0:
+                del midi.tracks[t]
                 continue
 
             # Quantize sustain pedal and pitch bend
             if self.config.use_sustain_pedals:
                 self._quantize_sustain_pedals(
-                    midi.instruments[t].pedals, midi.ticks_per_beat
+                    midi.tracks[t].pedals, midi.ticks_per_quarter
                 )
             if self.config.use_pitch_bends:
                 self._quantize_pitch_bends(
-                    midi.instruments[t].pitch_bends, midi.ticks_per_beat
+                    midi.tracks[t].pitch_bends, midi.ticks_per_quarter
                 )
             # TODO quantize control changes
 
         # Process tempo changes
         if self.config.use_tempos:
-            self._quantize_tempos(midi.tempo_changes, midi.ticks_per_beat)
+            self._quantize_tempos(midi.tempos, midi.ticks_per_quarter)
 
         # Process time signature changes
-        if len(midi.time_signature_changes) == 0:  # can sometimes happen
-            midi.time_signature_changes.append(
+        if len(midi.time_signatures) == 0:  # can sometimes happen
+            midi.time_signatures.append(
                 TimeSignature(*TIME_SIGNATURE, 0)
             )  # 4/4 by default in this case
         if self.config.use_time_signatures:
-            self._quantize_time_signatures(
-                midi.time_signature_changes, midi.ticks_per_beat
-            )
+            self._quantize_time_signatures(midi.time_signatures, midi.ticks_per_quarter)
 
         # We do not change key signature changes, markers and lyrics here as they are
         # not used by MidiTok (yet)
 
-        # Recalculate max_tick is this could have changed after notes quantization
-        set_midi_max_tick(midi)
-
-    def _quantize_notes(self, notes: List[Note], time_division: int):
+    def _quantize_notes(self, notes: NoteTickList, time_division: int):
         r"""Quantize the notes attributes: their pitch, velocity, start and end values.
         It shifts the notes so that they start at times that match the time resolution
         (e.g. 16 samples per bar).
@@ -448,6 +453,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         pitches = range(*self.config.pitch_range)
         # TODO batching times downsampling with numpy?
         while i < len(notes):
+            end_initial = notes[i].end
             if notes[i].pitch not in pitches:
                 del notes[i]
                 continue
@@ -457,20 +463,20 @@ class MIDITokenizer(ABC, HFHubMixin):
                 if start_offset <= ticks_per_sample / 2
                 else ticks_per_sample - start_offset
             )
-            if notes[i].end - notes[i].start > max_duration_ticks:
-                notes[i].end = notes[i].start + max_duration_ticks
+            if end_initial - notes[i].start > max_duration_ticks:
+                notes[i].duration = max_duration_ticks
             else:
-                end_offset = notes[i].end % ticks_per_sample
-                notes[i].end += (
-                    -end_offset
-                    if end_offset <= ticks_per_sample / 2
-                    else ticks_per_sample - end_offset
+                dur_offset = notes[i].end % ticks_per_sample
+                notes[i].duration += (
+                    -dur_offset
+                    if dur_offset <= ticks_per_sample / 2
+                    else ticks_per_sample - dur_offset
                 )
 
                 # if this happens to often, consider using a higher beat resolution
                 # like 8 samples per beat or 24 samples per bar
                 if notes[i].start == notes[i].end:
-                    notes[i].end += ticks_per_sample
+                    notes[i].duration = ticks_per_sample
 
             notes[i].velocity = int(
                 self.velocities[
@@ -479,7 +485,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             )
             i += 1
 
-    def _quantize_tempos(self, tempos: List[TempoChange], time_division: int):
+    def _quantize_tempos(self, tempos: TempoTickList, time_division: int):
         r"""Quantize the times and tempo values of tempo change events.
         Consecutive identical tempo changes will be removed.
 
@@ -488,11 +494,11 @@ class MIDITokenizer(ABC, HFHubMixin):
             MIDI being parsed).
         """
         ticks_per_sample = int(time_division / max(self.config.beat_res.values()))
-        prev_tempo = TempoChange(-1, -1)
+        prev_tempo = Tempo(-1, -1)
         # If we delete the successive equal tempo changes, we need to sort them by time
         # Otherwise it is not required here as the tokens will be sorted by time
         if self.config.delete_equal_successive_tempo_changes:
-            tempos.sort(key=lambda x: x.time)
+            tempos.sort_inplace(key=lambda x: x.time)
 
         i = 0
         while i < len(tempos):
@@ -522,7 +528,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             i += 1
 
     def _quantize_time_signatures(
-        self, time_sigs: List[TimeSignature], time_division: int
+        self, time_sigs: TimeSignatureTickList, time_division: int
     ):
         r"""Quantize the time signature changes, delayed to the next bar.
         See MIDI 1.0 Detailed specifications, pages 54 - 56, for more information on
@@ -540,16 +546,22 @@ class MIDITokenizer(ABC, HFHubMixin):
         # If we delete the successive equal tempo changes, we need to sort them by time
         # Otherwise it is not required here as the tokens will be sorted by time
         if self.config.delete_equal_successive_time_sig_changes:
-            time_sigs.sort(key=lambda x: x.time)
+            time_sigs.sort_inplace(key=lambda x: x.time)
 
         i = 1
         while i < len(time_sigs):
             time_sig = time_sigs[i]
 
-            if self.config.delete_equal_successive_time_sig_changes and (
-                time_sig.numerator,
-                time_sig.denominator,
-            ) == (prev_ts.numerator, prev_ts.denominator):
+            if (
+                self.config.delete_equal_successive_time_sig_changes
+                and (
+                    time_sig.numerator,
+                    time_sig.denominator,
+                )
+                == (prev_ts.numerator, prev_ts.denominator)
+                or time_sig.numerator == 0
+                or time_sig.denominator == 0
+            ):
                 del time_sigs[i]
                 continue
 
@@ -569,7 +581,6 @@ class MIDITokenizer(ABC, HFHubMixin):
             # If the current time signature is now at the same time as the previous
             # one, we delete the previous
             if time_sig.time == previous_tick:
-                previous_tick = time_sig.time
                 del time_sigs[i - 1]
                 continue
 
@@ -577,7 +588,8 @@ class MIDITokenizer(ABC, HFHubMixin):
             prev_ts = time_sig
             i += 1
 
-    def _quantize_sustain_pedals(self, pedals: List[Pedal], time_division: int):
+    def _quantize_sustain_pedals(self, pedals: PedalTickList, time_division: int):
+        # TODO replace PedalTick by Pedal
         r"""Quantize the sustain pedal events from a track. Their onset and offset
         times will be adjusted according to the beat resolution of the tokenizer.
 
@@ -587,22 +599,22 @@ class MIDITokenizer(ABC, HFHubMixin):
         """
         ticks_per_sample = int(time_division / max(self.config.beat_res.values()))
         for pedal in pedals:
-            start_offset = pedal.start % ticks_per_sample
-            end_offset = pedal.end % ticks_per_sample
-            pedal.start += (
+            start_offset = pedal.time % ticks_per_sample
+            pedal.time += (
                 -start_offset
                 if start_offset <= ticks_per_sample / 2
                 else ticks_per_sample - start_offset
             )
-            pedal.end += (
-                -end_offset
-                if end_offset <= ticks_per_sample / 2
-                else ticks_per_sample - end_offset
+            duration_offset = pedal.duration % ticks_per_sample
+            pedal.duration += (
+                -duration_offset
+                if duration_offset <= ticks_per_sample / 2
+                else ticks_per_sample - duration_offset
             )
-            if pedal.start == pedal.end:
-                pedal.end += ticks_per_sample
+            if pedal.time == pedal.end:
+                pedal.duration = ticks_per_sample
 
-    def _quantize_pitch_bends(self, pitch_bends: List[PitchBend], time_division: int):
+    def _quantize_pitch_bends(self, pitch_bends: PitchBendTickList, time_division: int):
         r"""Quantize the pitch bend events from a track. Their onset and offset times
         will be adjusted according to the beat resolution of the tokenizer. While being
         downsampled, overlapping pitch bends will be deduplicated by keeping the one
@@ -621,21 +633,21 @@ class MIDITokenizer(ABC, HFHubMixin):
                 if start_offset <= ticks_per_sample / 2
                 else ticks_per_sample - start_offset
             )
-            pitch_bends[i].pitch = self.pitch_bends[
-                np.argmin(np.abs(self.pitch_bends - pitch_bends[i].pitch))
+            pitch_bends[i].value = self.pitch_bends[
+                np.argmin(np.abs(self.pitch_bends - pitch_bends[i].value))
             ]
 
             # Check there is no pb at the same tick, otherwise keep the highest
             # absolute value
             if i > 0 and pitch_bends[i].time == pitch_bends[i - 1].time:
-                if abs(pitch_bends[i].pitch) <= abs(pitch_bends[i - 1].pitch):
+                if abs(pitch_bends[i].value) <= abs(pitch_bends[i - 1].value):
                     del pitch_bends[i]
                 else:
                     del pitch_bends[i - 1]
             else:
                 i += 1
 
-    def _midi_to_tokens(self, midi: MidiFile) -> Union[TokSequence, List[TokSequence]]:
+    def _midi_to_tokens(self, midi: Score) -> Union[TokSequence, List[TokSequence]]:
         r"""Converts a preprocessed MIDI object to a sequence of tokens.
         The workflow of this method is as follows: the events (*Pitch*, *Velocity*,
         *Tempo*, *TimeSignature*...) are gathered into a list, then the time events
@@ -650,10 +662,10 @@ class MIDITokenizer(ABC, HFHubMixin):
         # Create events list
         all_events = []
         if not self.one_token_stream:
-            if len(midi.instruments) == 0:
+            if len(midi.tracks) == 0:
                 all_events.append([])
             else:
-                all_events = [[] for _ in range(len(midi.instruments))]
+                all_events = [[] for _ in range(len(midi.tracks))]
 
         # Global events (Tempo, TimeSignature)
         global_events = self._create_midi_events(midi)
@@ -664,7 +676,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 all_events[i] += global_events
 
         # Adds track tokens
-        for ti, track in enumerate(midi.instruments):
+        for ti, track in enumerate(midi.tracks):
             track_events = self._create_track_events(track)
             if self.one_token_stream:
                 all_events += track_events
@@ -720,7 +732,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         else:
             return 10
 
-    def _create_track_events(self, track: Instrument) -> List[Event]:
+    def _create_track_events(self, track: Track) -> List[Event]:
         r"""Extract the tokens / events of individual tracks: *Pitch*, *Velocity*,
         *Duration*, *NoteOn*, *NoteOff* and optionally *Chord*, from a track
         (``miditoolkit.Instrument``).
@@ -770,7 +782,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                     Event(
                         "Pedal",
                         program if self.config.use_programs else 0,
-                        pedal.start,
+                        pedal.time,
                         program,
                     )
                 )
@@ -781,7 +793,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                         Event(
                             "Duration",
                             ".".join(map(str, self.durations[index])),
-                            pedal.start,
+                            pedal.time,
                             program,
                         )
                     )
@@ -802,7 +814,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                         )
                     )
                 events.append(
-                    Event("PitchBend", pitch_bend.pitch, pitch_bend.time, program)
+                    Event("PitchBend", pitch_bend.value, pitch_bend.time, program)
                 )
 
         # TODO add control changes
@@ -906,15 +918,14 @@ class MIDITokenizer(ABC, HFHubMixin):
                     )
                 )
             else:
-                duration = note.end - note.start
-                index = np.argmin(np.abs(dur_bins - duration))
+                index = np.argmin(np.abs(dur_bins - note.duration))
                 events.append(
                     Event(
                         type="Duration",
                         value=".".join(map(str, self.durations[index])),
                         time=note.start,
                         program=program,
-                        desc=f"{duration} ticks",
+                        desc=f"{note.duration} ticks",
                     )
                 )
 
@@ -945,7 +956,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         for idx, event in reversed(program_change_events):
             events.insert(idx, event)
 
-    def _create_midi_events(self, midi: MidiFile) -> List[Event]:
+    def _create_midi_events(self, midi: Score) -> List[Event]:
         r"""Create the *global* MIDI additional tokens: `Tempo` and `TimeSignature`.
 
         :param midi: midi to extract the events from.
@@ -955,26 +966,37 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         # First adds time signature tokens if specified
         if self.config.use_time_signatures:
-            events += [
-                Event(
-                    type="TimeSig",
-                    value=f"{time_signature_change.numerator}/"
-                    f"{time_signature_change.denominator}",
-                    time=time_signature_change.time,
+            for time_sig in midi.time_signatures:
+                if (
+                    time_sig.numerator,
+                    time_sig.denominator,
+                ) not in self.time_signatures:
+                    raise ValueError(
+                        f"The MIDI contains a time signature ({time_sig}) outside of"
+                        f"those supported by the tokenizer ({self.time_signatures})."
+                        "You should either discard this MIDI or support this time"
+                        "signature, or alternatively deleting it however if you are "
+                        "using a beat-based tokenizer (REMI) the bars will be"
+                        "incorrectly detected.",
+                    )
+                events.append(
+                    Event(
+                        type="TimeSig",
+                        value=f"{time_sig.numerator}/" f"{time_sig.denominator}",
+                        time=time_sig.time,
+                    )
                 )
-                for time_signature_change in midi.time_signature_changes
-            ]
 
         # Adds tempo events if specified
         if self.config.use_tempos:
             events += [
                 Event(
                     type="Tempo",
-                    value=tempo_change.tempo,
-                    time=tempo_change.time,
-                    desc=tempo_change.tempo,
+                    value=round(tempo.tempo, 2),  # req to handle c++ values
+                    time=tempo.time,
+                    desc=tempo.tempo,
                 )
-                for tempo_change in midi.tempo_changes
+                for tempo in midi.tempos
             ]
 
         return events
@@ -983,7 +1005,9 @@ class MIDITokenizer(ABC, HFHubMixin):
         raise NotImplementedError
 
     def midi_to_tokens(
-        self, midi: MidiFile, apply_bpe_if_possible: bool = True, *args, **kwargs
+        self,
+        midi: Score,
+        apply_bpe_if_possible: bool = True,
     ) -> Union[TokSequence, List[TokSequence]]:
         r"""Tokenizes a MIDI file.
         This method returns a list of :class:`miditok.TokSequence`.
@@ -1000,17 +1024,17 @@ class MIDITokenizer(ABC, HFHubMixin):
         """
         # Check if the durations values have been calculated before for this time
         # division
-        if midi.ticks_per_beat not in self._durations_ticks:
-            self._durations_ticks[midi.ticks_per_beat] = np.array(
+        if midi.ticks_per_quarter not in self._durations_ticks:
+            self._durations_ticks[midi.ticks_per_quarter] = np.array(
                 [
-                    (beat * res + pos) * midi.ticks_per_beat // res
+                    (beat * res + pos) * midi.ticks_per_quarter // res
                     for beat, pos, res in self.durations
                 ]
             )
-        if self.config.use_rests and midi.ticks_per_beat not in self._rests_ticks:
-            self._rests_ticks[midi.ticks_per_beat] = np.array(
+        if self.config.use_rests and midi.ticks_per_quarter not in self._rests_ticks:
+            self._rests_ticks[midi.ticks_per_quarter] = np.array(
                 [
-                    (beat * res + pos) * midi.ticks_per_beat // res
+                    (beat * res + pos) * midi.ticks_per_quarter // res
                     for beat, pos, res in self.rests
                 ]
             )
@@ -1019,15 +1043,14 @@ class MIDITokenizer(ABC, HFHubMixin):
         self.preprocess_midi(midi)
 
         # Register MIDI metadata
-        self._current_midi_metadata = {
-            "time_division": midi.ticks_per_beat,
-            "max_tick": midi.max_tick,
-            "tempo_changes": midi.tempo_changes,
-            "time_sig_changes": midi.time_signature_changes,
-            "key_sig_changes": midi.key_signature_changes,
+        self._current_midi_metadata = {  # TODO remove usages for this
+            "time_division": midi.ticks_per_quarter,
+            "tempo_changes": midi.tempos,
+            "time_sig_changes": midi.time_signatures,
+            "key_sig_changes": midi.key_signatures,
         }
 
-        tokens = self._midi_to_tokens(midi, *args, **kwargs)
+        tokens = self._midi_to_tokens(midi)
 
         if apply_bpe_if_possible and self.has_bpe:
             self.apply_bpe(tokens)
@@ -1111,7 +1134,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     @staticmethod
     def _events_to_tokens(
-        events: List[Union[Event, List[Event]]]
+        events: List[Union[Event, List[Event]]],
     ) -> List[Union[str, List[str]]]:
         r"""Converts a sequence of Events to their associated tokens (str).
 
@@ -1175,7 +1198,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         programs: Optional[List[Tuple[int, bool]]] = None,
         output_path: Optional[str] = None,
         time_division: Optional[int] = TIME_DIVISION,
-    ) -> MidiFile:
+    ) -> Score:
         r"""Detokenize one or multiple sequences of tokens into a MIDI file.
         You can give the tokens sequences either as :class:`miditok.TokSequence`
         objects, lists of integers, numpy arrays or PyTorch / Tensorflow tensors.
@@ -1190,7 +1213,34 @@ class MIDITokenizer(ABC, HFHubMixin):
         :param output_path: path to save the file. (default: None)
         :param time_division: MIDI time division / resolution, in ticks/beat (of the
             MIDI to create).
-        :return: the midi object (miditoolkit.MidiFile).
+        :return: the midi object (symusic.Score).
+        """
+        midi = self._tokens_to_midi(tokens, programs, time_division)
+        # Write MIDI file
+        if output_path:
+            Path(output_path).mkdir(parents=True, exist_ok=True)
+            midi.dump(output_path)
+        return midi
+
+    def _tokens_to_midi(
+        self,
+        tokens: Union[TokSequence, List, np.ndarray, Any],
+        programs: Optional[List[Tuple[int, bool]]] = None,
+        time_division: Optional[int] = TIME_DIVISION,
+    ) -> Score:
+        r"""Internal method called by ``self.tokens_to_midi``, intended to be
+        implemented by inheriting classes.
+
+        :param tokens: tokens to convert. Can be either a list of
+            :class:`miditok.TokSequence`, a Tensor (PyTorch and Tensorflow are
+            supported), a numpy array or a Python list of ints. The first dimension
+            represents tracks, unless the tokenizer handle tracks altogether as a
+            single token sequence (``tokenizer.one_token_stream == True``).
+        :param programs: programs of the tracks. If none is given, will default to
+            piano, program 0. (default: None)
+        :param time_division: MIDI time division / resolution, in ticks/beat (of the
+            MIDI to create).
+        :return: the midi object (symusic.Score).
         """
         raise NotImplementedError
 
@@ -1607,14 +1657,14 @@ class MIDITokenizer(ABC, HFHubMixin):
         numerator, denominator = map(int, token_time_sig.split("/"))
         return numerator, denominator
 
-    def validate_midi_time_signatures(self, midi: MidiFile) -> bool:
+    def validate_midi_time_signatures(self, midi: Score) -> bool:
         r"""Checks if a MIDI contains only time signatures supported by the tokenizer.
 
         :param midi: MIDI file
         :return: boolean indicating whether the MIDI can be processed by the tokenizer.
         """
         if self.config.use_time_signatures:
-            for time_sig in midi.time_signature_changes:
+            for time_sig in midi.time_signatures:
                 if (
                     time_sig.numerator,
                     time_sig.denominator,
@@ -1685,6 +1735,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             return
 
         # If no iterator, loads tokens / samples to analyze
+        # TODO Provide a MIDI iterator, loading MIDIs from a list of paths
         if iterator is None:
             iterator = []  # list of lists of one string (bytes)
             for file_path in tqdm(tokens_paths, desc="Loading token files"):
@@ -1833,6 +1884,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         if isinstance(out_path, str):
             out_path = Path(out_path)
 
+        # TODO handle MIDIs, tokenize on the fly?
         files_paths = list(Path(dataset_path).glob("**/*.json"))
         for json_path in tqdm(files_paths, desc="Applying BPE to dataset"):
             sample = self.load_tokens(json_path)
@@ -1894,7 +1946,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         out_dir: Union[str, Path],
         overwrite_mode: bool = True,
         tokenizer_config_file_name: str = DEFAULT_TOKENIZER_FILE_NAME,
-        validation_fn: Optional[Callable[[MidiFile], bool]] = None,
+        validation_fn: Optional[Callable[[Score], bool]] = None,
         data_augment_offsets=None,
         apply_bpe: bool = True,
         save_programs: Optional[bool] = None,
@@ -2007,7 +2059,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             # continues
             midi_path = Path(midi_path)
             try:
-                midi = MidiFile(midi_path)
+                midi = Score(midi_path)
             except FileNotFoundError:
                 if logging:
                     warnings.warn(f"File not found: {midi_path}", stacklevel=2)
@@ -2016,7 +2068,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 continue
 
             # Checks the time division is valid
-            if midi.ticks_per_beat < max(self.config.beat_res.values()) * 4:
+            if midi.ticks_per_quarter < max(self.config.beat_res.values()) * 4:
                 continue
             # Passing the MIDI to validation tests if given
             if validation_fn is not None and not validation_fn(midi):
@@ -2263,6 +2315,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             "has_bpe": self.has_bpe,
             "tokenization": self.__class__.__name__,
             "miditok_version": CURRENT_MIDITOK_VERSION,
+            "symusic_version": CURRENT_SYMUSIC_VERSION,
             "hf_tokenizers_version": CURRENT_TOKENIZERS_VERSION,
             **additional_attributes,
         }
@@ -2422,23 +2475,28 @@ class MIDITokenizer(ABC, HFHubMixin):
         provide a MIDI object or path to a MIDI file, or the
         :py:func:`miditok.MIDITokenizer.tokens_to_midi` method otherwise.
 
-        :param obj: a `miditoolkit.MidiFile` object, a sequence of tokens, or a path to
+        :param obj: a `symusic.Score` object, a sequence of tokens, or a path to
             a MIDI or tokens json file.
         :return: the converted object.
         """
         # Tokenize MIDI
-        if isinstance(obj, MidiFile):
+        if isinstance(obj, type(ScoreTick)):
             return self.midi_to_tokens(obj, *args, **kwargs)
 
         # Loads a file (.mid or .json)
         elif isinstance(obj, (str, Path)):
             path = Path(obj)
             if path.suffix in MIDI_FILES_EXTENSIONS:
-                midi = MidiFile(obj)
+                midi = Score(obj)
                 return self.midi_to_tokens(midi, *args, **kwargs)
             else:
                 tokens = self.load_tokens(path)
                 return self.tokens_to_midi(tokens, *args, **kwargs)
+
+        # Depreciated miditoolkit object
+        elif MidiFile is not None and isinstance(obj, MidiFile):
+            # TODO convert to score
+            return self.midi_to_tokens(obj, *args, **kwargs)
 
         # Consider it tokens --> converts to MIDI
         else:

@@ -107,6 +107,6 @@ MMM
 Create yours
 ------------------------
 
-You can easily create your own tokenization and benefit from the MidiTok framework. Just create a class inheriting from :class:`miditok.MIDITokenizer`, and override the :py:func:`miditok.MIDITokenizer._add_time_events`, :py:func:`miditok.MIDITokenizer.tokens_to_midi`, :py:func:`miditok.MIDITokenizer._create_vocabulary` and :py:func:`miditok.MIDITokenizer._create_token_types_graph` (and optionally if needed :py:func:`miditok.MIDITokenizer._midi_to_tokens`, :py:func:`miditok.MIDITokenizer._create_track_events` and :py:func:`miditok.MIDITokenizer._create_midi_events`) methods with your tokenization strategy.
+You can easily create your own tokenizer and benefit from the MidiTok framework. Just create a class inheriting from :class:`miditok.MIDITokenizer`, and override the :py:func:`miditok.MIDITokenizer._add_time_events`, :py:func:`miditok.MIDITokenizer._tokens_to_midi`, :py:func:`miditok.MIDITokenizer._create_vocabulary` and :py:func:`miditok.MIDITokenizer._create_token_types_graph` (and optionally if needed :py:func:`miditok.MIDITokenizer._midi_to_tokens`, :py:func:`miditok.MIDITokenizer._create_track_events` and :py:func:`miditok.MIDITokenizer._create_midi_events`) methods with your tokenization strategy.
 
 If you think people can benefit from it, feel free to send a pull request on `Github <https://github.com/Natooz/MidiTok>`_.

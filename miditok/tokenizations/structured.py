@@ -1,8 +1,7 @@
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
-from miditoolkit import Instrument, MidiFile, Note, TempoChange, TimeSignature
+from symusic import Note, Score, Tempo, TimeSignature, Track
 
 from ..classes import Event, TokSequence
 from ..constants import (
@@ -10,8 +9,7 @@ from ..constants import (
     TIME_DIVISION,
     TIME_SIGNATURE,
 )
-from ..midi_tokenizer import MIDITokenizer, _in_as_seq
-from ..utils import set_midi_max_tick
+from ..midi_tokenizer import MIDITokenizer
 
 
 class Structured(MIDITokenizer):
@@ -40,7 +38,7 @@ class Structured(MIDITokenizer):
         self.config.use_pitch_intervals = False
         self.config.program_changes = False
 
-    def _create_track_events(self, track: Instrument) -> List[Event]:
+    def _create_track_events(self, track: Track) -> List[Event]:
         r"""Extract the tokens / events of individual tracks: *Pitch*, *Velocity*,
         *Duration*, *NoteOn*, *NoteOff* and optionally *Chord*, from a track
         (``miditoolkit.Instrument``).
@@ -138,7 +136,7 @@ class Structured(MIDITokenizer):
 
         return all_events
 
-    def _midi_to_tokens(self, midi: MidiFile) -> Union[TokSequence, List[TokSequence]]:
+    def _midi_to_tokens(self, midi: Score) -> Union[TokSequence, List[TokSequence]]:
         r"""Converts a preprocessed MIDI object to a sequence of tokens.
         We override the parent method to handle the "non-program" case where
         `TimeShift` events have already been added by `_notes_to_events`.
@@ -151,9 +149,9 @@ class Structured(MIDITokenizer):
         all_events = []
 
         # Adds note tokens
-        if not self.one_token_stream and len(midi.instruments) == 0:
+        if not self.one_token_stream and len(midi.tracks) == 0:
             all_events.append([])
-        for track in midi.instruments:
+        for track in midi.tracks:
             note_events = self._create_track_events(track)
             if self.one_token_stream:
                 all_events += note_events
@@ -162,7 +160,7 @@ class Structured(MIDITokenizer):
 
         # Add time events
         if self.one_token_stream:
-            if len(midi.instruments) > 1:
+            if len(midi.tracks) > 1:
                 all_events.sort(key=lambda x: x.time)
             all_events = self._add_time_events(all_events)
             tok_sequence = TokSequence(events=all_events)
@@ -176,24 +174,21 @@ class Structured(MIDITokenizer):
 
         return tok_sequence
 
-    @_in_as_seq()
-    def tokens_to_midi(
+    def _tokens_to_midi(
         self,
         tokens: Union[
             Union[TokSequence, List, np.ndarray, Any],
             List[Union[TokSequence, List, np.ndarray, Any]],
         ],
         programs: Optional[List[Tuple[int, bool]]] = None,
-        output_path: Optional[str] = None,
         time_division: int = TIME_DIVISION,
-    ) -> MidiFile:
+    ) -> Score:
         r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
 
         :param tokens: tokens to convert. Can be either a list of
             :class:`miditok.TokSequence`,
         :param programs: programs of the tracks. If none is given, will default to
             piano, program 0. (default: None)
-        :param output_path: path to save the file. (default: None)
         :param time_division: MIDI time division / resolution, in ticks/beat (of the
             MIDI to create).
         :return: the midi object (:class:`miditoolkit.MidiFile`).
@@ -203,7 +198,7 @@ class Structured(MIDITokenizer):
             tokens = [tokens]
         for i in range(len(tokens)):
             tokens[i] = tokens[i].tokens
-        midi = MidiFile(ticks_per_beat=time_division)
+        midi = Score(ticks_per_quarter=time_division)
         if time_division % max(self.config.beat_res.values()) != 0:
             raise ValueError(
                 f"Invalid time division, please give one divisible by"
@@ -211,13 +206,13 @@ class Structured(MIDITokenizer):
             )
 
         # RESULTS
-        instruments: Dict[int, Instrument] = {}
-        tempo_changes = [TempoChange(self._DEFAULT_TEMPO, 0)]
-        time_signature_changes = [TimeSignature(*TIME_SIGNATURE, 0)]
+        instruments: Dict[int, Track] = {}
+        tempo_changes = [Tempo(0, self._DEFAULT_TEMPO)]
+        time_signature_changes = [TimeSignature(0, *TIME_SIGNATURE)]
 
         def check_inst(prog: int):
             if prog not in instruments:
-                instruments[prog] = Instrument(
+                instruments[prog] = Track(
                     program=0 if prog == -1 else prog,
                     is_drum=prog == -1,
                     name="Drums" if prog == -1 else MIDI_INSTRUMENTS[prog]["name"],
@@ -233,7 +228,7 @@ class Structured(MIDITokenizer):
                 is_drum = False
                 if programs is not None:
                     current_program, is_drum = programs[si]
-                current_instrument = Instrument(
+                current_instrument = Track(
                     program=current_program,
                     is_drum=is_drum,
                     name="Drums"
@@ -258,9 +253,7 @@ class Structured(MIDITokenizer):
                             duration = self._token_duration_to_ticks(
                                 seq[ti + 2].split("_")[1], time_division
                             )
-                            new_note = Note(
-                                vel, pitch, current_tick, current_tick + duration
-                            )
+                            new_note = Note(current_tick, duration, pitch, vel)
                             if self.one_token_stream:
                                 check_inst(current_program)
                                 instruments[current_program].notes.append(new_note)
@@ -276,19 +269,14 @@ class Structured(MIDITokenizer):
 
             # Add current_inst to midi and handle notes still active
             if not self.one_token_stream:
-                midi.instruments.append(current_instrument)
+                midi.tracks.append(current_instrument)
 
         # create MidiFile
         if self.one_token_stream:
-            midi.instruments = list(instruments.values())
-        midi.tempo_changes = tempo_changes
-        midi.time_signature_changes = time_signature_changes
-        set_midi_max_tick(midi)
+            midi.tracks = list(instruments.values())
+        midi.tempos = tempo_changes
+        midi.time_signatures = time_signature_changes
 
-        # Write MIDI file
-        if output_path:
-            Path(output_path).mkdir(parents=True, exist_ok=True)
-            midi.dump(output_path)
         return midi
 
     def _create_base_vocabulary(self) -> List[str]:
