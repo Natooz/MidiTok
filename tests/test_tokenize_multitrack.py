@@ -8,8 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Sequence, Tuple, Union
 
 import pytest
-from symusic import Score
-from symusic.core import PedalTick
+from symusic import Pedal, Score
 
 import miditok
 
@@ -92,9 +91,7 @@ def test_multitrack_midi_to_tokens_to_midi(
     # Reads the MIDI and add pedal messages
     midi = Score(Path(midi_path))
     for ti in range(max(3, len(midi.tracks))):
-        midi.tracks[ti].pedals = [
-            PedalTick(start, 200) for start in [100, 600, 1800, 2200]
-        ]
+        midi.tracks[ti].pedals = [Pedal(start, 200) for start in [100, 600, 1800, 2200]]
 
     for tok_i, (tokenization, params) in enumerate(tok_params_sets):
         tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(

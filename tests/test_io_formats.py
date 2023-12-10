@@ -81,7 +81,7 @@ def encode_decode_and_check(tokenizer: miditok.MIDITokenizer, midi: Score) -> bo
     midi_to_compare = prepare_midi_for_tests(midi, tokenizer=tokenizer)
 
     # Convert the midi to tokens, and keeps the ids (integers)
-    tokens = tokenizer.midi_to_tokens(midi_to_compare)  # TODO __call__
+    tokens = tokenizer(midi_to_compare)
     if tokenizer.one_token_stream:
         tokens = tokens.ids
     else:

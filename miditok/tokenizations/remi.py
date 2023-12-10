@@ -5,13 +5,13 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 from symusic import (
     Note,
+    Pedal,
     PitchBend,
     Score,
     Tempo,
     TimeSignature,
     Track,
 )
-from symusic.core import PedalTick
 
 from ..classes import Event, TokenizerConfig, TokSequence
 from ..constants import (
@@ -77,16 +77,15 @@ class REMI(MIDITokenizer):
             # tokenizer encounter longer MIDIs
             self.config.additional_params["max_bar_embedding"] = None
 
-    def _add_time_events(self, events: List[Event]) -> List[Event]:
-        r"""
-        Takes a sequence of note events (containing optionally Chord, Tempo and
-        TimeSignature tokens), and insert (not inplace) time tokens (TimeShift, Rest)
-        to complete the sequence.
+    def _add_time_events(self, events: List[Event], time_division: int) -> List[Event]:
+        r"""Internal method intended to be implemented by inheriting classes.
+        It creates the time events from the list of global and track events, and as
+        such the final token sequence.
 
         :param events: note events to complete.
+        :param time_division: time division of the MIDI being parsed.
         :return: the same events, with time events inserted.
         """
-        time_division = self._current_midi_metadata["time_division"]
         ticks_per_sample = time_division / max(self.config.beat_res.values())
 
         # Add time events
@@ -124,11 +123,11 @@ class REMI(MIDITokenizer):
                 # (Rest)
                 if (
                     self.config.use_rests
-                    and event.time - previous_note_end >= self._min_rest
+                    and event.time - previous_note_end >= self._min_rest(time_division)
                 ):
                     previous_tick = previous_note_end
                     rest_values = self._ticks_to_duration_tokens(
-                        event.time - previous_tick, rest=True
+                        event.time - previous_tick, time_division, rest=True
                     )
                     # Add Rest events and increment previous_tick
                     for dur_value, dur_ticks in zip(*rest_values):
@@ -263,7 +262,7 @@ class REMI(MIDITokenizer):
             tokens = [tokens]
         for i in range(len(tokens)):
             tokens[i] = tokens[i].tokens
-        midi = Score(ticks_per_quarter=time_division)
+        midi = Score(time_division)
         if time_division % max(self.config.beat_res.values()) != 0:
             raise ValueError(
                 f"Invalid time division, please give one divisible by"
@@ -432,7 +431,7 @@ class REMI(MIDITokenizer):
                             )
                             # Add instrument if it doesn't exist, can happen for the
                             # first tokens
-                            new_pedal = PedalTick(current_tick, duration)
+                            new_pedal = Pedal(current_tick, duration)
                             if self.one_token_stream:
                                 check_inst(pedal_prog)
                                 tracks[pedal_prog].pedals.append(new_pedal)
@@ -446,14 +445,14 @@ class REMI(MIDITokenizer):
                         int(tok_val) if self.config.use_programs else current_program
                     )
                     if pedal_prog in active_pedals:
-                        new_pedal = PedalTick(
+                        new_pedal = Pedal(
                             active_pedals[pedal_prog],
                             current_tick - active_pedals[pedal_prog],
                         )
                         if self.one_token_stream:
                             check_inst(pedal_prog)
                             tracks[pedal_prog].pedals.append(
-                                PedalTick(
+                                Pedal(
                                     active_pedals[pedal_prog],
                                     current_tick - active_pedals[pedal_prog],
                                 )

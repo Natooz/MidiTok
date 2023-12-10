@@ -38,7 +38,7 @@ class Structured(MIDITokenizer):
         self.config.use_pitch_intervals = False
         self.config.program_changes = False
 
-    def _create_track_events(self, track: Track) -> List[Event]:
+    def _create_track_events(self, track: Track, time_division: int) -> List[Event]:
         r"""Extract the tokens / events of individual tracks: *Pitch*, *Velocity*,
         *Duration*, *NoteOn*, *NoteOff* and optionally *Chord*, from a track
         (``miditoolkit.Instrument``).
@@ -48,7 +48,7 @@ class Structured(MIDITokenizer):
         """
         # Make sure the notes are sorted first by their onset (start) times, second by
         # pitch: notes.sort(key=lambda x: (x.start, x.pitch)) done in midi_to_tokens
-        dur_bins = self._durations_ticks[self._current_midi_metadata["time_division"]]
+        dur_bins = self._durations_ticks[time_division]
         program = track.program if not track.is_drum else -1
         events = []
 
@@ -100,16 +100,16 @@ class Structured(MIDITokenizer):
 
         return events
 
-    def _add_time_events(self, events: List[Event]) -> List[Event]:
-        r"""
-        Takes a sequence of note events (containing optionally Chord, Tempo and
-        TimeSignature tokens), and insert (not inplace) time tokens (TimeShift,
-        Rest) to complete the sequence.
+    def _add_time_events(self, events: List[Event], time_division: int) -> List[Event]:
+        r"""Internal method intended to be implemented by inheriting classes.
+        It creates the time events from the list of global and track events, and as
+        such the final token sequence.
 
         :param events: note events to complete.
+        :param time_division: time division of the MIDI being parsed.
         :return: the same events, with time events inserted.
         """
-        dur_bins = self._durations_ticks[self._current_midi_metadata["time_division"]]
+        dur_bins = self._durations_ticks[time_division]
         all_events = []
         token_type_to_check = "Program" if self.one_token_stream else "Pitch"
 
@@ -162,7 +162,7 @@ class Structured(MIDITokenizer):
         if self.one_token_stream:
             if len(midi.tracks) > 1:
                 all_events.sort(key=lambda x: x.time)
-            all_events = self._add_time_events(all_events)
+            all_events = self._add_time_events(all_events, midi.ticks_per_quarter)
             tok_sequence = TokSequence(events=all_events)
             self.complete_sequence(tok_sequence)
         else:
@@ -198,7 +198,7 @@ class Structured(MIDITokenizer):
             tokens = [tokens]
         for i in range(len(tokens)):
             tokens[i] = tokens[i].tokens
-        midi = Score(ticks_per_quarter=time_division)
+        midi = Score(time_division)
         if time_division % max(self.config.beat_res.values()) != 0:
             raise ValueError(
                 f"Invalid time division, please give one divisible by"

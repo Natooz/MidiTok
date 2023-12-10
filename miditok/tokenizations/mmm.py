@@ -59,29 +59,22 @@ class MMM(MIDITokenizer):
                 dtype=np.intc,
             )
 
-    def _add_time_events(self, events: List[Event]) -> List[Event]:
-        r"""
-        Takes a sequence of note events (containing optionally Chord, Tempo and
-        TimeSignature tokens), and insert (not inplace) time tokens (TimeShift, Rest)
-        to complete the sequence.
+    def _add_time_events(self, events: List[Event], time_division: int) -> List[Event]:
+        r"""Internal method intended to be implemented by inheriting classes.
+        It creates the time events from the list of global and track events, and as
+        such the final token sequence.
 
         :param events: note events to complete.
+        :param time_division: time division of the MIDI being parsed.
         :return: the same events, with time events inserted.
         """
-        time_division = self._current_midi_metadata["time_division"]
-        dur_bins = self._durations_ticks[self._current_midi_metadata["time_division"]]
+        dur_bins = self._durations_ticks[time_division]
 
         # Creates first events
         all_events = [Event("Bar", "Start", 0)]
 
         # Time events
-        if (
-            self.config.use_time_signatures
-            and len(self._current_midi_metadata["time_sig_changes"]) > 0
-        ):
-            time_sig_change = self._current_midi_metadata["time_sig_changes"][0]
-        else:
-            time_sig_change = TimeSignature(*TIME_SIGNATURE, 0)
+        time_sig_change = TimeSignature(0, *TIME_SIGNATURE)
         ticks_per_bar = self._compute_ticks_per_bar(time_sig_change, time_division)
         bar_at_last_ts_change = 0
         previous_tick = 0
@@ -190,9 +183,11 @@ class MMM(MIDITokenizer):
                 ),
             ]
 
-            track_events = deepcopy(global_events) + self._create_track_events(track)
+            track_events = deepcopy(global_events) + self._create_track_events(
+                track, midi.ticks_per_quarter
+            )
             track_events.sort(key=lambda x: x.time)
-            all_events += self._add_time_events(track_events)
+            all_events += self._add_time_events(track_events, midi.ticks_per_quarter)
             all_events.append(Event("Track", "End", all_events[-1].time + 1))
 
         self.config.use_programs = True
@@ -216,7 +211,7 @@ class MMM(MIDITokenizer):
         :return: the midi object (:class:`miditoolkit.MidiFile`).
         """
         tokens = cast(TokSequence, tokens)
-        midi = Score(ticks_per_quarter=time_division)
+        midi = Score(time_division)
         if time_division % max(self.config.beat_res.values()) != 0:
             raise ValueError(
                 f"Invalid time division, please give one divisible by"

@@ -13,12 +13,12 @@ from symusic import (
     ControlChange,
     KeySignature,
     Note,
+    Pedal,
     PitchBend,
     Score,
     Tempo,
     TimeSignature,
 )
-from symusic.core import PedalTick
 
 from miditok import REMI, TokenizerConfig
 from miditok.constants import CLASS_OF_INST
@@ -57,9 +57,9 @@ def test_containers_assertions():
     assert ts1 != ts2
     assert ts2 == ts3
 
-    sp1 = [PedalTick(0, 2), PedalTick(10, 20)]
-    sp2 = [PedalTick(1, 2), PedalTick(15, 20)]
-    sp3 = [PedalTick(1, 2), PedalTick(15, 20)]
+    sp1 = [Pedal(0, 2), Pedal(10, 20)]
+    sp2 = [Pedal(1, 2), Pedal(15, 20)]
+    sp3 = [Pedal(1, 2), Pedal(15, 20)]
     assert sp1 != sp2
     assert sp2 == sp3
 
@@ -104,7 +104,7 @@ def test_check_midi_equals(midi_path: Path):
         # Altering pedals
         midi_copy = copy(midi)
         if len(midi_copy.tracks[0].pedals) == 0:
-            midi_copy.tracks[0].pedals.append(PedalTick(0, 10))
+            midi_copy.tracks[0].pedals.append(Pedal(0, 10))
         else:
             midi_copy.tracks[0].pedals[-1].end += 10
         assert not check_midis_equals(midi, midi_copy)[1]

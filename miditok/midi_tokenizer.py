@@ -304,10 +304,6 @@ class MIDITokenizer(ABC, HFHubMixin):
         self._durations_ticks = {}
         self._rests_ticks = {}
 
-        # Holds the tempo changes, time signature, time division and key signature of a
-        # MIDI (being parsed) so that methods processing tracks can access them
-        self._current_midi_metadata = {}  # needs to be updated each time a MIDI is read
-
     def _tweak_config_before_creating_voc(self):
         # called after setting the tokenizer's TokenizerConfig (.config). To be
         # customized by tokenizer classes.
@@ -376,12 +372,11 @@ class MIDITokenizer(ABC, HFHubMixin):
         """
         return [self[token] for token in self.special_tokens]
 
-    @property
-    def _min_rest(self) -> int:
+    def _min_rest(self, time_division: int) -> int:
         if not self.config.use_rests:
             return 0
         else:
-            return self._rests_ticks[self._current_midi_metadata["time_division"]][0]
+            return self._rests_ticks[time_division][0]
 
     def preprocess_midi(self, midi: Score):
         r"""Pre-process (in place) a MIDI file to quantize its time and note attributes
@@ -498,7 +493,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         # If we delete the successive equal tempo changes, we need to sort them by time
         # Otherwise it is not required here as the tokens will be sorted by time
         if self.config.delete_equal_successive_tempo_changes:
-            tempos.sort_inplace(key=lambda x: x.time)
+            tempos.sort(key=lambda x: x.time)
 
         i = 0
         while i < len(tempos):
@@ -546,7 +541,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         # If we delete the successive equal tempo changes, we need to sort them by time
         # Otherwise it is not required here as the tokens will be sorted by time
         if self.config.delete_equal_successive_time_sig_changes:
-            time_sigs.sort_inplace(key=lambda x: x.time)
+            time_sigs.sort(key=lambda x: x.time)
 
         i = 1
         while i < len(time_sigs):
@@ -589,7 +584,6 @@ class MIDITokenizer(ABC, HFHubMixin):
             i += 1
 
     def _quantize_sustain_pedals(self, pedals: PedalTickList, time_division: int):
-        # TODO replace PedalTick by Pedal
         r"""Quantize the sustain pedal events from a track. Their onset and offset
         times will be adjusted according to the beat resolution of the tokenizer.
 
@@ -677,7 +671,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         # Adds track tokens
         for ti, track in enumerate(midi.tracks):
-            track_events = self._create_track_events(track)
+            track_events = self._create_track_events(track, midi.ticks_per_quarter)
             if self.one_token_stream:
                 all_events += track_events
             else:
@@ -697,13 +691,15 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         # Add time events
         if self.one_token_stream:
-            all_events = self._add_time_events(all_events)
+            all_events = self._add_time_events(all_events, midi.ticks_per_quarter)
             tok_sequence = TokSequence(events=all_events)
             self.complete_sequence(tok_sequence)
         else:
             tok_sequence = []
             for i in range(len(all_events)):
-                all_events[i] = self._add_time_events(all_events[i])
+                all_events[i] = self._add_time_events(
+                    all_events[i], midi.ticks_per_quarter
+                )
                 tok_sequence.append(TokSequence(events=all_events[i]))
                 self.complete_sequence(tok_sequence[-1])
 
@@ -732,25 +728,25 @@ class MIDITokenizer(ABC, HFHubMixin):
         else:
             return 10
 
-    def _create_track_events(self, track: Track) -> List[Event]:
+    def _create_track_events(self, track: Track, time_division: int) -> List[Event]:
         r"""Extract the tokens / events of individual tracks: *Pitch*, *Velocity*,
         *Duration*, *NoteOn*, *NoteOff* and optionally *Chord*, from a track
         (``miditoolkit.Instrument``).
 
-        :param track: MIDI track to convert
+        :param track: MIDI track to convert.
+        :param time_division: time division of the MIDI being parsed.
         :return: sequence of corresponding Events
         """
         # Make sure the notes are sorted first by their onset (start) times, second by
         # pitch: notes.sort(key=lambda x: (x.start, x.pitch)) (done in midi_to_tokens)
-        dur_bins = self._durations_ticks[self._current_midi_metadata["time_division"]]
+        dur_bins = self._durations_ticks[time_division]
         program = track.program if not track.is_drum else -1
         events = []
         note_token_name = "NoteOn" if self._note_on_off else "Pitch"
         max_time_interval = 0
         if self.config.use_pitch_intervals:
             max_time_interval = (
-                self._current_midi_metadata["time_division"]
-                * self.config.pitch_intervals_max_time_dist
+                time_division * self.config.pitch_intervals_max_time_dist
             )
         previous_note_onset = -max_time_interval - 1
         previous_pitch_onset = -128  # lowest at a given time
@@ -760,7 +756,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         if self.config.use_chords and not track.is_drum:
             chords = detect_chords(
                 track.notes,
-                self._current_midi_metadata["time_division"],
+                time_division,
                 chord_maps=self.config.chord_maps,
                 program=program,
                 specify_root_note=self.config.chord_tokens_with_root_note,
@@ -1001,7 +997,15 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         return events
 
-    def _add_time_events(self, events: List[Event]) -> List[Event]:
+    def _add_time_events(self, events: List[Event], time_division: int) -> List[Event]:
+        r"""Internal method intended to be implemented by inheriting classes.
+        It creates the time events from the list of global and track events, and as
+        such the final token sequence.
+
+        :param events: note events to complete.
+        :param time_division: time division of the MIDI being parsed.
+        :return: the same events, with time events inserted.
+        """
         raise NotImplementedError
 
     def midi_to_tokens(
@@ -1042,16 +1046,8 @@ class MIDITokenizer(ABC, HFHubMixin):
         # Preprocess the MIDI file
         self.preprocess_midi(midi)
 
-        # Register MIDI metadata
-        self._current_midi_metadata = {  # TODO remove usages for this
-            "time_division": midi.ticks_per_quarter,
-            "tempo_changes": midi.tempos,
-            "time_sig_changes": midi.time_signatures,
-            "key_sig_changes": midi.key_signatures,
-        }
-
+        # Tokenize it
         tokens = self._midi_to_tokens(midi)
-
         if apply_bpe_if_possible and self.has_bpe:
             self.apply_bpe(tokens)
 
@@ -1527,7 +1523,7 @@ class MIDITokenizer(ABC, HFHubMixin):
     def _ticks_to_duration_tokens(
         self,
         duration: int,
-        time_division: Optional[int] = None,
+        time_division: Optional[int],
         rest: bool = False,
     ) -> Tuple[List[Tuple[int, int, int]], List[int]]:
         r"""Converts a duration in ticks into a sequence of
@@ -1542,8 +1538,6 @@ class MIDITokenizer(ABC, HFHubMixin):
         :return: list of associated token values, and the list of the elapsed offset in
             tick for each of these values.
         """
-        if time_division is None:
-            time_division = self._current_midi_metadata["time_division"]
         if rest:
             dur_bins = self._rests_ticks[time_division]
             dur_vals = self.rests
@@ -1740,9 +1734,8 @@ class MIDITokenizer(ABC, HFHubMixin):
             iterator = []  # list of lists of one string (bytes)
             for file_path in tqdm(tokens_paths, desc="Loading token files"):
                 sample = self.load_tokens(file_path)
-                bytes_ = self._ids_to_bytes(
-                    sample["ids"], as_one_str=True
-                )  # list of str (bytes)
+                # list of str (bytes)
+                bytes_ = self._ids_to_bytes(sample["ids"], as_one_str=True)
                 iterator += (
                     [[byte_] for byte_ in bytes_]
                     if not self.one_token_stream
@@ -2479,7 +2472,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         :return: the converted object.
         """
         # Tokenize MIDI
-        if isinstance(obj, type(ScoreTick)):
+        if isinstance(obj, ScoreTick):
             return self.midi_to_tokens(obj, *args, **kwargs)
 
         # Loads a file (.mid or .json)

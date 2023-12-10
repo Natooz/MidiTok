@@ -273,7 +273,7 @@ def merge_tracks_per_class(
 
     # merge tracks of the same instrument classes
     if classes_to_merge is not None:
-        midi.tracks.sort_inplace(key=lambda trac: trac.program)
+        midi.tracks.sort(key=lambda trac: trac.program)
         if max_nb_of_tracks_per_inst_class is None:
             max_nb_of_tracks_per_inst_class = {
                 cla: len(midi.tracks) for cla in classes_to_merge
@@ -349,17 +349,17 @@ def merge_tracks(
 
     # Gather and sort notes
     tracks_[0].notes = sum((t.notes for t in tracks_), [])
-    tracks_[0].notes.sort_inplace(key=lambda note: note.start)
+    tracks_[0].notes.sort(key=lambda note: note.start)
     if effects:
         # Pedals
         tracks_[0].pedals = sum((t.pedals for t in tracks_), [])
-        tracks_[0].pedals.sort_inplace(key=lambda pedal: pedal.time)
+        tracks_[0].pedals.sort(key=lambda pedal: pedal.time)
         # Control changes
         tracks_[0].controls = sum((t.controls for t in tracks_), [])
-        tracks_[0].controls.sort_inplace(key=lambda control_change: control_change.time)
+        tracks_[0].controls.sort(key=lambda control_change: control_change.time)
         # Pitch bends
         tracks_[0].pitch_bends = sum((t.pitch_bends for t in tracks_), [])
-        tracks_[0].pitch_bends.sort_inplace(key=lambda pitch_bend: pitch_bend.time)
+        tracks_[0].pitch_bends.sort(key=lambda pitch_bend: pitch_bend.time)
 
     # Keeps only one track
     if isinstance(tracks, Score):
@@ -398,7 +398,7 @@ def merge_same_program_tracks(tracks: Union[List[Track], TrackTickList]):
         ]
         tracks[idx[0]].name += "".join([" / " + tracks[i].name for i in idx[1:]])
         tracks[idx[0]].notes = sum((tracks[i].notes for i in idx), [])
-        tracks[idx[0]].notes.sort_inplace(key=lambda note: (note.start, note.pitch))
+        tracks[idx[0]].notes.sort(key=lambda note: (note.start, note.pitch))
         for i in list(reversed(idx[1:])):
             del tracks[i]
 

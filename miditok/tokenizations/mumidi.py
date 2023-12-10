@@ -103,7 +103,7 @@ class MuMIDI(MIDITokenizer):
         note_tokens = []
         for track in midi.tracks:
             if track.program in self.config.programs:
-                note_tokens += self._track_to_tokens(track)
+                note_tokens += self._track_to_tokens(track, midi.ticks_per_quarter)
 
         note_tokens.sort(
             key=lambda x: (x[0].time, x[0].desc)
@@ -118,19 +118,13 @@ class MuMIDI(MIDITokenizer):
         current_pos = -1
         current_track = -2  # because -2 doesn't exist
         current_tempo_idx = 0
-        current_tempo = self._current_midi_metadata["tempo_changes"][
-            current_tempo_idx
-        ].tempo
+        current_tempo = midi.tempos[current_tempo_idx].tempo
         for note_token in note_tokens:
             # (Tempo) update tempo values current_tempo
             # If the current tempo is not the last one
-            if self.config.use_tempos and current_tempo_idx + 1 < len(
-                self._current_midi_metadata["tempo_changes"]
-            ):
+            if self.config.use_tempos and current_tempo_idx + 1 < len(midi.tempos):
                 # Will loop over incoming tempo changes
-                for tempo_change in self._current_midi_metadata["tempo_changes"][
-                    current_tempo_idx + 1 :
-                ]:
+                for tempo_change in midi.tempos[current_tempo_idx + 1 :]:
                     # If this tempo change happened before the current moment
                     if tempo_change.time <= note_token[0].time:
                         current_tempo = tempo_change.tempo
@@ -189,7 +183,9 @@ class MuMIDI(MIDITokenizer):
 
         return TokSequence(tokens=tokens)
 
-    def _track_to_tokens(self, track: Track) -> List[List[Union[Event, str]]]:
+    def _track_to_tokens(
+        self, track: Track, time_division: int
+    ) -> List[List[Union[Event, str]]]:
         r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
         (:class:`miditok.TokSequence`). For each note, it creates a time step as a
         list of tokens where (list index: token type):
@@ -202,7 +198,7 @@ class MuMIDI(MIDITokenizer):
         """
         # Make sure the notes are sorted first by their onset (start) times, second by
         # pitch: notes.sort(key=lambda x: (x.start, x.pitch)) (done in midi_to_tokens)
-        dur_bins = self._durations_ticks[self._current_midi_metadata["time_division"]]
+        dur_bins = self._durations_ticks[time_division]
 
         tokens = []
         for note in track.notes:
@@ -240,7 +236,7 @@ class MuMIDI(MIDITokenizer):
         if self.config.use_chords and not track.is_drum:
             chords = detect_chords(
                 track.notes,
-                self._current_midi_metadata["time_division"],
+                time_division,
                 chord_maps=self.config.chord_maps,
                 specify_root_note=self.config.chord_tokens_with_root_note,
                 beat_res=self._first_beat_res,
@@ -289,7 +285,7 @@ class MuMIDI(MIDITokenizer):
                 f"Invalid time division, please give one divisible by"
                 f"{max(self.config.beat_res.values())}"
             )
-        midi = Score(ticks_per_quarter=time_division)
+        midi = Score(time_division)
 
         # Tempos
         if self.config.use_tempos and len(tokens) > 0:

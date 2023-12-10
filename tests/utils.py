@@ -9,13 +9,13 @@ from typing import Any, Dict, List, Tuple, Union
 import numpy as np
 from symusic import (
     Note,
+    Pedal,
     Score,
     Tempo,
     TextMeta,
     TimeSignature,
     Track,
 )
-from symusic.core import PedalTick
 
 import miditok
 from miditok.constants import CHORD_MAPS, TIME_SIGNATURE, TIME_SIGNATURE_RANGE
@@ -131,13 +131,11 @@ def prepare_midi_for_tests(
         if track.is_drum:
             track.program = 0  # need to be done before sorting tracks per program
         if sort_notes:
-            track.notes.sort_inplace(
-                key=lambda x: (x.start, x.pitch, x.end, x.velocity)
-            )
+            track.notes.sort(key=lambda x: (x.start, x.pitch, x.end, x.velocity))
 
     # Sorts tracks
     # MIDI detokenized with one_token_stream contains tracks sorted by note occurrence
-    new_midi.tracks.sort_inplace(key=lambda x: (x.program, x.is_drum))
+    new_midi.tracks.sort(key=lambda x: (x.program, x.is_drum))
 
     return new_midi
 
@@ -261,14 +259,14 @@ def tokenize_and_check_equals(
 ) -> Tuple[Score, bool]:
     tokenization = type(tokenizer).__name__
     log_prefix = f"MIDI {file_idx} - {file_name} / {tokenization}"
-    midi.tracks.sort_inplace(key=lambda x: (x.program, x.is_drum))
+    midi.tracks.sort(key=lambda x: (x.program, x.is_drum))
     # merging is performed in preprocess only in one_token_stream mode
     # but in multi token stream, decoding will actually keep one track per program
     if tokenizer.config.use_programs:
         miditok.utils.merge_same_program_tracks(midi.tracks)
 
     # Tokenize and detokenize
-    tokens = tokenizer.midi_to_tokens(midi)  # TODO __call__
+    tokens = tokenizer(midi)
     midi_decoded = tokenizer(
         tokens,
         miditok.utils.get_midi_programs(midi) if len(midi.tracks) > 0 else None,
@@ -375,7 +373,7 @@ def adjust_notes_durations(
 
 
 def adjust_pedal_durations(
-    pedals: List[PedalTick], tokenizer: miditok.MIDITokenizer, time_division: int
+    pedals: List[Pedal], tokenizer: miditok.MIDITokenizer, time_division: int
 ):
     """Adapt pedal offset times so that they match the possible durations covered by a
     tokenizer.

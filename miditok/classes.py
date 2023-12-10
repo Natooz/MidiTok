@@ -46,6 +46,12 @@ from .constants import (
     USE_TIME_SIGNATURE,
 )
 
+IGNORED_CONFIG_KEY_DICT = [
+    "miditok_version",
+    "symusic_version",
+    "hf_tokenizers_version",
+]
+
 
 @dataclass
 class Event:
@@ -488,8 +494,9 @@ class TokenizerConfig:
         """
         input_dict.update(**input_dict["additional_params"])
         input_dict.pop("additional_params")
-        if "miditok_version" in input_dict:
-            input_dict.pop("miditok_version")
+        for key in IGNORED_CONFIG_KEY_DICT:
+            if key in input_dict:
+                input_dict.pop(key)
         return cls(**input_dict, **kwargs)
 
     def to_dict(self, serialize: bool = False) -> Dict[str, Any]:

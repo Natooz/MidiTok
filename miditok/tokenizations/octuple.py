@@ -76,11 +76,12 @@ class Octuple(MIDITokenizer):
             type_: idx for idx, type_ in enumerate(token_types)
         }  # used for data augmentation
 
-    def _add_time_events(self, events: List[Event]) -> List[List[Event]]:
-        r"""
-        Takes a sequence of note events (containing optionally Chord, Tempo and
-        TimeSignature tokens), and insert (not inplace) time tokens (TimeShift, Rest)
-        to complete the sequence.
+    def _add_time_events(
+        self, events: List[Event], time_division: int
+    ) -> List[List[Event]]:
+        r"""Internal method intended to be implemented by inheriting classes.
+        It creates the time events from the list of global and track events, and as
+        such the final token sequence.
         A time step is a list of tokens where:
             (list index: token type)
             0: Pitch
@@ -93,9 +94,9 @@ class Octuple(MIDITokenizer):
             (7: TimeSignature)
 
         :param events: note events to complete.
+        :param time_division: time division of the MIDI being parsed.
         :return: the same events, with time events inserted.
         """
-        time_division = self._current_midi_metadata["time_division"]
         ticks_per_sample = time_division / max(self.config.beat_res.values())
 
         # Add time events
@@ -209,7 +210,7 @@ class Octuple(MIDITokenizer):
             tokens = [tokens]
         for i in range(len(tokens)):
             tokens[i] = tokens[i].tokens
-        midi = Score(ticks_per_quarter=time_division)
+        midi = Score(time_division)
         if time_division % max(self.config.beat_res.values()) != 0:
             raise ValueError(
                 f"Invalid time division, please give one divisible by"

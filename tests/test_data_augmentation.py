@@ -61,12 +61,8 @@ def test_data_augmentation_midi(
         for track_ogi, track_aug in zip(original_midi.tracks, aug_midi.tracks):
             if track_ogi.is_drum:
                 continue
-            track_ogi.notes.sort_inplace(
-                key=lambda x: (x.start, x.pitch, x.end, x.velocity)
-            )
-            track_aug.notes.sort_inplace(
-                key=lambda x: (x.start, x.pitch, x.end, x.velocity)
-            )
+            track_ogi.notes.sort(key=lambda x: (x.start, x.pitch, x.end, x.velocity))
+            track_aug.notes.sort(key=lambda x: (x.start, x.pitch, x.end, x.velocity))
             for note_o, note_s in zip(track_ogi.notes, track_aug.notes):
                 assert note_s.pitch == note_o.pitch + offsets[0]
                 assert note_s.velocity in [
