@@ -254,11 +254,10 @@ def check_midis_equals(
 def tokenize_and_check_equals(
     midi: Score,
     tokenizer: miditok.MIDITokenizer,
-    file_idx: Union[int, str],
     file_name: str,
 ) -> Tuple[Score, bool]:
     tokenization = type(tokenizer).__name__
-    log_prefix = f"MIDI {file_idx} - {file_name} / {tokenization}"
+    log_prefix = f"{file_name} / {tokenization}"
     midi.tracks.sort(key=lambda x: (x.program, x.is_drum))
     # merging is performed in preprocess only in one_token_stream mode
     # but in multi token stream, decoding will actually keep one track per program

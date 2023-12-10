@@ -605,7 +605,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 if duration_offset <= ticks_per_sample / 2
                 else ticks_per_sample - duration_offset
             )
-            if pedal.time == pedal.end:
+            if pedal.time == pedal.time + pedal.duration:  # TODO pedal.end
                 pedal.duration = ticks_per_sample
 
     def _quantize_pitch_bends(self, pitch_bends: PitchBendTickList, time_division: int):
