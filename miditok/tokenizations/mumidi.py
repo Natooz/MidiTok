@@ -118,7 +118,7 @@ class MuMIDI(MIDITokenizer):
         current_pos = -1
         current_track = -2  # because -2 doesn't exist
         current_tempo_idx = 0
-        current_tempo = midi.tempos[current_tempo_idx].tempo
+        current_tempo = round(midi.tempos[current_tempo_idx].tempo, 2)
         for note_token in note_tokens:
             # (Tempo) update tempo values current_tempo
             # If the current tempo is not the last one
@@ -127,7 +127,7 @@ class MuMIDI(MIDITokenizer):
                 for tempo_change in midi.tempos[current_tempo_idx + 1 :]:
                     # If this tempo change happened before the current moment
                     if tempo_change.time <= note_token[0].time:
-                        current_tempo = tempo_change.tempo
+                        current_tempo = round(tempo_change.tempo, 2)
                         current_tempo_idx += (
                             1  # update tempo value (might not change) and index
                         )
@@ -340,7 +340,7 @@ class MuMIDI(MIDITokenizer):
                 midi.tracks.append(Track(0, True, "Drums"))
             else:
                 midi.tracks.append(
-                    Track(int(program), False, MIDI_INSTRUMENTS[int(program)]["name"])
+                    Track(MIDI_INSTRUMENTS[int(program)]["name"], int(program), False)
                 )
             midi.tracks[-1].notes = notes
 

@@ -110,7 +110,7 @@ class Octuple(MIDITokenizer):
         current_tempo = self._DEFAULT_TEMPO
         current_program = None
         ticks_per_bar = self._compute_ticks_per_bar(
-            TimeSignature(*current_time_sig, 0), time_division
+            TimeSignature(0, *current_time_sig), time_division
         )
         for e, event in enumerate(events):
             # Set current bar and position
@@ -127,7 +127,7 @@ class Octuple(MIDITokenizer):
                 current_bar_from_ts_time = current_bar
                 current_tick_from_ts_time = previous_tick
                 ticks_per_bar = self._compute_ticks_per_bar(
-                    TimeSignature(*current_time_sig, event.time), time_division
+                    TimeSignature(event.time, *current_time_sig), time_division
                 )
             elif event.type == "Tempo":
                 current_tempo = event.value
@@ -220,8 +220,8 @@ class Octuple(MIDITokenizer):
 
         # RESULTS
         tracks: Dict[int, Track] = {}
-        tempo_changes = [Tempo(-1, self._DEFAULT_TEMPO)]
-        time_signature_changes = []
+        tempo_changes, time_signature_changes = [Tempo(-1, self._DEFAULT_TEMPO)], []
+        tempo_changes[0].tempo = -1
 
         def check_inst(prog: int):
             if prog not in tracks:
@@ -303,7 +303,7 @@ class Octuple(MIDITokenizer):
                     tempo = float(
                         time_step[self.vocab_types_idx["Tempo"]].split("_")[1]
                     )
-                    if tempo != tempo_changes[-1].tempo:
+                    if tempo != round(tempo_changes[-1].tempo, 2):
                         tempo_changes.append(Tempo(current_tick, tempo))
 
                 # Time Signature, adds a TimeSignatureChange if necessary
@@ -337,9 +337,16 @@ class Octuple(MIDITokenizer):
             if not self.one_token_stream:
                 midi.tracks.append(current_instrument)
 
-        if len(tempo_changes) > 1:
-            del tempo_changes[0]  # delete mocked tempo change
-        tempo_changes[0].time = 0
+        # Delete mocked
+        # And handle first tempo (tick 0) here instead of super
+        del tempo_changes[0]
+        if len(tempo_changes) == 0 or (
+            tempo_changes[0].time != 0
+            and round(tempo_changes[0].tempo, 2) != self._DEFAULT_TEMPO
+        ):
+            tempo_changes.insert(0, Tempo(0, self._DEFAULT_TEMPO))
+        elif round(tempo_changes[0].tempo, 2) == self._DEFAULT_TEMPO:
+            tempo_changes[0].time = 0
 
         # create MidiFile
         if self.one_token_stream:

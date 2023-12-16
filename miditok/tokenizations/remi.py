@@ -272,8 +272,7 @@ class REMI(MIDITokenizer):
 
         # RESULTS
         tracks: Dict[int, Track] = {}
-        tempo_changes = [Tempo(-1, self._DEFAULT_TEMPO)]
-        time_signature_changes = []
+        tempo_changes, time_signature_changes = [], []
 
         def check_inst(prog: int):
             if prog not in tracks:
@@ -380,8 +379,8 @@ class REMI(MIDITokenizer):
                             new_note = Note(
                                 current_tick,
                                 dur,
-                                int(vel),
                                 pitch,
+                                int(vel),
                             )
                             if self.one_token_stream:
                                 check_inst(current_program)
@@ -399,12 +398,8 @@ class REMI(MIDITokenizer):
                 elif tok_type == "Program":
                     current_program = int(tok_val)
                 elif tok_type == "Tempo":
-                    # If your encoding include tempo tokens, each Position token should
-                    # be followed by a tempo token, but if it is not the case this
-                    # method will skip this step
-                    tempo = float(tok_val)
-                    if si == 0 and current_tick != tempo_changes[-1].time:
-                        tempo_changes.append(Tempo(current_tick, tempo))
+                    if si == 0:
+                        tempo_changes.append(Tempo(current_tick, float(tok_val)))
                     previous_note_end = max(previous_note_end, current_tick)
                 elif tok_type == "TimeSig":
                     num, den = self._parse_token_time_signature(tok_val)
@@ -471,10 +466,6 @@ class REMI(MIDITokenizer):
             # Add current_inst to midi and handle notes still active
             if not self.one_token_stream:
                 midi.tracks.append(current_instrument)
-
-        if len(tempo_changes) > 1:
-            del tempo_changes[0]  # delete mocked tempo change
-        tempo_changes[0].time = 0
 
         # create MidiFile
         if self.one_token_stream:
@@ -594,6 +585,7 @@ class REMI(MIDITokenizer):
             dic["Position"].append("Pedal")
             if self.config.sustain_pedal_duration:
                 dic["Pedal"] = ["Duration"]
+                dic["Duration"].append("Pedal")
             else:
                 dic["PedalOff"] = [
                     "Pedal",

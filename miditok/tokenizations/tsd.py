@@ -15,7 +15,6 @@ from ..classes import Event, TokSequence
 from ..constants import (
     MIDI_INSTRUMENTS,
     TIME_DIVISION,
-    TIME_SIGNATURE,
 )
 from ..midi_tokenizer import MIDITokenizer
 
@@ -145,8 +144,7 @@ class TSD(MIDITokenizer):
 
         # RESULTS
         tracks: Dict[int, Track] = {}
-        tempo_changes = [Track(self._DEFAULT_TEMPO, -1)]
-        time_signature_changes = [TimeSignature(0, *TIME_SIGNATURE)]
+        tempo_changes, time_signature_changes = [], []
 
         def check_inst(prog: int):
             if prog not in tracks:
@@ -207,9 +205,7 @@ class TSD(MIDITokenizer):
                         dur_type, dur = seq[ti + 2].split("_")
                         if vel_type == "Velocity" and dur_type == "Duration":
                             dur = self._token_duration_to_ticks(dur, time_division)
-                            new_note = Note(
-                                int(vel), pitch, current_tick, current_tick + dur
-                            )
+                            new_note = Note(current_tick, dur, pitch, int(vel))
                             if self.one_token_stream:
                                 check_inst(current_program)
                                 tracks[current_program].notes.append(new_note)
@@ -225,23 +221,11 @@ class TSD(MIDITokenizer):
                         pass
                 elif tok_type == "Program":
                     current_program = int(tok_val)
-                elif tok_type == "Tempo":
-                    # If your encoding include tempo tokens, each Position token should
-                    # be followed by a tempo token, but if it is not the case this
-                    # method will skip this step
-                    tempo = float(tok_val)
-                    if si == 0 and current_tick != tempo_changes[-1].time:
-                        tempo_changes.append(Tempo(current_tick, tempo))
+                elif tok_type == "Tempo" and si == 0:
+                    tempo_changes.append(Tempo(current_tick, float(tok_val)))
                 elif si == 0 and tok_type == "TimeSig":
                     num, den = self._parse_token_time_signature(tok_val)
-                    current_time_signature = time_signature_changes[-1]
-                    if (
-                        num != current_time_signature.numerator
-                        or den != current_time_signature.denominator
-                    ):
-                        time_signature_changes.append(
-                            TimeSignature(current_tick, num, den)
-                        )
+                    time_signature_changes.append(TimeSignature(current_tick, num, den))
                 elif tok_type == "Pedal":
                     pedal_prog = (
                         int(tok_val) if self.config.use_programs else current_program
@@ -304,13 +288,6 @@ class TSD(MIDITokenizer):
             # Add current_inst to midi and handle notes still active
             if not self.one_token_stream:
                 midi.tracks.append(current_instrument)
-
-        if len(tempo_changes) > 1:
-            del tempo_changes[0]  # delete mocked tempo change
-        tempo_changes[0].time = 0
-        if len(time_signature_changes) > 1:
-            del time_signature_changes[0]  # delete mocked time signature change
-        time_signature_changes[0].time = 0
 
         # create MidiFile
         if self.one_token_stream:
@@ -421,6 +398,7 @@ class TSD(MIDITokenizer):
             dic["TimeShift"].append("Pedal")
             if self.config.sustain_pedal_duration:
                 dic["Pedal"] = ["Duration"]
+                dic["Duration"].append("Pedal")
             else:
                 dic["PedalOff"] = [
                     "Pedal",

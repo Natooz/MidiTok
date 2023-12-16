@@ -45,7 +45,7 @@ Here we convert a MIDI to tokens, and the other way around.
 
     # Convert to MIDI and save it
     generated_midi = tokenizer(tokens)  # MidiTok can handle PyTorch / Tensorflow Tensors
-    generated_midi.dump('path/to/save/file.mid')  # could have been done above by giving the path argument
+    generated_midi.dump_midi('path/to/save/file.mid')  # could have been done above by giving the path argument
 
 Tokenize a dataset
 ------------------------

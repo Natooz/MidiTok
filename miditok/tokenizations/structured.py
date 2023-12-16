@@ -1,13 +1,12 @@
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
-from symusic import Note, Score, Tempo, TimeSignature, Track
+from symusic import Note, Score, Track
 
 from ..classes import Event, TokSequence
 from ..constants import (
     MIDI_INSTRUMENTS,
     TIME_DIVISION,
-    TIME_SIGNATURE,
 )
 from ..midi_tokenizer import MIDITokenizer
 
@@ -152,7 +151,7 @@ class Structured(MIDITokenizer):
         if not self.one_token_stream and len(midi.tracks) == 0:
             all_events.append([])
         for track in midi.tracks:
-            note_events = self._create_track_events(track)
+            note_events = self._create_track_events(track, midi.ticks_per_quarter)
             if self.one_token_stream:
                 all_events += note_events
             else:
@@ -207,8 +206,6 @@ class Structured(MIDITokenizer):
 
         # RESULTS
         instruments: Dict[int, Track] = {}
-        tempo_changes = [Tempo(0, self._DEFAULT_TEMPO)]
-        time_signature_changes = [TimeSignature(0, *TIME_SIGNATURE)]
 
         def check_inst(prog: int):
             if prog not in instruments:
@@ -274,8 +271,6 @@ class Structured(MIDITokenizer):
         # create MidiFile
         if self.one_token_stream:
             midi.tracks = list(instruments.values())
-        midi.tempos = tempo_changes
-        midi.time_signatures = time_signature_changes
 
         return midi
 

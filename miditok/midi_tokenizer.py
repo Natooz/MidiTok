@@ -605,7 +605,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 if duration_offset <= ticks_per_sample / 2
                 else ticks_per_sample - duration_offset
             )
-            if pedal.time == pedal.time + pedal.duration:  # TODO pedal.end
+            if pedal.duration == 0:
                 pedal.duration = ticks_per_sample
 
     def _quantize_pitch_bends(self, pitch_bends: PitchBendTickList, time_division: int):
@@ -682,9 +682,9 @@ class MIDITokenizer(ABC, HFHubMixin):
                         0, Event("Program", track.program, 0, desc="ProgramNoteOff")
                     )
                 all_events[ti] += track_events
-                all_events[ti].sort(key=lambda x: (x.time, self.__order(x)))
+                all_events[ti].sort(key=lambda x: x.time)
         if self.one_token_stream:
-            all_events.sort(key=lambda x: (x.time, self.__order(x)))
+            all_events.sort(key=lambda x: x.time)
             # Add ProgramChange (named Program) tokens if requested
             if self.config.program_changes:
                 self._add_program_change_events(all_events)
@@ -706,7 +706,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         return tok_sequence
 
     @staticmethod
-    def __order(event: Event) -> int:
+    def __order(event: Event) -> int:  # TODO remove?
         # Global MIDI tokens first
         if event.type in ["Tempo", "TimeSig"]:
             return 0
@@ -1212,10 +1212,17 @@ class MIDITokenizer(ABC, HFHubMixin):
         :return: the midi object (symusic.Score).
         """
         midi = self._tokens_to_midi(tokens, programs, time_division)
+
+        # Set default tempo and time signatures at tick 0 if not present
+        if len(midi.tempos) == 0 or midi.tempos[0].time != 0:
+            midi.tempos.insert(0, Tempo(0, self._DEFAULT_TEMPO))
+        if len(midi.time_signatures) == 0 or midi.time_signatures[0].time != 0:
+            midi.time_signatures.insert(0, TimeSignature(0, *TIME_SIGNATURE))
+
         # Write MIDI file
         if output_path:
             Path(output_path).mkdir(parents=True, exist_ok=True)
-            midi.dump(output_path)
+            midi.dump_midi(output_path)
         return midi
 
     def _tokens_to_midi(
@@ -2488,6 +2495,12 @@ class MIDITokenizer(ABC, HFHubMixin):
         # Depreciated miditoolkit object
         elif MidiFile is not None and isinstance(obj, MidiFile):
             # TODO convert to score
+            warnings.warn(
+                "You are using a depreciated `miditoolkit.MidiFile` object. MidiTok"
+                "is now (>v2.2.0) using symusic.Score as MIDI backend. Your MIDI will"
+                "be converted on the fly, however please consider using symusic.",
+                stacklevel=2,
+            )
             return self.midi_to_tokens(obj, *args, **kwargs)
 
         # Consider it tokens --> converts to MIDI

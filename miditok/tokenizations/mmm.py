@@ -88,7 +88,7 @@ class MMM(MIDITokenizer):
                 tick_at_last_ts_change = events[ei].time
                 ticks_per_bar = self._compute_ticks_per_bar(
                     TimeSignature(
-                        *list(map(int, events[ei].value.split("/"))), events[ei].time
+                        events[ei].time, *list(map(int, events[ei].value.split("/")))
                     ),
                     time_division,
                 )
@@ -167,8 +167,11 @@ class MMM(MIDITokenizer):
         # Disable use_programs so that _create_track_events do not add Program events
         self.config.use_programs = False
         for track in midi.tracks:
-            note_density = len(track.notes) / midi.ticks_per_quarter
-            note_density = int(np.argmin(np.abs(note_density_bins - note_density)))
+            note_density = len(track.notes) / (
+                max(note.end for note in track.notes) / midi.ticks_per_quarter
+            )
+            note_density_idx = np.argmin(np.abs(note_density_bins - note_density))
+            note_density = int(note_density_bins[note_density_idx])
             all_events += [
                 Event("Track", "Start", 0),
                 Event(
@@ -221,15 +224,11 @@ class MMM(MIDITokenizer):
 
         # RESULTS
         tracks: List[Track] = []
-        tempo_changes = [
-            Tempo(-1, self._DEFAULT_TEMPO)
-        ]  # mock the first tempo change to optimize below
-        time_signature_changes = [
-            TimeSignature(0, *TIME_SIGNATURE)
-        ]  # mock the first time signature change to optimize below
+        tempo_changes = []
+        time_signature_changes = []
         ticks_per_bar = self._compute_ticks_per_bar(
-            time_signature_changes[0], time_division
-        )  # init
+            TimeSignature(0, *TIME_SIGNATURE), time_division
+        )
 
         current_tick = tick_at_current_bar = 0
         current_bar = -1
@@ -268,23 +267,13 @@ class MMM(MIDITokenizer):
             elif (
                 first_program is None or current_program == first_program
             ) and tok_type == "Tempo":
-                # If the tokenizer includes tempo tokens, each Position token should be
-                # followed by a tempo token, but if it is not the case this method will
-                # skip this step
-                tempo = float(token.split("_")[1])
-                if current_tick != tempo_changes[-1].time:
-                    tempo_changes.append(Tempo(current_tick, tempo))
+                tempo_changes.append(Tempo(current_tick, float(token.split("_")[1])))
             elif tok_type == "TimeSig":
                 num, den = self._parse_token_time_signature(token.split("_")[1])
-                current_time_signature = time_signature_changes[-1]
-                if (
-                    num != current_time_signature.numerator
-                    or den != current_time_signature.denominator
-                ):
-                    time_signature_changes.append(TimeSignature(current_tick, num, den))
-                    ticks_per_bar = self._compute_ticks_per_bar(
-                        time_signature_changes[-1], time_division
-                    )
+                time_signature_changes.append(TimeSignature(current_tick, num, den))
+                ticks_per_bar = self._compute_ticks_per_bar(
+                    time_signature_changes[-1], time_division
+                )
             elif tok_type in ["Pitch", "PitchIntervalTime", "PitchIntervalChord"]:
                 if tok_type == "Pitch":
                     pitch = int(tok_val)
@@ -313,12 +302,7 @@ class MMM(MIDITokenizer):
                     # However with generated sequences this can happen, or if the
                     # sequence isn't finished
                     pass
-        if len(tempo_changes) > 1:
-            del tempo_changes[0]  # delete mocked tempo change
-        tempo_changes[0].time = 0
-        if len(time_signature_changes) > 1:
-            del time_signature_changes[0]  # delete mocked time signature change
-        time_signature_changes[0].time = 0
+
         # create MidiFile
         midi.tracks = tracks
         midi.tempos = tempo_changes

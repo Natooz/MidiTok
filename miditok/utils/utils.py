@@ -397,7 +397,11 @@ def merge_same_program_tracks(tracks: Union[List[Track], TrackTickList]):
             )
         ]
         tracks[idx[0]].name += "".join([" / " + tracks[i].name for i in idx[1:]])
-        tracks[idx[0]].notes = sum((tracks[i].notes for i in idx), [])
+        # tracks[idx[0]].notes = sum((tracks[i].notes for i in idx), [])
+        new_notes = []
+        for i in idx:
+            new_notes += tracks[i].notes
+        tracks[idx[0]].notes = new_notes
         tracks[idx[0]].notes.sort(key=lambda note: (note.start, note.pitch))
         for i in list(reversed(idx[1:])):
             del tracks[i]

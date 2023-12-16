@@ -112,7 +112,9 @@ def prepare_midi_for_tests(
         # We use the first track only, as it is the one for which tempos are decoded
         if tokenizer.config.use_tempos and tokenization in ["Octuple", "CPWord"]:
             if len(new_midi.tracks) > 0:
-                adapt_tempo_changes_times([new_midi.tracks[0]], new_midi.tempos)
+                adapt_tempo_changes_times(
+                    [new_midi.tracks[0]], new_midi.tempos, tokenizer._DEFAULT_TEMPO
+                )
             else:
                 new_midi.tempos = [Tempo(0, tokenizer._DEFAULT_TEMPO)]
         if (
@@ -319,7 +321,9 @@ def del_invalid_time_sig(
             idx += 1
 
 
-def adapt_tempo_changes_times(tracks: List[Track], tempo_changes: List[Tempo]):
+def adapt_tempo_changes_times(
+    tracks: List[Track], tempo_changes: List[Tempo], default_tempo: int
+):
     r"""Will adapt the times of tempo changes depending on the
     onset times of the notes of the MIDI.
     This is needed to pass the tempo tests for Octuple as the tempos
@@ -327,8 +331,11 @@ def adapt_tempo_changes_times(tracks: List[Track], tempo_changes: List[Tempo]):
 
     :param tracks: tracks of the MIDI to adapt the tempo changes
     :param tempo_changes: tempo changes to adapt
+    :param default_tempo: default tempo value to mock at beginning if needed
     """
-    notes = sum((t.notes for t in tracks), [])
+    notes = []
+    for track in tracks:
+        notes += track.notes
     notes.sort(key=lambda x: x.start)
     max_tick = max(note.start for note in notes)
 
@@ -347,6 +354,14 @@ def adapt_tempo_changes_times(tracks: List[Track], tempo_changes: List[Tempo]):
             del tempo_changes[tempo_idx - 1]
             continue
         tempo_idx += 1
+
+    # Fixes the first tempo at the time of the first note and mock if needed
+    if round(tempo_changes[0].tempo, 2) == default_tempo:
+        tempo_changes[0].time = 0
+    else:
+        tempo_changes[0].time = notes[0].time
+        if tempo_changes[0].time != 0:
+            tempo_changes.insert(0, Tempo(0, default_tempo))
 
 
 def adjust_notes_durations(

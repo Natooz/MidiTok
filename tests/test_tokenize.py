@@ -113,10 +113,6 @@ def _test_tokenize(
 
     # Reads the MIDI and add pedal messages to make sure there are some
     midi = Score(Path(midi_path))
-    for ti in range(min(3, len(midi.tracks))):
-        midi.tracks[ti].pedals.extend(
-            [Pedal(start, 200) for start in [100, 600, 1800, 2200]]
-        )
 
     # Creates the tokenizer
     tokenization, params = tok_params_set
@@ -124,6 +120,12 @@ def _test_tokenize(
         tokenizer_config=miditok.TokenizerConfig(**params)
     )
     str(tokenizer)  # shouldn't fail
+    if tokenizer.config.use_sustain_pedals:
+        for ti in range(min(3, len(midi.tracks))):
+            midi.tracks[ti].pedals.extend(
+                [Pedal(start, 200) for start in [100, 600, 1800, 2200]]
+            )
+            midi.tracks[ti].pedals.sort(key=lambda p: p.time)
 
     # MIDI -> Tokens -> MIDI
     midi_to_compare = prepare_midi_for_tests(midi, tokenizer=tokenizer)
@@ -135,8 +137,10 @@ def _test_tokenize(
         TEST_LOG_DIR.mkdir(exist_ok=True, parents=True)
         at_least_one_error = True
         if saving_erroneous_midis:
-            decoded_midi.dump(TEST_LOG_DIR / f"{midi_path.stem}_{tokenization}.mid")
-            midi_to_compare.dump(
+            decoded_midi.dump_midi(
+                TEST_LOG_DIR / f"{midi_path.stem}_{tokenization}.mid"
+            )
+            midi_to_compare.dump_midi(
                 TEST_LOG_DIR / f"{midi_path.stem}_{tokenization}_original.mid"
             )
 

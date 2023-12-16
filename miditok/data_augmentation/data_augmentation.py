@@ -206,7 +206,7 @@ def data_augmentation_dataset(
                 saving_path = out_path / file_path.parent.relative_to(data_path)
                 saving_path.mkdir(parents=True, exist_ok=True)
                 saving_path /= f"{file_path.stem}{suffix}.mid"
-                aug_midi.dump(saving_path)
+                aug_midi.dump_midi(saving_path)
                 nb_augmentations += 1
                 nb_tracks_augmented += len(aug_midi.tracks)
             if copy_original_in_new_location and out_path != data_path:
@@ -216,7 +216,7 @@ def data_augmentation_dataset(
                     / f"{file_path.stem}.mid"
                 )
                 saving_path.parent.mkdir(parents=True, exist_ok=True)
-                midi.dump(saving_path)
+                midi.dump_midi(saving_path)
 
     # Saves data augmentation report, json encoded with txt extension to not mess with
     # others json files

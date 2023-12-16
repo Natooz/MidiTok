@@ -4,11 +4,7 @@ import numpy as np
 from symusic import Note, Pedal, PitchBend, Score, Tempo, TimeSignature, Track
 
 from ..classes import Event, TokSequence
-from ..constants import (
-    MIDI_INSTRUMENTS,
-    TIME_DIVISION,
-    TIME_SIGNATURE,
-)
+from ..constants import MIDI_INSTRUMENTS, TIME_DIVISION
 from ..midi_tokenizer import MIDITokenizer, _in_as_seq
 from ..utils import fix_offsets_overlapping_notes
 
@@ -170,8 +166,7 @@ class MIDILike(MIDITokenizer):
 
         # RESULTS
         tracks: Dict[int, Track] = {}
-        tempo_changes = [Tempo(-1, self._DEFAULT_TEMPO)]
-        time_signature_changes = [TimeSignature(*TIME_SIGNATURE, 0)]
+        tempo_changes, time_signature_changes = [], []
         active_notes = {p: {} for p in self.config.programs}
 
         def check_inst(prog: int):
@@ -276,23 +271,11 @@ class MIDILike(MIDITokenizer):
                         active_notes[current_program][pitch] = (current_tick, vel)
                 elif tok_type == "Program":
                     current_program = int(tok_val)
-                elif tok_type == "Tempo":
-                    # If your encoding include tempo tokens, each Position token should
-                    # be followed by a tempo token, but if it is not the case this
-                    # method will skip this step.
-                    tempo = float(tok_val)
-                    if si == 0 and current_tick != tempo_changes[-1].time:
-                        tempo_changes.append(Tempo(current_tick, tempo))
-                elif si == 0 and tok_type == "TimeSig":
+                elif tok_type == "Tempo" and si == 0:
+                    tempo_changes.append(Tempo(current_tick, float(tok_val)))
+                elif tok_type == "TimeSig" and si == 0:
                     num, den = self._parse_token_time_signature(tok_val)
-                    current_time_signature = time_signature_changes[-1]
-                    if (
-                        num != current_time_signature.numerator
-                        or den != current_time_signature.denominator
-                    ):
-                        time_signature_changes.append(
-                            TimeSignature(current_tick, num, den)
-                        )
+                    time_signature_changes.append(TimeSignature(current_tick, num, den))
                 elif tok_type == "Pedal":
                     pedal_prog = (
                         int(tok_val) if self.config.use_programs else current_program
@@ -350,12 +333,6 @@ class MIDILike(MIDITokenizer):
         # Handle notes still active
         if self.one_token_stream:
             clear_active_notes()
-        if len(tempo_changes) > 1:
-            del tempo_changes[0]  # delete mocked tempo change
-        tempo_changes[0].time = 0
-        if len(time_signature_changes) > 1:
-            del time_signature_changes[0]  # delete mocked time signature change
-        time_signature_changes[0].time = 0
 
         # create MidiFile
         if self.one_token_stream:
@@ -480,7 +457,12 @@ class MIDILike(MIDITokenizer):
                 dic["NoteOff"].append("PedalOff")
             if self.config.sustain_pedal_duration:
                 dic["Pedal"] = ["Duration"]
-                dic["Duration"] = [first_note_token_type, "NoteOff", "TimeShift"]
+                dic["Duration"] = [
+                    first_note_token_type,
+                    "NoteOff",
+                    "TimeShift",
+                    "Pedal",
+                ]
                 if self.config.use_pitch_intervals:
                     dic["Duration"] += ["PitchIntervalTime", "PitchIntervalChord"]
             else:
