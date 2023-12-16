@@ -3,7 +3,7 @@
 """
 import json
 import warnings
-from copy import deepcopy
+from copy import copy, deepcopy
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 from warnings import warn
@@ -367,7 +367,7 @@ def data_augmentation_midi(
     # Pitch augmentation
     if pitch_offsets is not None:
         for offset in pitch_offsets:
-            midi_augmented = deepcopy(midi)
+            midi_augmented = copy(midi)
             for track in midi_augmented.tracks:
                 if not track.is_drum:
                     for note in track.notes:
@@ -382,7 +382,7 @@ def data_augmentation_midi(
         ) -> List[Tuple[Tuple[int, int, int], Score]]:
             aug_ = []
             for offset_ in velocity_offsets:
-                midi_aug_ = deepcopy(midi_)
+                midi_aug_ = copy(midi_)
                 for track_ in midi_aug_.tracks:
                     for note_ in track_.notes:
                         if offset_ < 0:

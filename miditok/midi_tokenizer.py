@@ -1953,7 +1953,6 @@ class MIDITokenizer(ABC, HFHubMixin):
         midi_paths: Union[str, Path, Sequence[Union[str, Path]]],
         out_dir: Union[str, Path],
         overwrite_mode: bool = True,
-        tokenizer_config_file_name: str = DEFAULT_TOKENIZER_FILE_NAME,
         validation_fn: Optional[Callable[[Score], bool]] = None,
         data_augment_offsets=None,
         apply_bpe: bool = True,
@@ -1980,8 +1979,6 @@ class MIDITokenizer(ABC, HFHubMixin):
             saved in the same directory, with the same name with a number appended at
             the end. Both token files and tokenizer config are concerned.
             (default: True)
-        :param tokenizer_config_file_name: name of the tokenizer config file name. This
-            file will be saved in ``out_dir``. (default: "tokenizer.conf")
         :param validation_fn: a function checking if the MIDI is valid on your
             requirements (e.g. time signature, minimum/maximum length, instruments...).
         :param data_augment_offsets: data augmentation arguments, to be passed to the
@@ -2021,37 +2018,6 @@ class MIDITokenizer(ABC, HFHubMixin):
                 root_parts.append(all_parts[0][depth])
             root_dir = Path(*root_parts)
 
-        # Saves the tokenizer so that it can be reloaded
-        out_path_tokenizer = out_dir / tokenizer_config_file_name
-        if out_path_tokenizer.is_file():
-            if overwrite_mode:
-                warnings.warn(
-                    f"Tokenizer config file already exists. Overwriting it"
-                    f"({out_path_tokenizer})",
-                    stacklevel=2,
-                )
-            # Set the new tokenizer file name
-            else:
-                file_name_tokenizer = tokenizer_config_file_name
-                ext = None
-                file_name_parts = tokenizer_config_file_name.split(".")
-                if len(file_name_parts) > 1:
-                    ext = file_name_parts[-1]
-                    file_name_tokenizer = ".".join(file_name_parts)
-                i = 1
-                while out_path_tokenizer.is_file():
-                    out_path_tokenizer = out_dir / (
-                        f"{file_name_tokenizer}_{i}" + f".{ext}"
-                        if ext is not None
-                        else ""
-                    )
-                    i += 1
-                warnings.warn(
-                    f"Tokenizer config file already exists. Saving it as"
-                    f"({out_path_tokenizer})",
-                    stacklevel=2,
-                )
-        self.save_params(out_path_tokenizer)
         if save_programs is None:
             save_programs = not self.config.use_programs
 

@@ -16,7 +16,6 @@ MIDI_LOADING_EXCEPTION = (
     IOError,
     EOFError,
 )
-# TODO make sure it is not saved in the save dir of dataset tokenization
 DEFAULT_TOKENIZER_FILE_NAME = "tokenizer.json"
 
 # Starting id of chr() method for BPE, as the 5 (0 to 4 included) firsts are ignored by
