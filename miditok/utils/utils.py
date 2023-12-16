@@ -11,6 +11,7 @@ from symusic.core import NoteTickList, TrackTickList
 
 from miditok.classes import Event
 from miditok.constants import (
+    DRUM_PITCH_RANGE,
     INSTRUMENT_CLASSES,
     MIDI_INSTRUMENTS,
     PITCH_CLASSES,
@@ -263,7 +264,7 @@ def merge_tracks_per_class(
         i = 0
         while i < len(midi.tracks):
             if midi.tracks[i].is_drum:
-                midi.tracks[i].program = -1  # sets program of drums to -1
+                midi.tracks[i].program = 128  # sets program of drums to 128
             if midi.tracks[i].program not in valid_programs:
                 del midi.tracks[i]
                 if len(midi.tracks) == 0:
@@ -320,10 +321,11 @@ def merge_tracks_per_class(
         for track in midi.tracks:
             ni = 0
             while ni < len(track.notes):
-                if (
-                    track.notes[ni].pitch
-                    not in MIDI_INSTRUMENTS[track.program]["pitch_range"]
-                ):
+                if track.is_drum:
+                    tessitura = DRUM_PITCH_RANGE
+                else:
+                    tessitura = MIDI_INSTRUMENTS[track.program]["pitch_range"]
+                if track.notes[ni].pitch not in tessitura:
                     del track.notes[ni]
                 else:
                     ni += 1
@@ -348,17 +350,26 @@ def merge_tracks(
     tracks_[0].name += "".join([" / " + t.name for t in tracks_[1:]])
 
     # Gather and sort notes
-    tracks_[0].notes = sum((t.notes for t in tracks_), [])
+    notes_sum = []
+    for track in tracks_:
+        notes_sum += track.notes
+    tracks_[0].notes = notes_sum
     tracks_[0].notes.sort(key=lambda note: note.start)
     if effects:
         # Pedals
-        tracks_[0].pedals = sum((t.pedals for t in tracks_), [])
+        pedals_sum, cc_sum, pb_sum = [], [], []
+        for track in tracks_:
+            pedals_sum += track.pedals
+            cc_sum += track.controls
+            pb_sum += track.pitch_bends
+        tracks_[0].pedals = pedals_sum
         tracks_[0].pedals.sort(key=lambda pedal: pedal.time)
         # Control changes
-        tracks_[0].controls = sum((t.controls for t in tracks_), [])
+        tracks_[0].controls = cc_sum
+        # tracks_[0].controls = sum((t.controls for t in tracks_), [])
         tracks_[0].controls.sort(key=lambda control_change: control_change.time)
         # Pitch bends
-        tracks_[0].pitch_bends = sum((t.pitch_bends for t in tracks_), [])
+        tracks_[0].pitch_bends = pb_sum
         tracks_[0].pitch_bends.sort(key=lambda pitch_bend: pitch_bend.time)
 
     # Keeps only one track

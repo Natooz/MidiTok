@@ -69,9 +69,9 @@ def test_containers_assertions():
     assert pb1 != pb2
     assert pb2 == pb3
 
-    ks1 = [KeySignature(2, "C#"), KeySignature(0, "C#")]
-    ks2 = [KeySignature(20, "C#"), KeySignature(0, "C#")]
-    ks3 = [KeySignature(20, "C#"), KeySignature(0, "C#")]
+    ks1 = [KeySignature(2, 0, 1), KeySignature(0, 0, 1)]
+    ks2 = [KeySignature(20, 0, 1), KeySignature(0, 0, 1)]
+    ks3 = [KeySignature(20, 0, 1), KeySignature(0, 0, 1)]
     assert ks1 != ks2
     assert ks2 == ks3
 
@@ -106,7 +106,7 @@ def test_check_midi_equals(midi_path: Path):
         if len(midi_copy.tracks[0].pedals) == 0:
             midi_copy.tracks[0].pedals.append(Pedal(0, 10))
         else:
-            midi_copy.tracks[0].pedals[-1].end += 10
+            midi_copy.tracks[0].pedals[-1].duration += 10
         assert not check_midis_equals(midi, midi_copy)[1]
 
         # Altering pitch bends
@@ -114,7 +114,7 @@ def test_check_midi_equals(midi_path: Path):
         if len(midi_copy.tracks[0].pitch_bends) == 0:
             midi_copy.tracks[0].pitch_bends.append(PitchBend(50, 10))
         else:
-            midi_copy.tracks[0].pitch_bends[-1].end += 10
+            midi_copy.tracks[0].pitch_bends[-1].value += 10
         assert not check_midis_equals(midi, midi_copy)[1]
 
     # Altering tempos
@@ -158,7 +158,7 @@ def test_merge_same_program_tracks_and_by_class(midi_path: Union[str, Path]):
     midi = Score(midi_path)
     for track in midi.tracks:
         if track.is_drum:
-            track.program = -1
+            track.program = 128
 
     # Test merge same program
     midi_copy = copy(midi)
@@ -175,7 +175,7 @@ def test_merge_same_program_tracks_and_by_class(midi_path: Union[str, Path]):
     merge_tracks_per_class(
         midi_copy,
         CLASS_OF_INST,
-        valid_programs=list(range(-1, 128)),
+        valid_programs=list(range(-1, 129)),
         filter_pitches=True,
     )
 
