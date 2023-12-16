@@ -264,15 +264,12 @@ class MIDITokenizer(ABC, HFHubMixin):
                 break
 
         # Tempos
-        # _DEFAULT_TEMPO is useful when `log_tempos` is enabled
+        # _DEFAULT_TEMPO is the closest one to 120 that the tokenizer supports
         self.tempos = np.zeros(1)
         self._DEFAULT_TEMPO = TEMPO
         if self.config.use_tempos:
             self.tempos = self.__create_tempos()
-            if self.config.log_tempos:
-                self._DEFAULT_TEMPO = self.tempos[
-                    np.argmin(np.abs(self.tempos - TEMPO))
-                ]
+            self._DEFAULT_TEMPO = self.tempos[np.argmin(np.abs(self.tempos - TEMPO))]
 
         # Rests
         self.rests = []
@@ -499,7 +496,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         while i < len(tempos):
             # Quantize tempo value
             tempos[i].tempo = self.tempos[
-                np.argmin(np.abs(self.tempos - tempos[i].tempo))
+                np.argmin(np.abs(self.tempos - round(tempos[i].tempo, 2)))
             ]
             if (
                 self.config.delete_equal_successive_tempo_changes
@@ -682,9 +679,9 @@ class MIDITokenizer(ABC, HFHubMixin):
                         0, Event("Program", track.program, 0, desc="ProgramNoteOff")
                     )
                 all_events[ti] += track_events
-                all_events[ti].sort(key=lambda x: x.time)
+                all_events[ti].sort(key=lambda x: (x.time, self.__order(x)))
         if self.one_token_stream:
-            all_events.sort(key=lambda x: x.time)
+            all_events.sort(key=lambda x: (x.time, self.__order(x)))
             # Add ProgramChange (named Program) tokens if requested
             if self.config.program_changes:
                 self._add_program_change_events(all_events)
@@ -706,7 +703,15 @@ class MIDITokenizer(ABC, HFHubMixin):
         return tok_sequence
 
     @staticmethod
-    def __order(event: Event) -> int:  # TODO remove?
+    def __order(event: Event) -> int:
+        """Internal method used to sort events (tokens) depending on their type or
+        context of appearance. This is required, especially for multitrack
+        one-token-stream situations where there can be several tokens appearing at
+        the same moment (tick) from different tracks, that need to be sorted.
+
+        :param event: event to determine priority.
+        :return: priority as an int
+        """
         # Global MIDI tokens first
         if event.type in ["Tempo", "TimeSig"]:
             return 0
@@ -716,7 +721,9 @@ class MIDITokenizer(ABC, HFHubMixin):
         ):
             return 1
         # Then track effects
-        elif event.type in ["Pedal", "PedalOff"]:
+        elif event.type in ["Pedal", "PedalOff"] or (
+            event.type == "Duration" and event.desc == "PedalDuration"
+        ):
             return 2
         elif event.type == "PitchBend" or (
             event.type == "Program" and event.desc == "ProgramPitchBend"
@@ -791,6 +798,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                             ".".join(map(str, self.durations[index])),
                             pedal.time,
                             program,
+                            "PedalDuration",
                         )
                     )
                 else:
@@ -2497,7 +2505,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             # TODO convert to score
             warnings.warn(
                 "You are using a depreciated `miditoolkit.MidiFile` object. MidiTok"
-                "is now (>v2.2.0) using symusic.Score as MIDI backend. Your MIDI will"
+                "is now (>v3.0.0) using symusic.Score as MIDI backend. Your MIDI will"
                 "be converted on the fly, however please consider using symusic.",
                 stacklevel=2,
             )

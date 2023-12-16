@@ -267,7 +267,7 @@ class TSD(MIDITokenizer):
                             current_instrument.pedals.append(new_pedal)
                         del active_pedals[pedal_prog]
                 elif tok_type == "PitchBend":
-                    new_pitch_bend = PitchBend(int(tok_val), current_tick)
+                    new_pitch_bend = PitchBend(current_tick, int(tok_val))
                     if self.one_token_stream:
                         check_inst(current_program)
                         tracks[current_program].pitch_bends.append(new_pitch_bend)

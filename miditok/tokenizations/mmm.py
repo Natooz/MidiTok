@@ -264,11 +264,13 @@ class MMM(MIDITokenizer):
                     # as this Position token occurs before any Bar token
                     current_bar = 0
                 current_tick += self._token_duration_to_ticks(tok_val, time_division)
-            elif (
+            elif tok_type == "Tempo" and (
                 first_program is None or current_program == first_program
-            ) and tok_type == "Tempo":
+            ):
                 tempo_changes.append(Tempo(current_tick, float(token.split("_")[1])))
-            elif tok_type == "TimeSig":
+            elif tok_type == "TimeSig" and (
+                first_program is None or current_program == first_program
+            ):
                 num, den = self._parse_token_time_signature(token.split("_")[1])
                 time_signature_changes.append(TimeSignature(current_tick, num, den))
                 ticks_per_bar = self._compute_ticks_per_bar(
