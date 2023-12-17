@@ -5,7 +5,7 @@ BPE.
 """
 
 import random
-from copy import deepcopy
+from copy import copy, deepcopy
 from pathlib import Path
 from time import time
 from typing import Optional, Sequence, Union
@@ -112,7 +112,7 @@ def test_bpe_conversion(
     tok_time = 0
     for i, file_path in enumerate(tqdm(midi_paths, desc="Testing BPE unbatched")):
         midi = Score(file_path)
-        tokens_no_bpe = tokenizer(deepcopy(midi), apply_bpe_if_possible=False)
+        tokens_no_bpe = tokenizer(copy(midi), apply_bpe_if_possible=False)
         if not tokenizer.one_token_stream:
             tokens_no_bpe = tokens_no_bpe[0]
         tokens_bpe = deepcopy(tokens_no_bpe)  # with BPE
