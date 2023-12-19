@@ -49,6 +49,7 @@ tests = [
     "pytest-xdist[psutil]",
     "torch",
     "tensorflow",
+    "miditoolkit",
 ]
 
 [project.urls]

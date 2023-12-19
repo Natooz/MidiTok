@@ -13,8 +13,13 @@ import numpy as np
 from huggingface_hub import ModelHubMixin as HFHubMixin
 from huggingface_hub import hf_hub_download
 from symusic import (
+    ControlChange,
+    Note,
+    Pedal,
+    PitchBend,
     Score,
     Tempo,
+    TextMeta,
     TimeSignature,
     Track,
 )
@@ -193,6 +198,45 @@ def _out_as_complete_seq(function: Callable):
         return res
 
     return wrapper
+
+
+def miditoolkit_to_symusic(midi: MidiFile) -> Score:
+    score = Score(midi.ticks_per_beat)
+
+    # MIDI events (except key signature)
+    for time_sig in midi.time_signature_changes:
+        score.time_signatures.append(
+            TimeSignature(time_sig.time, time_sig.numerator, time_sig.denominator)
+        )
+    for tempo in midi.tempo_changes:
+        score.tempos.append(Tempo(tempo.time, tempo.tempo))
+    for lyric in midi.lyrics:
+        score.lyrics.append(TextMeta(lyric.time, lyric.text))
+    for marker in midi.markers:
+        score.markers.append(TextMeta(marker.time, marker.text))
+
+    # Track events
+    for inst in midi.instruments:
+        track = Track(
+            name=inst.name,
+            program=inst.program,
+            is_drum=inst.is_drum,
+        )
+        for note in inst.notes:
+            track.notes.append(
+                Note(note.start, note.duration, note.pitch, note.velocity)
+            )
+        for control in inst.control_changes:
+            track.controls.append(
+                ControlChange(control.time, control.number, control.value)
+            )
+        for pb in inst.pitch_bends:
+            track.pitch_bends.append(PitchBend(pb.time, pb.pitch))
+        for pedal in inst.pedals:
+            track.pedals.append(Pedal(pedal.start, pedal.duration))
+        score.tracks.append(track)
+
+    return score
 
 
 class MIDITokenizer(ABC, HFHubMixin):
@@ -2468,14 +2512,13 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         # Depreciated miditoolkit object
         elif MidiFile is not None and isinstance(obj, MidiFile):
-            # TODO convert to score
             warnings.warn(
                 "You are using a depreciated `miditoolkit.MidiFile` object. MidiTok"
                 "is now (>v3.0.0) using symusic.Score as MIDI backend. Your MIDI will"
                 "be converted on the fly, however please consider using symusic.",
                 stacklevel=2,
             )
-            return self.midi_to_tokens(obj, *args, **kwargs)
+            return self.midi_to_tokens(miditoolkit_to_symusic(obj), *args, **kwargs)
 
         # Consider it tokens --> converts to MIDI
         else:
