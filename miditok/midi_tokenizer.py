@@ -455,7 +455,6 @@ class MIDITokenizer(ABC, HFHubMixin):
                 self._quantize_pitch_bends(
                     midi.tracks[t].pitch_bends, midi.ticks_per_quarter
                 )
-            # TODO quantize control changes
 
         # Process tempo changes
         if self.config.use_tempos:
@@ -2091,13 +2090,15 @@ class MIDITokenizer(ABC, HFHubMixin):
 
             # Save tokens files
             for aug_offsets, seq in tokens:
-                suffix = "§" + "_".join(
-                    [
-                        f"{t}{offset}"
-                        for t, offset in zip(["p", "v", "d"], aug_offsets)
-                        if offset != 0
-                    ]
-                )
+                suffix = ""
+                if any(off != 0 for off in aug_offsets):
+                    suffix = "§" + "_".join(
+                        [
+                            f"{t}{offset}"
+                            for t, offset in zip(["p", "v", "d"], aug_offsets)
+                            if offset != 0
+                        ]
+                    )
                 out_path = tokens_dir / f"{midi_path.stem}{suffix}.json"
                 if not overwrite_mode and out_path.is_file():
                     i = 1
