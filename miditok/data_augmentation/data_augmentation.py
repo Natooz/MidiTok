@@ -98,6 +98,9 @@ def data_augmentation_dataset(
                 dur_directions,
                 ids=ids,
             )
+            corrected_offsets = deepcopy(offsets)
+            vel_dim = int(128 / len(tokenizer.velocities))
+            corrected_offsets[1] = [int(off / vel_dim) for off in corrected_offsets[1]]
             augmented_tokens: Dict[
                 Tuple[int, int, int], List[Union[int, List[int]]]
             ] = {}
@@ -113,11 +116,6 @@ def data_augmentation_dataset(
                     )
                 ):  # drums
                     continue
-                corrected_offsets = deepcopy(offsets)
-                vel_dim = int(128 / len(tokenizer.velocities))
-                corrected_offsets[1] = [
-                    int(off / vel_dim) for off in corrected_offsets[1]
-                ]
                 aug = data_augmentation_tokens(
                     np.array(track),
                     tokenizer,
@@ -363,6 +361,7 @@ def data_augmentation_midi(
     :return: augmented MIDI objects.
     """
     augmented = []
+    # TODO use shift_pitch and shift_velocity? handle drums + min/max vals
 
     # Pitch augmentation
     if pitch_offsets is not None:

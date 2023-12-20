@@ -59,7 +59,8 @@ from .constants import (
     TIME_SIGNATURE,
     UNKNOWN_CHORD_PREFIX,
 )
-from .data_augmentation import data_augmentation_dataset
+from .data_augmentation import data_augmentation_tokens
+from .data_augmentation.data_augmentation import get_offsets
 from .utils import (
     convert_ids_tensors_to_list,
     detect_chords,
@@ -1747,7 +1748,6 @@ class MIDITokenizer(ABC, HFHubMixin):
         **The training progress bar will not appear with non-proper terminals.**
         (cf `GitHub issue <https://github.com/huggingface/tokenizers/issues/157>`_ )
 
-        # TODO update readme + docs usages (examples)
         :param vocab_size: size of the vocabulary to learn / build.
         :param iterator: an iterable object yielding the training data, as lists of
             string. It can be a list or a Generator. This iterator will be passed to
@@ -1888,43 +1888,6 @@ class MIDITokenizer(ABC, HFHubMixin):
             seq.ids = encoded_tokens.ids
             seq.ids_bpe_encoded = True
 
-    def apply_bpe_to_dataset(
-        self,
-        dataset_path: Union[Path, str],
-        out_path: Optional[Union[Path, str]] = None,
-    ):
-        r"""Applies BPE to an already tokenized dataset (with no BPE).
-
-        :param dataset_path: path to the directory containing token json files.
-        :param out_path: output directory to save. If none is given, this method will
-            overwrite original files. (default: None)
-        """
-        if not self.has_bpe:
-            return
-        if isinstance(out_path, str):
-            out_path = Path(out_path)
-
-        # TODO handle MIDIs, tokenize on the fly?
-        files_paths = list(Path(dataset_path).glob("**/*.json"))
-        for json_path in tqdm(files_paths, desc="Applying BPE to dataset"):
-            sample = self.load_tokens(json_path)
-            seq = (
-                TokSequence(ids=sample["ids"])
-                if self.one_token_stream
-                else [TokSequence(ids=track) for track in sample["ids"]]
-            )
-            self.apply_bpe(seq)
-
-            saving_path = (
-                out_path / json_path.relative_to(dataset_path)
-                if out_path is not None
-                else json_path
-            )
-            saving_path.parent.mkdir(parents=True, exist_ok=True)
-            self.save_tokens(
-                seq, saving_path, sample["programs"] if "programs" in sample else None
-            )
-
     def _are_ids_bpe_encoded(self, ids: Union[List[int], np.ndarray]) -> bool:
         r"""A small check telling if a sequence of ids are encoded with BPE.
         This is performed by checking if any id has a value superior or equal to the
@@ -1967,7 +1930,6 @@ class MIDITokenizer(ABC, HFHubMixin):
         overwrite_mode: bool = True,
         validation_fn: Optional[Callable[[Score], bool]] = None,
         data_augment_offsets=None,
-        apply_bpe: bool = True,
         save_programs: Optional[bool] = None,
         logging: bool = True,
     ):
@@ -1997,8 +1959,6 @@ class MIDITokenizer(ABC, HFHubMixin):
             miditok.data_augmentation.data_augmentation_dataset method. Has to be given
             as a list / tuple of offsets pitch octaves, velocities, durations, and
             finally their directions (up/down). (default: None)
-        :param apply_bpe: will apply BPE on the dataset to save, if the vocabulary was
-            learned with. (default: True)
         :param save_programs: will save the programs of the tracks of the MIDI as an
             entry in the Json file. That this option is probably unnecessary when using
             a multitrack tokenizer (`config.use_programs`), as the program information
@@ -2033,14 +1993,8 @@ class MIDITokenizer(ABC, HFHubMixin):
         if save_programs is None:
             save_programs = not self.config.use_programs
 
-        for midi_path in (
-            tqdm(
-                midi_paths,
-                desc=f'Tokenizing MIDIs ({"/".join(list(out_dir.parts[-2:]))})',
-            )
-            if logging
-            else midi_paths
-        ):
+        desc = f'Tokenizing MIDIs ({"/".join(list(out_dir.parts[-2:]))})'
+        for midi_path in tqdm(midi_paths, desc=desc):
             # Some MIDIs can contain errors, if so the loop continues
             midi_path = Path(midi_path)
             try:
@@ -2063,41 +2017,100 @@ class MIDITokenizer(ABC, HFHubMixin):
             if not self.validate_midi_time_signatures(midi):
                 continue
 
-            # Tokenizing the MIDI, without BPE here as this will be done at the end (as
-            # we might perform data aug)
+            # Tokenizing the MIDI, without BPE here as this will be done at the end as
+            # we might perform data aug before
             tokens = self(midi, apply_bpe_if_possible=False)
 
+            # Data augmentation on tokens
+            if data_augment_offsets is not None:
+                if isinstance(tokens, TokSequence):
+                    tokens = [tokens]
+                offsets = get_offsets(
+                    self,
+                    *data_augment_offsets,
+                    ids=[seq.ids for seq in tokens],
+                )
+                corrected_offsets = deepcopy(offsets)
+                vel_dim = int(128 / len(self.velocities))
+                corrected_offsets[1] = [
+                    int(off / vel_dim) for off in corrected_offsets[1]
+                ]
+
+                augmented_tokens: Dict[
+                    Tuple[int, int, int], Union[TokSequence, List[TokSequence]]
+                ] = {}
+                for track_seq, is_drum in zip(
+                    tokens, [track.is_drum for track in midi.tracks]
+                ):
+                    if is_drum:
+                        continue
+                    aug = data_augmentation_tokens(
+                        track_seq.ids,
+                        self,
+                        *corrected_offsets,
+                        need_to_decode_bpe=False,
+                    )
+                    if len(aug) == 0:
+                        continue
+                    for aug_offsets, aug_ids in aug:
+                        seq = TokSequence(ids=aug_ids)
+                        if self.one_token_stream:
+                            augmented_tokens[aug_offsets] = seq
+                            continue
+                        try:
+                            augmented_tokens[aug_offsets].append(seq)
+                        except KeyError:
+                            augmented_tokens[aug_offsets] = [seq]
+
+                if not self.one_token_stream:
+                    for i, (seq, is_drum) in enumerate(
+                        zip(tokens, [track.is_drum for track in midi.tracks])
+                    ):  # adding drums to all already augmented
+                        if is_drum:
+                            for aug_offsets in augmented_tokens:
+                                augmented_tokens[aug_offsets].insert(
+                                    i, TokSequence(ids=seq.ids)
+                                )
+
+                tokens = [((0, 0, 0), tokens)]
+                tokens += [(offs, seqs) for offs, seqs in augmented_tokens.items()]
+            else:
+                tokens = [((0, 0, 0), tokens)]
+
+            # Apply BPE on tokens
+            if self.has_bpe:
+                if self.one_token_stream:
+                    self.apply_bpe([seq for _, seq in tokens])
+                else:
+                    for _, track_seqs in tokens:
+                        self.apply_bpe(track_seqs)
+
             # Set output file path
-            out_path = (
-                out_dir
-                / midi_path.parent.relative_to(root_dir)
-                / f"{midi_path.stem}.json"
-            )
-            out_path.parent.mkdir(parents=True, exist_ok=True)
-            if not overwrite_mode and out_path.is_file():
-                i = 1
-                while out_path.is_file():
-                    out_path = out_path.parent / f"{midi_path.stem}_{i}.json"
-                    i += 1
+            tokens_dir = out_dir / midi_path.parent.relative_to(root_dir)
+            tokens_dir.mkdir(parents=True, exist_ok=True)
 
-            # Save the tokens as JSON
-            self.save_tokens(
-                tokens,
-                out_path,
-                get_midi_programs(midi) if save_programs else None,
-            )
+            # Save tokens files
+            for aug_offsets, seq in tokens:
+                suffix = "§" + "_".join(
+                    [
+                        f"{t}{offset}"
+                        for t, offset in zip(["p", "v", "d"], aug_offsets)
+                        if offset != 0
+                    ]
+                )
+                out_path = tokens_dir / f"{midi_path.stem}{suffix}.json"
+                if not overwrite_mode and out_path.is_file():
+                    i = 1
+                    while out_path.is_file():
+                        out_path = out_path.parent / f"{midi_path.stem}_{i}.json"
+                        i += 1
 
-        # Perform data augmentation
-        if data_augment_offsets is not None:
-            data_augmentation_dataset(
-                out_dir,
-                self,
-                *data_augment_offsets,
-                copy_original_in_new_location=False,
-            )
-
-        if apply_bpe and self.has_bpe:
-            self.apply_bpe_to_dataset(out_dir)
+                # Save the tokens as JSON
+                self.save_tokens(
+                    seq,
+                    out_path,
+                    get_midi_programs(midi) if save_programs else None,
+                )
 
     @_in_as_seq(complete=False, decode_bpe=False)
     def tokens_errors(

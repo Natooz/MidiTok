@@ -50,9 +50,8 @@ Here we convert a MIDI to tokens, and the other way around.
 Tokenize a dataset
 ------------------------
 
-Here we tokenize a whole dataset.
+Here we first train the tokenizer with :ref:`Byte Pair Encoding (BPE)`, then we tokenize a whole dataset.
 We also perform data augmentation on the pitch, velocity and duration dimension.
-Finally, we learn :ref:`Byte Pair Encoding (BPE)` on the tokenized dataset, and apply it.
 
 ..  code-block:: python
 
@@ -71,6 +70,9 @@ Finally, we learn :ref:`Byte Pair Encoding (BPE)` on the tokenized dataset, and 
             return False  # time signature different from 4/*, 4 beats per bar
         return True
 
+    # Learns the vocabulary with BPE
+    tokenizer.learn_bpe(vocab_size=10000, files_paths=midi_paths)
+
     # Converts MIDI files to tokens saved as JSON files
     data_augmentation_offsets = [2, 2, 1]   # will perform data augmentation on 2 pitch octaves,
     tokenizer.tokenize_midi_dataset(        # 2 velocity and 1 duration values
@@ -79,13 +81,3 @@ Finally, we learn :ref:`Byte Pair Encoding (BPE)` on the tokenized dataset, and 
         midi_valid,
         data_augmentation_offsets,
     )
-
-    # Learns the vocabulary with BPE
-    tokenizer.learn_bpe(
-        vocab_size=500,
-        tokens_paths=list(Path('path', 'to', 'tokens_noBPE').glob("**/*.json")),
-        out_dir=Path('path', 'to', 'tokens_BPE'),
-    )
-
-    # Applies BPE to the previous tokens
-    tokenizer.apply_bpe_to_dataset(Path('path', 'to', 'tokens_noBPE'), Path('path', 'to', 'tokens_BPE'))

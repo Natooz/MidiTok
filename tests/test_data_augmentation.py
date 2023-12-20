@@ -90,15 +90,8 @@ def test_data_augmentation_tokens(
     tokens_aug_path = tmp_path / "Multitrack_tokens_aug" / tokenization
 
     print("PERFORMING DATA AUGMENTATION ON TOKENS")
-    tokenizer.tokenize_midi_dataset(original_midi_paths, tokens_path)
-    miditok.data_augmentation.data_augmentation_dataset(
-        tokens_path,
-        tokenizer,
-        2,
-        1,
-        1,
-        out_path=tokens_aug_path,
-        copy_original_in_new_location=False,
+    tokenizer.tokenize_midi_dataset(
+        original_midi_paths, tokens_path, data_augment_offsets=(2, 1, 1)
     )
 
     # Getting tokens idx from tokenizer for assertions

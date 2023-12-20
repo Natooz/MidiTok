@@ -29,7 +29,7 @@ A token learned with BPE will be represented by the succession of the unique cha
 * ``_vocab_base_id_to_byte``: biding the base token ids (integers) to their byte forms;
 * ``_vocab_bpe_bytes_to_tokens``: biding the byte forms of the complete vocab to their string forms, as a list of string;
 
-For symbolic music, BPE `has been showned to improve the performances of Transformers models while helping them to learn more isotropic embedding representations <https://arxiv.org/abs/2301.11975>`_. BPE can be applied on top of any tokenization, as long as it is not based on embedding pooling! (``is_multi_voc``)
+For symbolic music, BPE `has been showned to improve the performances of Transformers models while helping them to learn more isotropic embedding representations <https://aclanthology.org/2023.emnlp-main.123/>`_. BPE can be applied on top of any tokenization, as long as it is not based on embedding pooling! (``is_multi_voc``)
 
 BPE example
 ------------------------
@@ -40,13 +40,12 @@ BPE example
     from copy import deepcopy
 
     tokenizer = REMI()  # using defaults parameters (constants.py)
-    tokens_no_bpe_paths = list(Path('path', 'to', 'dataset').glob('**/*.json'))
+    paths_midis = list(Path("path", "to", "midis").glob('**/*.mid'))
 
     # Learns the vocabulary with BPE
     tokenizer.learn_bpe(
         vocab_size=500,
-        tokens_paths=tokens_no_bpe_paths,
-        out_dir=Path('path', 'to', 'tokens_BPE'),
+        files_paths=paths_midis,
     )
 
     # Opens tokens, apply BPE on them, and decode BPE back
@@ -55,14 +54,11 @@ BPE example
     tokens_with_bpe = tokenizer.apply_bpe(deepcopy(tokens))  # copy as the method is inplace
     tokens_no_bpe = tokenizer.decode_bpe(deepcopy(tokens_with_bpe))
 
-    # Converts the tokenized musics into tokens with BPE
-    tokenizer.apply_bpe_to_dataset(Path('path', 'to', 'tokens_noBPE'), Path('path', 'to', 'tokens_BPE'))
-
 
 Methods
 ------------------------
 
-To use BPE, you must first train your tokenizer from data (:py:func:`miditok.MIDITokenizer.learn_bpe`), and then convert a dataset with BPE (:py:func:`miditok.MIDITokenizer.apply_bpe_to_dataset`).
+To use BPE, you must first train your tokenizer from data (:py:func:`miditok.MIDITokenizer.learn_bpe`), then BPE will be automatically applied when tokenizing any MIDI file.
 
 **Tokenizers can be saved and loaded** (:ref:`Save / Load tokenizer`).
 
@@ -70,9 +66,6 @@ To use BPE, you must first train your tokenizer from data (:py:func:`miditok.MID
     :noindex:
 
 .. autofunction:: miditok.MIDITokenizer.apply_bpe
-    :noindex:
-
-.. autofunction:: miditok.MIDITokenizer.apply_bpe_to_dataset
     :noindex:
 
 .. autofunction:: miditok.MIDITokenizer.decode_bpe
