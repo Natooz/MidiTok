@@ -61,11 +61,9 @@ def test_bpe_conversion(
     tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
         tokenizer_config=miditok.TokenizerConfig(**params_)
     )
-    # Give a str to dir for coverage
-    tokenizer.tokenize_midi_dataset(midi_paths, tmp_path)
     tokenizer.learn_bpe(
         vocab_size=len(tokenizer) + 400,
-        tokens_paths=list(tmp_path.glob("**/*.json")),
+        files_paths=midi_paths,
         start_from_empty_voc=True,
     )
     tokenizer.save_params(tmp_path / "bpe_config.txt")

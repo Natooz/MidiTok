@@ -93,7 +93,7 @@ def bpe_benchmark(data_path: Union[str, Path, PurePath] = "./tests/Maestro"):
         t0 = time()
         tokenizer.learn_bpe(
             vocab_size=vocab_size,
-            tokens_paths=list(
+            files_paths=list(
                 Path("tests", "test_results", f"{tokenization}_maestro").glob(
                     "**/*.json"
                 )

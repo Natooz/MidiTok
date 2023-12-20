@@ -41,6 +41,7 @@ from tokenizers.models import BPE
 from tokenizers.trainers import BpeTrainer
 from tqdm import tqdm
 
+from .bpe_iterator import BPEIterator
 from .classes import Event, TokenizerConfig, TokSequence
 from .constants import (
     BOS_TOKEN_NAME,
@@ -1729,7 +1730,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         self,
         vocab_size: int,
         iterator: Optional[Iterable] = None,
-        tokens_paths: Optional[List[Union[Path, str]]] = None,
+        files_paths: Optional[List[Union[Path, str]]] = None,
         start_from_empty_voc: bool = False,
         **kwargs,
     ):
@@ -1746,13 +1747,14 @@ class MIDITokenizer(ABC, HFHubMixin):
         **The training progress bar will not appear with non-proper terminals.**
         (cf `GitHub issue <https://github.com/huggingface/tokenizers/issues/157>`_ )
 
+        # TODO update readme + docs usages (examples)
         :param vocab_size: size of the vocabulary to learn / build.
         :param iterator: an iterable object yielding the training data, as lists of
             string. It can be a list or a Generator. This iterator will be passed to
-            the BPE model for training. If None is given, you must use the
-            ``tokens_paths`` argument. (default: None)
-        :param tokens_paths: paths of the token json files to load and use.
-            (default: False)
+            the BPE model for training. It musts implement the ``__len__`` method. If
+            None is given, you must use the ``tokens_paths`` argument. (default: None)
+        :param files_paths: paths of the files to load and use. They can be either MIDI
+            or tokens (json) files. (default: None)
         :param start_from_empty_voc: the training will start from an empty base
             vocabulary. The tokenizer will then have a base vocabulary only based on
             the unique bytes present in the training data. If you set this argument to
@@ -1773,7 +1775,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 stacklevel=2,
             )
             return
-        if iterator is None and tokens_paths is None:
+        if iterator is None and files_paths is None:
             raise ValueError(
                 "You must give an iterator or a list of paths to tokens to train the"
                 "tokenizer with BPE."
@@ -1788,42 +1790,8 @@ class MIDITokenizer(ABC, HFHubMixin):
             return
 
         # If no iterator, loads tokens / samples to analyze
-        # TODO Provide a MIDI iterator, loading MIDIs from a list of paths
         if iterator is None:
-            iterator = []  # list of lists of one string (bytes)
-            for file_path in tqdm(tokens_paths, desc="Loading token files"):
-                sample = self.load_tokens(file_path)
-                # list of str (bytes)
-                bytes_ = self._ids_to_bytes(sample["ids"], as_one_str=True)
-                iterator += (
-                    [[byte_] for byte_ in bytes_]
-                    if not self.one_token_stream
-                    else [bytes_]
-                )
-
-            # This doesn't seem to work, the trainer pre-processes the sequences, but
-            # then no word remains
-            """def it_gen():
-                for file_path_ in tqdm(tokens_paths, desc="Loading token files"):
-                    sample_ = self.load_tokens(file_path_)
-                    yield self._ids_to_bytes(sample_["ids"], as_one_str=True)
-
-            iterator = it_gen()"""
-
-            # Make sure the target vocab size > nb of unique chars across all samples
-            unique_chars = set()
-            for seq in iterator:
-                unique_chars.update(*seq)
-
-            if len(unique_chars) >= vocab_size:
-                warnings.warn(
-                    f"BPE TRAINING: the provided data comprises {len(unique_chars)}"
-                    f"base tokens (character level), whereas the target BPE vocabulary"
-                    f"size is inferior ({vocab_size}). No new token can be learned,"
-                    f"skipping BPE training.",
-                    stacklevel=2,
-                )
-                return
+            iterator = BPEIterator(self, files_paths)
 
         # Create new tokenizer model
         if self._bpe_model is None or start_from_empty_voc:
@@ -1857,7 +1825,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             **kwargs,
         )
         self._bpe_model.train_from_iterator(
-            iterator, length=sum(1 for _ in iterator), trainer=trainer
+            iterator, length=len(iterator), trainer=trainer
         )
 
         # Update other vocabs accordingly
