@@ -115,3 +115,8 @@ The BibTeX citations of all tokenizations can be found [in the documentation](ht
 
 Special thanks to all the contributors.
 We acknowledge [Aubay](https://blog.aubay.com/index.php/language/en/home/?lang=en), the [LIP6](https://www.lip6.fr/?LANG=en), [LERIA](http://blog.univ-angers.fr/leria/n) and [ESEO](https://eseo.fr/en) for the initial financing and support.
+
+## All Thanks To Our Contribiutors :
+<a href="https://github.com/Natooz/MidiTok/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=Natooz/MidiTok" />
+</a>
