@@ -127,9 +127,11 @@ def prepare_midi_for_tests(
     for track in new_midi.tracks:
         # Adjust notes and pedal ends to the maximum possible value
         if tokenizer is not None:
-            adjust_notes_durations(track.notes, tokenizer, midi.ticks_per_quarter)
+            adjust_notes_durations(track.notes, tokenizer, new_midi.ticks_per_quarter)
             if tokenizer.config.use_sustain_pedals:
-                adjust_pedal_durations(track.pedals, tokenizer, midi.ticks_per_quarter)
+                adjust_pedal_durations(
+                    track.pedals, tokenizer, new_midi.ticks_per_quarter
+                )
         if track.is_drum:
             track.program = 0  # need to be done before sorting tracks per program
         if sort_notes:

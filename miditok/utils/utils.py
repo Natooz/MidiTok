@@ -483,3 +483,27 @@ def nb_bar_pos(
     )  # position value, e.g. from 0 to 15, -1 means a bar with no Pos token following
 
     return current_bar, current_pos
+
+
+def np_get_closest(
+    array: np.ndarray, values: Union[np.ndarray, List[Any]]
+) -> np.ndarray:
+    """Simple method to find the closest values in an array of the values of another
+    reference array.
+    Taken from: https://stackoverflow.com/a/46184652
+
+    :param array: reference values array.
+    :param values: array to filter.
+    :return: the closest values for each position.
+    """
+    # get insert positions
+    idxs = np.searchsorted(array, values, side="left")
+
+    # find indexes where previous index is closer
+    prev_idx_is_less = (idxs == len(array)) | (
+        np.fabs(values - array[np.maximum(idxs - 1, 0)])
+        < np.fabs(values - array[np.minimum(idxs, len(array) - 1)])
+    )
+    idxs[prev_idx_is_less] -= 1
+
+    return array[idxs]
