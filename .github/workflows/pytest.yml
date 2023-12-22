@@ -13,7 +13,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.x", "pypy3.9"]
+        python-version: ["3.8", "3.9", "3.10", "3.11", "pypy3.9"]
         os: [ ubuntu-latest, windows-latest ]
         include:
           - os: macos-latest
@@ -36,7 +36,7 @@ jobs:
           pip install -e ".[tests]"
 
       - name: Test with pytest
-        run: pytest --cov=./ --cov-report=xml -n auto --durations=0 -v
+        run: pytest --cov=./ --cov-report=xml -n auto --durations=0 -v tests
         env:
           HF_TOKEN_HUB_TESTS: ${{ secrets.HF_TOKEN_HUB_TESTS }}
 
