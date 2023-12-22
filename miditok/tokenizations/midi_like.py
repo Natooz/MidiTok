@@ -36,13 +36,12 @@ class MIDILike(MIDITokenizer):
     def _tweak_config_before_creating_voc(self):
         self._note_on_off = True
 
-    def _add_time_events(self, events: List[Event], time_division: int) -> List[Event]:
+    def _add_time_events(self, events: List[Event]) -> List[Event]:
         r"""Internal method intended to be implemented by inheriting classes.
         It creates the time events from the list of global and track events, and as
         such the final token sequence.
 
         :param events: note events to complete.
-        :param time_division: time division of the MIDI being parsed.
         :return: the same events, with time events inserted.
         """
 
@@ -56,11 +55,11 @@ class MIDILike(MIDITokenizer):
                 # (Rest)
                 if (
                     self.config.use_rests
-                    and event.time - previous_note_end >= self._min_rest(time_division)
+                    and event.time - previous_note_end >= self._min_rest
                 ):
                     previous_tick = previous_note_end
                     rest_values = self._ticks_to_duration_tokens(
-                        event.time - previous_tick, time_division, rest=True
+                        event.time - previous_tick, self._time_division, rest=True
                     )
                     for dur_value, dur_ticks in zip(*rest_values):
                         all_events.append(
@@ -78,7 +77,7 @@ class MIDILike(MIDITokenizer):
                 if event.time != previous_tick:
                     time_shift = event.time - previous_tick
                     for dur_value, dur_ticks in zip(
-                        *self._ticks_to_duration_tokens(time_shift, time_division)
+                        *self._ticks_to_duration_tokens(time_shift, self._time_division)
                     ):
                         all_events.append(
                             Event(
@@ -156,12 +155,6 @@ class MIDILike(MIDITokenizer):
             raise ValueError(
                 f"Invalid time division, please give one divisible by"
                 f"{max(self.config.beat_res.values())}"
-            )
-        if time_division in self._durations_ticks:
-            max_duration_tok_tick = max(self._durations_ticks[time_division])
-        else:
-            max_duration_tok_tick = self._token_duration_to_ticks(
-                self.durations[-1], time_division
             )
 
         # RESULTS
@@ -252,7 +245,7 @@ class MIDILike(MIDITokenizer):
                     if pitch in active_notes[current_program]:
                         note_onset_tick, vel = active_notes[current_program][pitch]
                         offset_tick = current_tick
-                        if current_tick - note_onset_tick > max_duration_tok_tick:
+                        if current_tick - note_onset_tick > max(self._durations_ticks):
                             if default_duration is not None:
                                 offset_tick = note_onset_tick + default_duration
                             else:

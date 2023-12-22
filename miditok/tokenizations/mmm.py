@@ -59,23 +59,22 @@ class MMM(MIDITokenizer):
                 dtype=np.intc,
             )
 
-    def _add_time_events(self, events: List[Event], time_division: int) -> List[Event]:
+    def _add_time_events(self, events: List[Event]) -> List[Event]:
         r"""Internal method intended to be implemented by inheriting classes.
         It creates the time events from the list of global and track events, and as
         such the final token sequence.
 
         :param events: note events to complete.
-        :param time_division: time division of the MIDI being parsed.
         :return: the same events, with time events inserted.
         """
-        dur_bins = self._durations_ticks[time_division]
-
         # Creates first events
         all_events = [Event("Bar", "Start", 0)]
 
         # Time events
         time_sig_change = TimeSignature(0, *TIME_SIGNATURE)
-        ticks_per_bar = self._compute_ticks_per_bar(time_sig_change, time_division)
+        ticks_per_bar = self._compute_ticks_per_bar(
+            time_sig_change, self._time_division
+        )
         bar_at_last_ts_change = 0
         previous_tick = 0
         current_bar = 0
@@ -90,7 +89,7 @@ class MMM(MIDITokenizer):
                     TimeSignature(
                         events[ei].time, *list(map(int, events[ei].value.split("/")))
                     ),
-                    time_division,
+                    self._time_division,
                 )
             if events[ei].time != previous_tick:
                 # Bar
@@ -126,7 +125,7 @@ class MMM(MIDITokenizer):
                 # TimeShift
                 if events[ei].time != previous_tick:
                     time_shift = events[ei].time - previous_tick
-                    index = np.argmin(np.abs(dur_bins - time_shift))
+                    index = np.argmin(np.abs(self._durations_ticks - time_shift))
                     all_events.append(
                         Event(
                             type="TimeShift",
@@ -186,11 +185,9 @@ class MMM(MIDITokenizer):
                 ),
             ]
 
-            track_events = deepcopy(global_events) + self._create_track_events(
-                track, midi.ticks_per_quarter
-            )
+            track_events = deepcopy(global_events) + self._create_track_events(track)
             track_events.sort(key=lambda x: x.time)
-            all_events += self._add_time_events(track_events, midi.ticks_per_quarter)
+            all_events += self._add_time_events(track_events)
             all_events.append(Event("Track", "End", all_events[-1].time + 1))
 
         self.config.use_programs = True

@@ -84,19 +84,14 @@ class CPWord(MIDITokenizer):
         }  # used for data augmentation
         self.vocab_types_idx["Bar"] = 1  # same as position
 
-    def _add_time_events(
-        self, events: List[Event], time_division: int
-    ) -> List[List[Event]]:
+    def _add_time_events(self, events: List[Event]) -> List[List[Event]]:
         r"""Internal method intended to be implemented by inheriting classes.
         It creates the time events from the list of global and track events, and as
         such the final token sequence.
 
         :param events: note events to complete.
-        :param time_division: time division of the MIDI being parsed.
         :return: the same events, with time events inserted.
         """
-        ticks_per_sample = time_division / max(self.config.beat_res.values())
-
         # Add time events
         all_events = []
         current_bar = -1
@@ -114,7 +109,7 @@ class CPWord(MIDITokenizer):
             current_tempo = self._DEFAULT_TEMPO
         current_program = None
         ticks_per_bar = self._compute_ticks_per_bar(
-            TimeSignature(0, *current_time_sig), time_division
+            TimeSignature(0, *current_time_sig), self._time_division
         )
         # First look for a TimeSig token, if any is given at tick 0, to update
         # current_time_sig
@@ -123,7 +118,8 @@ class CPWord(MIDITokenizer):
                 if event.type == "TimeSig":
                     current_time_sig = list(map(int, event.value.split("/")))
                     ticks_per_bar = self._compute_ticks_per_bar(
-                        TimeSignature(event.time, *current_time_sig), time_division
+                        TimeSignature(event.time, *current_time_sig),
+                        self._time_division,
                     )
                     break
                 elif event.type in [
@@ -160,11 +156,11 @@ class CPWord(MIDITokenizer):
                 # (Rest)
                 if (
                     self.config.use_rests
-                    and event.time - previous_note_end >= self._min_rest(time_division)
+                    and event.time - previous_note_end >= self._min_rest
                 ):
                     previous_tick = previous_note_end
                     rest_values = self._ticks_to_duration_tokens(
-                        event.time - previous_tick, time_division, rest=True
+                        event.time - previous_tick, self._time_division, rest=True
                     )
                     # Add Rest events and increment previous_tick
                     for dur_value, dur_ticks in zip(*rest_values):
@@ -220,9 +216,7 @@ class CPWord(MIDITokenizer):
 
                 # Position
                 if event.type != "TimeSig":
-                    pos_index = int(
-                        (event.time - tick_at_current_bar) / ticks_per_sample
-                    )
+                    pos_index = event.time - tick_at_current_bar
                     all_events.append(
                         self.__create_cp_token(
                             event.time,
@@ -243,7 +237,7 @@ class CPWord(MIDITokenizer):
                 ) // ticks_per_bar
                 tick_at_last_ts_change = event.time
                 ticks_per_bar = self._compute_ticks_per_bar(
-                    TimeSignature(event.time, *current_time_sig), time_division
+                    TimeSignature(event.time, *current_time_sig), self._time_division
                 )
                 # We decrease the previous tick so that a Position token is enforced
                 # for the next event

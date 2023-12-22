@@ -346,10 +346,19 @@ class MIDITokenizer(ABC, HFHubMixin):
         self._token_types_indexes = {}
         self._update_token_types_indexes()
 
-        # Keep in memory durations in ticks for seen time divisions so these values
-        # are not calculated each time a MIDI is processed
-        self._durations_ticks = {}
-        self._rests_ticks = {}
+        # For internal use, Duration/TimeShift/Rest values of the tokenizer
+        self._durations_ticks = np.array(
+            [
+                (beat * res + pos) * self._time_division // res
+                for beat, pos, res in self.durations
+            ]
+        )
+        self._rests_ticks = np.array(
+            [
+                (beat * res + pos) * self._time_division // res
+                for beat, pos, res in self.rests
+            ]
+        )
 
     def _tweak_config_before_creating_voc(self):
         # called after setting the tokenizer's TokenizerConfig (.config). To be
@@ -419,11 +428,12 @@ class MIDITokenizer(ABC, HFHubMixin):
         """
         return [self[token] for token in self.special_tokens]
 
-    def _min_rest(self, time_division: int) -> int:
+    @property
+    def _min_rest(self) -> int:
         if not self.config.use_rests:
             return 0
         else:
-            return self._rests_ticks[time_division][0]
+            return self._rests_ticks[0]
 
     def preprocess_midi(self, midi: Score):
         r"""Pre-process (in place) a MIDI file to resample its time and events values
@@ -615,7 +625,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 continue
             times.append(time_sigs[i].time)
             values.append([time_sigs[i].numerator, time_sigs[i].denominator])
-            continue
+            i += 1
 
         # Resample time, find closest tempos
         # TODO align time on bars?
@@ -793,7 +803,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         # Adds track tokens
         for ti, track in enumerate(midi.tracks):
-            track_events = self._create_track_events(track, midi.ticks_per_quarter)
+            track_events = self._create_track_events(track)
             if self.one_token_stream:
                 all_events += track_events
             else:
@@ -813,15 +823,13 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         # Add time events
         if self.one_token_stream:
-            all_events = self._add_time_events(all_events, midi.ticks_per_quarter)
+            all_events = self._add_time_events(all_events)
             tok_sequence = TokSequence(events=all_events)
             self.complete_sequence(tok_sequence)
         else:
             tok_sequence = []
             for i in range(len(all_events)):
-                all_events[i] = self._add_time_events(
-                    all_events[i], midi.ticks_per_quarter
-                )
+                all_events[i] = self._add_time_events(all_events[i])
                 tok_sequence.append(TokSequence(events=all_events[i]))
                 self.complete_sequence(tok_sequence[-1])
 
@@ -860,25 +868,23 @@ class MIDITokenizer(ABC, HFHubMixin):
         else:
             return 10
 
-    def _create_track_events(self, track: Track, time_division: int) -> List[Event]:
+    def _create_track_events(self, track: Track) -> List[Event]:
         r"""Extract the tokens / events of individual tracks: *Pitch*, *Velocity*,
         *Duration*, *NoteOn*, *NoteOff* and optionally *Chord*, from a track
         (``miditoolkit.Instrument``).
 
         :param track: MIDI track to convert.
-        :param time_division: time division of the MIDI being parsed.
         :return: sequence of corresponding Events
         """
         # Make sure the notes are sorted first by their onset (start) times, second by
         # pitch: notes.sort(key=lambda x: (x.start, x.pitch)) (done in midi_to_tokens)
-        dur_bins = self._durations_ticks[time_division]
         program = track.program if not track.is_drum else -1
         events = []
         note_token_name = "NoteOn" if self._note_on_off else "Pitch"
         max_time_interval = 0
         if self.config.use_pitch_intervals:
             max_time_interval = (
-                time_division * self.config.pitch_intervals_max_time_dist
+                self._time_division * self.config.pitch_intervals_max_time_dist
             )
         previous_note_onset = -max_time_interval - 1
         previous_pitch_onset = -128  # lowest at a given time
@@ -888,7 +894,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         if self.config.use_chords and not track.is_drum:
             chords = detect_chords(
                 track.notes,
-                time_division,
+                self._time_division,
                 chord_maps=self.config.chord_maps,
                 program=program,
                 specify_root_note=self.config.chord_tokens_with_root_note,
@@ -916,7 +922,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 )
                 # PedalOff or Duration
                 if self.config.sustain_pedal_duration:
-                    index = np.argmin(np.abs(dur_bins - pedal.duration))
+                    index = np.argmin(np.abs(self._durations_ticks - pedal.duration))
                     events.append(
                         Event(
                             "Duration",
@@ -1047,7 +1053,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                     )
                 )
             else:
-                index = np.argmin(np.abs(dur_bins - note.duration))
+                index = np.argmin(np.abs(self._durations_ticks - note.duration))
                 events.append(
                     Event(
                         type="Duration",
@@ -1131,13 +1137,12 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         return events
 
-    def _add_time_events(self, events: List[Event], time_division: int) -> List[Event]:
+    def _add_time_events(self, events: List[Event]) -> List[Event]:
         r"""Internal method intended to be implemented by inheriting classes.
         It creates the time events from the list of global and track events, and as
         such the final token sequence.
 
         :param events: note events to complete.
-        :param time_division: time division of the MIDI being parsed.
         :return: the same events, with time events inserted.
         """
         raise NotImplementedError
@@ -1160,23 +1165,6 @@ class MIDITokenizer(ABC, HFHubMixin):
         :return: a :class:`miditok.TokSequence` if ``tokenizer.one_token_stream`` is
             ``True``, else a list of :class:`miditok.TokSequence` objects.
         """
-        # Check if the durations values have been calculated before for this time
-        # division
-        if midi.ticks_per_quarter not in self._durations_ticks:
-            self._durations_ticks[midi.ticks_per_quarter] = np.array(
-                [
-                    (beat * res + pos) * midi.ticks_per_quarter // res
-                    for beat, pos, res in self.durations
-                ]
-            )
-        if self.config.use_rests and midi.ticks_per_quarter not in self._rests_ticks:
-            self._rests_ticks[midi.ticks_per_quarter] = np.array(
-                [
-                    (beat * res + pos) * midi.ticks_per_quarter // res
-                    for beat, pos, res in self.rests
-                ]
-            )
-
         # Preprocess the MIDI file
         self.preprocess_midi(midi)
 
@@ -1680,10 +1668,10 @@ class MIDITokenizer(ABC, HFHubMixin):
             tick for each of these values.
         """
         if rest:
-            dur_bins = self._rests_ticks[time_division]
+            dur_bins = self._rests_ticks
             dur_vals = self.rests
         else:
-            dur_bins = self._durations_ticks[time_division]
+            dur_bins = self._durations_ticks
             dur_vals = self.durations
         min_dur = dur_bins[0]
 

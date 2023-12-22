@@ -39,13 +39,12 @@ class TSD(MIDITokenizer):
         if self.config.use_programs:
             self.one_token_stream = True
 
-    def _add_time_events(self, events: List[Event], time_division: int) -> List[Event]:
+    def _add_time_events(self, events: List[Event]) -> List[Event]:
         r"""Internal method intended to be implemented by inheriting classes.
         It creates the time events from the list of global and track events, and as
         such the final token sequence.
 
         :param events: note events to complete.
-        :param time_division: time division of the MIDI being parsed.
         :return: the same events, with time events inserted.
         """
         # Add time events
@@ -58,11 +57,11 @@ class TSD(MIDITokenizer):
                 # (Rest)
                 if (
                     self.config.use_rests
-                    and event.time - previous_note_end >= self._min_rest(time_division)
+                    and event.time - previous_note_end >= self._min_rest
                 ):
                     previous_tick = previous_note_end
                     rest_values = self._ticks_to_duration_tokens(
-                        event.time - previous_tick, time_division, rest=True
+                        event.time - previous_tick, self._time_division, rest=True
                     )
                     for dur_value, dur_ticks in zip(*rest_values):
                         all_events.append(
@@ -80,7 +79,7 @@ class TSD(MIDITokenizer):
                 if event.time != previous_tick:
                     time_shift = event.time - previous_tick
                     for dur_value, dur_ticks in zip(
-                        *self._ticks_to_duration_tokens(time_shift, time_division)
+                        *self._ticks_to_duration_tokens(time_shift, self._time_division)
                     ):
                         all_events.append(
                             Event(

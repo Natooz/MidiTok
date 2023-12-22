@@ -198,13 +198,12 @@ class MuMIDI(MIDITokenizer):
         """
         # Make sure the notes are sorted first by their onset (start) times, second by
         # pitch: notes.sort(key=lambda x: (x.start, x.pitch)) (done in midi_to_tokens)
-        dur_bins = self._durations_ticks[time_division]
 
         tokens = []
         for note in track.notes:
             # Note
             duration = note.end - note.start
-            dur_idx = np.argmin(np.abs(dur_bins - duration))
+            dur_idx = np.argmin(np.abs(self._durations_ticks - duration))
             if not track.is_drum:
                 tokens.append(
                     [

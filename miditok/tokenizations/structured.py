@@ -37,7 +37,7 @@ class Structured(MIDITokenizer):
         self.config.use_pitch_intervals = False
         self.config.program_changes = False
 
-    def _create_track_events(self, track: Track, time_division: int) -> List[Event]:
+    def _create_track_events(self, track: Track) -> List[Event]:
         r"""Extract the tokens / events of individual tracks: *Pitch*, *Velocity*,
         *Duration*, *NoteOn*, *NoteOff* and optionally *Chord*, from a track
         (``miditoolkit.Instrument``).
@@ -47,7 +47,6 @@ class Structured(MIDITokenizer):
         """
         # Make sure the notes are sorted first by their onset (start) times, second by
         # pitch: notes.sort(key=lambda x: (x.start, x.pitch)) done in midi_to_tokens
-        dur_bins = self._durations_ticks[time_division]
         program = track.program if not track.is_drum else -1
         events = []
 
@@ -58,7 +57,7 @@ class Structured(MIDITokenizer):
             # call __add_time_note_events and avoid delay cause by event sorting
             if not self.one_token_stream:
                 time_shift = note.start - previous_tick
-                index = np.argmin(np.abs(dur_bins - time_shift))
+                index = np.argmin(np.abs(self._durations_ticks - time_shift))
                 events.append(
                     Event(
                         type="TimeShift",
@@ -86,7 +85,7 @@ class Structured(MIDITokenizer):
                 )
             )
             duration = note.end - note.start
-            index = np.argmin(np.abs(dur_bins - duration))
+            index = np.argmin(np.abs(self._durations_ticks - duration))
             events.append(
                 Event(
                     type="Duration",
@@ -99,16 +98,14 @@ class Structured(MIDITokenizer):
 
         return events
 
-    def _add_time_events(self, events: List[Event], time_division: int) -> List[Event]:
+    def _add_time_events(self, events: List[Event]) -> List[Event]:
         r"""Internal method intended to be implemented by inheriting classes.
         It creates the time events from the list of global and track events, and as
         such the final token sequence.
 
         :param events: note events to complete.
-        :param time_division: time division of the MIDI being parsed.
         :return: the same events, with time events inserted.
         """
-        dur_bins = self._durations_ticks[time_division]
         all_events = []
         token_type_to_check = "Program" if self.one_token_stream else "Pitch"
 
@@ -118,7 +115,7 @@ class Structured(MIDITokenizer):
             if event.type == token_type_to_check:
                 # Time shift
                 time_shift = event.time - previous_tick
-                index = np.argmin(np.abs(dur_bins - time_shift))
+                index = np.argmin(np.abs(self._durations_ticks - time_shift))
                 all_events.append(
                     Event(
                         type="TimeShift",
@@ -151,7 +148,7 @@ class Structured(MIDITokenizer):
         if not self.one_token_stream and len(midi.tracks) == 0:
             all_events.append([])
         for track in midi.tracks:
-            note_events = self._create_track_events(track, midi.ticks_per_quarter)
+            note_events = self._create_track_events(track)
             if self.one_token_stream:
                 all_events += note_events
             else:
@@ -161,7 +158,7 @@ class Structured(MIDITokenizer):
         if self.one_token_stream:
             if len(midi.tracks) > 1:
                 all_events.sort(key=lambda x: x.time)
-            all_events = self._add_time_events(all_events, midi.ticks_per_quarter)
+            all_events = self._add_time_events(all_events)
             tok_sequence = TokSequence(events=all_events)
             self.complete_sequence(tok_sequence)
         else:

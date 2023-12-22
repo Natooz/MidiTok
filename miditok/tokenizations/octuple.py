@@ -76,9 +76,7 @@ class Octuple(MIDITokenizer):
             type_: idx for idx, type_ in enumerate(token_types)
         }  # used for data augmentation
 
-    def _add_time_events(
-        self, events: List[Event], time_division: int
-    ) -> List[List[Event]]:
+    def _add_time_events(self, events: List[Event]) -> List[List[Event]]:
         r"""Internal method intended to be implemented by inheriting classes.
         It creates the time events from the list of global and track events, and as
         such the final token sequence.
@@ -94,11 +92,8 @@ class Octuple(MIDITokenizer):
             (7: TimeSignature)
 
         :param events: note events to complete.
-        :param time_division: time division of the MIDI being parsed.
         :return: the same events, with time events inserted.
         """
-        ticks_per_sample = time_division / max(self.config.beat_res.values())
-
         # Add time events
         all_events = []
         current_bar = 0
@@ -110,7 +105,7 @@ class Octuple(MIDITokenizer):
         current_tempo = self._DEFAULT_TEMPO
         current_program = None
         ticks_per_bar = self._compute_ticks_per_bar(
-            TimeSignature(0, *current_time_sig), time_division
+            TimeSignature(0, *current_time_sig), self._time_division
         )
         for e, event in enumerate(events):
             # Set current bar and position
@@ -119,7 +114,7 @@ class Octuple(MIDITokenizer):
             if event.time != previous_tick:
                 elapsed_tick = event.time - current_tick_from_ts_time
                 current_bar = current_bar_from_ts_time + elapsed_tick // ticks_per_bar
-                current_pos = int((elapsed_tick % ticks_per_bar) / ticks_per_sample)
+                current_pos = elapsed_tick % ticks_per_bar
                 previous_tick = event.time
 
             if event.type == "TimeSig":
@@ -127,7 +122,7 @@ class Octuple(MIDITokenizer):
                 current_bar_from_ts_time = current_bar
                 current_tick_from_ts_time = previous_tick
                 ticks_per_bar = self._compute_ticks_per_bar(
-                    TimeSignature(event.time, *current_time_sig), time_division
+                    TimeSignature(event.time, *current_time_sig), self._time_division
                 )
             elif event.type == "Tempo":
                 current_tempo = event.value
