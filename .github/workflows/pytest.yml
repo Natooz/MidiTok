@@ -1,6 +1,6 @@
 # PyTest workflow
 
-name: Test
+name: Tests
 
 on:
   push:
@@ -13,8 +13,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11"]
-        os: [ ubuntu-latest, macOS-latest, windows-latest ]
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.x", "pypy3.9"]
+        os: [ ubuntu-latest, windows-latest ]
+        include:
+          - os: macos-latest
+            python-version: "3.x"
 
     steps:
       - uses: actions/checkout@v4
