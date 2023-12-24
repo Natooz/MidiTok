@@ -16,6 +16,7 @@ from symusic import (
     TimeSignature,
     Track,
 )
+from symusic.core import TempoTickList
 
 import miditok
 from miditok.constants import CHORD_MAPS, TIME_SIGNATURE, TIME_SIGNATURE_RANGE
@@ -187,6 +188,17 @@ def notes_equals(note1: Note, note2: Note) -> str:
     return ""
 
 
+def tempos_equals(tempos1: TempoTickList, tempos2: TempoTickList) -> bool:
+    for tempo1, tempo2 in zip(tempos1, tempos2):
+        if (
+            tempo1.time != tempo2.time
+            or round(tempo1.qpm, 2) != round(tempo2.qpm, 2)
+            or abs(tempo1.mspq - tempo2.mspq) > 1
+        ):
+            return False
+    return True
+
+
 def check_midis_equals(
     midi1: Score,
     midi2: Score,
@@ -240,7 +252,7 @@ def check_midis_equals(
                 break"""
 
     # Checks tempos
-    if check_tempos and midi1.tempos != midi2.tempos:
+    if check_tempos and not tempos_equals(midi1.tempos, midi2.tempos):
         types_of_errors.append("TEMPOS")
 
     # Checks time signatures
