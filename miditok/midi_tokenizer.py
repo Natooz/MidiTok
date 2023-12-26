@@ -55,7 +55,6 @@ from .constants import (
     MIDI_LOADING_EXCEPTION,
     PITCH_CLASSES,
     TEMPO,
-    TIME_DIVISION,
     TIME_SIGNATURE,
     UNKNOWN_CHORD_PREFIX,
 )
