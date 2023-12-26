@@ -1,5 +1,5 @@
 from copy import deepcopy
-from typing import Any, Dict, List, Union, cast
+from typing import Any, Dict, List, Optional, Union, cast
 
 import numpy as np
 from symusic import Note, Score, Tempo, TimeSignature, Track
@@ -8,7 +8,6 @@ from ..classes import Event, TokSequence
 from ..constants import (
     MIDI_INSTRUMENTS,
     MMM_DENSITY_BINS_MAX,
-    TIME_DIVISION,
     TIME_SIGNATURE,
 )
 from ..midi_tokenizer import MIDITokenizer, _in_as_seq
@@ -199,7 +198,7 @@ class MMM(MIDITokenizer):
         self,
         tokens: Union[TokSequence, List, np.ndarray, Any],
         _=None,
-        time_division: int = TIME_DIVISION,
+        time_division: Optional[int] = None,
     ) -> Score:
         r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
 
@@ -210,6 +209,8 @@ class MMM(MIDITokenizer):
             MIDI to create).
         :return: the midi object (:class:`miditoolkit.MidiFile`).
         """
+        if time_division is None:
+            time_division = self._time_division
         tokens = cast(TokSequence, tokens)
         midi = Score(time_division)
         if time_division % max(self.config.beat_res.values()) != 0:

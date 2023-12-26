@@ -4,7 +4,7 @@ import numpy as np
 from symusic import Note, Pedal, PitchBend, Score, Tempo, TimeSignature, Track
 
 from ..classes import Event, TokSequence
-from ..constants import MIDI_INSTRUMENTS, TIME_DIVISION
+from ..constants import MIDI_INSTRUMENTS
 from ..midi_tokenizer import MIDITokenizer, _in_as_seq
 from ..utils import fix_offsets_overlapping_notes
 
@@ -107,20 +107,20 @@ class MIDILike(MIDITokenizer):
 
         return all_events
 
-    def _midi_to_tokens(self, midi: Score) -> Union[TokSequence, List[TokSequence]]:
-        r"""Converts a preprocessed MIDI object to a sequence of tokens.
-        Overridden to call fix_offsets_overlapping_notes before.
+    def preprocess_midi(self, midi: Score) -> Score:
+        r"""Pre-process a MIDI file to resample its time and events values
+        before tokenizing it.
+        Overridden to call fix_offsets_overlapping_notes after.
 
-        :param midi: the MIDI object to convert.
-        :return: a :class:`miditok.TokSequence` if `tokenizer.one_token_stream` is
-            true, else a list of :class:`miditok.TokSequence` objects.
+        :param midi: MIDI object to preprocess.
         """
-        # Adds note tokens
+        midi = super().preprocess_midi(midi)
+
+        # Fix offsets overlapping notes
         for track in midi.tracks:
-            # Fix offsets overlapping notes
             fix_offsets_overlapping_notes(track.notes)
 
-        return super()._midi_to_tokens(midi)
+        return midi
 
     def _tokens_to_midi(
         self,
@@ -129,7 +129,7 @@ class MIDILike(MIDITokenizer):
             List[Union[TokSequence, List, np.ndarray, Any]],
         ],
         programs: Optional[List[Tuple[int, bool]]] = None,
-        time_division: int = TIME_DIVISION,
+        time_division: Optional[int] = None,
         default_duration: Optional[int] = None,
     ) -> Score:
         r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
@@ -145,6 +145,8 @@ class MIDILike(MIDITokenizer):
             with no Note Off event.
         :return: the midi object (:class:`miditoolkit.MidiFile`).
         """
+        if time_division is None:
+            time_division = self._time_division
         # Unsqueeze tokens in case of one_token_stream
         if self.one_token_stream:  # ie single token seq
             tokens = [tokens]
@@ -594,10 +596,16 @@ class MIDILike(MIDITokenizer):
             else [Event(*tok.split("_")) for tok in tokens.tokens]
         )
 
-        for i in range(1, len(events)):
+        for i in range(len(events)):
             # err_tokens = events[i - 4 : i + 4]  # uncomment for debug
+            # Bad token type
+            if (
+                i > 0
+                and events[i].type not in self.tokens_types_graph[events[i - 1].type]
+            ):
+                err += 1
             # Good token type
-            if events[i].type in self.tokens_types_graph[events[i - 1].type]:
+            else:
                 if events[i].type in [
                     "NoteOn",
                     "PitchIntervalTime",
@@ -642,7 +650,7 @@ class MIDILike(MIDITokenizer):
                                 break  # all good
                         elif events[j].type in ["TimeShift", "Rest"]:
                             offset_sample += self._token_duration_to_ticks(
-                                events[j].value, max(self.config.beat_res.values())
+                                events[j].value, self._time_division
                             )
                         elif events[j].type == "Program":
                             current_program_noff = events[j].value
@@ -660,9 +668,5 @@ class MIDILike(MIDITokenizer):
                     current_program = int(events[i].value)
                 elif events[i].type in ["TimeShift", "Rest"]:
                     current_pitches_tick = {p: [] for p in self.config.programs}
-
-            # Bad token type
-            else:
-                err += 1
 
         return err / nb_tok_predicted

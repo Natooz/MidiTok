@@ -8,7 +8,6 @@ from ..classes import Event, TokSequence
 from ..constants import (
     DRUM_PITCH_RANGE,
     MIDI_INSTRUMENTS,
-    TIME_DIVISION,
 )
 from ..midi_tokenizer import MIDITokenizer, _in_as_seq, _out_as_complete_seq
 from ..utils import detect_chords, get_midi_max_tick
@@ -255,7 +254,7 @@ class MuMIDI(MIDITokenizer):
         self,
         tokens: Union[TokSequence, List, np.ndarray, Any],
         _=None,
-        time_division: Optional[int] = TIME_DIVISION,
+        time_division: Optional[int] = None,
     ) -> Score:
         r"""Override the parent class method
         Convert multiple sequences of tokens into a multitrack MIDI and save it.
@@ -279,6 +278,8 @@ class MuMIDI(MIDITokenizer):
             MIDI to create)
         :return: the midi object (miditoolkit.MidiFile)
         """
+        if time_division is None:
+            time_division = self._time_division
         if time_division % max(self.config.beat_res.values()) != 0:
             raise ValueError(
                 f"Invalid time division, please give one divisible by"

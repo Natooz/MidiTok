@@ -433,7 +433,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         if not self.config.use_rests:
             return 0
         else:
-            return self._rests_ticks[0]
+            return int(self._rests_ticks[0])
 
     def preprocess_midi(self, midi: Score):
         r"""Pre-process (in place) a MIDI file to resample its time and events values
@@ -1315,7 +1315,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         tokens: Union[TokSequence, List, np.ndarray, Any],
         programs: Optional[List[Tuple[int, bool]]] = None,
         output_path: Optional[str] = None,
-        time_division: Optional[int] = TIME_DIVISION,
+        time_division: Optional[int] = None,
     ) -> Score:
         r"""Detokenize one or multiple sequences of tokens into a MIDI file.
         You can give the tokens sequences either as :class:`miditok.TokSequence`
@@ -1351,7 +1351,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         self,
         tokens: Union[TokSequence, List, np.ndarray, Any],
         programs: Optional[List[Tuple[int, bool]]] = None,
-        time_division: Optional[int] = TIME_DIVISION,
+        time_division: Optional[int] = None,
     ) -> Score:
         r"""Internal method called by ``self.tokens_to_midi``, intended to be
         implemented by inheriting classes.

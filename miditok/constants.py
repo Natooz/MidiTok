@@ -111,7 +111,6 @@ DRUM_PITCH_RANGE = (27, 88)
 MMM_DENSITY_BINS_MAX = (10, 20)
 
 # Defaults values when writing new MIDI files
-TIME_DIVISION = 384  # 384 and 480 are convenient as divisible by 4, 8, 12, 16, 24, 32
 TEMPO = 120
 TIME_SIGNATURE = (4, 4)
 DELETE_EQUAL_SUCCESSIVE_TIME_SIG_CHANGES = False

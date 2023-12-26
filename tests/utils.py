@@ -128,9 +128,11 @@ def prepare_midi_for_tests(
     for track in new_midi.tracks:
         # Adjust notes and pedal ends to the maximum possible value
         if tokenizer is not None:
-            adjust_notes_durations(track.notes, tokenizer, new_midi.ticks_per_quarter)
+            adjust_notes_pedals_durations(
+                track.notes, tokenizer, new_midi.ticks_per_quarter
+            )
             if tokenizer.config.use_sustain_pedals:
-                adjust_pedal_durations(
+                adjust_notes_pedals_durations(
                     track.pedals, tokenizer, new_midi.ticks_per_quarter
                 )
         if track.is_drum:
@@ -378,13 +380,15 @@ def adapt_tempo_changes_times(
             tempo_changes.insert(0, Tempo(0, default_tempo))
 
 
-def adjust_notes_durations(
-    notes: List[Note], tokenizer: miditok.MIDITokenizer, time_division: int
+def adjust_notes_pedals_durations(
+    notes_pedals: Union[List[Note], List[Pedal]],
+    tokenizer: miditok.MIDITokenizer,
+    time_division: int,
 ):
-    """Adapt notes offset times so that they match the possible durations covered by a
-    tokenizer.
+    """Adapt notes and pedals offset times so that they match the possible durations
+    covered by a tokenizer.
 
-    :param notes: list of Note objects to adapt.
+    :param notes_pedals: list of Note or Pedal objects to adapt.
     :param tokenizer: tokenizer (needed for durations).
     :param time_division: time division of the MIDI of origin.
     """
@@ -394,29 +398,7 @@ def adjust_notes_durations(
             for beat, pos, res in tokenizer.durations
         ]
     )
-    for note in notes:
-        dur_index = np.argmin(np.abs(durations_in_tick - note.duration))
+    for note_pedal in notes_pedals:
+        dur_index = np.argmin(np.abs(durations_in_tick - note_pedal.duration))
         beat, pos, res = tokenizer.durations[dur_index]
-        note.duration = (beat * res + pos) * time_division // res
-
-
-def adjust_pedal_durations(
-    pedals: List[Pedal], tokenizer: miditok.MIDITokenizer, time_division: int
-):
-    """Adapt pedal offset times so that they match the possible durations covered by a
-    tokenizer.
-
-    :param pedals: list of Pedal objects to adapt.
-    :param tokenizer: tokenizer (needed for durations).
-    :param time_division: time division of the MIDI of origin.
-    """
-    durations_in_tick = np.array(
-        [
-            (beat * res + pos) * time_division // res
-            for beat, pos, res in tokenizer.durations
-        ]
-    )
-    for pedal in pedals:
-        dur_index = np.argmin(np.abs(durations_in_tick - pedal.duration))
-        beat, pos, res = tokenizer.durations[dur_index]
-        pedal.duration = (beat * res + pos) * time_division // res
+        note_pedal.duration = (beat * res + pos) * time_division // res

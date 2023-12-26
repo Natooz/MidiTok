@@ -6,7 +6,6 @@ from symusic import Note, Score, Track
 from ..classes import Event, TokSequence
 from ..constants import (
     MIDI_INSTRUMENTS,
-    TIME_DIVISION,
 )
 from ..midi_tokenizer import MIDITokenizer
 
@@ -177,7 +176,7 @@ class Structured(MIDITokenizer):
             List[Union[TokSequence, List, np.ndarray, Any]],
         ],
         programs: Optional[List[Tuple[int, bool]]] = None,
-        time_division: int = TIME_DIVISION,
+        time_division: Optional[int] = None,
     ) -> Score:
         r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
 
@@ -189,6 +188,8 @@ class Structured(MIDITokenizer):
             MIDI to create).
         :return: the midi object (:class:`miditoolkit.MidiFile`).
         """
+        if time_division is None:
+            time_division = self._time_division
         # Unsqueeze tokens in case of one_token_stream
         if self.one_token_stream:  # ie single token seq
             tokens = [tokens]

@@ -109,8 +109,6 @@ def _test_tokenize(
     :param saving_erroneous_midis: will save MIDIs decoded with errors, to be used to
         debug.
     """
-    at_least_one_error = False
-
     # Reads the MIDI and add pedal messages to make sure there are some
     midi = Score(Path(midi_path))
 
@@ -135,7 +133,6 @@ def _test_tokenize(
 
     if has_errors:
         TEST_LOG_DIR.mkdir(exist_ok=True, parents=True)
-        at_least_one_error = True
         if saving_erroneous_midis:
             decoded_midi.dump_midi(
                 TEST_LOG_DIR / f"{midi_path.stem}_{tokenization}.mid"
@@ -144,7 +141,7 @@ def _test_tokenize(
                 TEST_LOG_DIR / f"{midi_path.stem}_{tokenization}_original.mid"
             )
 
-    assert not at_least_one_error
+    assert not has_errors
 
 
 @pytest.mark.parametrize("midi_path", MIDI_PATHS_ONE_TRACK)
