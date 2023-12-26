@@ -27,6 +27,7 @@ from miditok.utils import (
     merge_tracks,
     merge_tracks_per_class,
     nb_bar_pos,
+    remove_duplicated_notes,
 )
 
 from .utils import (
@@ -190,3 +191,76 @@ def test_nb_pos():
         tokenizer["Bar_None"],
         tokenizer.token_ids_of_type("Position"),
     )
+
+
+def test_remove_duplicated_notes():
+    sets = [
+        # No duplicated
+        (
+            [
+                Note(time=0, duration=10, pitch=50, velocity=50),
+                Note(time=0, duration=10, pitch=51, velocity=50),
+                Note(time=2, duration=10, pitch=50, velocity=50),
+                Note(time=4, duration=10, pitch=50, velocity=50),
+            ],
+            0,
+            0,
+        ),
+        # One duplicated with dur
+        (
+            [
+                Note(time=0, duration=10, pitch=50, velocity=50),
+                Note(time=0, duration=10, pitch=50, velocity=50),
+                Note(time=2, duration=10, pitch=50, velocity=50),
+                Note(time=4, duration=10, pitch=50, velocity=50),
+            ],
+            1,
+            1,
+        ),
+        (
+            [
+                Note(time=0, duration=10, pitch=50, velocity=50),
+                Note(time=0, duration=11, pitch=50, velocity=50),
+                Note(time=2, duration=10, pitch=50, velocity=50),
+                Note(time=4, duration=10, pitch=50, velocity=50),
+            ],
+            1,
+            0,
+        ),
+        (
+            [
+                Note(time=0, duration=10, pitch=50, velocity=50),
+                Note(time=0, duration=10, pitch=50, velocity=50),
+                Note(time=0, duration=11, pitch=50, velocity=50),
+                Note(time=2, duration=10, pitch=50, velocity=50),
+                Note(time=4, duration=10, pitch=50, velocity=50),
+            ],
+            2,
+            1,
+        ),
+        (
+            [
+                Note(time=0, duration=10, pitch=50, velocity=50),
+                Note(time=0, duration=10, pitch=50, velocity=50),
+                Note(time=0, duration=11, pitch=50, velocity=50),
+                Note(time=2, duration=10, pitch=50, velocity=50),
+                Note(time=2, duration=11, pitch=50, velocity=50),
+                Note(time=4, duration=10, pitch=50, velocity=50),
+            ],
+            3,
+            1,
+        ),
+    ]
+
+    for notes, diff, diff_with_duration in sets:
+        remove_duplicated_notes(notes_filtered := copy(notes))
+        remove_duplicated_notes(notes_filtered_dur := copy(notes), True)
+
+        if diff == 0:
+            assert notes == notes_filtered
+        else:
+            assert len(notes) - len(notes_filtered) == diff
+        if diff_with_duration == 0:
+            assert notes == notes_filtered_dur
+        else:
+            assert len(notes) - len(notes_filtered_dur) == diff_with_duration

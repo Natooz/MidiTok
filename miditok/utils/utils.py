@@ -6,7 +6,7 @@ from collections import Counter
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
-from symusic import Score, Track
+from symusic import Note, Score, Track
 from symusic.core import NoteTickList, TrackTickList
 
 from miditok.classes import Event
@@ -64,31 +64,30 @@ def get_midi_programs(midi: Score) -> List[Tuple[int, bool]]:
     return [(int(track.program), track.is_drum) for track in midi.tracks]
 
 
-def remove_duplicated_notes(notes: NoteTickList, filter_by_starting_tick: bool = True):
-    r"""Removes (inplace) possible duplicated notes, i.e. with the same pitch, starting
-    and ending times. Before running this method make sure the notes has been sorted by
-    start then pitch then end values:
-    `notes.sort(key=lambda x: (x.start, x.pitch, x.end))`
+def remove_duplicated_notes(
+    notes: Union[NoteTickList, List[Note]], consider_duration: bool = False
+):
+    r"""Removes (inplace) duplicated notes, i.e. with the same pitch and starting
+    (onset) time. `consider_duration` can be used to also consider their duration
+    (i.e. offset time) too. The velocities are ignored in this method.
+    **The notes need to be sorted by time, then pitch, and duration if
+    consider_duration is True:**
+    ``notes.sort(key=lambda x: (x.start, x.pitch, x.duration))``
 
     :param notes: notes to analyse
-    :param filter_by_starting_tick: will remove identical notes being played at the
-        same onset time regardless of their duration / offset time. If this argument is
-        disabled, only 100% identical notes will be deduplicated, i.e. with the same
-        duration too. (default: True)
+    :param consider_duration: if given ``True``, the method will also consider the
+        durations of the notes when detecting identical ones. (default: False)
     """
-    i = 0
-    while i + 1 < len(notes):
-        if (
-            notes[i].pitch == notes[i + 1].pitch
-            and notes[i].start == notes[i + 1].start
-        ):
-            if filter_by_starting_tick or (
-                not filter_by_starting_tick and notes[i].end == notes[i + 1].end
-            ):
-                # We keep the next note which has a longer duration
-                del notes[i]
-        else:
-            i += 1
+    if consider_duration:
+        onset_pitches = [[note.start, note.pitch, note.duration] for note in notes]
+    else:
+        onset_pitches = [[note.start, note.pitch] for note in notes]
+    onset_pitches = np.array(onset_pitches, dtype=np.intc)
+
+    successive_val_eq = np.all(onset_pitches[:-1] == onset_pitches[1:], axis=1)
+    idx_to_del = np.where(successive_val_eq)[0] + 1
+    for idx in reversed(idx_to_del):
+        del notes[idx]
 
 
 def fix_offsets_overlapping_notes(notes: NoteTickList):

@@ -102,6 +102,9 @@ PROGRAMS = list(range(-1, 128))
 ONE_TOKEN_STREAM_FOR_PROGRAMS = True
 PROGRAM_CHANGES = False
 
+# Other
+REMOVE_DUPLICATED_NOTES = False
+
 
 # Tokenizers specific parameters
 # For MuMIDI, recommended range from the GM2 specs

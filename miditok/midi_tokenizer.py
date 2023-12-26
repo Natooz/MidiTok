@@ -523,21 +523,25 @@ class MIDITokenizer(ABC, HFHubMixin):
             notes[i].velocity = vel
 
         # Sort notes and remove possible duplicated notes
-        notes.sort(key=lambda x: (x.start, x.pitch, x.end))
-        remove_duplicated_notes(notes)
+        notes.sort(key=lambda x: (x.start, x.pitch))
+        # TODO sort only if required? Check what it done in tests
+        """if self.config.use_pitch_intervals:
+            notes.sort(key=lambda x: (x.start, x.pitch))
+        else:
+            notes.sort(key=lambda x: x.start)"""
+        if self.config.remove_duplicated_notes:
+            remove_duplicated_notes(notes)
 
     def _preprocess_tempos(self, tempos: TempoTickList):
         r"""Resamples the tempo values of tempo change events.
-        For tempo changes occuring at the same tick/time, we only keep the last one.
+        For tempo changes occurring at the same tick/time, we only keep the last one.
         Consecutive identical tempo changes will be removed if
         ``self.config.delete_equal_successive_tempo_changes`` is True.
 
         :param tempos: tempo changes to resample.
         """
         # If we delete the successive equal tempo changes, we need to sort them by time
-        # Otherwise it is not required here as the tokens will be sorted by time
-        if self.config.delete_equal_successive_tempo_changes:
-            tempos.sort(key=lambda x: x.time)
+        # Fortunately, sorting is already performed by symusic when loading the MIDI.
 
         # Gather times and velocity values in lists
         times, values = [], []
@@ -584,10 +588,8 @@ class MIDITokenizer(ABC, HFHubMixin):
         :param time_sigs: time signature changes to quantize.
         """
         # If we delete the successive equal time signature changes, we need to sort
-        # them by time, otherwise it is not required here as the tokens will be sorted
-        # by time
-        if self.config.delete_equal_successive_time_sig_changes:
-            time_sigs.sort(key=lambda x: x.time)
+        # them by time.
+        # Fortunately, sorting is already performed by symusic when loading the MIDI.
 
         # Gathers times and velocity values in lists
         # Removes time sigs with a numerator or denominator equal to 0.
@@ -622,7 +624,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             if self.config.delete_equal_successive_time_sig_changes:
                 successive_val_eq = np.all(values[:-1] == values[1:], axis=1)
                 idx_to_del = np.where(successive_val_eq)[0] + 1
-                for idx in reversed(idx_to_del[1:]):
+                for idx in reversed(idx_to_del):
                     # times = np.delete(times, idx_to_del)
                     del time_sigs[idx]
 
@@ -814,12 +816,12 @@ class MIDITokenizer(ABC, HFHubMixin):
         r"""Extract the tokens / events of individual tracks: *Pitch*, *Velocity*,
         *Duration*, *NoteOn*, *NoteOff* and optionally *Chord*, from a track
         (``miditoolkit.Instrument``).
+        **If the tokenizer is using pitch intervals, the notes must be sorted by time
+        then pitch values. This is done in** ``preprocess_midi``.
 
         :param track: MIDI track to convert.
         :return: sequence of corresponding Events
         """
-        # Make sure the notes are sorted first by their onset (start) times, second by
-        # pitch: notes.sort(key=lambda x: (x.start, x.pitch)) (done in midi_to_tokens)
         program = track.program if not track.is_drum else -1
         events = []
         note_token_name = "NoteOn" if self._note_on_off else "Pitch"

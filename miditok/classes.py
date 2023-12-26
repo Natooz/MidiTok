@@ -32,6 +32,7 @@ from .constants import (
     PITCH_RANGE,
     PROGRAM_CHANGES,
     PROGRAMS,
+    REMOVE_DUPLICATED_NOTES,
     SPECIAL_TOKENS,
     SUSTAIN_PEDAL_DURATION,
     TEMPO_RANGE,
@@ -262,6 +263,9 @@ class TokenizerConfig:
         (default: ``(40, 250)``)
     :param log_tempos: will use log scaled tempo values instead of linearly scaled.
         (default: ``False``)
+    :param remove_duplicated_notes: will remove duplicated notes before tokenizing
+        MIDIs. Notes with the same onset time and pitch value will be deduplicated.
+        This option will slightly increase the tokenization time. (default: ``False``)
     :param delete_equal_successive_tempo_changes: setting this option True will delete
         identical successive tempo changes when preprocessing a MIDI file after loading
         it. For examples, if a MIDI has two tempo changes for tempo 120 at tick 1000
@@ -345,6 +349,7 @@ class TokenizerConfig:
         num_tempos: int = NUM_TEMPOS,
         tempo_range: Tuple[int, int] = TEMPO_RANGE,
         log_tempos: bool = LOG_TEMPOS,
+        remove_duplicated_notes: bool = REMOVE_DUPLICATED_NOTES,
         delete_equal_successive_tempo_changes: bool = DELETE_EQUAL_SUCCESSIVE_TEMPO_CHANGES,  # noqa: E501
         time_signature_range: Dict[
             int, Union[List[int], Tuple[int, int]]
@@ -395,6 +400,7 @@ class TokenizerConfig:
                     stacklevel=2,
                 )
             self.special_tokens.append("_".join(parts))
+        self.remove_duplicated_notes = remove_duplicated_notes
 
         # Additional token types params, enabling additional token types
         self.use_chords: bool = use_chords
