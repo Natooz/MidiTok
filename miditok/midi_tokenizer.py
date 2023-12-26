@@ -25,7 +25,6 @@ from symusic import (
 )
 from symusic.core import (
     NoteTickList,
-    PedalTickList,
     PitchBendTickList,
     ScoreTick,
     TempoTickList,
@@ -434,8 +433,8 @@ class MIDITokenizer(ABC, HFHubMixin):
         else:
             return int(self._rests_ticks[0])
 
-    def preprocess_midi(self, midi: Score):
-        r"""Pre-process (in place) a MIDI file to resample its time and events values
+    def preprocess_midi(self, midi: Score) -> Score:
+        r"""Pre-process a MIDI file to resample its time and events values
         before tokenizing it. Its notes attributes (times, pitches, velocities) will be
         downsampled and sorted, duplicated notes removed, as well as tempos. Empty
         tracks (with no note) will be removed from the MIDI object. Notes with pitches
@@ -443,35 +442,33 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         :param midi: MIDI object to preprocess.
         """
+        # Resample time, not inplace
+        if self._time_division != midi.ticks_per_quarter:
+            midi = midi.resample(self._time_division, 1)
+
         # Merge instruments of the same program / inst before preprocessing them
         # This allows to avoid potential duplicated notes in some multitrack settings
         if self.config.use_programs and self.one_token_stream:
             merge_same_program_tracks(midi.tracks)
 
         for t in range(len(midi.tracks) - 1, -1, -1):
-            # quantize notes attributes
-            self._resample_notes(midi.tracks[t].notes, midi.ticks_per_quarter)
-            # sort notes
-            midi.tracks[t].notes.sort(key=lambda x: (x.start, x.pitch, x.end))
-            # remove possible duplicated notes
-            remove_duplicated_notes(midi.tracks[t].notes)
+            if len(midi.tracks[t].notes) == 0:
+                del midi.tracks[t]
+                continue
+            # Preprocesses notes
+            self._preprocess_notes(midi.tracks[t].notes)
+
             if len(midi.tracks[t].notes) == 0:
                 del midi.tracks[t]
                 continue
 
-            # Quantize sustain pedal and pitch bend
-            if self.config.use_sustain_pedals and len(midi.tracks[t].pedals) > 0:
-                self._resample_sustain_pedals(
-                    midi.tracks[t].pedals, midi.ticks_per_quarter
-                )
+            # Resample pitch bend values
             if self.config.use_pitch_bends and len(midi.tracks[t].pitch_bends) > 0:
-                self._resample_pitch_bends(
-                    midi.tracks[t].pitch_bends, midi.ticks_per_quarter
-                )
+                self._preprocess_pitch_bends(midi.tracks[t].pitch_bends)
 
         # Process tempo changes
         if self.config.use_tempos and len(midi.tempos) > 0:
-            self._resample_tempos(midi.tempos, midi.ticks_per_quarter)
+            self._preprocess_tempos(midi.tempos)
 
         # Process time signature changes
         if len(midi.time_signatures) == 0:  # can sometimes happen
@@ -479,78 +476,64 @@ class MIDITokenizer(ABC, HFHubMixin):
                 TimeSignature(0, *TIME_SIGNATURE)
             )  # 4/4 by default in this case
         if self.config.use_time_signatures:
-            self._resample_time_signatures(midi.time_signatures, midi.ticks_per_quarter)
+            self._preprocess_time_signatures(midi.time_signatures)
 
         # We do not change key signature changes, markers and lyrics here as they are
         # not used by MidiTok (yet)
 
-        # Set the new time division
-        midi.ticks_per_quarter = self._time_division
+        return midi
 
-    def _resample_notes(self, notes: NoteTickList, time_division: int):
-        r"""Resamples the note attributes: their pitch, velocity, start and end values.
-        The new time division will correspond to the maximum resolution value
-        (``self.config.beat_res.values()``) in the config.
+    def _preprocess_notes(self, notes: NoteTickList):
+        r"""Resamples the note velocities, remove notes outside of pitch range.
         Note durations will be clipped to the maximum duration that can be handled by
         the tokenizer. This is done to prevent having incorrect offset values when
         computing rests. Notes with pitches outside of self.pitch_range will be
         deleted.
 
         :param notes: notes to preprocess.
-        :param time_division: time division of the MIDI being parsed.
         """
-        resampling_factor = self._time_division / time_division
-        max_duration_ticks = (
-            max(tu[1] for tu in self.config.beat_res) * self._time_division
-        )
-        pitches = range(*self.config.pitch_range)
-
         # Gather times and velocity values in lists
-        onsets_offsets, velocities = [], []
+        durations, velocities = [], []
         i = 0
         while i < len(notes):
-            if notes[i].pitch not in pitches:
+            if (
+                not self.config.pitch_range[0]
+                <= notes[i].pitch
+                < self.config.pitch_range[1]
+            ):
                 del notes[i]
                 continue
-            onsets_offsets.append([notes[i].time, notes[i].end])
+            durations.append(notes[i].duration)
             velocities.append(notes[i].velocity)
             i += 1
 
-        # Resample time, remove 0 durations, find closest velocities
-        onsets_offsets = np.rint(np.array(onsets_offsets) * resampling_factor).astype(
-            np.intc
-        )
-        dur_zero = np.where(onsets_offsets[:, 0] == onsets_offsets[:, 1])[0]
-        if len(dur_zero) > 0:
-            onsets_offsets[dur_zero, np.ones_like(dur_zero)] += 1
-        dur_excess = np.where(
-            onsets_offsets[:, 1] - onsets_offsets[:, 0] > max_duration_ticks
-        )[0]
-        if len(dur_excess) > 0:
-            new_offsets = (
-                onsets_offsets[dur_excess, np.zeros_like(dur_excess)]
-                + max_duration_ticks
+        # Clip max durations
+        if not self._note_on_off:
+            max_duration_ticks = (
+                max(tu[1] for tu in self.config.beat_res) * self._time_division
             )
-            for idx, new_offset in zip(dur_excess, new_offsets):
-                onsets_offsets[idx, 1] = new_offset
-        velocities = np_get_closest(self.velocities, velocities)
+            durations = np.array(durations, dtype=np.intc)
+            dur_excess = np.where(durations > max_duration_ticks)[0]
+            for idx in dur_excess:
+                notes[idx].duration = max_duration_ticks
 
-        # Apply new values
-        for i, ((onset, offset), vel) in enumerate(zip(onsets_offsets, velocities)):
-            notes[i].time = onset
-            notes[i].duration = offset - onset
+        # Apply new velocities
+        velocities = np_get_closest(self.velocities, velocities)
+        for i, vel in enumerate(velocities):
             notes[i].velocity = vel
 
-    def _resample_tempos(self, tempos: TempoTickList, time_division: int):
-        r"""Resamples the times and tempo values of tempo change events.
+        # Sort notes and remove possible duplicated notes
+        notes.sort(key=lambda x: (x.start, x.pitch, x.end))
+        remove_duplicated_notes(notes)
+
+    def _preprocess_tempos(self, tempos: TempoTickList):
+        r"""Resamples the tempo values of tempo change events.
+        For tempo changes occuring at the same tick/time, we only keep the last one.
         Consecutive identical tempo changes will be removed if
         ``self.config.delete_equal_successive_tempo_changes`` is True.
 
         :param tempos: tempo changes to resample.
-        :param time_division: time division of the MIDI being parsed
         """
-        resampling_factor = self._time_division / time_division
-
         # If we delete the successive equal tempo changes, we need to sort them by time
         # Otherwise it is not required here as the tokens will be sorted by time
         if self.config.delete_equal_successive_tempo_changes:
@@ -562,8 +545,8 @@ class MIDITokenizer(ABC, HFHubMixin):
             times.append(tempo.time)
             values.append(tempo.tempo)
 
-        # Resample time, find closest tempos
-        times = np.rint(np.array(times) * resampling_factor).astype(np.intc)
+        # Find the closest tempos
+        times = np.array(times, dtype=np.intc)
         values = np_get_closest(self.tempos, values)
 
         # Find groups of tempos at the same onset ticks, equal consecutive ones
@@ -575,7 +558,6 @@ class MIDITokenizer(ABC, HFHubMixin):
             for idx_group in reversed(idx_groups):
                 if len(idx_group) > 1:
                     for idx_to_del in reversed(idx_group[:-1]):
-                        times = np.delete(times, idx_to_del)
                         values = np.delete(values, idx_to_del)
                         del tempos[idx_to_del]
             # Deduplicate successive tempo changes with same tempo value
@@ -586,28 +568,21 @@ class MIDITokenizer(ABC, HFHubMixin):
                 for idx_group in reversed(idx_groups):
                     if len(idx_group) > 1:
                         for idx_to_del in reversed(idx_group[1:]):
-                            times = np.delete(times, idx_to_del)
                             values = np.delete(values, idx_to_del)
                             del tempos[idx_to_del]
 
         # Apply new values
-        for time, val, tempo in zip(times, values, tempos):
-            tempo.time = time
+        for val, tempo in zip(values, tempos):
             tempo.tempo = val
 
-    def _resample_time_signatures(
-        self, time_sigs: TimeSignatureTickList, time_division: int
-    ):
+    def _preprocess_time_signatures(self, time_sigs: TimeSignatureTickList):
         r"""Resamples the time signature changes.
         There are not delayed to the next bar (anymore since v3.0.0).
         See MIDI 1.0 Detailed specifications, pages 54 - 56, for more information on
         delayed time signature messages.
 
         :param time_sigs: time signature changes to quantize.
-        :param time_division: time division of the MIDI being parsed.
         """
-        resampling_factor = self._time_division / time_division
-
         # If we delete the successive equal time signature changes, we need to sort
         # them by time, otherwise it is not required here as the tokens will be sorted
         # by time
@@ -628,7 +603,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         # Resample time, find closest tempos
         # TODO align time on bars?
-        times = np.rint(np.array(times) * resampling_factor).astype(np.intc)
+        times = np.array(times, dtype=np.intc)
         values = np.array(values, dtype=np.short)
 
         # Find groups of time signatures at the same onset ticks, == consecutive ones
@@ -640,23 +615,20 @@ class MIDITokenizer(ABC, HFHubMixin):
             for idx_group in reversed(idx_groups):
                 if len(idx_group) > 1:
                     for idx_to_del in reversed(idx_group[:-1]):
-                        times = np.delete(times, idx_to_del)
+                        # times = np.delete(times, idx_to_del)
                         values = np.delete(values, idx_to_del, axis=0)
                         del time_sigs[idx_to_del]
             # Deduplicate successive time signature changes with same value
             if self.config.delete_equal_successive_time_sig_changes:
-                idx_groups = np.split(
-                    np.arange(len(values)), np.where(np.diff(values) != 0)[0] + 1
-                )
-                for idx_group in reversed(idx_groups):
-                    if len(idx_group) > 1:
-                        for idx_to_del in reversed(idx_group[1:]):
-                            times = np.delete(times, idx_to_del)
-                            del time_sigs[idx_to_del]
+                successive_val_eq = np.all(values[:-1] == values[1:], axis=1)
+                idx_to_del = np.where(successive_val_eq)[0] + 1
+                for idx in reversed(idx_to_del[1:]):
+                    # times = np.delete(times, idx_to_del)
+                    del time_sigs[idx]
 
-        # Apply new values
+        """# Apply new values
         for time, time_sig in zip(times, time_sigs):
-            time_sig.time = time
+            time_sig.time = time"""
 
         """ticks_per_bar = MIDITokenizer._compute_ticks_per_bar(
             time_sigs[0], time_division
@@ -708,40 +680,13 @@ class MIDITokenizer(ABC, HFHubMixin):
             prev_ts = time_sig
             i += 1"""
 
-    def _resample_sustain_pedals(self, pedals: PedalTickList, time_division: int):
-        r"""Resamples the sustain pedal events from a track. Their onset and offset
-        times will be adjusted according to the time division of the tokenizer.
-
-        :param pedals: sustain pedal events.
-        :param time_division: time division of the MIDI being parsed.
-        """
-        resampling_factor = self._time_division / time_division
-        onsets_offsets = [[pedal.time, pedal.end] for pedal in pedals]
-
-        # Resample time, remove 0 durations
-        onsets_offsets = np.rint(np.array(onsets_offsets) * resampling_factor).astype(
-            np.intc
-        )
-        dur_zero = np.where(onsets_offsets[:, 0] == onsets_offsets[:, 1])
-        if len(dur_zero) > 0:
-            onsets_offsets[dur_zero, np.ones_like(dur_zero)] += 1
-
-        # Apply new values
-        for i, (onset, offset) in enumerate(onsets_offsets):
-            pedals[i].time = onset
-            pedals[i].duration = offset - onset
-
-    def _resample_pitch_bends(self, pitch_bends: PitchBendTickList, time_division: int):
-        r"""Resamples the pitch bend events from a track. Their onset and offset times
-        will be adjusted according to the time division of the tokenizer. While being
-        downsampled, overlapping pitch bends will be deduplicated by keeping the one
+    def _preprocess_pitch_bends(self, pitch_bends: PitchBendTickList):
+        r"""Resamples the pitch bend events from a track.
+        Overlapping pitch bends will be deduplicated by keeping the one
         having the highest absolute value at a given tick.
 
         :param pitch_bends: pitch bend events.
-        :param time_division: time division of the MIDI being parsed.
         """
-        resampling_factor = self._time_division / time_division
-
         # Gather times and velocity values in lists
         times, values = [], []
         for pitch_bend in pitch_bends:
@@ -749,7 +694,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             values.append(pitch_bend.value)
 
         # Resample time, remove 0 durations
-        times = np.rint(np.array(times) * resampling_factor).astype(np.intc)
+        times = np.array(times, dtype=np.intc)
         values = np_get_closest(self.pitch_bends, values)
 
         # Find groups of pitch bends at the same onset ticks, and keep the > abs values
@@ -763,13 +708,11 @@ class MIDITokenizer(ABC, HFHubMixin):
                     max_abs_idx = np.argmax(np.max(np.abs(values_group)))
                     values[idx_group[0]] = values_group[max_abs_idx]
                     for idx_to_del in reversed(idx_group[1:]):
-                        times = np.delete(times, idx_to_del)
                         values = np.delete(values, idx_to_del)
                         del pitch_bends[idx_to_del]
 
         # Apply new values
-        for i, (time, value) in enumerate(zip(times, values)):
-            pitch_bends[i].time = time
+        for i, value in enumerate(values):
             pitch_bends[i].value = value
 
     def _midi_to_tokens(self, midi: Score) -> Union[TokSequence, List[TokSequence]]:
@@ -1165,7 +1108,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             ``True``, else a list of :class:`miditok.TokSequence` objects.
         """
         # Preprocess the MIDI file
-        self.preprocess_midi(midi)
+        midi = self.preprocess_midi(midi)
 
         # Tokenize it
         tokens = self._midi_to_tokens(midi)

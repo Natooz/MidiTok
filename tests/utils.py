@@ -106,7 +106,7 @@ def prepare_midi_for_tests(
         # structure of the music, bars will be incorrectly calculated. It is preferable
         # that to throw an error in this case.
         del_invalid_time_sig(new_midi.time_signatures, tokenizer.time_signatures)
-        tokenizer.preprocess_midi(new_midi)
+        new_midi = tokenizer.preprocess_midi(new_midi)
 
         # For Octuple/CPWord, as tempo is only carried at notes times, we need to adapt
         # their times for comparison. Set tempo changes at onset times of notes.
