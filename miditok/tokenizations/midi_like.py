@@ -114,7 +114,7 @@ class MIDILike(MIDITokenizer):
 
         :param midi: MIDI object to preprocess.
         """
-        midi = super().preprocess_midi(midi)
+        super().preprocess_midi(midi)
 
         # Fix offsets overlapping notes
         for track in midi.tracks:
