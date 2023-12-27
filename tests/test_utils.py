@@ -89,14 +89,14 @@ def test_check_midi_equals(midi_path: Path):
     midi_copy = copy(midi)
 
     # Check when midi is untouched
-    assert check_midis_equals(midi, midi_copy)[1]
+    assert check_midis_equals(midi, midi_copy)
 
     # Altering notes
     i = 0
     while i < len(midi_copy.tracks):
         if len(midi_copy.tracks[i].notes) > 0:
             midi_copy.tracks[i].notes[-1].pitch += 5
-            assert not check_midis_equals(midi, midi_copy)[1]
+            assert not check_midis_equals(midi, midi_copy)
             break
         i += 1
 
@@ -108,7 +108,7 @@ def test_check_midi_equals(midi_path: Path):
             midi_copy.tracks[0].pedals.append(Pedal(0, 10))
         else:
             midi_copy.tracks[0].pedals[-1].duration += 10
-        assert not check_midis_equals(midi, midi_copy)[1]
+        assert not check_midis_equals(midi, midi_copy)
 
         # Altering pitch bends
         midi_copy = copy(midi)
@@ -116,7 +116,7 @@ def test_check_midi_equals(midi_path: Path):
             midi_copy.tracks[0].pitch_bends.append(PitchBend(50, 10))
         else:
             midi_copy.tracks[0].pitch_bends[-1].value += 10
-        assert not check_midis_equals(midi, midi_copy)[1]
+        assert not check_midis_equals(midi, midi_copy)
 
     # Altering tempos
     midi_copy = copy(midi)
@@ -124,7 +124,7 @@ def test_check_midi_equals(midi_path: Path):
         midi_copy.tempos.append(Tempo(50, 10))
     else:
         midi_copy.tempos[-1].time += 10
-    assert not check_midis_equals(midi, midi_copy)[1]
+    assert not check_midis_equals(midi, midi_copy)
 
     # Altering time signatures
     midi_copy = copy(midi)
@@ -132,7 +132,7 @@ def test_check_midi_equals(midi_path: Path):
         midi_copy.time_signatures.append(TimeSignature(10, 4, 4))
     else:
         midi_copy.time_signatures[-1].time += 10
-    assert not check_midis_equals(midi, midi_copy)[1]
+    assert not check_midis_equals(midi, midi_copy)
 
 
 def test_merge_tracks(
