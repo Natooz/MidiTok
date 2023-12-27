@@ -101,7 +101,7 @@ class Octuple(MIDITokenizer):
         current_pos = 0
         previous_tick = 0
         current_time_sig = TIME_SIGNATURE
-        current_tempo = self._DEFAULT_TEMPO
+        current_tempo = self.default_tempo
         current_program = None
         ticks_per_bar = self._compute_ticks_per_bar(
             TimeSignature(0, *current_time_sig), self._time_division
@@ -216,7 +216,7 @@ class Octuple(MIDITokenizer):
 
         # RESULTS
         tracks: Dict[int, Track] = {}
-        tempo_changes, time_signature_changes = [Tempo(-1, self._DEFAULT_TEMPO)], []
+        tempo_changes, time_signature_changes = [Tempo(-1, self.default_tempo)], []
         tempo_changes[0].tempo = -1
 
         def check_inst(prog: int):
@@ -338,10 +338,10 @@ class Octuple(MIDITokenizer):
         del tempo_changes[0]
         if len(tempo_changes) == 0 or (
             tempo_changes[0].time != 0
-            and round(tempo_changes[0].tempo, 2) != self._DEFAULT_TEMPO
+            and round(tempo_changes[0].tempo, 2) != self.default_tempo
         ):
-            tempo_changes.insert(0, Tempo(0, self._DEFAULT_TEMPO))
-        elif round(tempo_changes[0].tempo, 2) == self._DEFAULT_TEMPO:
+            tempo_changes.insert(0, Tempo(0, self.default_tempo))
+        elif round(tempo_changes[0].tempo, 2) == self.default_tempo:
             tempo_changes[0].time = 0
 
         # create MidiFile
@@ -467,10 +467,11 @@ class Octuple(MIDITokenizer):
                 current_pitches = {p: [] for p in self.config.programs}
 
             # Pitch
-            if pitch_value in current_pitches[current_program]:
-                has_error = True
-            else:
-                current_pitches[current_program].append(pitch_value)
+            if self.config.remove_duplicated_notes:
+                if pitch_value in current_pitches[current_program]:
+                    has_error = True
+                else:
+                    current_pitches[current_program].append(pitch_value)
 
             if has_error:
                 err += 1

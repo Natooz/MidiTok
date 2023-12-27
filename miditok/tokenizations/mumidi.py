@@ -291,7 +291,7 @@ class MuMIDI(MIDITokenizer):
         if self.config.use_tempos and len(tokens) > 0:
             first_tempo = float(tokens.tokens[0][3].split("_")[1])
         else:
-            first_tempo = self._DEFAULT_TEMPO
+            first_tempo = self.default_tempo
         midi.tempos.append(Tempo(0, first_tempo))
 
         ticks_per_sample = time_division // max(self.config.beat_res.values())
@@ -478,7 +478,7 @@ class MuMIDI(MIDITokenizer):
                     current_bar += 1
                     current_pos = -1
                     current_pitches = []
-                elif token_type == "Pitch":  # noqa: S105
+                elif self.config.remove_duplicated_notes and token_type == "Pitch":  # noqa: S105
                     if int(token_value) in current_pitches:
                         err += 1  # pitch already played at current position
                     else:

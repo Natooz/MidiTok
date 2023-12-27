@@ -103,10 +103,10 @@ class CPWord(MIDITokenizer):
         if self.config.log_tempos:
             # pick the closest to the default value
             current_tempo = float(
-                self.tempos[(np.abs(self.tempos - self._DEFAULT_TEMPO)).argmin()]
+                self.tempos[(np.abs(self.tempos - self.default_tempo)).argmin()]
             )
         else:
-            current_tempo = self._DEFAULT_TEMPO
+            current_tempo = self.default_tempo
         current_program = None
         ticks_per_bar = self._compute_ticks_per_bar(
             TimeSignature(0, *current_time_sig), self._time_division
@@ -391,7 +391,7 @@ class CPWord(MIDITokenizer):
 
         # RESULTS
         tracks: Dict[int, Track] = {}
-        tempo_changes = [Tempo(-1, self._DEFAULT_TEMPO)]
+        tempo_changes = [Tempo(-1, self.default_tempo)]
         time_signature_changes = []
         tempo_changes[0].tempo = -1
 
@@ -552,10 +552,10 @@ class CPWord(MIDITokenizer):
         del tempo_changes[0]
         if len(tempo_changes) == 0 or (
             tempo_changes[0].time != 0
-            and round(tempo_changes[0].tempo, 2) != self._DEFAULT_TEMPO
+            and round(tempo_changes[0].tempo, 2) != self.default_tempo
         ):
-            tempo_changes.insert(0, Tempo(0, self._DEFAULT_TEMPO))
-        elif round(tempo_changes[0].tempo, 2) == self._DEFAULT_TEMPO:
+            tempo_changes.insert(0, Tempo(0, self.default_tempo))
+        elif round(tempo_changes[0].tempo, 2) == self.default_tempo:
             tempo_changes[0].time = 0
 
         # create MidiFile
@@ -730,7 +730,7 @@ class CPWord(MIDITokenizer):
                 if token_type == "Bar":  # noqa: S105
                     current_pos = -1
                     current_pitches = {p: [] for p in self.config.programs}
-                elif token_type == "Pitch":  # noqa: S105
+                elif self.config.remove_duplicated_notes and token_type == "Pitch":  # noqa: S105
                     if self.config.use_programs:
                         program = int(self[5, token[5]].split("_")[1])
                     if int(token_value) in current_pitches[program]:

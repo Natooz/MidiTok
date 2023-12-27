@@ -18,7 +18,7 @@ from .utils import (
     HERE,
     TOKENIZER_CONFIG_KWARGS,
     adjust_tok_params_for_tests,
-    prepare_midi_for_tests,
+    tokenize_and_check_equals,
 )
 
 default_params = deepcopy(TOKENIZER_CONFIG_KWARGS)
@@ -70,38 +70,6 @@ for tokenization_ in ALL_TOKENIZATIONS:
             TOK_PARAMS_IO.append((tokenization_, params_tmp))
 
 
-def encode_decode_and_check(tokenizer: miditok.MIDITokenizer, midi: Score) -> bool:
-    """Tests if a
-
-    :param tokenizer:
-    :param midi:
-    :return:
-    """
-    # Process the MIDI
-    midi_to_compare = prepare_midi_for_tests(midi, tokenizer=tokenizer)
-
-    # Convert the midi to tokens, and keeps the ids (integers)
-    tokens = tokenizer(midi_to_compare)
-    if tokenizer.one_token_stream:
-        tokens = tokens.ids
-    else:
-        tokens = [stream.ids for stream in tokens]
-
-    # Convert back token ids to a MIDI object
-    kwargs = {"time_division": midi.ticks_per_quarter}
-    if not tokenizer.one_token_stream:
-        kwargs["programs"] = miditok.utils.get_midi_programs(midi_to_compare)
-    try:
-        decoded_midi = tokenizer(tokens, **kwargs)
-    except Exception as e:
-        print(f"Error when decoding token ids with {tokenizer.__class__.__name__}: {e}")
-        return True
-
-    # Checks its good
-    decoded_midi = prepare_midi_for_tests(decoded_midi, sort_notes=True)
-    return decoded_midi == midi_to_compare
-
-
 @pytest.mark.parametrize("tok_params_set", TOK_PARAMS_IO)
 def test_io_formats(
     tok_params_set: Tuple[str, Dict[str, Any]],
@@ -121,5 +89,5 @@ def test_io_formats(
         tokenizer_config=miditok.TokenizerConfig(**params)
     )
 
-    at_least_one_error = encode_decode_and_check(tokenizer, midi)
-    assert not at_least_one_error
+    _, _, has_errors = tokenize_and_check_equals(midi, tokenizer, midi_path.stem)
+    assert not has_errors

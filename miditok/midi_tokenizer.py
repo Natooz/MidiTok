@@ -25,6 +25,7 @@ from symusic import (
 )
 from symusic.core import (
     NoteTickList,
+    PedalTickList,
     PitchBendTickList,
     ScoreTick,
     TempoTickList,
@@ -299,8 +300,18 @@ class MIDITokenizer(ABC, HFHubMixin):
         if self.config.use_programs:
             self.one_token_stream = self.config.one_token_stream_for_programs
 
-        # Init duration and velocity values
+        # Durations
         self.durations = self.__create_durations_tuples()
+        # For internal use, Duration/TimeShift/Rest values of the tokenizer
+        self._durations_ticks_to_tuple = {
+            (beat * res + pos) * self._time_division // res: (beat, pos, res)
+            for (beat, pos, res) in self.durations
+        }
+        self._durations_ticks = np.array(
+            list(self._durations_ticks_to_tuple.keys()), dtype=np.intc
+        )
+
+        # Velocities
         # [1:] so that there is no velocity_0
         self.velocities = np.linspace(
             0, 127, self.config.num_velocities + 1, dtype=np.intc
@@ -314,15 +325,21 @@ class MIDITokenizer(ABC, HFHubMixin):
         # Tempos
         # _DEFAULT_TEMPO is the closest one to 120 that the tokenizer supports
         self.tempos = np.zeros(1)
-        self._DEFAULT_TEMPO = TEMPO
+        self.default_tempo = TEMPO
         if self.config.use_tempos:
             self.tempos = self.__create_tempos()
-            self._DEFAULT_TEMPO = self.tempos[np.argmin(np.abs(self.tempos - TEMPO))]
+            self.default_tempo = self.tempos[np.argmin(np.abs(self.tempos - TEMPO))]
 
         # Rests
         self.rests = []
         if self.config.use_rests:
             self.rests = self.__create_rests()
+        self._rests_ticks = np.array(
+            [
+                (beat * res + pos) * self._time_division // res
+                for beat, pos, res in self.rests
+            ]
+        )
 
         # Time Signatures
         self.time_signatures = [TIME_SIGNATURE]
@@ -343,20 +360,6 @@ class MIDITokenizer(ABC, HFHubMixin):
         self._add_special_tokens_to_types_graph()
         self._token_types_indexes = {}
         self._update_token_types_indexes()
-
-        # For internal use, Duration/TimeShift/Rest values of the tokenizer
-        self._durations_ticks = np.array(
-            [
-                (beat * res + pos) * self._time_division // res
-                for beat, pos, res in self.durations
-            ]
-        )
-        self._rests_ticks = np.array(
-            [
-                (beat * res + pos) * self._time_division // res
-                for beat, pos, res in self.rests
-            ]
-        )
 
     def _tweak_config_before_creating_voc(self):
         # called after setting the tokenizer's TokenizerConfig (.config). To be
@@ -466,6 +469,10 @@ class MIDITokenizer(ABC, HFHubMixin):
             if self.config.use_pitch_bends and len(midi.tracks[t].pitch_bends) > 0:
                 self._preprocess_pitch_bends(midi.tracks[t].pitch_bends)
 
+            # Resample pedals durations
+            if self.config.use_sustain_pedals and len(midi.tracks[t].pedals) > 0:
+                self._preprocess_pedals(midi.tracks[t].pedals)
+
         # Process tempo changes
         if self.config.use_tempos and len(midi.tempos) > 0:
             self._preprocess_tempos(midi.tempos)
@@ -475,7 +482,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             midi.time_signatures.append(
                 TimeSignature(0, *TIME_SIGNATURE)
             )  # 4/4 by default in this case
-        if self.config.use_time_signatures:
+        elif self.config.use_time_signatures and len(midi.time_signatures) > 1:
             self._preprocess_time_signatures(midi.time_signatures)
 
         # We do not change key signature changes, markers and lyrics here as they are
@@ -507,28 +514,33 @@ class MIDITokenizer(ABC, HFHubMixin):
             velocities.append(notes[i].velocity)
             i += 1
 
-        # Clip max durations
-        if not self._note_on_off:
-            max_duration_ticks = (
-                max(tu[1] for tu in self.config.beat_res) * self._time_division
-            )
-            durations = np.array(durations, dtype=np.intc)
-            dur_excess = np.where(durations > max_duration_ticks)[0]
-            for idx in dur_excess:
-                notes[idx].duration = max_duration_ticks
-
-        # Apply new velocities
+        # Compute new velocities
         velocities = np_get_closest(self.velocities, velocities)
-        for i, vel in enumerate(velocities):
-            notes[i].velocity = vel
+
+        # Compute new durations + apply new values
+        if not self._note_on_off:
+            durations = np.array(durations, dtype=np.intc)
+            durations = np_get_closest(self._durations_ticks, durations)
+            for i, (vel, dur) in enumerate(zip(velocities, durations)):
+                notes[i].velocity = vel
+                notes[i].duration = dur
+        # Apply only new velocities
+        else:
+            for i, vel in enumerate(velocities):
+                notes[i].velocity = vel
 
         # Sort notes and remove possible duplicated notes
-        notes.sort(key=lambda x: (x.start, x.pitch))
-        # TODO sort only if required? Check what it done in tests
-        """if self.config.use_pitch_intervals:
+        # When using NoteOn/NoteOff, we also need to sort by duration and velocity to
+        # follow the FIFO order.
+        if self._note_on_off:
+            notes.sort(key=lambda x: (x.start, x.pitch, x.duration, x.velocity))
+        elif self.config.use_pitch_intervals:
             notes.sort(key=lambda x: (x.start, x.pitch))
         else:
-            notes.sort(key=lambda x: x.start)"""
+            # notes.sort()
+            # Need the lambda as symusic sorts by end by default
+            # This should be removed when it sorts by start/time to speed-up
+            notes.sort(key=lambda x: x.start)
         if self.config.remove_duplicated_notes:
             remove_duplicated_notes(notes)
 
@@ -717,6 +729,20 @@ class MIDITokenizer(ABC, HFHubMixin):
         for i, value in enumerate(values):
             pitch_bends[i].value = value
 
+    def _preprocess_pedals(self, pedals: PedalTickList):
+        r"""Resamples the pedals durations.
+
+        :param pedals: pedals to preprocess.
+        """
+        # Gather durations
+        durations = [pedal.duration for pedal in pedals]
+        durations = np.array(durations, dtype=np.intc)
+        durations = np_get_closest(self._durations_ticks, durations)
+
+        # Apply new durations
+        for i, duration in enumerate(durations):
+            pedals[i].duration = duration
+
     def _midi_to_tokens(self, midi: Score) -> Union[TokSequence, List[TokSequence]]:
         r"""Converts a preprocessed MIDI object to a sequence of tokens.
         The workflow of this method is as follows: the events (*Pitch*, *Velocity*,
@@ -866,11 +892,13 @@ class MIDITokenizer(ABC, HFHubMixin):
                 )
                 # PedalOff or Duration
                 if self.config.sustain_pedal_duration:
-                    index = np.argmin(np.abs(self._durations_ticks - pedal.duration))
+                    dur = ".".join(
+                        map(str, self._durations_ticks_to_tuple[pedal.duration])
+                    )
                     events.append(
                         Event(
                             "Duration",
-                            ".".join(map(str, self.durations[index])),
+                            dur,
                             pedal.time,
                             program,
                             "PedalDuration",
@@ -997,11 +1025,11 @@ class MIDITokenizer(ABC, HFHubMixin):
                     )
                 )
             else:
-                index = np.argmin(np.abs(self._durations_ticks - note.duration))
+                dur = ".".join(map(str, self._durations_ticks_to_tuple[note.duration]))
                 events.append(
                     Event(
                         type="Duration",
-                        value=".".join(map(str, self.durations[index])),
+                        value=dur,
                         time=note.start,
                         program=program,
                         desc=f"{note.duration} ticks",
@@ -1281,7 +1309,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         # Set default tempo and time signatures at tick 0 if not present
         if len(midi.tempos) == 0 or midi.tempos[0].time != 0:
-            midi.tempos.insert(0, Tempo(0, self._DEFAULT_TEMPO))
+            midi.tempos.insert(0, Tempo(0, self.default_tempo))
         if len(midi.time_signatures) == 0 or midi.time_signatures[0].time != 0:
             midi.time_signatures.insert(0, TimeSignature(0, *TIME_SIGNATURE))
 
@@ -2202,7 +2230,10 @@ class MIDITokenizer(ABC, HFHubMixin):
                             event_value
                         )
                         previous_pitch_chord[current_program] = pitch_val
-                    if pitch_val in current_pitches[current_program]:
+                    if (
+                        self.config.remove_duplicated_notes
+                        and pitch_val in current_pitches[current_program]
+                    ):
                         err_note += 1  # pitch already played at current position
                     else:
                         current_pitches[current_program].append(pitch_val)

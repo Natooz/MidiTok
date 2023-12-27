@@ -444,7 +444,10 @@ class MMM(MIDITokenizer):
             if event_type in self.tokens_types_graph[previous_type]:
                 if event_type in ["Bar", "TimeShift"]:  # reset
                     current_pitches = []
-                elif event_type in note_tokens_types:
+                elif (
+                    self.config.remove_duplicated_notes
+                    and event_type in note_tokens_types
+                ):
                     if event_type == "Pitch":
                         pitch_val = int(event_value)
                         previous_pitch_onset = pitch_val

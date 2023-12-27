@@ -615,9 +615,9 @@ class REMI(MIDITokenizer):
             # As a Program token will precede PitchBend otherwise
             # Else no need to add Program as its already in
             dic["PitchBend"] = [first_note_token_type, "Position", "Bar"]
-            if self.config.use_programs:
+            if self.config.use_programs and not self.config.program_changes:
                 dic["Program"].append("PitchBend")
-            if not self.config.programs or self.config.program_changes:
+            else:
                 dic["Position"].append("PitchBend")
                 if self.config.use_tempos:
                     dic["Tempo"].append("PitchBend")

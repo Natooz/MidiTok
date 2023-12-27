@@ -19,7 +19,6 @@ from .utils import (
     TEST_LOG_DIR,
     TOKENIZER_CONFIG_KWARGS,
     adjust_tok_params_for_tests,
-    prepare_midi_for_tests,
     tokenize_and_check_equals,
 )
 
@@ -39,6 +38,7 @@ default_params.update(
         "delete_equal_successive_time_sig_changes": True,
         "delete_equal_successive_tempo_changes": True,
         "sustain_pedal_duration": True,
+        "max_duration": (20, 0, 4),
     }
 )
 TOK_PARAMS_ONE_TRACK = []
@@ -98,6 +98,7 @@ def _test_tokenize(
     midi_path: Union[str, Path],
     tok_params_set: Tuple[str, Dict[str, Any]],
     saving_erroneous_midis: bool = False,
+    save_failed_midi_as_one_midi: bool = True,
 ):
     r"""Reads a MIDI file, converts it into tokens, convert it back to a MIDI object.
     The decoded MIDI should be identical to the original one after downsampling, and
@@ -108,6 +109,8 @@ def _test_tokenize(
     :param tok_params_set: tokenizer and its parameters to run.
     :param saving_erroneous_midis: will save MIDIs decoded with errors, to be used to
         debug.
+    :param save_failed_midi_as_one_midi: will save the MIDI with conversion errors as a
+        single MIDI, with all tracks appended altogether.
     """
     # Reads the MIDI and add pedal messages to make sure there are some
     midi = Score(Path(midi_path))
@@ -118,6 +121,8 @@ def _test_tokenize(
         tokenizer_config=miditok.TokenizerConfig(**params)
     )
     str(tokenizer)  # shouldn't fail
+
+    # Adds pedals to add a bit of complexity
     if tokenizer.config.use_sustain_pedals:
         for ti in range(min(3, len(midi.tracks))):
             midi.tracks[ti].pedals.extend(
@@ -126,30 +131,33 @@ def _test_tokenize(
             midi.tracks[ti].pedals.sort(key=lambda p: p.time)
 
     # MIDI -> Tokens -> MIDI
-    midi_to_compare = prepare_midi_for_tests(midi, tokenizer=tokenizer)
-    decoded_midi, has_errors = tokenize_and_check_equals(
-        midi_to_compare, tokenizer, midi_path.stem
+    midi_decoded, midi_ref, has_errors = tokenize_and_check_equals(
+        midi, tokenizer, midi_path.stem
     )
 
-    if has_errors:
+    if has_errors and saving_erroneous_midis:
         TEST_LOG_DIR.mkdir(exist_ok=True, parents=True)
-        if saving_erroneous_midis:
-            decoded_midi.dump_midi(
-                TEST_LOG_DIR / f"{midi_path.stem}_{tokenization}.mid"
+        if save_failed_midi_as_one_midi:
+            for i in range(len(midi_decoded.tracks) - 1, -1, -1):
+                midi_ref.tracks.insert(i + 1, midi_decoded.tracks[i])
+            midi_ref.markers.extend(midi_decoded.markers)
+        else:
+            midi_decoded.dump_midi(
+                TEST_LOG_DIR / f"{midi_path.stem}_{tokenization}_decoded.mid"
             )
-            midi_to_compare.dump_midi(
-                TEST_LOG_DIR / f"{midi_path.stem}_{tokenization}_original.mid"
-            )
+        midi_ref.dump_midi(TEST_LOG_DIR / f"{midi_path.stem}_{tokenization}.mid")
 
     assert not has_errors
 
 
+# TODO parametrize additional tokens
+# @pytest.mark.parametrize("param", [False, True])
 @pytest.mark.parametrize("midi_path", MIDI_PATHS_ONE_TRACK)
 @pytest.mark.parametrize("tok_params_set", TOK_PARAMS_ONE_TRACK)
 def test_one_track_midi_to_tokens_to_midi(
     midi_path: Union[str, Path],
     tok_params_set: Tuple[str, Dict[str, Any]],
-    saving_erroneous_midis: bool = False,
+    saving_erroneous_midis: bool = True,
 ):
     _test_tokenize(midi_path, tok_params_set, saving_erroneous_midis)
 
