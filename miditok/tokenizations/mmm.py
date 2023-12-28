@@ -73,9 +73,7 @@ class MMM(MIDITokenizer):
 
         # Time events
         time_sig_change = TimeSignature(0, *TIME_SIGNATURE)
-        ticks_per_bar = self._compute_ticks_per_bar(
-            time_sig_change, self._time_division
-        )
+        ticks_per_bar = self._compute_ticks_per_bar(time_sig_change, self.time_division)
         bar_at_last_ts_change = 0
         previous_tick = 0
         current_bar = 0
@@ -90,7 +88,7 @@ class MMM(MIDITokenizer):
                     TimeSignature(
                         events[ei].time, *list(map(int, events[ei].value.split("/")))
                     ),
-                    self._time_division,
+                    self.time_division,
                 )
             if events[ei].time != previous_tick:
                 # Bar
@@ -212,7 +210,7 @@ class MMM(MIDITokenizer):
         :return: the midi object (:class:`miditoolkit.MidiFile`).
         """
         if time_division is None:
-            time_division = self._time_division
+            time_division = self.time_division
         tokens = cast(TokSequence, tokens)
         midi = Score(time_division)
         if time_division % max(self.config.beat_res.values()) != 0:

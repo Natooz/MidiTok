@@ -83,23 +83,25 @@ def adjust_tok_params_for_tests(tokenization: str, params: dict[str, Any]):
         params["use_rests"] = False
 
 
-def sort_midi(midi: Score):
+def sort_midi(midi: Score, sort_tracks: bool = True):
     """Sorts a MIDI: its notes and other track events, and the tracks themselves.
 
     :param midi: midi to sort.
+    :param sort_tracks: will sort the tracks by program if given True.
     """
     for track in midi.tracks:
         if track.is_drum:
             track.program = 0  # need to be done before sorting tracks per program
-        track.notes.sort(key=lambda x: (x.start, x.pitch, x.end, x.velocity))
-        track.pedals.sort()
-        track.pitch_bends.sort()
+        track.notes.sort(key=lambda x: (x.time, x.pitch, x.duration, x.velocity))
+        # track.pedals.sort()
+        # track.pitch_bends.sort()
         # track.controls.sort()
 
     # Sorts tracks
     # MIDI detokenized with one_token_stream contains tracks sorted by note occurrence
     # This is done at the end as we may
-    midi.tracks.sort(key=lambda x: (x.program, x.is_drum))
+    if sort_tracks:
+        midi.tracks.sort(key=lambda x: (x.program, x.is_drum))
 
 
 def adapt_ref_midi_before_tokenize(midi: Score, tokenizer: miditok.MIDITokenizer):
@@ -110,19 +112,27 @@ def adapt_ref_midi_before_tokenize(midi: Score, tokenizer: miditok.MIDITokenizer
     """
     tokenization = type(tokenizer).__name__ if tokenizer is not None else None
 
-    # If MIDILike and a max_duration is provided, we clip the durations of the notes
-    # before tokenizing, otherwise these notes will be tokenized with durations > to
-    # this limit, which would yield errors when checking TSE
-    if (
-        tokenization == "MIDILike"
-        and "max_duration" in tokenizer.config.additional_params
-    ):
-        for track in midi.tracks:
+    if tokenizer._note_on_off:
+        # Need to sort the notes with all these keys, as otherwise some velocity values
+        # might be mixed up for notes with the same onset and duration values as the
+        # tokens are decoded in a FIFO logic.
+        # But before sorting, we need to merge the tracks if needed, and clip durations
+        if tokenizer.config.use_programs and tokenizer.one_token_stream:
+            miditok.utils.merge_same_program_tracks(midi.tracks)
+
+        # If a max_duration is provided, we clip the durations of the notes before
+        # tokenizing, otherwise these notes will be tokenized with durations > to this
+        # limit, which would yield errors when checking TSE.
+        if "max_duration" in tokenizer.config.additional_params:
             max_duration = tokenizer._token_duration_to_ticks(
                 tokenizer.config.additional_params["max_duration"],
                 midi.ticks_per_quarter,
             )
-            clip_durations(track.notes, max_duration)
+            for track in midi.tracks:
+                clip_durations(track.notes, max_duration)
+
+        # Now we can sort the notes
+        sort_midi(midi, sort_tracks=False)
 
     # For Octuple, CPWord and MMM, the time signature is carried with the notes.
     # If a MIDI doesn't have any note, no time signature will be tokenized, and in turn

@@ -106,7 +106,7 @@ class Octuple(MIDITokenizer):
         current_tempo = self.default_tempo
         current_program = None
         ticks_per_bar = self._compute_ticks_per_bar(
-            TimeSignature(0, *current_time_sig), self._time_division
+            TimeSignature(0, *current_time_sig), self.time_division
         )
         for e, event in enumerate(events):
             # Set current bar and position
@@ -123,7 +123,7 @@ class Octuple(MIDITokenizer):
                 current_bar_from_ts_time = current_bar
                 current_tick_from_ts_time = previous_tick
                 ticks_per_bar = self._compute_ticks_per_bar(
-                    TimeSignature(event.time, *current_time_sig), self._time_division
+                    TimeSignature(event.time, *current_time_sig), self.time_division
                 )
             elif event.type == "Tempo":
                 current_tempo = event.value
@@ -203,7 +203,7 @@ class Octuple(MIDITokenizer):
         :return: the midi object (:class:`miditoolkit.MidiFile`).
         """
         if time_division is None:
-            time_division = self._time_division
+            time_division = self.time_division
         # Unsqueeze tokens in case of one_token_stream
         if self.one_token_stream:  # ie single token seq
             tokens = [tokens]

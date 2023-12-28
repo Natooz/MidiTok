@@ -230,14 +230,22 @@ def miditoolkit_to_symusic(midi: MidiFile) -> Score:
             track.notes.append(
                 Note(note.start, note.duration, note.pitch, note.velocity)
             )
+        track.notes.sort(key=lambda x: (x.start, x.pitch, x.end, x.velocity))
+
         for control in inst.control_changes:
             track.controls.append(
                 ControlChange(control.time, control.number, control.value)
             )
+        track.controls.sort()
+
         for pb in inst.pitch_bends:
             track.pitch_bends.append(PitchBend(pb.time, pb.pitch))
+        track.pitch_bends.sort()
+
         for pedal in inst.pedals:
             track.pedals.append(Pedal(pedal.start, pedal.duration))
+        track.pedals.sort()
+
         score.tracks.append(track)
 
     return score
@@ -295,8 +303,11 @@ class MIDITokenizer(ABC, HFHubMixin):
         # classes
         self._tweak_config_before_creating_voc()
 
-        # For internal use, new time division to apply when preprocessing MIDIs
-        self._time_division = max(res for res in self.config.beat_res.values())
+        # New time division to apply when preprocessing MIDIs
+        # This is left as a class attribute and not a property as the config is not
+        # intended to be modified after its creation. Ultimately, this could be
+        # ensured by converting TokenizerConfig to a frozen dataclass.
+        self.time_division = max(res for res in self.config.beat_res.values())
 
         # Set one_token_stream mode according to the config params
         if self.config.use_programs:
@@ -306,7 +317,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         self.durations = self.__create_durations_tuples()
         # For internal use, Duration/TimeShift/Rest values of the tokenizer
         self._durations_ticks_to_tuple = {
-            (beat * res + pos) * self._time_division // res: (beat, pos, res)
+            (beat * res + pos) * self.time_division // res: (beat, pos, res)
             for (beat, pos, res) in self.durations
         }
         self._durations_ticks = np.array(
@@ -338,7 +349,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             self.rests = self.__create_rests()
         self._rests_ticks = np.array(
             [
-                (beat * res + pos) * self._time_division // res
+                (beat * res + pos) * self.time_division // res
                 for beat, pos, res in self.rests
             ]
         )
@@ -448,8 +459,8 @@ class MIDITokenizer(ABC, HFHubMixin):
         :param midi: MIDI object to preprocess.
         """
         # Resample time, not inplace
-        if self._time_division != midi.ticks_per_quarter:
-            midi = midi.resample(self._time_division, 1)
+        if self.time_division != midi.ticks_per_quarter:
+            midi = midi.resample(self.time_division, min_dur=1)
 
         # Merge instruments of the same program / inst before preprocessing them
         # This allows to avoid potential duplicated notes in some multitrack settings
@@ -531,18 +542,17 @@ class MIDITokenizer(ABC, HFHubMixin):
             for i, vel in enumerate(velocities):
                 notes[i].velocity = vel
 
-        # Sort notes and remove possible duplicated notes
-        # When using NoteOn/NoteOff, we also need to sort by duration and velocity to
-        # follow the FIFO order.
-        if self._note_on_off:
-            notes.sort(key=lambda x: (x.start, x.pitch, x.duration, x.velocity))
-        elif self.config.use_pitch_intervals:
-            notes.sort(key=lambda x: (x.start, x.pitch))
-        else:
-            # notes.sort()
-            # Need the lambda as symusic sorts by end by default
-            # This should be removed when it sorts by start/time to speed-up
-            notes.sort(key=lambda x: x.start)
+        # Symusic automatically sorts the notes by (time, pitch, duration) keys when
+        # reading a MIDI file. We hence don't need to sort the notes.
+        # However, when using `NoteOn`/`NoteOff`, we can encounter note order
+        # alterations with the velocity values as they are not sorted on velocities and
+        # that the tokens are decoded following a FIFO logic.
+        # To alleviate this, a user can sort them before calling the tokenizer.
+        # We do not do it here as it is not considered a disturbing issue, and that it
+        # would add a significant overhead preprocessing time. This is however done in
+        # the tokenization tests of MidiTok for concerned tokenizers in order to keep
+        # 100% of the data integrity, so that the tests pass.
+
         if self.config.remove_duplicated_notes:
             remove_duplicated_notes(notes)
 
@@ -846,7 +856,7 @@ class MIDITokenizer(ABC, HFHubMixin):
     def _create_track_events(self, track: Track) -> list[Event]:
         r"""Extract the tokens / events of individual tracks: *Pitch*, *Velocity*,
         *Duration*, *NoteOn*, *NoteOff* and optionally *Chord*, from a track
-        (``miditoolkit.Instrument``).
+        (``symusic.Track``).
         **If the tokenizer is using pitch intervals, the notes must be sorted by time
         then pitch values. This is done in** ``preprocess_midi``.
 
@@ -859,7 +869,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         max_time_interval = 0
         if self.config.use_pitch_intervals:
             max_time_interval = (
-                self._time_division * self.config.pitch_intervals_max_time_dist
+                self.time_division * self.config.pitch_intervals_max_time_dist
             )
         previous_note_onset = -max_time_interval - 1
         previous_pitch_onset = -128  # lowest at a given time
@@ -869,7 +879,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         if self.config.use_chords and not track.is_drum:
             chords = detect_chords(
                 track.notes,
-                self._time_division,
+                self.time_division,
                 chord_maps=self.config.chord_maps,
                 program=program,
                 specify_root_note=self.config.chord_tokens_with_root_note,
@@ -1653,7 +1663,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         min_dur = dur_bins[0]
 
         # TODO optimize / batch
-        offset_times = [0]
+        offset_times = []
         values = []
         while duration >= min_dur:
             if rest:
@@ -1665,7 +1675,6 @@ class MIDITokenizer(ABC, HFHubMixin):
             val_ticks = self._token_duration_to_ticks(val, time_division)
             duration -= val_ticks
             offset_times.append(val_ticks)
-        del offset_times[0]
 
         return values, offset_times
 

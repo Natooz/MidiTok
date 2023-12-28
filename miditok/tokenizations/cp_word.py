@@ -111,7 +111,7 @@ class CPWord(MIDITokenizer):
             current_tempo = self.default_tempo
         current_program = None
         ticks_per_bar = self._compute_ticks_per_bar(
-            TimeSignature(0, *current_time_sig), self._time_division
+            TimeSignature(0, *current_time_sig), self.time_division
         )
         # First look for a TimeSig token, if any is given at tick 0, to update
         # current_time_sig
@@ -121,7 +121,7 @@ class CPWord(MIDITokenizer):
                     current_time_sig = list(map(int, event.value.split("/")))
                     ticks_per_bar = self._compute_ticks_per_bar(
                         TimeSignature(event.time, *current_time_sig),
-                        self._time_division,
+                        self.time_division,
                     )
                     break
                 elif event.type in [
@@ -162,7 +162,7 @@ class CPWord(MIDITokenizer):
                 ):
                     previous_tick = previous_note_end
                     rest_values = self._ticks_to_duration_tokens(
-                        event.time - previous_tick, self._time_division, rest=True
+                        event.time - previous_tick, self.time_division, rest=True
                     )
                     # Add Rest events and increment previous_tick
                     for dur_value, dur_ticks in zip(*rest_values):
@@ -239,7 +239,7 @@ class CPWord(MIDITokenizer):
                 ) // ticks_per_bar
                 tick_at_last_ts_change = event.time
                 ticks_per_bar = self._compute_ticks_per_bar(
-                    TimeSignature(event.time, *current_time_sig), self._time_division
+                    TimeSignature(event.time, *current_time_sig), self.time_division
                 )
                 # We decrease the previous tick so that a Position token is enforced
                 # for the next event
@@ -378,7 +378,7 @@ class CPWord(MIDITokenizer):
         :return: the midi object (:class:`miditoolkit.MidiFile`).
         """
         if time_division is None:
-            time_division = self._time_division
+            time_division = self.time_division
         # Unsqueeze tokens in case of one_token_stream
         if self.one_token_stream:  # ie single token seq
             tokens = [tokens]

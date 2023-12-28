@@ -62,7 +62,7 @@ class TSD(MIDITokenizer):
                 ):
                     previous_tick = previous_note_end
                     rest_values = self._ticks_to_duration_tokens(
-                        event.time - previous_tick, self._time_division, rest=True
+                        event.time - previous_tick, self.time_division, rest=True
                     )
                     for dur_value, dur_ticks in zip(*rest_values):
                         all_events.append(
@@ -80,7 +80,7 @@ class TSD(MIDITokenizer):
                 if event.time != previous_tick:
                     time_shift = event.time - previous_tick
                     for dur_value, dur_ticks in zip(
-                        *self._ticks_to_duration_tokens(time_shift, self._time_division)
+                        *self._ticks_to_duration_tokens(time_shift, self.time_division)
                     ):
                         all_events.append(
                             Event(
@@ -132,7 +132,7 @@ class TSD(MIDITokenizer):
         :return: the midi object (:class:`miditoolkit.MidiFile`).
         """
         if time_division is None:
-            time_division = self._time_division
+            time_division = self.time_division
         # Unsqueeze tokens in case of one_token_stream
         if self.one_token_stream:  # ie single token seq
             tokens = [tokens]

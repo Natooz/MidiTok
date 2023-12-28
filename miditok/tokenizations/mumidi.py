@@ -281,7 +281,7 @@ class MuMIDI(MIDITokenizer):
         :return: the midi object (miditoolkit.MidiFile)
         """
         if time_division is None:
-            time_division = self._time_division
+            time_division = self.time_division
         if time_division % max(self.config.beat_res.values()) != 0:
             raise ValueError(
                 f"Invalid time division, please give one divisible by"

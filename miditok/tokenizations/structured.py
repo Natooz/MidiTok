@@ -195,7 +195,7 @@ class Structured(MIDITokenizer):
         :return: the midi object (:class:`miditoolkit.MidiFile`).
         """
         if time_division is None:
-            time_division = self._time_division
+            time_division = self.time_division
         # Unsqueeze tokens in case of one_token_stream
         if self.one_token_stream:  # ie single token seq
             tokens = [tokens]

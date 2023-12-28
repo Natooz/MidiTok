@@ -66,7 +66,7 @@ class MIDILike(MIDITokenizer):
                 ):
                     previous_tick = previous_note_end
                     rest_values = self._ticks_to_duration_tokens(
-                        event.time - previous_tick, self._time_division, rest=True
+                        event.time - previous_tick, self.time_division, rest=True
                     )
                     for dur_value, dur_ticks in zip(*rest_values):
                         all_events.append(
@@ -84,7 +84,7 @@ class MIDILike(MIDITokenizer):
                 if event.time != previous_tick:
                     time_shift = event.time - previous_tick
                     for dur_value, dur_ticks in zip(
-                        *self._ticks_to_duration_tokens(time_shift, self._time_division)
+                        *self._ticks_to_duration_tokens(time_shift, self.time_division)
                     ):
                         all_events.append(
                             Event(
@@ -135,7 +135,7 @@ class MIDILike(MIDITokenizer):
         :return: the midi object (:class:`miditoolkit.MidiFile`).
         """
         if time_division is None:
-            time_division = self._time_division
+            time_division = self.time_division
         # Unsqueeze tokens in case of one_token_stream
         if self.one_token_stream:  # ie single token seq
             tokens = [tokens]
@@ -600,7 +600,7 @@ class MIDILike(MIDITokenizer):
         max_duration = self.config.additional_params.get("max_duration", None)
         if max_duration is not None:
             max_duration = self._token_duration_to_ticks(
-                max_duration, self._time_division
+                max_duration, self.time_division
             )
         previous_pitch_onset = {program: -128 for program in self.config.programs}
         previous_pitch_chord = {program: -128 for program in self.config.programs}
@@ -670,7 +670,7 @@ class MIDILike(MIDITokenizer):
                                 break  # all good
                         elif events[j].type in ["TimeShift", "Rest"]:
                             offset_sample += self._token_duration_to_ticks(
-                                events[j].value, self._time_division
+                                events[j].value, self.time_division
                             )
                         elif events[j].type == "Program":
                             current_program_noff = events[j].value
