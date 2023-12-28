@@ -58,10 +58,9 @@ class Structured(MIDITokenizer):
             # call __add_time_note_events and avoid delay cause by event sorting
             if not self.one_token_stream:
                 time_shift_ticks = note.start - previous_tick
+                index = np.argmin(np.abs(self._durations_ticks - time_shift_ticks))
                 if time_shift_ticks != 0:
-                    time_shift = ".".join(
-                        map(str, self._durations_ticks_to_tuple[time_shift_ticks])
-                    )
+                    time_shift = ".".join(map(str, self.durations[index]))
                 else:
                     time_shift = "0.0.1"
                 events.append(
@@ -118,10 +117,9 @@ class Structured(MIDITokenizer):
             if event.type == token_type_to_check:
                 # Time shift
                 time_shift_ticks = event.time - previous_tick
+                index = np.argmin(np.abs(self._durations_ticks - time_shift_ticks))
                 if time_shift_ticks != 0:
-                    time_shift = ".".join(
-                        map(str, self._durations_ticks_to_tuple[time_shift_ticks])
-                    )
+                    time_shift = ".".join(map(str, self.durations[index]))
                 else:
                     time_shift = "0.0.1"
                 all_events.append(
