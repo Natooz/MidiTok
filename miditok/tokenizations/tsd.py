@@ -1,4 +1,6 @@
-from typing import Any, Dict, List, Optional, Tuple, Union
+from __future__ import annotations
+
+from typing import Any
 
 import numpy as np
 from symusic import (
@@ -38,7 +40,7 @@ class TSD(MIDITokenizer):
         if self.config.use_programs:
             self.one_token_stream = True
 
-    def _add_time_events(self, events: List[Event]) -> List[Event]:
+    def _add_time_events(self, events: list[Event]) -> list[Event]:
         r"""Internal method intended to be implemented by inheriting classes.
         It creates the time events from the list of global and track events, and as
         such the final token sequence.
@@ -111,12 +113,13 @@ class TSD(MIDITokenizer):
 
     def _tokens_to_midi(
         self,
-        tokens: Union[
-            Union[TokSequence, List, np.ndarray, Any],
-            List[Union[TokSequence, List, np.ndarray, Any]],
-        ],
-        programs: Optional[List[Tuple[int, bool]]] = None,
-        time_division: Optional[int] = None,
+        tokens: TokSequence
+        | list
+        | np.ndarray
+        | Any
+        | list[TokSequence | list | np.ndarray | Any],
+        programs: list[tuple[int, bool]] | None = None,
+        time_division: int | None = None,
     ) -> Score:
         r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
 
@@ -143,7 +146,7 @@ class TSD(MIDITokenizer):
             )
 
         # RESULTS
-        tracks: Dict[int, Track] = {}
+        tracks: dict[int, Track] = {}
         tempo_changes, time_signature_changes = [], []
 
         def check_inst(prog: int):
@@ -297,7 +300,7 @@ class TSD(MIDITokenizer):
 
         return midi
 
-    def _create_base_vocabulary(self) -> List[str]:
+    def _create_base_vocabulary(self) -> list[str]:
         r"""Creates the vocabulary, as a list of string tokens.
         Each token as to be given as the form of "Type_Value", separated with an
         underscore. Example: Pitch_58
@@ -332,7 +335,7 @@ class TSD(MIDITokenizer):
 
         return vocab
 
-    def _create_token_types_graph(self) -> Dict[str, List[str]]:
+    def _create_token_types_graph(self) -> dict[str, list[str]]:
         r"""Returns a graph (as a dictionary) of the possible token
         types successions.
         NOTE: Program type is not referenced here, you can add it manually by
@@ -340,7 +343,7 @@ class TSD(MIDITokenizer):
 
         :return: the token types transitions dictionary
         """
-        dic = dict()
+        dic = {}
 
         if self.config.use_programs:
             first_note_token_type = (

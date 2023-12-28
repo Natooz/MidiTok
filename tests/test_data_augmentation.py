@@ -4,9 +4,10 @@
 
 """
 
+from __future__ import annotations
+
 import json
 from pathlib import Path
-from typing import Union
 
 import numpy as np
 import pytest
@@ -22,7 +23,7 @@ MAX_NUM_FILES_TEST_TOKENS = 7
 
 def test_data_augmentation_midi(
     tmp_path: Path,
-    data_path: Union[str, Path] = HERE / "MIDIs_multitrack",
+    data_path: str | Path = HERE / "MIDIs_multitrack",
     tokenization: str = "MIDILike",
 ):
     # We only test data augmentation on MIDIs with one tokenization, as tokenizers does
@@ -76,7 +77,7 @@ def test_data_augmentation_midi(
 def test_data_augmentation_tokens(
     tmp_path: Path,
     tokenization: str,
-    data_path: Union[str, Path] = HERE / "MIDIs_multitrack",
+    data_path: str | Path = HERE / "MIDIs_multitrack",
     max_num_files: int = MAX_NUM_FILES_TEST_TOKENS,
 ):
     original_midi_paths = list(data_path.glob("**/*.mid"))[:max_num_files]

@@ -1,11 +1,12 @@
 """Data augmentation methods
 
 """
+from __future__ import annotations
+
 import json
 import warnings
 from copy import copy, deepcopy
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
 from warnings import warn
 
 import numpy as np
@@ -16,16 +17,16 @@ from ..constants import MIDI_LOADING_EXCEPTION
 
 
 def data_augmentation_dataset(
-    data_path: Union[Path, str],
+    data_path: Path | str,
     tokenizer=None,
-    nb_octave_offset: Optional[int] = None,
-    nb_vel_offset: Optional[int] = None,
-    nb_dur_offset: Optional[int] = None,
-    octave_directions: Tuple[bool, bool] = (True, True),
-    vel_directions: Tuple[bool, bool] = (True, True),
-    dur_directions: Tuple[bool, bool] = (True, True),
+    nb_octave_offset: int | None = None,
+    nb_vel_offset: int | None = None,
+    nb_dur_offset: int | None = None,
+    octave_directions: tuple[bool, bool] = (True, True),
+    vel_directions: tuple[bool, bool] = (True, True),
+    dur_directions: tuple[bool, bool] = (True, True),
     all_offset_combinations: bool = False,
-    out_path: Optional[Union[Path, str]] = None,
+    out_path: Path | str | None = None,
     copy_original_in_new_location: bool = True,
     save_data_aug_report: bool = True,
 ):
@@ -101,9 +102,7 @@ def data_augmentation_dataset(
             corrected_offsets = deepcopy(offsets)
             vel_dim = int(128 / len(tokenizer.velocities))
             corrected_offsets[1] = [int(off / vel_dim) for off in corrected_offsets[1]]
-            augmented_tokens: Dict[
-                Tuple[int, int, int], List[Union[int, List[int]]]
-            ] = {}
+            augmented_tokens: dict[tuple[int, int, int], list[int | list[int]]] = {}
             for ti, track in enumerate(ids):
                 # we dont augment drums
                 if (
@@ -232,15 +231,15 @@ def data_augmentation_dataset(
 
 def get_offsets(
     tokenizer=None,
-    nb_octave_offset: Optional[int] = None,
-    nb_vel_offset: Optional[int] = None,
-    nb_dur_offset: Optional[int] = None,
-    octave_directions: Tuple[bool, bool] = (True, True),
-    vel_directions: Tuple[bool, bool] = (True, True),
-    dur_directions: Tuple[bool, bool] = (True, True),
+    nb_octave_offset: int | None = None,
+    nb_vel_offset: int | None = None,
+    nb_dur_offset: int | None = None,
+    octave_directions: tuple[bool, bool] = (True, True),
+    vel_directions: tuple[bool, bool] = (True, True),
+    dur_directions: tuple[bool, bool] = (True, True),
     midi: Score = None,
-    ids: Optional[List[Union[int, List[int]]]] = None,
-) -> List[List[int]]:
+    ids: list[int | list[int]] | None = None,
+) -> list[list[int]]:
     r"""Build the offsets in absolute value for data augmentation.
     TODO some sort of limit for velocity and duration values (min / max as for octaves)
 
@@ -339,11 +338,11 @@ def get_offsets(
 def data_augmentation_midi(
     midi: Score,
     tokenizer,
-    pitch_offsets: Optional[List[int]] = None,
-    velocity_offsets: Optional[List[int]] = None,
-    duration_offsets: Optional[List[int]] = None,
+    pitch_offsets: list[int] | None = None,
+    velocity_offsets: list[int] | None = None,
+    duration_offsets: list[int] | None = None,
     all_offset_combinations: bool = False,
-) -> List[Tuple[Tuple[int, int, int], Score]]:
+) -> list[tuple[tuple[int, int, int], Score]]:
     r"""Perform data augmentation on a MIDI object.
     Drum tracks are not augmented, but copied as original in augmented MIDIs.
     **Note: data augmentation on note durations is not implemented at the moment for
@@ -377,8 +376,8 @@ def data_augmentation_midi(
     if velocity_offsets is not None:
 
         def augment_vel(
-            midi_: Score, offsets_: Tuple[int, int, int]
-        ) -> List[Tuple[Tuple[int, int, int], Score]]:
+            midi_: Score, offsets_: tuple[int, int, int]
+        ) -> list[tuple[tuple[int, int, int], Score]]:
             aug_ = []
             for offset_ in velocity_offsets:
                 midi_aug_ = copy(midi_)
@@ -450,14 +449,14 @@ def data_augmentation_midi(
 
 
 def data_augmentation_tokens(
-    tokens: Union[np.ndarray, List[int]],
+    tokens: np.ndarray | list[int],
     tokenizer,
-    pitch_offsets: Optional[List[int]] = None,
-    velocity_offsets: Optional[List[int]] = None,
-    duration_offsets: Optional[List[int]] = None,
+    pitch_offsets: list[int] | None = None,
+    velocity_offsets: list[int] | None = None,
+    duration_offsets: list[int] | None = None,
     all_offset_combinations: bool = False,
-    need_to_decode_bpe: Optional[bool] = None,
-) -> List[Tuple[Tuple[int, int, int], List[int]]]:
+    need_to_decode_bpe: bool | None = None,
+) -> list[tuple[tuple[int, int, int], list[int]]]:
     r"""Perform data augmentation on a sequence of tokens, on the pitch dimension.
     NOTE: token sequences with BPE will be decoded during the augmentation, this might
     take some time.
@@ -550,8 +549,8 @@ def data_augmentation_tokens(
             vel_tokens = np.array(tokenizer.token_ids_of_type("Velocity", vel_voc_idx))
 
         def augment_vel(
-            seq_: np.ndarray, offsets_: Tuple[int, int, int]
-        ) -> List[Tuple[Tuple[int, int, int], np.ndarray]]:
+            seq_: np.ndarray, offsets_: tuple[int, int, int]
+        ) -> list[tuple[tuple[int, int, int], np.ndarray]]:
             if not tokenizer.is_multi_voc:
                 mask = np.isin(seq_, vel_tokens)
             else:
@@ -591,8 +590,8 @@ def data_augmentation_tokens(
             dur_tokens = np.array(tokenizer.token_ids_of_type("Duration", dur_voc_idx))
 
         def augment_dur(
-            seq_: np.ndarray, offsets_: Tuple[int, int, int]
-        ) -> List[Tuple[Tuple[int, int, int], np.ndarray]]:
+            seq_: np.ndarray, offsets_: tuple[int, int, int]
+        ) -> list[tuple[tuple[int, int, int], np.ndarray]]:
             if not tokenizer.is_multi_voc:
                 mask = np.isin(seq_, dur_tokens)
             else:

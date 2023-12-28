@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from math import ceil
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 import numpy as np
 from symusic import Note, Score, Tempo, TimeSignature, Track
@@ -75,7 +77,7 @@ class Octuple(MIDITokenizer):
             type_: idx for idx, type_ in enumerate(token_types)
         }  # used for data augmentation
 
-    def _add_time_events(self, events: List[Event]) -> List[List[Event]]:
+    def _add_time_events(self, events: list[Event]) -> list[list[Event]]:
         r"""Internal method intended to be implemented by inheriting classes.
         It creates the time events from the list of global and track events, and as
         such the final token sequence.
@@ -150,7 +152,7 @@ class Octuple(MIDITokenizer):
 
         return all_events
 
-    def _midi_to_tokens(self, midi: Score) -> Union[TokSequence, List[TokSequence]]:
+    def _midi_to_tokens(self, midi: Score) -> TokSequence | list[TokSequence]:
         r"""Converts a preprocessed MIDI object to a sequence of tokens.
         The workflow of this method is as follows: the events (Pitch, Velocity, Tempo,
         TimeSignature...) are gathered into a list, then the time events are added. If
@@ -182,12 +184,13 @@ class Octuple(MIDITokenizer):
 
     def _tokens_to_midi(
         self,
-        tokens: Union[
-            Union[TokSequence, List, np.ndarray, Any],
-            List[Union[TokSequence, List, np.ndarray, Any]],
-        ],
-        programs: Optional[List[Tuple[int, bool]]] = None,
-        time_division: Optional[int] = None,
+        tokens: TokSequence
+        | list
+        | np.ndarray
+        | Any
+        | list[TokSequence | list | np.ndarray | Any],
+        programs: list[tuple[int, bool]] | None = None,
+        time_division: int | None = None,
     ) -> Score:
         r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
 
@@ -215,7 +218,7 @@ class Octuple(MIDITokenizer):
         ticks_per_sample = time_division // max(self.config.beat_res.values())
 
         # RESULTS
-        tracks: Dict[int, Track] = {}
+        tracks: dict[int, Track] = {}
         tempo_changes, time_signature_changes = [Tempo(-1, self.default_tempo)], []
         tempo_changes[0].tempo = -1
 
@@ -352,7 +355,7 @@ class Octuple(MIDITokenizer):
 
         return midi
 
-    def _create_base_vocabulary(self) -> List[List[str]]:
+    def _create_base_vocabulary(self) -> list[list[str]]:
         r"""Creates the vocabulary, as a list of string tokens.
         Each token as to be given as the form of "Type_Value", separated with an
         underscore. Example: Pitch_58
@@ -377,9 +380,7 @@ class Octuple(MIDITokenizer):
         ]
 
         # POSITION
-        max_nb_beats = max(
-            map(lambda ts: ceil(4 * ts[0] / ts[1]), self.time_signatures)
-        )
+        max_nb_beats = max(ceil(4 * ts[0] / ts[1]) for ts in self.time_signatures)
         nb_positions = max(self.config.beat_res.values()) * max_nb_beats
         vocab[3] += [f"Position_{i}" for i in range(nb_positions)]
 
@@ -403,7 +404,7 @@ class Octuple(MIDITokenizer):
 
         return vocab
 
-    def _create_token_types_graph(self) -> Dict[str, List[str]]:
+    def _create_token_types_graph(self) -> dict[str, list[str]]:
         r"""Returns a graph (as a dictionary) of the possible token
         types successions.
         Not relevant for Octuple as it is not subject to token type errors.
@@ -414,8 +415,8 @@ class Octuple(MIDITokenizer):
 
     @_in_as_seq()
     def tokens_errors(
-        self, tokens: Union[TokSequence, List, np.ndarray, Any]
-    ) -> Union[float, List[float]]:
+        self, tokens: TokSequence | list | np.ndarray | Any
+    ) -> float | list[float]:
         r"""Checks if a sequence of tokens is made of good token values and
         returns the error ratio (lower is better).
         The token types are always the same in Octuple so this methods only checks

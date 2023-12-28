@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from copy import deepcopy
-from typing import Any, Dict, List, Optional, Union, cast
+from typing import Any, List, cast
 
 import numpy as np
 from symusic import Note, Score, Tempo, TimeSignature, Track
@@ -58,7 +60,7 @@ class MMM(MIDITokenizer):
                 dtype=np.intc,
             )
 
-    def _add_time_events(self, events: List[Event]) -> List[Event]:
+    def _add_time_events(self, events: list[Event]) -> list[Event]:
         r"""Internal method intended to be implemented by inheriting classes.
         It creates the time events from the list of global and track events, and as
         such the final token sequence.
@@ -196,9 +198,9 @@ class MMM(MIDITokenizer):
 
     def _tokens_to_midi(
         self,
-        tokens: Union[TokSequence, List, np.ndarray, Any],
+        tokens: TokSequence | list | np.ndarray | Any,
         _=None,
-        time_division: Optional[int] = None,
+        time_division: int | None = None,
     ) -> Score:
         r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
 
@@ -221,7 +223,7 @@ class MMM(MIDITokenizer):
         tokens = cast(List[str], tokens.tokens)  # for reducing type errors
 
         # RESULTS
-        tracks: List[Track] = []
+        tracks: list[Track] = []
         tempo_changes = []
         time_signature_changes = []
         ticks_per_bar = self._compute_ticks_per_bar(
@@ -310,7 +312,7 @@ class MMM(MIDITokenizer):
 
         return midi
 
-    def _create_base_vocabulary(self) -> List[str]:
+    def _create_base_vocabulary(self) -> list[str]:
         r"""Creates the vocabulary, as a list of string tokens.
         Each token as to be given as the form of "Type_Value", separated with an
         underscore. Example: Pitch_58
@@ -355,22 +357,22 @@ class MMM(MIDITokenizer):
 
         return vocab
 
-    def _create_token_types_graph(self) -> Dict[str, List[str]]:
+    def _create_token_types_graph(self) -> dict[str, list[str]]:
         r"""Returns a graph (as a dictionary) of the possible token
         types successions.
 
         :return: the token types transitions dictionary
         """
-        dic: Dict[str, List[str]] = dict()
-
-        dic["Bar"] = ["Bar", "TimeShift", "Pitch", "Track"]
-        dic["TimeShift"] = ["Pitch"]
-        dic["Track"] = ["Program", "Track"]
-        dic["Program"] = ["NoteDensity"]
-        dic["NoteDensity"] = ["Bar"]
-        dic["Pitch"] = ["Velocity"]
-        dic["Velocity"] = ["Duration"]
-        dic["Duration"] = ["Pitch", "TimeShift", "Bar"]
+        dic: dict[str, list[str]] = {
+            "Bar": ["Bar", "TimeShift", "Pitch", "Track"],
+            "TimeShift": ["Pitch"],
+            "Track": ["Program", "Track"],
+            "Program": ["NoteDensity"],
+            "NoteDensity": ["Bar"],
+            "Pitch": ["Velocity"],
+            "Velocity": ["Duration"],
+            "Duration": ["Pitch", "TimeShift", "Bar"],
+        }
 
         if self.config.use_pitch_intervals:
             for token_type in ("PitchIntervalTime", "PitchIntervalChord"):
@@ -409,7 +411,7 @@ class MMM(MIDITokenizer):
 
     @_in_as_seq(complete=False, decode_bpe=False)
     def tokens_errors(
-        self, tokens_to_check: Union[TokSequence, List[Union[int, List[int]]]]
+        self, tokens_to_check: TokSequence | list[int | list[int]]
     ) -> float:
         tokens_to_check = cast(TokSequence, tokens_to_check)
         nb_tok_predicted = len(tokens_to_check)  # used to norm the score

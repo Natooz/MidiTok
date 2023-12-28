@@ -4,8 +4,10 @@
 Test classes and methods from the pytorch_data module.
 """
 
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Optional, Sequence, Union
+from typing import Sequence
 
 from symusic import Score
 from torch import randint
@@ -30,8 +32,8 @@ def test_split_seq():
 
 def test_dataset_ram(
     tmp_path: Path,
-    midi_paths_one_track: Optional[Sequence[Union[str, Path]]] = None,
-    midi_paths_multitrack: Optional[Sequence[Union[str, Path]]] = None,
+    midi_paths_one_track: Sequence[str | Path] | None = None,
+    midi_paths_multitrack: Sequence[str | Path] | None = None,
 ):
     if midi_paths_one_track is None:
         midi_paths_one_track = MIDI_PATHS_ONE_TRACK[:3]
@@ -41,7 +43,7 @@ def test_dataset_ram(
     dummy_labels = {
         label: i
         for i, label in enumerate(
-            set(path.name.split("_")[0] for path in midi_paths_one_track)
+            {path.name.split("_")[0] for path in midi_paths_one_track}
         )
     }
 
@@ -102,9 +104,7 @@ def test_dataset_ram(
     )
 
 
-def test_dataset_io(
-    tmp_path: Path, midi_path: Optional[Sequence[Union[str, Path]]] = None
-):
+def test_dataset_io(tmp_path: Path, midi_path: Sequence[str | Path] | None = None):
     if midi_path is None:
         midi_path = MIDI_PATHS_MULTITRACK[:3]
     tokens_os_dir = tmp_path / "multitrack_tokens_os"
@@ -128,7 +128,7 @@ def test_dataset_io(
 
 def test_split_dataset_to_subsequences(
     tmp_path: Path,
-    midi_paths: Optional[Sequence[Union[str, Path]]] = None,
+    midi_paths: Sequence[str | Path] | None = None,
 ):
     if midi_paths is None:
         midi_paths = MIDI_PATHS_MULTITRACK[:3]

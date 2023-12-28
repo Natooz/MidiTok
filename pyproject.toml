@@ -69,9 +69,13 @@ target-version = "py38"
 extend-select = [
     "ARG",
     "A",
+    # "ANN",
     "B",
+    "C4",
+    # "COM",
     "E",
     "F",
+    "FA",
     "G",
     "I",
     "INT",

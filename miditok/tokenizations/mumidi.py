@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 from math import ceil
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 import numpy as np
 from symusic import Note, Score, Tempo, Track
@@ -184,7 +186,7 @@ class MuMIDI(MIDITokenizer):
 
     def _track_to_tokens(
         self, track: Track, time_division: int
-    ) -> List[List[Union[Event, str]]]:
+    ) -> list[list[Event | str]]:
         r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
         (:class:`miditok.TokSequence`). For each note, it creates a time step as a
         list of tokens where (list index: token type):
@@ -252,9 +254,9 @@ class MuMIDI(MIDITokenizer):
 
     def _tokens_to_midi(
         self,
-        tokens: Union[TokSequence, List, np.ndarray, Any],
+        tokens: TokSequence | list | np.ndarray | Any,
         _=None,
-        time_division: Optional[int] = None,
+        time_division: int | None = None,
     ) -> Score:
         r"""Override the parent class method
         Convert multiple sequences of tokens into a multitrack MIDI and save it.
@@ -346,7 +348,7 @@ class MuMIDI(MIDITokenizer):
 
         return midi
 
-    def _create_base_vocabulary(self) -> List[List[str]]:
+    def _create_base_vocabulary(self) -> list[list[str]]:
         r"""Creates the vocabulary, as a list of string tokens.
         Each token as to be given as the form of "Type_Value", separated with an
         underscore. Example: Pitch_58
@@ -374,9 +376,7 @@ class MuMIDI(MIDITokenizer):
             for i in range(*self.config.additional_params["drum_pitch_range"])
         ]
         vocab[0] += ["Bar_None"]  # new bar token
-        max_nb_beats = max(
-            map(lambda ts: ceil(4 * ts[0] / ts[1]), self.time_signatures)
-        )
+        max_nb_beats = max(ceil(4 * ts[0] / ts[1]) for ts in self.time_signatures)
         nb_positions = max(self.config.beat_res.values()) * max_nb_beats
         vocab[0] += [f"Position_{i}" for i in range(nb_positions)]
         vocab[0] += [f"Program_{program}" for program in self.config.programs]
@@ -416,7 +416,7 @@ class MuMIDI(MIDITokenizer):
 
         return vocab
 
-    def _create_token_types_graph(self) -> Dict[str, List[str]]:
+    def _create_token_types_graph(self) -> dict[str, list[str]]:
         r"""Returns a graph (as a dictionary) of the possible token
         types successions.
         Here the combination of Pitch, Velocity and Duration tokens is represented by
@@ -424,13 +424,13 @@ class MuMIDI(MIDITokenizer):
 
         :return: the token types transitions dictionary
         """
-        dic = dict()
-
-        dic["Bar"] = ["Bar", "Position"]
-        dic["Position"] = ["Program"]
-        dic["Program"] = ["Pitch", "DrumPitch"]
-        dic["Pitch"] = ["Pitch", "Program", "Bar", "Position"]
-        dic["DrumPitch"] = ["DrumPitch", "Program", "Bar", "Position"]
+        dic = {
+            "Bar": ["Bar", "Position"],
+            "Position": ["Program"],
+            "Program": ["Pitch", "DrumPitch"],
+            "Pitch": ["Pitch", "Program", "Bar", "Position"],
+            "DrumPitch": ["DrumPitch", "Program", "Bar", "Position"],
+        }
 
         if self.config.use_chords:
             dic["Program"] += ["Chord"]
@@ -439,7 +439,7 @@ class MuMIDI(MIDITokenizer):
         return dic
 
     @_in_as_seq()
-    def tokens_errors(self, tokens: Union[TokSequence, List, np.ndarray, Any]) -> float:
+    def tokens_errors(self, tokens: TokSequence | list | np.ndarray | Any) -> float:
         r"""Checks if a sequence of tokens is made of good token types
         successions and returns the error ratio (lower is better).
         The Pitch and Position values are also analyzed:

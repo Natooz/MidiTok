@@ -4,8 +4,10 @@
 
 """
 
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Optional, Sequence, Union
+from typing import Sequence
 
 from miditoolkit import MidiFile, Pedal
 from tensorflow import Tensor as tfTensor
@@ -38,7 +40,7 @@ def test_convert_tensors():
 
 
 def test_tokenize_datasets_file_tree(
-    tmp_path: Path, midi_paths: Optional[Sequence[Union[str, Path]]] = None
+    tmp_path: Path, midi_paths: Sequence[str | Path] | None = None
 ):
     if midi_paths is None:
         midi_paths = MIDI_PATHS_ALL

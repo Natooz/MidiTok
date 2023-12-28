@@ -1,9 +1,11 @@
 """Useful methods
 
 """
+from __future__ import annotations
+
 import warnings
 from collections import Counter
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Sequence
 
 import numpy as np
 from symusic import Note, Score, Track
@@ -54,7 +56,7 @@ def convert_ids_tensors_to_list(ids: Any):
     return ids
 
 
-def get_midi_programs(midi: Score) -> List[Tuple[int, bool]]:
+def get_midi_programs(midi: Score) -> list[tuple[int, bool]]:
     r"""Returns the list of programs of the tracks of a MIDI, deeping the
     same order. It returns it as a list of tuples (program, is_drum).
 
@@ -65,7 +67,7 @@ def get_midi_programs(midi: Score) -> List[Tuple[int, bool]]:
 
 
 def remove_duplicated_notes(
-    notes: Union[NoteTickList, List[Note]], consider_duration: bool = False
+    notes: NoteTickList | list[Note], consider_duration: bool = False
 ):
     r"""Removes (inplace) duplicated notes, i.e. with the same pitch and starting
     (onset) time. `consider_duration` can be used to also consider their duration
@@ -111,14 +113,14 @@ def fix_offsets_overlapping_notes(notes: NoteTickList):
 def detect_chords(
     notes: NoteTickList,
     time_division: int,
-    chord_maps: Dict[str, Sequence[int]],
-    program: Optional[int] = None,
+    chord_maps: dict[str, Sequence[int]],
+    program: int | None = None,
     specify_root_note: bool = True,
     beat_res: int = 4,
     onset_offset: int = 1,
-    unknown_chords_nb_notes_range: Optional[Tuple[int, int]] = None,
+    unknown_chords_nb_notes_range: tuple[int, int] | None = None,
     simul_notes_limit: int = 10,
-) -> List[Event]:
+) -> list[Event]:
     r"""Chord detection method. Make sure to sort notes by start time then pitch
     before: ``notes.sort(key=lambda x: (x.start, x.pitch))``.
     **On very large tracks with high note density this method can be slow.**
@@ -229,10 +231,10 @@ def detect_chords(
 
 def merge_tracks_per_class(
     midi: Score,
-    classes_to_merge: Optional[List[int]] = None,
-    new_program_per_class: Optional[Dict[int, int]] = None,
-    max_nb_of_tracks_per_inst_class: Optional[Dict[int, int]] = None,
-    valid_programs: Optional[List[int]] = None,
+    classes_to_merge: list[int] | None = None,
+    new_program_per_class: dict[int, int] | None = None,
+    max_nb_of_tracks_per_inst_class: dict[int, int] | None = None,
+    valid_programs: list[int] | None = None,
     filter_pitches: bool = True,
 ):
     r"""Merges per instrument class the tracks which are in the class in
@@ -331,7 +333,7 @@ def merge_tracks_per_class(
 
 
 def merge_tracks(
-    tracks: Union[List[Track], TrackTickList, Score], effects: bool = False
+    tracks: list[Track] | TrackTickList | Score, effects: bool = False
 ) -> Track:
     r"""Merge several miditoolkit Instrument objects, from a list of Instruments or a
     ``MidiFile`` object. All the tracks will be merged into the first Instrument object
@@ -381,7 +383,7 @@ def merge_tracks(
     return tracks_[0]
 
 
-def merge_same_program_tracks(tracks: Union[List[Track], TrackTickList]):
+def merge_same_program_tracks(tracks: list[Track] | TrackTickList):
     r"""Takes a list of tracks and merge the ones with the same programs.
     NOTE: Control change messages are not considered
 
@@ -459,7 +461,7 @@ def get_midi_max_tick(midi: Score) -> int:
 
 def nb_bar_pos(
     seq: Sequence[int], bar_token: int, position_tokens: Sequence[int]
-) -> Tuple[int, int]:
+) -> tuple[int, int]:
     r"""Returns the number of bars and the last position of a sequence of tokens. This
     method is compatible with tokenizations representing time with *Bar* and *Position*
     tokens, such as :py:class:`miditok.REMI`.
@@ -484,9 +486,7 @@ def nb_bar_pos(
     return current_bar, current_pos
 
 
-def np_get_closest(
-    array: np.ndarray, values: Union[np.ndarray, List[Any]]
-) -> np.ndarray:
+def np_get_closest(array: np.ndarray, values: np.ndarray | list[Any]) -> np.ndarray:
     """Simple method to find the closest values in an array of the values of another
     reference array.
     Taken from: https://stackoverflow.com/a/46184652

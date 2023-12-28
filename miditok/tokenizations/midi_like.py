@@ -1,4 +1,6 @@
-from typing import Any, Dict, List, Optional, Tuple, Union
+from __future__ import annotations
+
+from typing import Any
 
 import numpy as np
 from symusic import Note, Pedal, PitchBend, Score, Tempo, TimeSignature, Track
@@ -41,7 +43,7 @@ class MIDILike(MIDITokenizer):
     def _tweak_config_before_creating_voc(self):
         self._note_on_off = True
 
-    def _add_time_events(self, events: List[Event]) -> List[Event]:
+    def _add_time_events(self, events: list[Event]) -> list[Event]:
         r"""Internal method intended to be implemented by inheriting classes.
         It creates the time events from the list of global and track events, and as
         such the final token sequence.
@@ -114,12 +116,13 @@ class MIDILike(MIDITokenizer):
 
     def _tokens_to_midi(
         self,
-        tokens: Union[
-            Union[TokSequence, List, np.ndarray, Any],
-            List[Union[TokSequence, List, np.ndarray, Any]],
-        ],
-        programs: Optional[List[Tuple[int, bool]]] = None,
-        time_division: Optional[int] = None,
+        tokens: TokSequence
+        | list
+        | np.ndarray
+        | Any
+        | list[TokSequence | list | np.ndarray | Any],
+        programs: list[tuple[int, bool]] | None = None,
+        time_division: int | None = None,
     ) -> Score:
         r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
 
@@ -149,9 +152,9 @@ class MIDILike(MIDITokenizer):
             max_duration = self._token_duration_to_ticks(max_duration, time_division)
 
         # RESULTS
-        tracks: Dict[int, Track] = {}
+        tracks: dict[int, Track] = {}
         tempo_changes, time_signature_changes = [], []
-        active_notes: Dict[int, Dict[int, List[Tuple[int, int]]]] = {
+        active_notes: dict[int, dict[int, list[tuple[int, int]]]] = {
             prog: {
                 pi: []
                 for pi in range(
@@ -341,7 +344,7 @@ class MIDILike(MIDITokenizer):
 
         return midi
 
-    def _create_base_vocabulary(self) -> List[str]:
+    def _create_base_vocabulary(self) -> list[str]:
         r"""Creates the vocabulary, as a list of string tokens.
         Each token as to be given as the form of "Type_Value", separated with an
         underscore. Example: Pitch_58
@@ -380,7 +383,7 @@ class MIDILike(MIDITokenizer):
 
         return vocab
 
-    def _create_token_types_graph(self) -> Dict[str, List[str]]:
+    def _create_token_types_graph(self) -> dict[str, list[str]]:
         r"""Returns a graph (as a dictionary) of the possible token
         types successions.
         NOTE: Program type is not referenced here, you can add it manually by
@@ -388,8 +391,7 @@ class MIDILike(MIDITokenizer):
 
         :return: the token types transitions dictionary
         """
-        dic = dict()
-        dic["NoteOn"] = ["Velocity"]
+        dic = {"NoteOn": ["Velocity"]}
 
         if self.config.use_programs:
             first_note_token_type = (
@@ -558,8 +560,8 @@ class MIDILike(MIDITokenizer):
 
     @_in_as_seq(complete=False, decode_bpe=False)
     def tokens_errors(
-        self, tokens: Union[TokSequence, List, np.ndarray, Any]
-    ) -> Union[float, List[float]]:
+        self, tokens: TokSequence | list | np.ndarray | Any
+    ) -> float | list[float]:
         r"""Checks if a sequence of tokens is made of good token types
         successions and returns the error ratio (lower is better).
         The Pitch and Position values are also analyzed:
@@ -585,7 +587,7 @@ class MIDILike(MIDITokenizer):
 
         err = 0
         current_program = 0
-        active_pitches: Dict[int, Dict[int, int]] = {
+        active_pitches: dict[int, dict[int, int]] = {
             prog: {
                 pi: 0
                 for pi in range(

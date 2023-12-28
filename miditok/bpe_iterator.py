@@ -1,9 +1,10 @@
 """
 Common classes.
 """
+from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Sequence
+from typing import Sequence
 
 from symusic import Score
 
@@ -23,7 +24,7 @@ class BPEIterator:
         self.files_paths = files_paths
         self.__iter_count = 0
 
-    def load_file(self, path: Path) -> List[str]:
+    def load_file(self, path: Path) -> list[str]:
         if path.suffix in MIDI_FILES_EXTENSIONS:
             midi = Score(path)
             token_ids = self.tokenizer(midi)
@@ -44,7 +45,7 @@ class BPEIterator:
     def __len__(self):
         return len(self.files_paths)
 
-    def __getitem__(self, idx) -> List[str]:
+    def __getitem__(self, idx) -> list[str]:
         return self.load_file(self.files_paths[idx])
 
     def __iter__(self):

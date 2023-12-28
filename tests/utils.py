@@ -2,9 +2,11 @@
 Test validation methods.
 """
 
+from __future__ import annotations
+
 from copy import copy, deepcopy
 from pathlib import Path
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any
 
 from symusic import (
     Note,
@@ -53,7 +55,7 @@ TOKENIZER_CONFIG_KWARGS = {
 }
 
 
-def adjust_tok_params_for_tests(tokenization: str, params: Dict[str, Any]):
+def adjust_tok_params_for_tests(tokenization: str, params: dict[str, Any]):
     """Adjusts parameters (as dictionary for keyword arguments) depending on the
     tokenization.
 
@@ -180,7 +182,7 @@ def adapt_ref_midi_for_tests_assertion(
 
 def midis_notes_equals(
     midi1: Score, midi2: Score
-) -> List[Tuple[int, str, List[Tuple[str, Union[Note, int], int]]]]:
+) -> list[tuple[int, str, list[tuple[str, Note | int, int]]]]:
     """Checks if the notes from two MIDIs are all equal, and if not returns the list of
     errors.
 
@@ -198,7 +200,7 @@ def midis_notes_equals(
 
 def tracks_notes_equals(
     track1: Track, track2: Track
-) -> List[Tuple[str, Union[Note, int], int]]:
+) -> list[tuple[str, Note | int, int]]:
     if len(track1.notes) != len(track2.notes):
         return [("len", len(track2.notes), len(track1.notes))]
     errors = []
@@ -302,7 +304,7 @@ def tokenize_and_check_equals(
     midi: Score,
     tokenizer: miditok.MIDITokenizer,
     file_name: str,
-) -> Tuple[Score, Score, bool]:
+) -> tuple[Score, Score, bool]:
     tokenization = type(tokenizer).__name__
     log_prefix = f"{file_name} / {tokenization}"
 
@@ -342,7 +344,7 @@ def tokenize_and_check_equals(
 
 
 def del_invalid_time_sig(
-    time_sigs: List[TimeSignature], time_sigs_tokenizer: List[TimeSignature]
+    time_sigs: list[TimeSignature], time_sigs_tokenizer: list[TimeSignature]
 ):
     r"""Will adapt the times of tempo changes depending on the
     onset times of the notes of the MIDI.
@@ -364,8 +366,8 @@ def del_invalid_time_sig(
 
 
 def adapt_tempo_changes_times(
-    tracks: List[Track],
-    tempo_changes: List[Tempo],
+    tracks: list[Track],
+    tempo_changes: list[Tempo],
     default_tempo: int,
 ):
     r"""Will adapt the times of tempo changes depending on the
@@ -417,7 +419,7 @@ def adapt_tempo_changes_times(
 
 
 def clip_durations(
-    notes_pedals: Union[List[Note], List[Pedal]],
+    notes_pedals: list[Note] | list[Pedal],
     max_duration: int,
 ):
     """Adapt notes and pedals offset times so that they match the possible durations

@@ -4,9 +4,11 @@
 Testing the possible I/O formats of the tokenizers.
 """
 
+from __future__ import annotations
+
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Dict, Tuple, Union
+from typing import Any
 
 import pytest
 from symusic import Score
@@ -72,8 +74,8 @@ for tokenization_ in ALL_TOKENIZATIONS:
 
 @pytest.mark.parametrize("tok_params_set", TOK_PARAMS_IO)
 def test_io_formats(
-    tok_params_set: Tuple[str, Dict[str, Any]],
-    midi_path: Union[str, Path] = HERE / "MIDIs_multitrack" / "Funkytown.mid",
+    tok_params_set: tuple[str, dict[str, Any]],
+    midi_path: str | Path = HERE / "MIDIs_multitrack" / "Funkytown.mid",
 ):
     r"""Reads a few MIDI files, convert them into token sequences, convert them back to
     MIDI files. The converted back MIDI files should identical to original one, expect

@@ -4,11 +4,13 @@
 BPE.
 """
 
+from __future__ import annotations
+
 import random
 from copy import copy, deepcopy
 from pathlib import Path
 from time import time
-from typing import Optional, Sequence, Union
+from typing import Sequence
 
 import pytest
 from symusic import Score
@@ -38,7 +40,7 @@ default_params.update(
 def test_bpe_conversion(
     tokenization: str,
     tmp_path: Path,
-    midi_paths: Optional[Sequence[Union[str, Path]]] = None,
+    midi_paths: Sequence[str | Path] | None = None,
     seed: int = SEED,
 ):
     r"""Reads a few MIDI files, convert them into token sequences, convert them back

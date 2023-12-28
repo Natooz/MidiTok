@@ -2,12 +2,14 @@
 Common classes.
 """
 
+from __future__ import annotations
+
 import json
 import warnings
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Sequence, Tuple, Union
+from typing import Any, Sequence
 
 from numpy import ndarray
 
@@ -65,8 +67,8 @@ class Event:
     """
 
     type: str  # noqa: A003
-    value: Union[str, int]
-    time: Union[int, float] = None
+    value: str | int
+    time: int | float = None
     program: int = None
     desc: Any = None
 
@@ -98,12 +100,12 @@ class TokSequence:
     :py:meth:`miditok.MIDITokenizer.complete_sequence`
     """
 
-    tokens: List[Union[str, List[str]]] = None
-    ids: List[Union[int, List[int]]] = None  # BPE can be applied on ids
+    tokens: list[str | list[str]] = None
+    ids: list[int | list[int]] = None  # BPE can be applied on ids
     bytes: str = None  # noqa: A003
-    events: List[Union[Event, List[Event]]] = None
+    events: list[Event | list[Event]] = None
     ids_bpe_encoded: bool = False
-    _ids_no_bpe: List[Union[int, List[int]]] = None
+    _ids_no_bpe: list[int | list[int]] = None
 
     def __len__(self) -> int:
         if self.ids is not None:
@@ -330,8 +332,8 @@ class TokenizerConfig:
 
     def __init__(
         self,
-        pitch_range: Tuple[int, int] = PITCH_RANGE,
-        beat_res: Dict[Tuple[int, int], int] = BEAT_RES,
+        pitch_range: tuple[int, int] = PITCH_RANGE,
+        beat_res: dict[tuple[int, int], int] = BEAT_RES,
         num_velocities: int = NUM_VELOCITIES,
         special_tokens: Sequence[str] = SPECIAL_TOKENS,
         use_chords: bool = USE_CHORDS,
@@ -342,20 +344,20 @@ class TokenizerConfig:
         use_pitch_bends: bool = USE_PITCH_BENDS,
         use_programs: bool = USE_PROGRAMS,
         use_pitch_intervals: bool = USE_PITCH_INTERVALS,
-        beat_res_rest: Dict[Tuple[int, int], int] = BEAT_RES_REST,
-        chord_maps: Dict[str, Tuple] = CHORD_MAPS,
+        beat_res_rest: dict[tuple[int, int], int] = BEAT_RES_REST,
+        chord_maps: dict[str, tuple] = CHORD_MAPS,
         chord_tokens_with_root_note: bool = CHORD_TOKENS_WITH_ROOT_NOTE,
-        chord_unknown: Tuple[int, int] = CHORD_UNKNOWN,
+        chord_unknown: tuple[int, int] = CHORD_UNKNOWN,
         num_tempos: int = NUM_TEMPOS,
-        tempo_range: Tuple[int, int] = TEMPO_RANGE,
+        tempo_range: tuple[int, int] = TEMPO_RANGE,
         log_tempos: bool = LOG_TEMPOS,
         remove_duplicated_notes: bool = REMOVE_DUPLICATED_NOTES,
         delete_equal_successive_tempo_changes: bool = DELETE_EQUAL_SUCCESSIVE_TEMPO_CHANGES,  # noqa: E501
-        time_signature_range: Dict[
-            int, Union[List[int], Tuple[int, int]]
+        time_signature_range: dict[
+            int, list[int] | tuple[int, int]
         ] = TIME_SIGNATURE_RANGE,
         sustain_pedal_duration: bool = SUSTAIN_PEDAL_DURATION,
-        pitch_bend_range: Tuple[int, int, int] = PITCH_BEND_RANGE,
+        pitch_bend_range: tuple[int, int, int] = PITCH_BEND_RANGE,
         delete_equal_successive_time_sig_changes: bool = DELETE_EQUAL_SUCCESSIVE_TIME_SIG_CHANGES,  # noqa: E501
         programs: Sequence[int] = PROGRAMS,
         one_token_stream_for_programs: bool = ONE_TOKEN_STREAM_FOR_PROGRAMS,
@@ -383,10 +385,10 @@ class TokenizerConfig:
                 )
 
         # Global parameters
-        self.pitch_range: Tuple[int, int] = pitch_range
-        self.beat_res: Dict[Tuple[int, int], int] = beat_res
+        self.pitch_range: tuple[int, int] = pitch_range
+        self.beat_res: dict[tuple[int, int], int] = beat_res
         self.num_velocities: int = num_velocities
-        self.special_tokens: List[str] = []
+        self.special_tokens: list[str] = []
         for special_token in special_tokens:
             parts = special_token.split("_")
             if len(parts) == 1:
@@ -413,7 +415,7 @@ class TokenizerConfig:
         self.use_pitch_intervals = use_pitch_intervals
 
         # Rest params
-        self.beat_res_rest: Dict[Tuple[int, int], int] = beat_res_rest
+        self.beat_res_rest: dict[tuple[int, int], int] = beat_res_rest
         if self.use_rests:
             max_rest_res = max(self.beat_res_rest.values())
             max_global_res = max(self.beat_res.values())
@@ -426,22 +428,22 @@ class TokenizerConfig:
                 )
 
         # Chord params
-        self.chord_maps: Dict[str, Tuple] = chord_maps
+        self.chord_maps: dict[str, tuple] = chord_maps
         # Tokens will look as "Chord_C:maj"
         self.chord_tokens_with_root_note: bool = chord_tokens_with_root_note
         # (3, 6) for chords between 3 and 5 notes
-        self.chord_unknown: Tuple[int, int] = chord_unknown
+        self.chord_unknown: tuple[int, int] = chord_unknown
 
         # Tempo params
         self.num_tempos: int = num_tempos
-        self.tempo_range: Tuple[int, int] = tempo_range  # (min_tempo, max_tempo)
+        self.tempo_range: tuple[int, int] = tempo_range  # (min_tempo, max_tempo)
         self.log_tempos: bool = log_tempos
         self.delete_equal_successive_tempo_changes = (
             delete_equal_successive_tempo_changes
         )
 
         # Time signature params
-        self.time_signature_range: Dict[int, List[int]] = {
+        self.time_signature_range: dict[int, list[int]] = {
             beat_res: (
                 list(range(beats[0], beats[1] + 1))
                 if isinstance(beats, tuple)
@@ -486,7 +488,7 @@ class TokenizerConfig:
         self.additional_params = kwargs
 
     @classmethod
-    def from_dict(cls, input_dict: Dict[str, Any], **kwargs):
+    def from_dict(cls, input_dict: dict[str, Any], **kwargs):
         r"""
         Instantiates an ``AdditionalTokensConfig`` from a Python dictionary of
         parameters.
@@ -505,7 +507,7 @@ class TokenizerConfig:
                 input_dict.pop(key)
         return cls(**input_dict, **kwargs)
 
-    def to_dict(self, serialize: bool = False) -> Dict[str, Any]:
+    def to_dict(self, serialize: bool = False) -> dict[str, Any]:
         r"""
         Serializes this instance to a Python dictionary.
 
@@ -519,7 +521,7 @@ class TokenizerConfig:
             self.__serialize_dict(dict_config)
         return dict_config
 
-    def __serialize_dict(self, dict_: Dict):
+    def __serialize_dict(self, dict_: dict):
         r"""
         Converts numpy arrays to lists recursively within a dictionary.
 
@@ -531,7 +533,7 @@ class TokenizerConfig:
             elif isinstance(dict_[key], ndarray):
                 dict_[key] = dict_[key].tolist()
 
-    def save_to_json(self, out_path: Union[str, Path]):
+    def save_to_json(self, out_path: str | Path):
         r"""
         Saves a tokenizer configuration object to the `out_path` path, so that it can
         be re-loaded later.
@@ -555,7 +557,7 @@ class TokenizerConfig:
             json.dump(dict_config, outfile, indent=4)
 
     @classmethod
-    def load_from_json(cls, config_file_path: Union[str, Path]) -> "TokenizerConfig":
+    def load_from_json(cls, config_file_path: str | Path) -> TokenizerConfig:
         r"""
         Loads a tokenizer configuration from the `config_path` path.
 

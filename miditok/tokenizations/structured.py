@@ -1,4 +1,6 @@
-from typing import Any, Dict, List, Optional, Tuple, Union
+from __future__ import annotations
+
+from typing import Any
 
 import numpy as np
 from symusic import Note, Score, Track
@@ -36,7 +38,7 @@ class Structured(MIDITokenizer):
         self.config.use_pitch_intervals = False
         self.config.program_changes = False
 
-    def _create_track_events(self, track: Track) -> List[Event]:
+    def _create_track_events(self, track: Track) -> list[Event]:
         r"""Extract the tokens / events of individual tracks: *Pitch*, *Velocity*,
         *Duration*, *NoteOn*, *NoteOff* and optionally *Chord*, from a track
         (``miditoolkit.Instrument``).
@@ -55,16 +57,19 @@ class Structured(MIDITokenizer):
             # In this case, we directly add TimeShift events here so we don't have to
             # call __add_time_note_events and avoid delay cause by event sorting
             if not self.one_token_stream:
-                time_shift = note.start - previous_tick
-                index = np.argmin(np.abs(self._durations_ticks - time_shift))
+                time_shift_ticks = note.start - previous_tick
+                if time_shift_ticks != 0:
+                    time_shift = ".".join(
+                        map(str, self._durations_ticks_to_tuple[time_shift_ticks])
+                    )
+                else:
+                    time_shift = "0.0.1"
                 events.append(
                     Event(
                         type="TimeShift",
                         time=note.start,
-                        desc=f"{time_shift} ticks",
-                        value=".".join(map(str, self.durations[index]))
-                        if time_shift != 0
-                        else "0.0.1",
+                        desc=f"{time_shift_ticks} ticks",
+                        value=time_shift,
                     )
                 )
             # Note On / Velocity / Duration
@@ -83,21 +88,20 @@ class Structured(MIDITokenizer):
                     desc=f"{note.velocity}",
                 )
             )
-            duration = note.end - note.start
-            index = np.argmin(np.abs(self._durations_ticks - duration))
+            dur = ".".join(map(str, self._durations_ticks_to_tuple[note.duration]))
             events.append(
                 Event(
                     type="Duration",
-                    value=".".join(map(str, self.durations[index])),
+                    value=dur,
                     time=note.start,
-                    desc=f"{duration} ticks",
+                    desc=f"{note.duration} ticks",
                 )
             )
             previous_tick = note.start
 
         return events
 
-    def _add_time_events(self, events: List[Event]) -> List[Event]:
+    def _add_time_events(self, events: list[Event]) -> list[Event]:
         r"""Internal method intended to be implemented by inheriting classes.
         It creates the time events from the list of global and track events, and as
         such the final token sequence.
@@ -113,16 +117,19 @@ class Structured(MIDITokenizer):
         for event in events:
             if event.type == token_type_to_check:
                 # Time shift
-                time_shift = event.time - previous_tick
-                index = np.argmin(np.abs(self._durations_ticks - time_shift))
+                time_shift_ticks = event.time - previous_tick
+                if time_shift_ticks != 0:
+                    time_shift = ".".join(
+                        map(str, self._durations_ticks_to_tuple[time_shift_ticks])
+                    )
+                else:
+                    time_shift = "0.0.1"
                 all_events.append(
                     Event(
                         type="TimeShift",
                         time=event.time,
-                        desc=f"{time_shift} ticks",
-                        value=".".join(map(str, self.durations[index]))
-                        if time_shift != 0
-                        else "0.0.1",
+                        desc=f"{time_shift_ticks} ticks",
+                        value=time_shift,
                     )
                 )
                 previous_tick = event.time
@@ -131,7 +138,7 @@ class Structured(MIDITokenizer):
 
         return all_events
 
-    def _midi_to_tokens(self, midi: Score) -> Union[TokSequence, List[TokSequence]]:
+    def _midi_to_tokens(self, midi: Score) -> TokSequence | list[TokSequence]:
         r"""Converts a preprocessed MIDI object to a sequence of tokens.
         We override the parent method to handle the "non-program" case where
         `TimeShift` events have already been added by `_notes_to_events`.
@@ -171,12 +178,13 @@ class Structured(MIDITokenizer):
 
     def _tokens_to_midi(
         self,
-        tokens: Union[
-            Union[TokSequence, List, np.ndarray, Any],
-            List[Union[TokSequence, List, np.ndarray, Any]],
-        ],
-        programs: Optional[List[Tuple[int, bool]]] = None,
-        time_division: Optional[int] = None,
+        tokens: TokSequence
+        | list
+        | np.ndarray
+        | Any
+        | list[TokSequence | list | np.ndarray | Any],
+        programs: list[tuple[int, bool]] | None = None,
+        time_division: int | None = None,
     ) -> Score:
         r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
 
@@ -203,7 +211,7 @@ class Structured(MIDITokenizer):
             )
 
         # RESULTS
-        instruments: Dict[int, Track] = {}
+        instruments: dict[int, Track] = {}
 
         def check_inst(prog: int):
             if prog not in instruments:
@@ -272,7 +280,7 @@ class Structured(MIDITokenizer):
 
         return midi
 
-    def _create_base_vocabulary(self) -> List[str]:
+    def _create_base_vocabulary(self) -> list[str]:
         r"""Creates the vocabulary, as a list of string tokens.
         Each token as to be given as the form of "Type_Value", separated with an
         underscore. Example: Pitch_58
@@ -308,7 +316,7 @@ class Structured(MIDITokenizer):
 
         return vocab
 
-    def _create_token_types_graph(self) -> Dict[str, List[str]]:
+    def _create_token_types_graph(self) -> dict[str, list[str]]:
         r"""Returns a graph (as a dictionary) of the possible token
         types successions.
         NOTE: Program type is not referenced here, you can add it manually by

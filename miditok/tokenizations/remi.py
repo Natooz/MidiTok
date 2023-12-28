@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 from math import ceil
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 import numpy as np
 from symusic import (
@@ -56,8 +58,8 @@ class REMI(MIDITokenizer):
     def __init__(
         self,
         tokenizer_config: TokenizerConfig = None,
-        max_bar_embedding: Optional[int] = None,
-        params: Optional[Union[str, Path]] = None,
+        max_bar_embedding: int | None = None,
+        params: str | Path | None = None,
     ):
         if (
             tokenizer_config is not None
@@ -76,7 +78,7 @@ class REMI(MIDITokenizer):
             # tokenizer encounter longer MIDIs
             self.config.additional_params["max_bar_embedding"] = None
 
-    def _add_time_events(self, events: List[Event]) -> List[Event]:
+    def _add_time_events(self, events: list[Event]) -> list[Event]:
         r"""Internal method intended to be implemented by inheriting classes.
         It creates the time events from the list of global and track events, and as
         such the final token sequence.
@@ -235,12 +237,13 @@ class REMI(MIDITokenizer):
 
     def _tokens_to_midi(
         self,
-        tokens: Union[
-            Union[TokSequence, List, np.ndarray, Any],
-            List[Union[TokSequence, List, np.ndarray, Any]],
-        ],
-        programs: Optional[List[Tuple[int, bool]]] = None,
-        time_division: Optional[int] = None,
+        tokens: TokSequence
+        | list
+        | np.ndarray
+        | Any
+        | list[TokSequence | list | np.ndarray | Any],
+        programs: list[tuple[int, bool]] | None = None,
+        time_division: int | None = None,
     ) -> Score:
         r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
 
@@ -268,7 +271,7 @@ class REMI(MIDITokenizer):
         ticks_per_sample = time_division // max(self.config.beat_res.values())
 
         # RESULTS
-        tracks: Dict[int, Track] = {}
+        tracks: dict[int, Track] = {}
         tempo_changes, time_signature_changes = [], []
 
         def check_inst(prog: int):
@@ -472,7 +475,7 @@ class REMI(MIDITokenizer):
 
         return midi
 
-    def _create_base_vocabulary(self) -> List[str]:
+    def _create_base_vocabulary(self) -> list[str]:
         r"""Creates the vocabulary, as a list of string tokens.
         Each token as to be given as the form of "Type_Value", separated with an
         underscore. Example: Pitch_58
@@ -506,9 +509,7 @@ class REMI(MIDITokenizer):
         ]
 
         # POSITION
-        max_nb_beats = max(
-            map(lambda ts: ceil(4 * ts[0] / ts[1]), self.time_signatures)
-        )
+        max_nb_beats = max(ceil(4 * ts[0] / ts[1]) for ts in self.time_signatures)
         nb_positions = max(self.config.beat_res.values()) * max_nb_beats
         vocab += [f"Position_{i}" for i in range(nb_positions)]
 
@@ -517,13 +518,13 @@ class REMI(MIDITokenizer):
 
         return vocab
 
-    def _create_token_types_graph(self) -> Dict[str, List[str]]:
+    def _create_token_types_graph(self) -> dict[str, list[str]]:
         r"""Returns a graph (as a dictionary) of the possible token
         types successions.
 
         :return: the token types transitions dictionary
         """
-        dic: Dict[str, List[str]] = dict()
+        dic: dict[str, list[str]] = {}
 
         if self.config.use_programs:
             first_note_token_type = (

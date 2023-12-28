@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import warnings
 from math import ceil
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 import numpy as np
 from symusic import Note, Score, Tempo, TimeSignature, Track
@@ -84,7 +86,7 @@ class CPWord(MIDITokenizer):
         }  # used for data augmentation
         self.vocab_types_idx["Bar"] = 1  # same as position
 
-    def _add_time_events(self, events: List[Event]) -> List[List[Event]]:
+    def _add_time_events(self, events: list[Event]) -> list[list[Event]]:
         r"""Internal method intended to be implemented by inheriting classes.
         It creates the time events from the list of global and track events, and as
         such the final token sequence.
@@ -270,17 +272,17 @@ class CPWord(MIDITokenizer):
         self,
         time: int,
         bar: bool = False,
-        pos: Optional[int] = None,
-        pitch: Optional[int] = None,
-        vel: Optional[int] = None,
-        dur: Optional[str] = None,
-        chord: Optional[str] = None,
-        rest: Optional[str] = None,
-        tempo: Optional[float] = None,
-        time_signature: Optional[str] = None,
-        program: Optional[int] = None,
+        pos: int | None = None,
+        pitch: int | None = None,
+        vel: int | None = None,
+        dur: str | None = None,
+        chord: str | None = None,
+        rest: str | None = None,
+        tempo: float | None = None,
+        time_signature: str | None = None,
+        program: int | None = None,
         desc: str = "",
-    ) -> List[Event]:
+    ) -> list[Event]:
         r"""Create a CP Word token, with the following structure:
             (index. Token type)
             0. Family
@@ -357,12 +359,13 @@ class CPWord(MIDITokenizer):
 
     def _tokens_to_midi(
         self,
-        tokens: Union[
-            Union[TokSequence, List, np.ndarray, Any],
-            List[Union[TokSequence, List, np.ndarray, Any]],
-        ],
-        programs: Optional[List[Tuple[int, bool]]] = None,
-        time_division: Optional[int] = None,
+        tokens: TokSequence
+        | list
+        | np.ndarray
+        | Any
+        | list[TokSequence | list | np.ndarray | Any],
+        programs: list[tuple[int, bool]] | None = None,
+        time_division: int | None = None,
     ) -> Score:
         r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
 
@@ -390,7 +393,7 @@ class CPWord(MIDITokenizer):
         ticks_per_sample = time_division // max(self.config.beat_res.values())
 
         # RESULTS
-        tracks: Dict[int, Track] = {}
+        tracks: dict[int, Track] = {}
         tempo_changes = [Tempo(-1, self.default_tempo)]
         time_signature_changes = []
         tempo_changes[0].tempo = -1
@@ -566,7 +569,7 @@ class CPWord(MIDITokenizer):
 
         return midi
 
-    def _create_base_vocabulary(self) -> List[List[str]]:
+    def _create_base_vocabulary(self) -> list[list[str]]:
         r"""Creates the vocabulary, as a list of string tokens.
         Each token as to be given as the form of "Type_Value", separated with an
         underscore. Example: Pitch_58
@@ -584,9 +587,7 @@ class CPWord(MIDITokenizer):
         vocab[0].append("Family_Note")
 
         # POSITION
-        max_nb_beats = max(
-            map(lambda ts: ceil(4 * ts[0] / ts[1]), self.time_signatures)
-        )
+        max_nb_beats = max(ceil(4 * ts[0] / ts[1]) for ts in self.time_signatures)
         nb_positions = max(self.config.beat_res.values()) * max_nb_beats
         vocab[1].append("Ignore_None")
         vocab[1].append("Bar_None")
@@ -637,7 +638,7 @@ class CPWord(MIDITokenizer):
 
         return vocab
 
-    def _create_token_types_graph(self) -> Dict[str, List[str]]:
+    def _create_token_types_graph(self) -> dict[str, list[str]]:
         r"""Returns a graph (as a dictionary) of the possible token types successions.
         As with CP the tokens types are "merged", each state here corresponds to
         a "compound" token, which is characterized by the token types Program, Bar,
@@ -649,11 +650,11 @@ class CPWord(MIDITokenizer):
 
         :return: the token types transitions dictionary
         """
-        dic = dict()
-
-        dic["Bar"] = ["Position", "Bar"]
-        dic["Position"] = ["Pitch"]
-        dic["Pitch"] = ["Pitch", "Bar", "Position"]
+        dic = {
+            "Bar": ["Position", "Bar"],
+            "Position": ["Pitch"],
+            "Pitch": ["Pitch", "Bar", "Position"],
+        }
 
         if self.config.use_chords:
             dic["Rest"] = ["Rest", "Position"]
@@ -678,8 +679,8 @@ class CPWord(MIDITokenizer):
 
     @_in_as_seq()
     def tokens_errors(
-        self, tokens: Union[TokSequence, List, np.ndarray, Any]
-    ) -> Union[float, List[float]]:
+        self, tokens: TokSequence | list | np.ndarray | Any
+    ) -> float | list[float]:
         r"""Checks if a sequence of tokens is made of good token types
         successions and returns the error ratio (lower is better).
         The Pitch and Position values are also analyzed:
@@ -697,7 +698,7 @@ class CPWord(MIDITokenizer):
         if len(tokens) == 0:
             return 0
 
-        def cp_token_type(tok: List[int]) -> List[str]:
+        def cp_token_type(tok: list[int]) -> list[str]:
             family = self[0, tok[0]].split("_")[1]
             if family == "Note":
                 return self[2, tok[2]].split("_")
@@ -730,7 +731,9 @@ class CPWord(MIDITokenizer):
                 if token_type == "Bar":  # noqa: S105
                     current_pos = -1
                     current_pitches = {p: [] for p in self.config.programs}
-                elif self.config.remove_duplicated_notes and token_type == "Pitch":  # noqa: S105
+                elif (
+                    self.config.remove_duplicated_notes and token_type == "Pitch"  # noqa: S105
+                ):
                     if self.config.use_programs:
                         program = int(self[5, token[5]].split("_")[1])
                     if int(token_value) in current_pitches[program]:

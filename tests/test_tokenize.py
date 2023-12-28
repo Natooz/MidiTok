@@ -3,9 +3,11 @@
 """Multitrack test file
 """
 
+from __future__ import annotations
+
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Dict, Tuple, Union
+from typing import Any
 
 import pytest
 from symusic import Pedal, Score
@@ -95,8 +97,8 @@ for tokenization_ in ALL_TOKENIZATIONS:
 
 
 def _test_tokenize(
-    midi_path: Union[str, Path],
-    tok_params_set: Tuple[str, Dict[str, Any]],
+    midi_path: str | Path,
+    tok_params_set: tuple[str, dict[str, Any]],
     saving_erroneous_midis: bool = False,
     save_failed_midi_as_one_midi: bool = True,
 ):
@@ -155,8 +157,8 @@ def _test_tokenize(
 @pytest.mark.parametrize("midi_path", MIDI_PATHS_ONE_TRACK)
 @pytest.mark.parametrize("tok_params_set", TOK_PARAMS_ONE_TRACK)
 def test_one_track_midi_to_tokens_to_midi(
-    midi_path: Union[str, Path],
-    tok_params_set: Tuple[str, Dict[str, Any]],
+    midi_path: str | Path,
+    tok_params_set: tuple[str, dict[str, Any]],
     saving_erroneous_midis: bool = True,
 ):
     _test_tokenize(midi_path, tok_params_set, saving_erroneous_midis)
@@ -165,8 +167,8 @@ def test_one_track_midi_to_tokens_to_midi(
 @pytest.mark.parametrize("midi_path", MIDI_PATHS_MULTITRACK)
 @pytest.mark.parametrize("tok_params_set", TOK_PARAMS_MULTITRACK)
 def test_multitrack_midi_to_tokens_to_midi(
-    midi_path: Union[str, Path],
-    tok_params_set: Tuple[str, Dict[str, Any]],
+    midi_path: str | Path,
+    tok_params_set: tuple[str, dict[str, Any]],
     saving_erroneous_midis: bool = False,
 ):
     _test_tokenize(midi_path, tok_params_set, saving_erroneous_midis)

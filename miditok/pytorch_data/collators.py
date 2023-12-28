@@ -1,9 +1,11 @@
 """
 Collator objects for PyTorch `DataLoader`s.
 """
+from __future__ import annotations
+
 import warnings
 from copy import deepcopy
-from typing import Any, List, Mapping, Optional
+from typing import Any, Mapping
 
 import torch
 from torch import LongTensor
@@ -13,8 +15,8 @@ class DataCollator:
     def __init__(
         self,
         pad_token_id: int,
-        bos_token_id: Optional[int] = None,
-        eos_token_id: Optional[int] = None,
+        bos_token_id: int | None = None,
+        eos_token_id: int | None = None,
         pad_on_left: bool = False,
         copy_inputs_as_labels: bool = False,
         shift_labels: bool = False,
@@ -53,7 +55,7 @@ class DataCollator:
         self.inputs_kwarg_name = inputs_kwarg_name
         self.labels_kwarg_name = labels_kwarg_name
 
-    def __call__(self, batch: List[Mapping[str, Any]]) -> Mapping[str, LongTensor]:
+    def __call__(self, batch: list[Mapping[str, Any]]) -> Mapping[str, LongTensor]:
         out_batch = {}
         x, y = None, None
 
@@ -119,9 +121,9 @@ class DataCollator:
 
 
 def _add_bos_eos_tokens_to_batch(
-    batch: List[LongTensor],
-    bos_tok_id: Optional[int] = None,
-    eos_tok_id: Optional[int] = None,
+    batch: list[LongTensor],
+    bos_tok_id: int | None = None,
+    eos_tok_id: int | None = None,
 ):
     """Adds (inplace) BOS and EOS tokens to inputs.
 
@@ -155,7 +157,7 @@ def _add_bos_eos_tokens_to_batch(
 
 
 def _pad_batch(
-    batch: List[LongTensor],
+    batch: list[LongTensor],
     pad_token_id: int,
     pad_on_left: bool = False,
 ) -> LongTensor:
@@ -184,7 +186,7 @@ def _pad_batch(
         ).long()
 
 
-def _pad_left(batch: List[LongTensor], pad_token_id: int) -> LongTensor:
+def _pad_left(batch: list[LongTensor], pad_token_id: int) -> LongTensor:
     r"""Here the sequences are padded to the left, so that the last token along the
     time dimension is always the last token of each seq, allowing to efficiently
     generate by batch.

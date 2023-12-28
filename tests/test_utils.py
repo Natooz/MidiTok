@@ -4,9 +4,10 @@
 
 """
 
+from __future__ import annotations
+
 from copy import copy
 from pathlib import Path
-from typing import Union
 
 import pytest
 from symusic import (
@@ -136,7 +137,7 @@ def test_check_midi_equals(midi_path: Path):
 
 
 def test_merge_tracks(
-    midi_path: Union[str, Path] = MIDI_PATHS_ONE_TRACK[0],
+    midi_path: str | Path = MIDI_PATHS_ONE_TRACK[0],
 ):
     # Load MIDI and only keep the first track
     midi = Score(midi_path)
@@ -155,7 +156,7 @@ def test_merge_tracks(
 
 
 @pytest.mark.parametrize("midi_path", MIDI_PATHS_MULTITRACK)
-def test_merge_same_program_tracks_and_by_class(midi_path: Union[str, Path]):
+def test_merge_same_program_tracks_and_by_class(midi_path: str | Path):
     midi = Score(midi_path)
     for track in midi.tracks:
         if track.is_drum:

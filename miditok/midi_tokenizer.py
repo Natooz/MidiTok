@@ -1,13 +1,15 @@
 """
 MIDI encoding base class and methods
 """
+from __future__ import annotations
+
 import json
 import math
 import warnings
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Iterable, Sequence
 
 import numpy as np
 from huggingface_hub import ModelHubMixin as HFHubMixin
@@ -72,7 +74,7 @@ from .utils.utils import np_get_closest
 
 def convert_sequence_to_tokseq(
     tokenizer, input_seq, complete_seq: bool = True, decode_bpe: bool = True
-) -> Union[TokSequence, List[TokSequence]]:
+) -> TokSequence | list[TokSequence]:
     r"""Converts a sequence into a :class:`miditok.TokSequence` or list of
     :class:`miditok.TokSequence` objects with the appropriate format of the tokenizer
     being used.
@@ -163,7 +165,7 @@ def _in_as_seq(complete: bool = True, decode_bpe: bool = True):
         completing the sequence.
     """
 
-    def decorator(function: Optional[Callable] = None):
+    def decorator(function: Callable | None = None):
         def wrapper(*args, **kwargs):
             tokenizer = args[0]
             seq = args[1]
@@ -255,7 +257,7 @@ class MIDITokenizer(ABC, HFHubMixin):
     def __init__(
         self,
         tokenizer_config: TokenizerConfig = None,
-        params: Optional[Union[str, Path]] = None,
+        params: str | Path | None = None,
     ):
         # Initialize params
         self.config = deepcopy(tokenizer_config)
@@ -369,7 +371,7 @@ class MIDITokenizer(ABC, HFHubMixin):
     @property
     def vocab(
         self,
-    ) -> Union[Dict[str, int], List[Dict[str, int]]]:  # token (str) to its id (int)
+    ) -> dict[str, int] | list[dict[str, int]]:  # token (str) to its id (int)
         """Get the base vocabulary, as a dictionary linking tokens (str) to their ids
         (int). The different (hidden / protected) vocabulary attributes of the class
         are:
@@ -400,7 +402,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         return self._vocab_base
 
     @property
-    def vocab_bpe(self) -> Union[None, Dict[str, int]]:  # byte (str) to its id (int)
+    def vocab_bpe(self) -> None | dict[str, int]:  # byte (str) to its id (int)
         r"""Returns the vocabulary learnt with BPE.
         In case the tokenizer has not been trained with BPE, it returns None.
 
@@ -412,7 +414,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             return self._bpe_model.get_vocab()
 
     @property
-    def special_tokens(self) -> List[str]:
+    def special_tokens(self) -> list[str]:
         r"""Returns the vocabulary learnt with BPE.
         In case the tokenizer has not been trained with BPE, it returns None.
 
@@ -617,6 +619,8 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         # Resample time, find closest tempos
         # TODO align time on bars?
+        # TODO build docs action, make sure no error / warning https://github.com/readthedocs/actions
+        # TODO optimize time shift computations in tokenizers
         times = np.array(times, dtype=np.intc)
         values = np.array(values, dtype=np.short)
 
@@ -743,7 +747,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         for i, duration in enumerate(durations):
             pedals[i].duration = duration
 
-    def _midi_to_tokens(self, midi: Score) -> Union[TokSequence, List[TokSequence]]:
+    def _midi_to_tokens(self, midi: Score) -> TokSequence | list[TokSequence]:
         r"""Converts a preprocessed MIDI object to a sequence of tokens.
         The workflow of this method is as follows: the events (*Pitch*, *Velocity*,
         *Tempo*, *TimeSignature*...) are gathered into a list, then the time events
@@ -838,7 +842,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         else:
             return 10
 
-    def _create_track_events(self, track: Track) -> List[Event]:
+    def _create_track_events(self, track: Track) -> list[Event]:
         r"""Extract the tokens / events of individual tracks: *Pitch*, *Velocity*,
         *Duration*, *NoteOn*, *NoteOff* and optionally *Chord*, from a track
         (``miditoolkit.Instrument``).
@@ -1039,7 +1043,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         return events
 
     @staticmethod
-    def _add_program_change_events(events: List[Event]):
+    def _add_program_change_events(events: list[Event]):
         """Adds inplace Program tokens acting as Program Changes to a list of Events.
 
         :param events: Events to add Programs
@@ -1063,7 +1067,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         for idx, event in reversed(program_change_events):
             events.insert(idx, event)
 
-    def _create_midi_events(self, midi: Score) -> List[Event]:
+    def _create_midi_events(self, midi: Score) -> list[Event]:
         r"""Create the *global* MIDI additional tokens: `Tempo` and `TimeSignature`.
 
         :param midi: midi to extract the events from.
@@ -1109,7 +1113,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         return events
 
-    def _add_time_events(self, events: List[Event]) -> List[Event]:
+    def _add_time_events(self, events: list[Event]) -> list[Event]:
         r"""Internal method intended to be implemented by inheriting classes.
         It creates the time events from the list of global and track events, and as
         such the final token sequence.
@@ -1123,7 +1127,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         self,
         midi: Score,
         apply_bpe_if_possible: bool = True,
-    ) -> Union[TokSequence, List[TokSequence]]:
+    ) -> TokSequence | list[TokSequence]:
         r"""Tokenizes a MIDI file.
         This method returns a list of :class:`miditok.TokSequence`.
 
@@ -1172,8 +1176,8 @@ class MIDITokenizer(ABC, HFHubMixin):
             seq.bytes = self._ids_to_bytes(seq.ids, as_one_str=True)
 
     def _tokens_to_ids(
-        self, tokens: Sequence[Union[str, List[str]]]
-    ) -> List[Union[int, List[int]]]:
+        self, tokens: Sequence[str | list[str]]
+    ) -> list[int | list[int]]:
         r"""Converts a list of tokens (str) into their associated ids (int).
 
         :param tokens: list of tokens (str) to convert.
@@ -1190,8 +1194,8 @@ class MIDITokenizer(ABC, HFHubMixin):
         return ids
 
     def _ids_to_tokens(
-        self, ids: List[Union[int, List[int]]], as_str: bool = True
-    ) -> List[Union[Union[str, Event], List[Union[str, Event]]]]:
+        self, ids: list[int | list[int]], as_str: bool = True
+    ) -> list[str | Event | list[str | Event]]:
         r"""Converts a sequence of ids (int) to their associated tokens (str or Event).
         **This method will not work with ids encoded with BPE. You will need to decode
         them first (:py:meth:`miditok.MIDITokenizer.decode_bpe`).**
@@ -1224,8 +1228,8 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     @staticmethod
     def _events_to_tokens(
-        events: List[Union[Event, List[Event]]],
-    ) -> List[Union[str, List[str]]]:
+        events: list[Event | list[Event]],
+    ) -> list[str | list[str]]:
         r"""Converts a sequence of Events to their associated tokens (str).
 
         :param events: sequence of Events to convert.
@@ -1241,8 +1245,8 @@ class MIDITokenizer(ABC, HFHubMixin):
         return [str(event) for event in events]
 
     def _ids_to_bytes(
-        self, ids: List[Union[int, List[int]]], as_one_str: bool = False
-    ) -> Union[str, List[str]]:
+        self, ids: list[int | list[int]], as_one_str: bool = False
+    ) -> str | list[str]:
         r"""Converts a list of ids into their associated bytes.
         It can be returned either as a list of bytes or as a unique string of bytes.
         **This method will not work with ids encoded with BPE. You will need to decode
@@ -1261,8 +1265,8 @@ class MIDITokenizer(ABC, HFHubMixin):
         return "".join(bytes_) if as_one_str else bytes_
 
     def _bytes_to_tokens(
-        self, bytes_: Union[str, List[str]], as_str: bool = True
-    ) -> List[Union[Union[str, Event], List[Union[str, Event]]]]:
+        self, bytes_: str | list[str], as_str: bool = True
+    ) -> list[str | Event | list[str | Event]]:
         r"""Converts a sequence of bytes into their associated tokens (str or Event).
 
         :param bytes_: sequence of bytes to convert.
@@ -1284,10 +1288,10 @@ class MIDITokenizer(ABC, HFHubMixin):
     @_in_as_seq()
     def tokens_to_midi(
         self,
-        tokens: Union[TokSequence, List, np.ndarray, Any],
-        programs: Optional[List[Tuple[int, bool]]] = None,
-        output_path: Optional[str] = None,
-        time_division: Optional[int] = None,
+        tokens: TokSequence | list | np.ndarray | Any,
+        programs: list[tuple[int, bool]] | None = None,
+        output_path: str | None = None,
+        time_division: int | None = None,
     ) -> Score:
         r"""Detokenize one or multiple sequences of tokens into a MIDI file.
         You can give the tokens sequences either as :class:`miditok.TokSequence`
@@ -1321,9 +1325,9 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     def _tokens_to_midi(
         self,
-        tokens: Union[TokSequence, List, np.ndarray, Any],
-        programs: Optional[List[Tuple[int, bool]]] = None,
-        time_division: Optional[int] = None,
+        tokens: TokSequence | list | np.ndarray | Any,
+        programs: list[tuple[int, bool]] | None = None,
+        time_division: int | None = None,
     ) -> Score:
         r"""Internal method called by ``self.tokens_to_midi``, intended to be
         implemented by inheriting classes.
@@ -1342,7 +1346,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         raise NotImplementedError
 
     @abstractmethod
-    def _create_base_vocabulary(self, *args, **kwargs) -> List[Union[str, List[str]]]:
+    def _create_base_vocabulary(self, *args, **kwargs) -> list[str | list[str]]:
         r"""Creates the vocabulary, as a list of string tokens.
         This method is unimplemented and need to be overridden by inheriting classes.
         Each token as to be given as the form of "Type_Value", separated with an
@@ -1375,7 +1379,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             for tok in vocab:
                 self.add_to_vocab(tok)
 
-    def _add_additional_tokens_to_vocab_list(self, vocab: List[str]):
+    def _add_additional_tokens_to_vocab_list(self, vocab: list[str]):
         # PITCH INTERVALS
         if self.config.use_pitch_intervals:
             for interval_type in ("PitchIntervalTime", "PitchIntervalChord"):
@@ -1425,7 +1429,7 @@ class MIDITokenizer(ABC, HFHubMixin):
     def _update_token_types_indexes(self):
         r"""Updates the _token_types_indexes attribute according to _event_to_token."""
 
-        def create_for_dict(voc: Dict[str, int]) -> Dict[str, List[int]]:
+        def create_for_dict(voc: dict[str, int]) -> dict[str, list[int]]:
             types_ = {}
             for event, token in voc.items():
                 token_type = event.split("_")[0]
@@ -1443,8 +1447,8 @@ class MIDITokenizer(ABC, HFHubMixin):
             self._token_types_indexes = create_for_dict(self._vocab_base)
 
     def token_ids_of_type(
-        self, token_type: str, vocab_id: Optional[int] = None
-    ) -> List[int]:
+        self, token_type: str, vocab_id: int | None = None
+    ) -> list[int]:
         r"""Returns the list of token ids of the given type.
 
         :param token_type: token type to get the associated token ids.
@@ -1463,9 +1467,9 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     def add_to_vocab(
         self,
-        token: Union[str, Event],
-        vocab_idx: Optional[int] = None,
-        byte_: Optional[str] = None,
+        token: str | Event,
+        vocab_idx: int | None = None,
+        byte_: str | None = None,
         add_to_bpe_model: bool = False,
     ):
         r"""Adds an event to the vocabulary. Its index (int) will be the length of the
@@ -1503,7 +1507,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             if self._bpe_model is not None and add_to_bpe_model:
                 self._bpe_model.add_tokens([byte_])
 
-    def _create_chords_tokens(self) -> List[str]:
+    def _create_chords_tokens(self) -> list[str]:
         """Just create the *Chord* tokens that will populate the base vocabulary. This
         protected method is intended to be used by subclasses when creating their
         vocabularies.
@@ -1535,7 +1539,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         return tokens
 
-    def token_id_type(self, id_: int, vocab_id: Optional[int] = None) -> str:
+    def token_id_type(self, id_: int, vocab_id: int | None = None) -> str:
         r"""Returns the type of the given token id.
 
         :param id_: token id to get the type.
@@ -1547,7 +1551,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         return token.split("_")[0]
 
     @abstractmethod
-    def _create_token_types_graph(self) -> Dict[str, List[str]]:
+    def _create_token_types_graph(self) -> dict[str, list[str]]:
         r"""Creates a dictionary describing the possible token type successions.
         This method is unimplemented and need to be overridden by inheriting classes.
         See other classes (:class:`miditok.REMI._create_token_types_graph`, ...)
@@ -1574,7 +1578,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 for token_type in original_token_types:
                     self.tokens_types_graph[token_type].append(special_token_type)
 
-    def __create_durations_tuples(self) -> List[Tuple[int, int, int]]:
+    def __create_durations_tuples(self) -> list[tuple[int, int, int]]:
         r"""Creates the possible durations in beat / position units, as tuple of the
         form: (beat, pos, res) where beat is the number of beats, pos the number of
         "samples" and res the beat resolution considered (samples per beat).
@@ -1606,7 +1610,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     @staticmethod
     def _token_duration_to_ticks(
-        token_duration: Union[str, Tuple[int, int, int]], time_division: int
+        token_duration: str | tuple[int, int, int], time_division: int
     ) -> int:
         r"""Converts a *Duration* token value of the form x.x.x, for
         beat.position.resolution, in ticks. Can also be used for
@@ -1624,9 +1628,9 @@ class MIDITokenizer(ABC, HFHubMixin):
     def _ticks_to_duration_tokens(
         self,
         duration: int,
-        time_division: Optional[int],
+        time_division: int | None,
         rest: bool = False,
-    ) -> Tuple[List[Tuple[int, int, int]], List[int]]:
+    ) -> tuple[list[tuple[int, int, int]], list[int]]:
         r"""Converts a duration in ticks into a sequence of
         `Duration`/`TimeShift` values.
 
@@ -1663,7 +1667,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         return values, offset_times
 
-    def __create_rests(self) -> List[Tuple[int, int, int]]:
+    def __create_rests(self) -> list[tuple[int, int, int]]:
         r"""Creates the possible rests in beat / position units, as tuple of the form:
         (beat, pos, res) where beat is the number of beats, pos the number of "samples"
         and res the beat resolution considered (samples per beat).
@@ -1700,7 +1704,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         tempo_fn = np.geomspace if self.config.log_tempos else np.linspace
         return tempo_fn(*self.config.tempo_range, self.config.num_tempos).round(2)
 
-    def __create_time_signatures(self) -> List[Tuple]:
+    def __create_time_signatures(self) -> list[tuple]:
         r"""Creates the possible time signatures, as tuples of the form:
         (nb_beats, beat_res) where nb_beats is the number of beats per bar.
         Example: (3, 4) means one bar is 3 beat long and each beat is a quarter note.
@@ -1741,7 +1745,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         return int(time_division * 4 * time_sig.numerator / time_sig.denominator)
 
     @staticmethod
-    def _parse_token_time_signature(token_time_sig: str) -> Tuple[int, int]:
+    def _parse_token_time_signature(token_time_sig: str) -> tuple[int, int]:
         r"""Converts a time signature token value of the form x/x into a tuple of
         integers, time signature's numerator (bar length in beats) and denominator
         (beat resolution).
@@ -1770,8 +1774,8 @@ class MIDITokenizer(ABC, HFHubMixin):
     def learn_bpe(
         self,
         vocab_size: int,
-        iterator: Optional[Iterable] = None,
-        files_paths: Optional[List[Union[Path, str]]] = None,
+        iterator: Iterable | None = None,
+        files_paths: list[Path | str] | None = None,
         start_from_empty_voc: bool = False,
         **kwargs,
     ):
@@ -1875,12 +1879,9 @@ class MIDITokenizer(ABC, HFHubMixin):
             # sorted by byte / char index. Some bytes / tokens might be missing from
             # tokenizer.get_vocab(), as simply not present in training samples. We must
             # get rid of them from the base vocabulary
-            new_vocab = {
-                k: v
-                for k, v in sorted(
-                    self._bpe_model.get_vocab().items(), key=lambda item: item[1]
-                )
-            }
+            new_vocab = dict(
+                sorted(self._bpe_model.get_vocab().items(), key=lambda item: item[1])
+            )
             byte_to_token_old = deepcopy(self._vocab_base_byte_to_token)
 
             # Rebuild base vocabularies dicts
@@ -1906,7 +1907,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         self.has_bpe = True
 
-    def apply_bpe(self, seq: Union[TokSequence, List[TokSequence]]):
+    def apply_bpe(self, seq: TokSequence | list[TokSequence]):
         """Applies Byte Pair Encoding (BPE) to a TokSequence, or list of TokSequences.
         If a list is given, BPE will be applied by batch on all sequences at the time.
 
@@ -1928,7 +1929,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             seq.ids = encoded_tokens.ids
             seq.ids_bpe_encoded = True
 
-    def _are_ids_bpe_encoded(self, ids: Union[List[int], np.ndarray]) -> bool:
+    def _are_ids_bpe_encoded(self, ids: list[int] | np.ndarray) -> bool:
         r"""A small check telling if a sequence of ids are encoded with BPE.
         This is performed by checking if any id has a value superior or equal to the
         length of the base vocabulary.
@@ -1938,7 +1939,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         """
         return np.any(np.array(ids) >= len(self._vocab_base))
 
-    def decode_bpe(self, seq: Union[TokSequence, List[TokSequence]]):
+    def decode_bpe(self, seq: TokSequence | list[TokSequence]):
         r"""Decodes (inplace) a sequence of tokens (:class:`miditok.TokSequence`) with
         ids encoded with BPE. This method only modifies the ``.ids`` attribute of the
         input sequence(s) only and does not complete it. This method can also receive a
@@ -1965,12 +1966,12 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     def tokenize_midi_dataset(
         self,
-        midi_paths: Union[str, Path, Sequence[Union[str, Path]]],
-        out_dir: Union[str, Path],
+        midi_paths: str | Path | Sequence[str | Path],
+        out_dir: str | Path,
         overwrite_mode: bool = True,
-        validation_fn: Optional[Callable[[Score], bool]] = None,
+        validation_fn: Callable[[Score], bool] | None = None,
         data_augment_offsets=None,
-        save_programs: Optional[bool] = None,
+        save_programs: bool | None = None,
         logging: bool = True,
     ):
         r"""Converts a dataset / list of MIDI files, into their token version and save
@@ -1980,7 +1981,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         files, up to the deepest common root directory if `midi_paths` is given as a
         list of paths, will be reproducing in ``out_dir``. The config of the tokenizer
         will be saved as a file named ``tokenizer_config_file_name`` (default:
-        ``tokenizer.conf``) in the ``out_dir`` directory.
+        ``tokenizer.json``) in the ``out_dir`` directory.
 
         :param midi_paths: paths of the MIDI files. It can also be a path to a
             directory, in which case this method will recursively find the MIDI files
@@ -2025,7 +2026,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             max_depth = max(len(parts) for parts in all_parts)
             root_parts = []
             for depth in range(max_depth):
-                if len(set(parts[depth] for parts in all_parts)) > 1:
+                if len({parts[depth] for parts in all_parts}) > 1:
                     break
                 root_parts.append(all_parts[0][depth])
             root_dir = Path(*root_parts)
@@ -2076,8 +2077,8 @@ class MIDITokenizer(ABC, HFHubMixin):
                     int(off / vel_dim) for off in corrected_offsets[1]
                 ]
 
-                augmented_tokens: Dict[
-                    Tuple[int, int, int], Union[TokSequence, List[TokSequence]]
+                augmented_tokens: dict[
+                    tuple[int, int, int], TokSequence | list[TokSequence]
                 ] = {}
                 for track_seq, is_drum in zip(
                     tokens, [track.is_drum for track in midi.tracks]
@@ -2113,7 +2114,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                                 )
 
                 tokens = [((0, 0, 0), tokens)]
-                tokens += [(offs, seqs) for offs, seqs in augmented_tokens.items()]
+                tokens += list(augmented_tokens.items())
             else:
                 tokens = [((0, 0, 0), tokens)]
 
@@ -2156,8 +2157,8 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     @_in_as_seq(complete=False, decode_bpe=False)
     def tokens_errors(
-        self, tokens: Union[TokSequence, List[Union[int, List[int]]]]
-    ) -> Union[float, List[float]]:
+        self, tokens: TokSequence | list[int | list[int]]
+    ) -> float | list[float]:
         r"""Checks if a sequence of tokens is made of good token types successions and
         returns the error ratio (lower is better). The common implementation in
         MIDITokenizer class will check token types, duplicated notes and time errors.
@@ -2262,9 +2263,9 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     def save_tokens(
         self,
-        tokens: Union[TokSequence, List, np.ndarray, Any],
-        path: Union[str, Path],
-        programs: Optional[List[Tuple[int, bool]]] = None,
+        tokens: TokSequence | list | np.ndarray | Any,
+        path: str | Path,
+        programs: list[tuple[int, bool]] | None = None,
         **kwargs,
     ):
         r"""Saves tokens as a JSON file.
@@ -2305,7 +2306,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             json.dump(dic, outfile)
 
     @staticmethod
-    def load_tokens(path: Union[str, Path]) -> Union[List[Any], Dict]:
+    def load_tokens(path: str | Path) -> list[Any] | dict:
         r"""Loads tokens saved as JSON files.
 
         :param path: path of the file to load.
@@ -2320,9 +2321,9 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     def save_params(
         self,
-        out_path: Union[str, Path],
-        additional_attributes: Optional[Dict] = None,
-        filename: Optional[str] = DEFAULT_TOKENIZER_FILE_NAME,
+        out_path: str | Path,
+        additional_attributes: dict | None = None,
+        filename: str | None = DEFAULT_TOKENIZER_FILE_NAME,
     ):
         r"""Saves the config / parameters of the tokenizer in a json encoded file. This
         can be useful to keep track of how a dataset has been tokenized.
@@ -2336,7 +2337,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             file. It can be used to override the default attributes saved in the parent
             method. (default: None)
         :param filename: name of the file to save, to be used in case `out_path` leads
-            to a directory. (default: ``"tokenizer.conf"``)
+            to a directory. (default: ``"tokenizer.json"``)
         """
         if additional_attributes is None:
             additional_attributes = {}
@@ -2375,15 +2376,15 @@ class MIDITokenizer(ABC, HFHubMixin):
         cls,
         *,
         model_id: str,
-        revision: Optional[str],
-        cache_dir: Optional[Union[str, Path]],
+        revision: str | None,
+        cache_dir: str | Path | None,
         force_download: bool,
-        proxies: Optional[Dict],
+        proxies: dict | None,
         resume_download: bool,
         local_files_only: bool,
-        token: Optional[Union[str, bool]],
+        token: str | bool | None,
         **kwargs,
-    ) -> "MIDITokenizer":
+    ) -> MIDITokenizer:
         # Called by `ModelHubMixin.from_pretrained`
         pretrained_path = Path(model_id)
         if pretrained_path.is_file():
@@ -2409,7 +2410,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         return cls(params=params_path)
 
-    def _load_params(self, config_file_path: Union[str, Path]):
+    def _load_params(self, config_file_path: str | Path):
         r"""Loads the parameters of the tokenizer from a config file. This method is
         not intended to be called outside __init__, when creating a tokenizer.
 
@@ -2500,7 +2501,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         return isinstance(self._vocab_base, list)
 
     @property
-    def io_format(self) -> Tuple[str]:
+    def io_format(self) -> tuple[str]:
         format_ = []
         if not self.one_token_stream:
             format_.append("I")
@@ -2568,7 +2569,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         return len(self.vocab)
 
     @property
-    def len(self) -> Union[int, List[int]]:  # noqa: A003
+    def len(self) -> int | list[int]:  # noqa: A003
         r"""Returns the length of the vocabulary. If the tokenizer uses embedding
         pooling/have multiple vocabularies, it will return the **list** of their
         lengths. Use the :py:func:`miditok.MIDITokenizer.__len__` magic method
@@ -2598,8 +2599,8 @@ class MIDITokenizer(ABC, HFHubMixin):
         return out_str
 
     def __getitem__(
-        self, item: Union[int, str, Tuple[int, Union[int, str]]]
-    ) -> Union[str, int, List[int]]:
+        self, item: int | str | tuple[int, int | str]
+    ) -> str | int | list[int]:
         r"""Convert a token (int) to an event (str), or vice-versa.
 
         :param item: a token (int) or an event (str). For tokenizers with
@@ -2625,9 +2626,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         else:
             return self.__get_from_voc(item)
 
-    def __get_from_voc(
-        self, item: Union[int, str], vocab_id: Optional[int] = None
-    ) -> Union[int, str]:
+    def __get_from_voc(self, item: int | str, vocab_id: int | None = None) -> int | str:
         r"""Get element from the vocabulary.
         The method handles both token (int) <--> event (str) ways.
 
