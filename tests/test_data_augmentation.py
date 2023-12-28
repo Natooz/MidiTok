@@ -16,7 +16,7 @@ from tqdm import tqdm
 
 import miditok
 
-from .utils import ALL_TOKENIZATIONS, HERE
+from .utils import ALL_TOKENIZATIONS, HERE, adjust_tok_params_for_tests
 
 MAX_NUM_FILES_TEST_TOKENS = 7
 
@@ -86,7 +86,9 @@ def test_data_augmentation_tokens(
             "MuMIDI is not compatible with data augmentation at the token level"
         )
 
-    tokenizer = getattr(miditok, tokenization)()
+    adjust_tok_params_for_tests(tokenization, config_kwargs := {})
+    config = miditok.TokenizerConfig(**config_kwargs)
+    tokenizer = getattr(miditok, tokenization)(config)
     tokens_path = tmp_path / "Multitrack_tokens" / tokenization
     tokens_aug_path = tmp_path / "Multitrack_tokens_aug" / tokenization
 
