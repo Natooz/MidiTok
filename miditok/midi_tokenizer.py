@@ -165,7 +165,7 @@ def _in_as_seq(complete: bool = True, decode_bpe: bool = True):
         completing the sequence.
     """
 
-    def decorator(function: Callable | None = None):
+    def decorator(function: Callable):
         def wrapper(*args, **kwargs):
             tokenizer = args[0]
             seq = args[1]
@@ -621,6 +621,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         # TODO align time on bars?
         # TODO build docs action, make sure no error / warning https://github.com/readthedocs/actions
         # TODO optimize time shift computations in tokenizers
+        # TODO check if some loops/methods can be batched (numpy)
         times = np.array(times, dtype=np.intc)
         values = np.array(values, dtype=np.short)
 
@@ -1651,6 +1652,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             dur_vals = self.durations
         min_dur = dur_bins[0]
 
+        # TODO optimize / batch
         offset_times = [0]
         values = []
         while duration >= min_dur:

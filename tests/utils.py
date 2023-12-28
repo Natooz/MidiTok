@@ -77,8 +77,8 @@ def adjust_tok_params_for_tests(tokenization: str, params: dict[str, Any]):
     # there is None is this case).
     elif (
         tokenization == "CPWord"
-        and params["use_time_signatures"]
-        and params["use_rests"]
+        and params.get("use_time_signatures", False)
+        and params.get("use_rests", False)
     ):
         params["use_rests"] = False
 
