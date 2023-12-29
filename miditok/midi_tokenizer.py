@@ -1,5 +1,7 @@
 """
 MIDI encoding base class and methods
+# TODO switch from ticks/beat to ticks/quarter logic for time division
+# TODO build docs action, make sure no error / warning https://github.com/readthedocs/actions
 """
 from __future__ import annotations
 
@@ -626,14 +628,10 @@ class MIDITokenizer(ABC, HFHubMixin):
             times.append(time_sigs[i].time)
             values.append([time_sigs[i].numerator, time_sigs[i].denominator])
             i += 1
-
-        # Resample time, find closest tempos
-        # TODO align time on bars?
-        # TODO build docs action, make sure no error / warning https://github.com/readthedocs/actions
-        # TODO optimize time shift computations in tokenizers
-        # TODO check if some loops/methods can be batched (numpy)
         times = np.array(times, dtype=np.intc)
         values = np.array(values, dtype=np.short)
+
+        # TODO Align time on new bars (delayed to the next one)?
 
         # Find groups of time signatures at the same onset ticks, == consecutive ones
         if len(time_sigs) > 1:
@@ -734,7 +732,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             for idx_group in reversed(idx_groups):
                 if len(idx_group) > 1:
                     values_group = values[idx_group]
-                    max_abs_idx = np.argmax(np.max(np.abs(values_group)))
+                    max_abs_idx = np.argmax(np.abs(values_group))
                     values[idx_group[0]] = values_group[max_abs_idx]
                     for idx_to_del in reversed(idx_group[1:]):
                         values = np.delete(values, idx_to_del)
@@ -1639,16 +1637,12 @@ class MIDITokenizer(ABC, HFHubMixin):
     def _ticks_to_duration_tokens(
         self,
         duration: int,
-        time_division: int | None,
         rest: bool = False,
     ) -> tuple[list[tuple[int, int, int]], list[int]]:
         r"""Converts a duration in ticks into a sequence of
         `Duration`/`TimeShift` values.
 
         :param duration: duration in tick to convert.
-        :param time_division: time division of the MIDI being parsed. If none is given,
-            the method will use `self._current_midi_metadata["time_division"]`.
-            (default: None)
         :param rest: the duration is a rest, hence the created tokens will be based on
             the `self.rests` values.
         :return: list of associated token values, and the list of the elapsed offset in
@@ -1662,17 +1656,14 @@ class MIDITokenizer(ABC, HFHubMixin):
             dur_vals = self.durations
         min_dur = dur_bins[0]
 
-        # TODO optimize / batch
-        offset_times = []
-        values = []
+        offset_times, values = [], []
         while duration >= min_dur:
             if rest:
                 index = np.where(dur_bins - duration <= 0)[0][-1]
             else:
                 index = np.argmin(np.abs(dur_bins - duration))
-            val = dur_vals[index]
-            values.append(val)
-            val_ticks = self._token_duration_to_ticks(val, time_division)
+            values.append(dur_vals[index])
+            val_ticks = dur_bins[index]
             duration -= val_ticks
             offset_times.append(val_ticks)
 

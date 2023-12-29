@@ -126,7 +126,7 @@ class REMI(MIDITokenizer):
                 ):
                     previous_tick = previous_note_end
                     rest_values = self._ticks_to_duration_tokens(
-                        event.time - previous_tick, self.time_division, rest=True
+                        event.time - previous_tick, rest=True
                     )
                     # Add Rest events and increment previous_tick
                     for dur_value, dur_ticks in zip(*rest_values):
@@ -146,6 +146,10 @@ class REMI(MIDITokenizer):
                         + (previous_tick - tick_at_last_ts_change) // ticks_per_bar
                     )
                     if real_current_bar > current_bar:
+                        # In case we instantly begin with a Rest,
+                        # we need to update current_bar
+                        if current_bar == -1:
+                            current_bar = 0
                         tick_at_current_bar += (
                             real_current_bar - current_bar
                         ) * ticks_per_bar
@@ -348,6 +352,10 @@ class REMI(MIDITokenizer):
                         + (current_tick - tick_at_last_ts_change) // ticks_per_bar
                     )
                     if real_current_bar > current_bar:
+                        # In case we instantly begin with a Rest,
+                        # we need to update current_bar
+                        if current_bar == -1:
+                            current_bar = 0
                         tick_at_current_bar += (
                             real_current_bar - current_bar
                         ) * ticks_per_bar

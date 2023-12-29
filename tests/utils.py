@@ -31,6 +31,15 @@ MIDI_PATHS_ALL = sorted(
     deepcopy(MIDI_PATHS_ONE_TRACK) + deepcopy(MIDI_PATHS_MULTITRACK)
 )
 TEST_LOG_DIR = HERE / "test_logs"
+# Those are MIDI files known to contain tricky contents (time sig, pedals...) and edge
+# case situations, likely to make some tests fail.
+MIDIS_ONE_TRACK_HARD_NAMES = [
+    "6338816_Etude No. 4.mid",
+    "6354774_Macabre Waltz.mid",
+    "Maestro_6.mid",
+    "Maestro_7.mid",
+    "Maestro_9.mid",
+]
 
 # TOKENIZATIONS
 ALL_TOKENIZATIONS = miditok.tokenizations.__all__
@@ -67,8 +76,7 @@ def adjust_tok_params_for_tests(tokenization: str, params: dict[str, Any]):
     if tokenization == "Structured":
         params["beat_res"] = {(0, 512): 8}
     # We don't test time signatures with Octuple as it can lead to time shifts, as the
-    # TS changes are only
-    # detectable at the onset times of the notes.
+    # TS changes are only carried at the onset times of the notes.
     elif tokenization == "Octuple":
         params["max_bar_embedding"] = 300
         params["use_time_signatures"] = False

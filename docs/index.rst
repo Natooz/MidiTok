@@ -46,7 +46,7 @@ Contents
 ==================
 
 .. toctree::
-   midi_tokenizer
+   bases
    examples
    tokenizations
    bpe
