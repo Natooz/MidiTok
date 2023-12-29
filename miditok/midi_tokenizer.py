@@ -1658,10 +1658,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         offset_times, values = [], []
         while duration >= min_dur:
-            if rest:
-                index = np.where(dur_bins - duration <= 0)[0][-1]
-            else:
-                index = np.argmin(np.abs(dur_bins - duration))
+            index = (dur_bins - duration <= 0).nonzero()[0][-1]
             values.append(dur_vals[index])
             val_ticks = dur_bins[index]
             duration -= val_ticks

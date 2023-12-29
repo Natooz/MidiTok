@@ -31,14 +31,16 @@ MIDI_PATHS_ALL = sorted(
     deepcopy(MIDI_PATHS_ONE_TRACK) + deepcopy(MIDI_PATHS_MULTITRACK)
 )
 TEST_LOG_DIR = HERE / "test_logs"
-# Those are MIDI files known to contain tricky contents (time sig, pedals...) and edge
-# case situations, likely to make some tests fail.
+# MIDI files known to contain tricky contents (time sig, pedals...) and edge case
+# situations, likely to make some tests fail.
 MIDIS_ONE_TRACK_HARD_NAMES = [
     "6338816_Etude No. 4.mid",
     "6354774_Macabre Waltz.mid",
-    "Maestro_6.mid",
-    "Maestro_7.mid",
     "Maestro_9.mid",
+    "POP909_191.mid",
+]
+MIDI_PATHS_ONE_TRACK_HARD = [
+    path for path in MIDI_PATHS_ONE_TRACK if path.name in MIDIS_ONE_TRACK_HARD_NAMES
 ]
 
 # TOKENIZATIONS
