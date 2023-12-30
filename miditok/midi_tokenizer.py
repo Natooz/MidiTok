@@ -2063,33 +2063,23 @@ class MIDITokenizer(ABC, HFHubMixin):
                         self.apply_bpe(track_seqs)
 
             # Set output file path
-            tokens_dir = out_dir / midi_path.parent.relative_to(root_dir)
-            tokens_dir.mkdir(parents=True, exist_ok=True)
+            out_path = out_dir / midi_path.parent.relative_to(root_dir)
+            out_path.mkdir(parents=True, exist_ok=True)
+            out_path /= f"{midi_path.stem}.json"
 
-            # Save tokens files
-            for aug_offsets, seq in tokens:
-                suffix = ""
-                if any(off != 0 for off in aug_offsets):
-                    suffix = "§" + "_".join(
-                        [
-                            f"{t}{offset}"
-                            for t, offset in zip(["p", "v", "d"], aug_offsets)
-                            if offset != 0
-                        ]
-                    )
-                out_path = tokens_dir / f"{midi_path.stem}{suffix}.json"
-                if not overwrite_mode and out_path.is_file():
-                    i = 1
-                    while out_path.is_file():
-                        out_path = out_path.parent / f"{midi_path.stem}_{i}.json"
-                        i += 1
+            # If non-overwrite, set the new file name
+            if not overwrite_mode and out_path.is_file():
+                i = 1
+                while out_path.is_file():
+                    out_path = out_path.parent / f"{midi_path.stem}_{i}.json"
+                    i += 1
 
-                # Save the tokens as JSON
-                self.save_tokens(
-                    seq,
-                    out_path,
-                    get_midi_programs(midi) if save_programs else None,
-                )
+            # Save the tokens as JSON
+            self.save_tokens(
+                tokens,
+                out_path,
+                get_midi_programs(midi) if save_programs else None,
+            )
 
     @_in_as_seq(complete=False, decode_bpe=False)
     def tokens_errors(

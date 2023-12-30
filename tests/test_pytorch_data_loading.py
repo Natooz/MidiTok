@@ -36,9 +36,9 @@ def test_dataset_ram(
     midi_paths_multitrack: Sequence[str | Path] | None = None,
 ):
     if midi_paths_one_track is None:
-        midi_paths_one_track = MIDI_PATHS_ONE_TRACK[:3]
+        midi_paths_one_track = MIDI_PATHS_ONE_TRACK[:6]
     if midi_paths_multitrack is None:
-        midi_paths_multitrack = MIDI_PATHS_MULTITRACK[:3]
+        midi_paths_multitrack = MIDI_PATHS_MULTITRACK[:6]
     tokens_os_dir = tmp_path / "multitrack_tokens_os"
     dummy_labels = {
         label: i
