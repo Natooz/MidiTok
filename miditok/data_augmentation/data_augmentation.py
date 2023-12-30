@@ -4,58 +4,59 @@
 from __future__ import annotations
 
 import json
-import warnings
-from copy import copy, deepcopy
+from copy import copy
 from pathlib import Path
-from warnings import warn
+from shutil import copy2
 
 import numpy as np
 from symusic import Score
 from tqdm import tqdm
 
-from ..constants import MIDI_LOADING_EXCEPTION
+from ..constants import MIDI_INSTRUMENTS, MIDI_LOADING_EXCEPTION
 
 
-def data_augmentation_dataset(
+def augment_midi_dataset(
     data_path: Path | str,
-    tokenizer=None,
-    nb_octave_offset: int | None = None,
-    nb_vel_offset: int | None = None,
-    nb_dur_offset: int | None = None,
-    octave_directions: tuple[bool, bool] = (True, True),
-    vel_directions: tuple[bool, bool] = (True, True),
-    dur_directions: tuple[bool, bool] = (True, True),
+    pitch_offsets: list[int] | None = None,
+    velocity_offsets: list[int] | None = None,
+    duration_offsets: list[int] | None = None,
     all_offset_combinations: bool = False,
+    restrict_on_program_tessitura: bool = True,
+    velocity_range: tuple[int, int] = (1, 127),
+    duration_in_ticks: bool = False,
+    min_duration: int | float = 0.03125,
     out_path: Path | str | None = None,
     copy_original_in_new_location: bool = True,
     save_data_aug_report: bool = True,
 ):
-    r"""Perform data augmentation on a whole dataset, on the pitch dimension. Drum
-    tracks are not augmented. The new created files have names in two parts, separated
-    with a '§' character. Make sure your files do not have '§' in their names if you
-    intend to reuse the information of the second part in some script.
-    For note duration augmentation, only the duration, i.e. the ending / offset times
-    of the notes are altered, while starting / onset times are unchanged.
-    **Note: data augmentation on note durations is not implemented at the moment for
-    MIDI files. Duration offsets will be skipped. Alternatively, you can perform data
-    augmentation on note duration on JSON token files.**
+    r"""Perform data augmentation on a dataset of MIDI files.
+    The new created files have names in two parts, separated with a '§' character. Make
+    sure your files do not have '§' in their names if you intend to reuse the
+    information of the second part in some script.
+    **Drum tracks are not augmented.**
 
     :param data_path: root path to the folder containing tokenized json files.
-    :param tokenizer: tokenizer, needs to have 'Pitch' or 'NoteOn' tokens. Has to be
-        given if performing augmentation on tokens (default: None).
-    :param nb_octave_offset: number of pitch octaves offset to perform data
-        augmentation.
-    :param nb_vel_offset: number of velocity values
-    :param nb_dur_offset: number of pitch octaves offset to perform data augmentation.
-    :param octave_directions: directions to shift the pitch augmentation, for up / down
-        as a tuple of two booleans. (default: (True, True))
-    :param vel_directions: directions to shift the velocity augmentation, for up / down
-        as a tuple of two booleans. (default: (True, True))
-    :param dur_directions: directions to shift the duration augmentation, for up / down
-        as a tuple of two booleans. (default: (True, True))
+    :param pitch_offsets: list of pitch offsets for augmentation.
+    :param velocity_offsets: list of velocity offsets for augmentation. If you plan to
+        tokenize this MIDI, the velocity offsets should be chosen accordingly to the
+        number of velocities in your tokenizer's vocabulary (``num_velocities``).
+    :param duration_offsets: list of duration offsets for augmentation, to be given
+        either in beats if ``duration_in_ticks`` is ``False``, in ticks otherwise.
     :param all_offset_combinations: will perform data augmentation on all the possible
-        combinations of offsets. If set to False, will perform data augmentation only
-        based on the original sample. (default: False)
+        combinations of offset values. If set to ``False``, the method will only
+        augment on the offsets separately without combining them.
+    :param restrict_on_program_tessitura: if ``True``, the method will consider the
+        recommended pitch values of each instrument/program as the range of possible
+        values after augmentation. Otherwise, the ``(0, 127)`` range will be used.
+        (default: ``True``)
+    :param velocity_range: minimum and maximum velocity values. (default: ``(1, 127)``)
+    :param duration_in_ticks: if given ``True``, the ``duration_offset`` argument will
+        be considered as expressed in ticks. Otherwise, it is considered in beats, and
+        the equivalent in ticks will be determined by multiplying it by the MIDI's
+        time division. (default: False)
+    :param min_duration: minimum duration limit to apply if ``duration_offset`` is
+        negative. If ``duration_in_ticks`` is ``True``, it must be given in ticks,
+        otherwise in beats as a float or integer. (default: 0.03125)
     :param out_path: output path to save the augmented files. Original (non-augmented)
         MIDIs will be saved to this location. If none is given, they will be saved in
         the same location as the data_path. (default: None)
@@ -70,150 +71,46 @@ def data_augmentation_dataset(
         if isinstance(out_path, str):
             out_path = Path(out_path)
         out_path.mkdir(parents=True, exist_ok=True)
-    as_tokens = True
-    files_paths = list(Path(data_path).glob("**/*.json"))
-    if len(files_paths) == 0:
-        files_paths = list(Path(data_path).glob("**/*.mid"))
-        as_tokens = False
+    files_paths = list(Path(data_path).glob("**/*.mid"))
 
     nb_augmentations, nb_tracks_augmented = 0, 0
     for file_path in tqdm(files_paths, desc="Performing data augmentation"):
-        if as_tokens:
-            with file_path.open() as json_file:
-                file = json.load(json_file)
-                ids = file["ids"]
-                programs = file.get("programs", None)
-                ids_bpe = file.get("ids_bpe_encoded", False)
+        try:
+            midi = Score(file_path)
+        except MIDI_LOADING_EXCEPTION:
+            continue
 
-            if tokenizer.one_token_stream:
-                ids = [ids]
-
-            # Perform data augmentation for each track
-            offsets = get_offsets(
-                tokenizer,
-                nb_octave_offset,
-                nb_vel_offset,
-                nb_dur_offset,
-                octave_directions,
-                vel_directions,
-                dur_directions,
-                ids=ids,
-            )
-            corrected_offsets = deepcopy(offsets)
-            vel_dim = int(128 / len(tokenizer.velocities))
-            corrected_offsets[1] = [int(off / vel_dim) for off in corrected_offsets[1]]
-            augmented_tokens: dict[tuple[int, int, int], list[int | list[int]]] = {}
-            for ti, track in enumerate(ids):
-                # we dont augment drums
-                if (
-                    programs is not None
-                    and programs[ti][1]
-                    or (
-                        tokenizer.one_token_stream
-                        and programs is not None
-                        and all(p[1] for p in programs)
-                    )
-                ):  # drums
-                    continue
-                aug = data_augmentation_tokens(
-                    np.array(track),
-                    tokenizer,
-                    *corrected_offsets,
-                    all_offset_combinations=all_offset_combinations,
-                    need_to_decode_bpe=ids_bpe,
-                )
-                if len(aug) == 0:
-                    continue
-                for aug_offsets, seq in aug:
-                    if tokenizer.one_token_stream:
-                        augmented_tokens[aug_offsets] = seq
-                        continue
-                    try:
-                        augmented_tokens[aug_offsets].append(seq)
-                    except KeyError:
-                        augmented_tokens[aug_offsets] = [seq]
-            if not tokenizer.one_token_stream and programs is not None:
-                for i, (track, (_, is_drum)) in enumerate(
-                    zip(ids, programs)
-                ):  # adding drums to all already augmented
-                    if is_drum:
-                        for aug_offsets in augmented_tokens:
-                            augmented_tokens[aug_offsets].insert(i, track)
-
-            # Save augmented tracks as json
-            for aug_offsets, tracks_seq in augmented_tokens.items():
-                if len(tracks_seq) == 0:
-                    continue
-                suffix = "§" + "_".join(
-                    [
-                        f"{t}{offset}"
-                        for t, offset in zip(["p", "v", "d"], aug_offsets)
-                        if offset != 0
-                    ]
-                )
-                saving_path = out_path / file_path.parent.relative_to(data_path)
-                saving_path.mkdir(parents=True, exist_ok=True)
-                saving_path /= f"{file_path.stem}{suffix}.json"
-                tokenizer.save_tokens(tracks_seq, saving_path, programs)
-                nb_augmentations += 1
-                nb_tracks_augmented += len(tracks_seq)
-            if copy_original_in_new_location and out_path != data_path:
-                if tokenizer.one_token_stream:
-                    ids = ids[0]
-                saving_path = (
-                    out_path
-                    / file_path.parent.relative_to(data_path)
-                    / f"{file_path.stem}.json"
-                )
-                saving_path.parent.mkdir(parents=True, exist_ok=True)
-                tokenizer.save_tokens(ids, saving_path, programs)
-
-        else:  # as midi
-            try:
-                midi = Score(file_path)
-            except MIDI_LOADING_EXCEPTION:
+        augmented_midis = augment_midi_multiple_offsets(
+            midi,
+            pitch_offsets,
+            velocity_offsets,
+            duration_offsets,
+            all_offset_combinations,
+            restrict_on_program_tessitura,
+            velocity_range,
+            duration_in_ticks,
+            min_duration,
+        )
+        for aug_offsets, midi_aug in augmented_midis:
+            if len(midi_aug.tracks) == 0:
                 continue
-
-            offsets = get_offsets(
-                tokenizer,
-                nb_octave_offset,
-                nb_vel_offset,
-                nb_dur_offset,
-                octave_directions,
-                vel_directions,
-                dur_directions,
-                midi=midi,
+            suffix = "§" + "_".join(
+                [
+                    f"{t}{offset}"
+                    for t, offset in zip(["p", "v", "d"], aug_offsets)
+                    if offset != 0
+                ]
             )
-            augmented_midis = data_augmentation_midi(
-                midi,
-                tokenizer,
-                *offsets,
-                all_offset_combinations=all_offset_combinations,
-            )
-            for aug_offsets, aug_midi in augmented_midis:
-                if len(aug_midi.tracks) == 0:
-                    continue
-                suffix = "§" + "_".join(
-                    [
-                        f"{t}{offset}"
-                        for t, offset in zip(["p", "v", "d"], aug_offsets)
-                        if offset != 0
-                    ]
-                )
-                saving_path = out_path / file_path.parent.relative_to(data_path)
-                saving_path.mkdir(parents=True, exist_ok=True)
-                saving_path /= f"{file_path.stem}{suffix}.mid"
-                aug_midi.dump_midi(saving_path)
-                nb_augmentations += 1
-                nb_tracks_augmented += len(aug_midi.tracks)
-            if copy_original_in_new_location and out_path != data_path:
-                saving_path = (
-                    out_path
-                    / file_path.parent.relative_to(data_path)
-                    / f"{file_path.stem}.mid"
-                )
-                saving_path.parent.mkdir(parents=True, exist_ok=True)
-                midi.dump_midi(saving_path)
+            saving_path = out_path / file_path.parent.relative_to(data_path)
+            saving_path.mkdir(parents=True, exist_ok=True)
+            saving_path /= f"{file_path.stem}{suffix}.mid"
+            midi_aug.dump_midi(saving_path)
+            nb_augmentations += 1
+            nb_tracks_augmented += len(midi_aug.tracks)
+        if copy_original_in_new_location and out_path != data_path:
+            saving_path = out_path / file_path.relative_to(data_path)
+            saving_path.parent.mkdir(parents=True, exist_ok=True)
+            copy2(file_path, saving_path)
 
     # Saves data augmentation report, json encoded with txt extension to not mess with
     # others json files
@@ -229,398 +126,230 @@ def data_augmentation_dataset(
             )
 
 
-def get_offsets(
-    tokenizer=None,
-    nb_octave_offset: int | None = None,
-    nb_vel_offset: int | None = None,
-    nb_dur_offset: int | None = None,
-    octave_directions: tuple[bool, bool] = (True, True),
-    vel_directions: tuple[bool, bool] = (True, True),
-    dur_directions: tuple[bool, bool] = (True, True),
-    midi: Score = None,
-    ids: list[int | list[int]] | None = None,
-) -> list[list[int]]:
-    r"""Build the offsets in absolute value for data augmentation.
-    TODO some sort of limit for velocity and duration values (min / max as for octaves)
+def _filter_offset_tuples_to_midi(
+    pitch_offsets: list[int],
+    midi: Score,
+    restrict_on_program_tessitura: bool,
+) -> list[int]:
+    r"""Removes pitch offset values that would cause errors or are out of tessitura.
 
-    :param tokenizer: tokenizer, needs to have 'Pitch' tokens.
-    :param nb_octave_offset: number of pitch octaves offset to perform data
-        augmentation.
-    :param nb_vel_offset: number of velocity values
-    :param nb_dur_offset: number of pitch octaves offset to perform data augmentation.
-    :param octave_directions: directions to shift the pitch augmentation, for up / down
-        as a tuple of two booleans. (default: (True, True))
-    :param vel_directions: directions to shift the velocity augmentation, for up / down
-        as a tuple of two booleans. (default: (True, True))
-    :param dur_directions: directions to shift the duration augmentation, for up / down
-        as a tuple of two booleans. (default: (True, True))
+    :param pitch_offsets: list of pitch offsets for augmentation.
     :param midi: midi object to augment (default: None)
-    :param ids: token ids as a list of tracks (default: None)
-    :return: the offsets of pitch, velocity and duration features, in "absolute" value
+    :param restrict_on_program_tessitura: if ``True``, the method will consider the
+        recommended pitch values of each instrument/program as the range of possible
+        values after augmentation. Otherwise, the ``(0, 127)`` range will be used.
+    :return: the filtered offsets of pitch.
     """
-    offsets = []
+    # Get min and max pitches in the MIDI (except drum tracks)
+    all_pitches = [
+        np.array([note.pitch for note in track.notes])
+        for track in midi.tracks
+        if not track.is_drum
+    ]
+    min_pitches = [np.min(pitches) for pitches in all_pitches]
+    max_pitches = [np.max(pitches) for pitches in all_pitches]
 
-    if nb_octave_offset is not None:
-        # Get the maximum and lowest pitch in original track
-        all_pitches = []
-        if midi is not None:
-            for track in midi.tracks:
-                if not track.is_drum:
-                    all_pitches += [note.pitch for note in track.notes]
-            max_pitch, min_pitch = max(all_pitches), min(all_pitches)
-        else:
-            pitch_voc_idx = (
-                tokenizer.vocab_types_idx["Pitch"] if tokenizer.is_multi_voc else None
+    # Determine the minimum and maximum possible pitch offsets
+    if restrict_on_program_tessitura:
+        min_possible_pitch_offset, max_possible_pitch_offset = -127, 127
+        for min_pitch, max_pitch, track in zip(
+            min_pitches, max_pitches, [t for t in midi.tracks if not t.is_drum]
+        ):
+            pitch_range = MIDI_INSTRUMENTS[track.program]["pitch_range"]
+            min_possible_pitch_offset = max(
+                min_possible_pitch_offset, pitch_range.start - min_pitch
             )
-            ids_pitch = []
-            if not tokenizer.is_multi_voc:
-                pitch_ids_vocab = np.array(
-                    tokenizer.token_ids_of_type("Pitch")
-                    + tokenizer.token_ids_of_type("NoteOn")
-                )
-                for track_ids in ids:
-                    tt_arr = np.array(track_ids)
-                    ids_pitch.append(tt_arr[np.isin(tt_arr, pitch_ids_vocab)])
-                max_pitch = tokenizer[int(np.max(np.concatenate(ids_pitch)))].split(
-                    "_"
-                )[1]
-                min_pitch = tokenizer[int(np.min(np.concatenate(ids_pitch)))].split(
-                    "_"
-                )[1]
-            else:
-                pitch_ids_vocab = np.array(
-                    tokenizer.token_ids_of_type("Pitch", pitch_voc_idx)
-                )
-                for track_ids in ids:
-                    tt_arr = np.array(track_ids)[:, pitch_voc_idx]
-                    ids_pitch.append(tt_arr[np.isin(tt_arr, pitch_ids_vocab)])
-                max_pitch = tokenizer[
-                    pitch_voc_idx, int(np.max(np.concatenate(ids_pitch)))
-                ].split("_")[1]
-                min_pitch = tokenizer[
-                    pitch_voc_idx, int(np.min(np.concatenate(ids_pitch)))
-                ].split("_")[1]
-        offset_up = min(
-            nb_octave_offset,
-            (tokenizer.config.pitch_range[1] - 1 - int(max_pitch)) // 12,
-        )
-        offset_down = min(
-            nb_octave_offset, (int(min_pitch) - tokenizer.config.pitch_range[0]) // 12
-        )
+            max_possible_pitch_offset = min(
+                max_possible_pitch_offset, pitch_range.stop - max_pitch
+            )
+    else:
+        min_possible_pitch_offset = -min(min_pitches)
+        max_possible_pitch_offset = 127 - max(max_pitches)
 
-        off = []
-        if octave_directions[0]:
-            off += list(range(12, offset_up * 12 + 1, 12))
-        if octave_directions[1]:
-            off += list(range(-offset_down * 12, 0, 12))
-        offsets.append(off)
+    return [
+        pitch_offset
+        for pitch_offset in pitch_offsets
+        if min_possible_pitch_offset <= pitch_offset <= max_possible_pitch_offset
+    ]
 
-    if nb_vel_offset is not None:
-        vel_dim = int(128 / len(tokenizer.velocities))
-        off = []
-        if vel_directions[0]:
-            off += list(range(vel_dim, nb_vel_offset * vel_dim + 1, vel_dim))
-        if vel_directions[1]:
-            off += list(range(-nb_vel_offset * vel_dim, 0, vel_dim))
-        offsets.append(off)
 
-    if nb_dur_offset is not None:
-        off = []
-        if dur_directions[0]:
-            off += list(range(1, nb_dur_offset + 1))
-        if dur_directions[1]:
-            off += list(range(-nb_dur_offset, 0))
-        offsets.append(off)
+def _create_offsets_tuples(
+    midi: Score,
+    pitch_offsets: list[int] | None = None,
+    velocity_offsets: list[int] | None = None,
+    duration_offsets: list[int] | None = None,
+    all_offset_combinations: bool = False,
+    restrict_on_program_tessitura: bool = True,
+) -> list[tuple[int, int, int]]:
+    # Remove pitch offsets that would cause errors or are out of tessitura
+    pitch_offsets = _filter_offset_tuples_to_midi(
+        pitch_offsets, midi, restrict_on_program_tessitura
+    )
+    # Create basic offsets
+    offsets = [(pitch_offset, 0, 0) for pitch_offset in pitch_offsets]
+    offsets += [(0, velocity_offset, 0) for velocity_offset in velocity_offsets]
+    offsets += [(0, 0, duration_offset) for duration_offset in duration_offsets]
+
+    # Adds all possible combinations
+    if all_offset_combinations:
+        for idx, offsets_type in enumerate(
+            (pitch_offsets, velocity_offsets, duration_offsets)
+        ):
+            if offsets_type is None:
+                continue
+            for offset_val in offsets_type:
+                for offset_idx in range(len(offsets)):
+                    if offsets[offset_idx][idx] != offset_val:
+                        (new_offset := list(offsets[offset_idx]))[idx] = offset_val
+                        new_offset = tuple(new_offset)
+                        # This could be optimized by removing the "in" and parametrize
+                        if new_offset not in offsets:
+                            offsets.append(new_offset)
 
     return offsets
 
 
-def data_augmentation_midi(
+def augment_midi(
     midi: Score,
-    tokenizer,
+    pitch_offset: int = 0,
+    velocity_offset: int = 0,
+    duration_offset: int | float = 0,
+    velocity_range: tuple[int, int] = (1, 127),
+    duration_in_ticks: bool = False,
+    min_duration: int | float = 0.03125,
+) -> Score:
+    r"""Augments a MIDI object, by shifting its note attribute values. Velocity and
+    duration values will be clipped according to the ``velocity_range`` and
+    ``min_duration`` arguments. Drum tracks are only augmented on the velocity.
+    If you are using a pitch offset, make sure the MIDI doesn't contain notes with
+    pitches that would end outside the conventional ``(0, 127)`` range, the method will
+    otherwise crash.
+
+    :param midi: midi object to augment.
+    :param pitch_offset: pitch offset for augmentation. (default: 0)
+    :param velocity_offset: velocity offset for augmentation. If you plan to tokenize
+        this MIDI, the velocity offset should be chosen accordingly to the number of
+        velocities in your tokenizer's vocabulary (``num_velocities``). (default: 0)
+    :param duration_offset: duration offset for augmentation, to be given
+        either in beats if ``duration_in_ticks`` is ``False``, in ticks otherwise.
+        (default: 0)
+    :param velocity_range: minimum and maximum velocity values. (default: ``(1, 127)``)
+    :param duration_in_ticks: if given ``True``, the ``duration_offset`` argument will
+        be considered as expressed in ticks. Otherwise, it is considered in beats, and
+        the equivalent in ticks will be determined by multiplying it by the MIDI's
+        time division. (default: False)
+    :param min_duration: minimum duration limit to apply if ``duration_offset`` is
+        negative. If ``duration_in_ticks`` is ``True``, it must be given in ticks,
+        otherwise in beats as a float or integer. (default: 0.03125)
+    :return: the augmented MIDI object.
+    """
+    midi_aug = copy(midi)
+
+    if pitch_offset != 0:
+        for track in midi_aug.tracks:
+            if not track.is_drum:
+                track.shift_pitch(pitch_offset, inplace=True)
+
+    if velocity_offset != 0:
+        for track in midi_aug.tracks:
+            for note in track.notes:
+                vel_shifted = note.velocity + velocity_offset
+                if velocity_offset < 0:
+                    note.velocity = max(min(velocity_range), vel_shifted)
+                else:
+                    note.velocity = min(max(velocity_range), vel_shifted)
+
+    if duration_offset != 0:
+        if not duration_in_ticks:
+            duration_offset = max(round(duration_offset * midi.ticks_per_quarter), 1)
+            min_duration = max(round(min_duration * midi.ticks_per_quarter), 1)
+        # If in ticks but the offset is a float, we round it to the closest integer.
+        elif isinstance(duration_offset, float):
+            duration_offset = round(duration_offset)
+            min_duration = round(min_duration)
+        for track in midi_aug.tracks:
+            if not track.is_drum:
+                for note in track.notes:
+                    if duration_offset < 0:
+                        # If note.duration <= min_duration, it is left unchanged
+                        if note.duration > min_duration:
+                            note.duration = max(
+                                min_duration, note.duration + duration_offset
+                            )
+                    else:
+                        note.duration += duration_offset
+
+    return midi_aug
+
+
+def augment_midi_multiple_offsets(
+    midi: Score,
     pitch_offsets: list[int] | None = None,
     velocity_offsets: list[int] | None = None,
     duration_offsets: list[int] | None = None,
     all_offset_combinations: bool = False,
+    restrict_on_program_tessitura: bool = True,
+    velocity_range: tuple[int, int] = (1, 127),
+    duration_in_ticks: bool = False,
+    min_duration: int | float = 0.03125,
 ) -> list[tuple[tuple[int, int, int], Score]]:
-    r"""Perform data augmentation on a MIDI object.
-    Drum tracks are not augmented, but copied as original in augmented MIDIs.
-    **Note: data augmentation on note durations is not implemented at the moment for
-    MIDI files. Duration offsets will be skipped. Alternatively, you can perform data
-    augmentation on note duration on JSON token files.**
+    r"""Perform data augmentations on a MIDI object with multiple offset values.
+    Velocity and duration values will be clipped according to the ``velocity_range`` and
+    ``min_duration`` arguments. Drum tracks are only augmented on the velocity.
 
-    :param midi: midi object to augment
-    :param tokenizer: tokenizer, needs to have 'Pitch' tokens.
+    :param midi: midi object to augment.
     :param pitch_offsets: list of pitch offsets for augmentation.
-    :param velocity_offsets: list of velocity offsets for augmentation.
-    :param duration_offsets: list of duration offsets for augmentation.
+    :param velocity_offsets: list of velocity offsets for augmentation. If you plan to
+        tokenize this MIDI, the velocity offsets should be chosen accordingly to the
+        number of velocities in your tokenizer's vocabulary (``num_velocities``).
+    :param duration_offsets: list of duration offsets for augmentation, to be given
+        either in beats if ``duration_in_ticks`` is ``False``, in ticks otherwise.
     :param all_offset_combinations: will perform data augmentation on all the possible
-        combinations of offsets. If set to False, will perform data augmentation only
-        based on the original sample.
+        combinations of offset values. If set to ``False``, the method will only
+        augment on the offsets separately without combining them.
+    :param restrict_on_program_tessitura: if ``True``, the method will consider the
+        recommended pitch values of each instrument/program as the range of possible
+        values after augmentation. Otherwise, the ``(0, 127)`` range will be used.
+        (default: ``True``)
+    :param velocity_range: minimum and maximum velocity values. (default: ``(1, 127)``)
+    :param duration_in_ticks: if given ``True``, the ``duration_offset`` argument will
+        be considered as expressed in ticks. Otherwise, it is considered in beats, and
+        the equivalent in ticks will be determined by multiplying it by the MIDI's
+        time division. (default: False)
+    :param min_duration: minimum duration limit to apply if ``duration_offset`` is
+        negative. If ``duration_in_ticks`` is ``True``, it must be given in ticks,
+        otherwise in beats as a float or integer. (default: 0.03125)
     :return: augmented MIDI objects.
     """
-    augmented = []
-    # TODO use shift_pitch and shift_velocity? handle drums + min/max vals
+    # Create offset tuples
+    # If duration offsets are given in beats, we convert them to ticks here so
+    # that the conversion is not done multiple times in downstream methods
+    if duration_offsets and not duration_in_ticks:
+        duration_offsets = [
+            round(duration_offset * midi.ticks_per_quarter)
+            for duration_offset in duration_offsets
+        ]
+        min_duration = max(round(min_duration * midi.ticks_per_quarter), 1)
+    offsets = _create_offsets_tuples(
+        midi,
+        pitch_offsets,
+        velocity_offsets,
+        duration_offsets,
+        all_offset_combinations,
+        restrict_on_program_tessitura,
+    )
 
-    # Pitch augmentation
-    if pitch_offsets is not None:
-        for offset in pitch_offsets:
-            midi_augmented = copy(midi)
-            for track in midi_augmented.tracks:
-                if not track.is_drum:
-                    for note in track.notes:
-                        note.pitch += offset
-            augmented.append(((offset, 0, 0), midi_augmented))
-
-    # Velocity augmentation
-    if velocity_offsets is not None:
-
-        def augment_vel(
-            midi_: Score, offsets_: tuple[int, int, int]
-        ) -> list[tuple[tuple[int, int, int], Score]]:
-            aug_ = []
-            for offset_ in velocity_offsets:
-                midi_aug_ = copy(midi_)
-                for track_ in midi_aug_.tracks:
-                    for note_ in track_.notes:
-                        if offset_ < 0:
-                            note_.velocity = max(
-                                min(tokenizer.velocities), note_.velocity + offset_
-                            )
-                        else:
-                            note_.velocity = min(
-                                max(tokenizer.velocities), note_.velocity + offset_
-                            )
-                aug_.append(((offsets_[0], offset_, offsets_[2]), midi_aug_))
-            return aug_
-
-        if all_offset_combinations:
-            for i in range(len(augmented)):
-                offsets, midi_aug = augmented[i]
-                augmented += augment_vel(
-                    midi_aug, offsets
-                )  # for already augmented midis
-        augmented += augment_vel(midi, (0, 0, 0))  # for original midi
-
-    # Duration augmentation
-    if duration_offsets is not None:
-        warnings.warn(
-            "You provided duration offsets for data augmentation on MIDI files. Data"
-            "augmentation on note durations is not implemented in MidiTok at the"
-            "moment. Your duration offsets will be skipped. Alternatively, you can"
-            "perform data augmentation on note duration on JSON token files.",
-            stacklevel=2,
+    # Create augmented versions
+    return [
+        (
+            offsets_tuple,
+            augment_midi(
+                midi,
+                *offsets_tuple,
+                velocity_range=velocity_range,
+                duration_in_ticks=True,
+                min_duration=min_duration,
+            ),
         )
-        # TODO implement it, and remove warning above + update doc
-        """tokenizer.durations_ticks[midi.ticks_per_quarter] = np.array(
-            [
-                (beat * res + pos) * midi.ticks_per_quarter // res
-                for beat, pos, res in tokenizer.durations
-            ]
-        )
-
-        def augment_dur(
-            midi_: MidiFile, offsets_: Tuple[int, int, int]
-        ) -> List[Tuple[Tuple[int, int, int], MidiFile]]:
-            aug_ = []
-            dur_bins = tokenizer.durations_ticks[
-                tokenizer.current_midi_metadata["time_division"]
-            ]
-
-            for offset_ in dur_offsets:
-                midi_aug_ = deepcopy(midi_)
-                for track_ in midi_aug_.instruments:
-                    for note_ in track_.notes:
-                        duration = note.end - note.start
-                        index = np.argmin(np.abs(dur_bins - duration))
-
-                        note_.end += offset_  # TODO multiply token val
-                aug_.append(((offsets_[0], offsets_[1], offset_), midi_aug_))
-            return aug_
-
-        if all_offset_combinations:
-            for i in range(len(augmented)):
-                offsets, midi_aug = augmented[i]
-                # for already augmented midis
-                augmented += augment_dur(midi_aug, offsets)
-        augmented += augment_dur(midi, (0, 0, 0))  # for original midi"""
-
-    return augmented
-
-
-def data_augmentation_tokens(
-    tokens: np.ndarray | list[int],
-    tokenizer,
-    pitch_offsets: list[int] | None = None,
-    velocity_offsets: list[int] | None = None,
-    duration_offsets: list[int] | None = None,
-    all_offset_combinations: bool = False,
-    need_to_decode_bpe: bool | None = None,
-) -> list[tuple[tuple[int, int, int], list[int]]]:
-    r"""Perform data augmentation on a sequence of tokens, on the pitch dimension.
-    NOTE: token sequences with BPE will be decoded during the augmentation, this might
-    take some time.
-    NOTE 2: the tokenizer must have a vocabulary in which the pitch values increase
-    with the token index,
-    e.g. Pitch_48: token 64, Pitch_49: token65 ...
-    The same goes for durations.
-    MIDILike is not compatible with data augmentation on durations.
-    MuMIDI is not compatible at all.
-
-    :param tokens: tokens to perform data augmentation on.
-    :param tokenizer: tokenizer, needs to have 'Pitch' tokens.
-    :param pitch_offsets: list of pitch offsets for augmentation.
-    :param velocity_offsets: list of velocity offsets for augmentation.
-    :param duration_offsets: list of duration offsets for augmentation.
-    :param all_offset_combinations: will perform data augmentation on all the possible
-        combinations of offsets. If set to False, will perform data augmentation only
-        based on the original sample.
-    :param need_to_decode_bpe: specify if BPE has to be decoded from the tokens. If
-        given None while the tokenizer uses BPE, the method will detect if any token id
-        is outside the base vocabulary, so encoded with BPE. Giving this argument
-        allows to skip this check. (default: None)
-    :return: the several data augmentations that have been performed
-    """
-    augmented = []
-
-    # Decode BPE
-    bpe_decoded = False
-    if tokenizer.has_bpe:
-        if need_to_decode_bpe is None:
-            ids_arr = tokens if isinstance(tokens, np.ndarray) else np.array(tokens)
-            need_to_decode_bpe = np.any(ids_arr) >= len(tokenizer.vocab)
-        if need_to_decode_bpe:
-            tokens = tokenizer.decode_bpe(
-                tokens.tolist() if isinstance(tokens, np.ndarray) else tokens
-            )
-            bpe_decoded = True
-
-    # Converts to np array if necessary
-    if not isinstance(tokens, np.ndarray):
-        tokens = np.array(tokens)
-
-    if pitch_offsets is not None:
-        # Get the maximum and lowest pitch in original track
-        pitch_voc_idx = (
-            tokenizer.vocab_types_idx["Pitch"] if tokenizer.is_multi_voc else None
-        )
-        note_off_tokens = []
-        if not tokenizer.is_multi_voc:
-            pitch_tokens = np.array(
-                tokenizer.token_ids_of_type("Pitch")
-                + tokenizer.token_ids_of_type("NoteOn")
-            )
-            note_off_tokens = np.array(tokenizer.token_ids_of_type("NoteOff"))
-            mask_pitch = np.isin(tokens, pitch_tokens)
-            # If applicable, removes drum notes from the mask
-            if tokenizer.one_token_stream:
-                for idx, is_note in enumerate(mask_pitch):
-                    if (
-                        is_note
-                        and idx > 0
-                        and tokenizer[tokens[idx - 1]] == "Program_-1"
-                    ):
-                        mask_pitch[idx] = False
-                        if len(note_off_tokens) > 0:
-                            note_off_tokens[idx] = False
-        else:
-            pitch_tokens = np.array(tokenizer.token_ids_of_type("Pitch", pitch_voc_idx))
-            mask_pitch = np.full_like(tokens, 0, dtype=np.bool_)
-            mask_pitch[:, pitch_voc_idx] = np.isin(
-                tokens[:, pitch_voc_idx], pitch_tokens
-            )
-
-        # Perform augmentation on pitch
-        for offset in pitch_offsets:
-            seq = tokens.copy()
-            seq[mask_pitch] += offset
-            if len(note_off_tokens) > 0:  # for MIDIlike
-                seq[np.isin(seq, note_off_tokens)] += offset
-            augmented.append(((offset, 0, 0), seq))
-
-    # Velocity augmentation
-    if velocity_offsets is not None:
-        vel_voc_idx = (
-            tokenizer.vocab_types_idx["Velocity"] if tokenizer.is_multi_voc else None
-        )
-        if not tokenizer.is_multi_voc:
-            vel_tokens = np.array(tokenizer.token_ids_of_type("Velocity"))
-        else:
-            vel_tokens = np.array(tokenizer.token_ids_of_type("Velocity", vel_voc_idx))
-
-        def augment_vel(
-            seq_: np.ndarray, offsets_: tuple[int, int, int]
-        ) -> list[tuple[tuple[int, int, int], np.ndarray]]:
-            if not tokenizer.is_multi_voc:
-                mask = np.isin(seq_, vel_tokens)
-            else:
-                mask = np.full_like(seq_, 0, dtype=np.bool_)
-                mask[:, vel_voc_idx] = np.isin(seq_[:, vel_voc_idx], vel_tokens)
-
-            aug_ = []
-            for offset_ in velocity_offsets:
-                aug_seq = seq_.copy()
-                aug_seq[mask] += offset_
-                aug_seq[mask] = np.clip(aug_seq[mask], vel_tokens[0], vel_tokens[-1])
-                aug_.append(((offsets_[0], offset_, offsets_[2]), aug_seq))
-            return aug_
-
-        if all_offset_combinations:
-            for i in range(len(augmented)):
-                offsets, seq_aug = augmented[i]
-                augmented += augment_vel(
-                    seq_aug, offsets
-                )  # for already augmented midis
-        augmented += augment_vel(tokens, (0, 0, 0))  # for original midi
-
-    # Duration augmentation
-    if duration_offsets is not None and type(tokenizer).__name__ == "MIDILike":
-        warn(
-            f"{type(tokenizer).__name__} is not compatible with data augmentation on"
-            f"duration at token level",
-            stacklevel=2,
-        )
-    elif duration_offsets is not None:
-        dur_voc_idx = (
-            tokenizer.vocab_types_idx["Duration"] if tokenizer.is_multi_voc else None
-        )
-        if not tokenizer.is_multi_voc:
-            dur_tokens = np.array(tokenizer.token_ids_of_type("Duration"))
-        else:
-            dur_tokens = np.array(tokenizer.token_ids_of_type("Duration", dur_voc_idx))
-
-        def augment_dur(
-            seq_: np.ndarray, offsets_: tuple[int, int, int]
-        ) -> list[tuple[tuple[int, int, int], np.ndarray]]:
-            if not tokenizer.is_multi_voc:
-                mask = np.isin(seq_, dur_tokens)
-            else:
-                mask = np.full_like(seq_, 0, dtype=np.bool_)
-                mask[:, dur_voc_idx] = np.isin(seq_[:, dur_voc_idx], dur_tokens)
-
-            aug_ = []
-            for offset_ in duration_offsets:
-                aug_seq = seq_.copy()
-                aug_seq[mask] += offset_
-                aug_seq[mask] = np.clip(aug_seq[mask], dur_tokens[0], dur_tokens[-1])
-                aug_.append(((offsets_[0], offsets_[1], offset_), aug_seq))
-            return aug_
-
-        if all_offset_combinations:
-            for i in range(len(augmented)):
-                offsets, seq_aug = augmented[i]
-                augmented += augment_dur(
-                    seq_aug, offsets
-                )  # for already augmented midis
-        augmented += augment_dur(tokens, (0, 0, 0))  # for original midi
-
-    # Convert all arrays to lists and reapply BPE if necessary
-    for i in range(len(augmented)):
-        augmented[i] = (
-            augmented[i][0],
-            tokenizer.apply_bpe(augmented[i][1].tolist())
-            if bpe_decoded
-            else augmented[i][1].tolist(),
-        )
-
-    return augmented
+        for offsets_tuple in offsets
+    ]

@@ -1,11 +1,11 @@
 from .data_augmentation import (
-    data_augmentation_dataset,
-    data_augmentation_midi,
-    data_augmentation_tokens,
+    augment_midi,
+    augment_midi_dataset,
+    augment_midi_multiple_offsets,
 )
 
 __all__ = [
-    "data_augmentation_dataset",
-    "data_augmentation_tokens",
-    "data_augmentation_midi",
+    "augment_midi",
+    "augment_midi_multiple_offsets",
+    "augment_midi_dataset",
 ]

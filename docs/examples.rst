@@ -45,7 +45,7 @@ Here we convert a MIDI to tokens, and the other way around.
 
     # Convert to MIDI and save it
     generated_midi = tokenizer(tokens)  # MidiTok can handle PyTorch / Tensorflow Tensors
-    generated_midi.dump_midi('path/to/save/file.mid')  # could have been done above by giving the path argument
+    generated_midi.dump_midi("path/to/save/file.mid")  # could have been done above by giving the path argument
 
 Tokenize a dataset
 ------------------------
@@ -56,11 +56,12 @@ We also perform data augmentation on the pitch, velocity and duration dimension.
 ..  code-block:: python
 
     from miditok import REMI
+    from miditok.data_augmentation import augment_midi_dataset
     from pathlib import Path
 
     # Creates the tokenizer and list the file paths
     tokenizer = REMI()  # using defaults parameters (constants.py)
-    midi_paths = list(Path('path', 'to', 'dataset').glob('**/*.mid'))
+    midi_paths = list(Path("path", "to", "dataset").glob("**/*.mid"))
 
     # A validation method to discard MIDIs we do not want
     # It can also be used for custom pre-processing, for instance if you want to merge
@@ -71,13 +72,20 @@ We also perform data augmentation on the pitch, velocity and duration dimension.
         return True
 
     # Learns the vocabulary with BPE
-    tokenizer.learn_bpe(vocab_size=10000, files_paths=midi_paths)
+    tokenizer.learn_bpe(vocab_size=30000, files_paths=midi_paths)
 
-    # Converts MIDI files to tokens saved as JSON files
-    data_augmentation_offsets = [2, 2, 1]   # will perform data augmentation on 2 pitch octaves,
+    # Performs data augmentation on one pitch octave (up and down), velocities and
+    # durations
+    augment_midi_dataset(
+        midi_paths,
+        pitch_offsets=[-12, 12],
+        velocity_offsets=[-4, 5],
+        duration_offsets=[-0.5, 1],
+        out_path=midi_aug_path,
+        Path("to", "new", "location", "augmented"),
+    )
     tokenizer.tokenize_midi_dataset(        # 2 velocity and 1 duration values
         midi_paths,
-        Path('path', 'to', 'tokens_noBPE'),
+        Path("path", "to", "tokens"),
         midi_valid,
-        data_augmentation_offsets,
     )

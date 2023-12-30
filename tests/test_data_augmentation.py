@@ -6,39 +6,35 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
-import numpy as np
-import pytest
 from symusic import Score
 from tqdm import tqdm
 
-import miditok
+from miditok.data_augmentation import (
+    augment_midi_dataset,
+)
 
-from .utils import ALL_TOKENIZATIONS, HERE, adjust_tok_params_for_tests
-
-MAX_NUM_FILES_TEST_TOKENS = 7
+from .utils import HERE
 
 
-def test_data_augmentation_midi(
+def test_augment_midi_dataset(
     tmp_path: Path,
     data_path: str | Path = HERE / "MIDIs_multitrack",
-    tokenization: str = "MIDILike",
 ):
     # We only test data augmentation on MIDIs with one tokenization, as tokenizers does
     # not play here
 
-    tokenizer = getattr(miditok, tokenization)()
-    midi_aug_path = tmp_path / "Multitrack_MIDIs_aug" / tokenization
-    miditok.data_augmentation.data_augmentation_dataset(
+    midi_aug_path = tmp_path / "Multitrack_MIDIs_aug"
+    min_duration = 0.03125
+    augment_midi_dataset(
         data_path,
-        tokenizer,
-        2,
-        1,
-        1,
+        pitch_offsets=[-2, 1, 2],
+        velocity_offsets=[-4, 5],
+        duration_offsets=[-1, 2],
+        all_offset_combinations=True,
+        min_duration=min_duration,
         out_path=midi_aug_path,
-        copy_original_in_new_location=False,
     )
 
     aug_midi_paths = list(midi_aug_path.glob("**/*.mid"))
@@ -47,6 +43,9 @@ def test_data_augmentation_midi(
     ):
         # Determine offsets of file
         parts = aug_midi_path.stem.split("§")
+        # If original non-augmented file
+        if len(parts) < 2:
+            continue
         original_stem, offsets_str = parts[0], parts[1].split("_")
         offsets = [0, 0, 0]
         for offset_str in offsets_str:
@@ -55,200 +54,43 @@ def test_data_augmentation_midi(
                     offsets[pos] = int(offset_str[1:])
 
         # Loads MIDIs to compare
-        aug_midi = Score(aug_midi_path)
-        original_midi = Score(data_path / f"{original_stem}.mid")
+        midi_aug = Score(aug_midi_path)
+        midi_ogi = Score(data_path / f"{original_stem}.mid")
+        min_duration_ticks = round(min_duration * midi_aug.ticks_per_quarter)
 
         # Compare them
-        for track_ogi, track_aug in zip(original_midi.tracks, aug_midi.tracks):
+        for track_ogi, track_aug in zip(midi_ogi.tracks, midi_aug.tracks):
             if track_ogi.is_drum:
                 continue
             track_ogi.notes.sort(key=lambda x: (x.start, x.pitch, x.end, x.velocity))
             track_aug.notes.sort(key=lambda x: (x.start, x.pitch, x.end, x.velocity))
-            for note_o, note_s in zip(track_ogi.notes, track_aug.notes):
-                assert note_s.pitch == note_o.pitch + offsets[0]
-                assert note_s.velocity in [
-                    tokenizer.velocities[0],
-                    tokenizer.velocities[-1],
-                    note_o.velocity + offsets[1],
-                ]
-
-
-@pytest.mark.parametrize("tokenization", ALL_TOKENIZATIONS)
-def test_data_augmentation_tokens(
-    tmp_path: Path,
-    tokenization: str,
-    data_path: str | Path = HERE / "MIDIs_multitrack",
-    max_num_files: int = MAX_NUM_FILES_TEST_TOKENS,
-):
-    original_midi_paths = list(data_path.glob("**/*.mid"))[:max_num_files]
-    if tokenization == "MuMIDI":
-        pytest.skip(
-            "MuMIDI is not compatible with data augmentation at the token level"
-        )
-
-    adjust_tok_params_for_tests(tokenization, config_kwargs := {})
-    config = miditok.TokenizerConfig(**config_kwargs)
-    tokenizer = getattr(miditok, tokenization)(config)
-    tokens_path = tmp_path / "Multitrack_tokens" / tokenization
-    tokens_aug_path = tmp_path / "Multitrack_tokens_aug" / tokenization
-
-    print("PERFORMING DATA AUGMENTATION ON TOKENS")
-    tokenizer.tokenize_midi_dataset(
-        original_midi_paths, tokens_path, data_augment_offsets=(2, 1, 1)
-    )
-
-    # Getting tokens idx from tokenizer for assertions
-    aug_tokens_paths = list(tokens_aug_path.glob("**/*.json"))
-    pitch_voc_idx, vel_voc_idx, dur_voc_idx = None, None, None
-    note_off_tokens = []
-    if tokenizer.is_multi_voc:
-        pitch_voc_idx = tokenizer.vocab_types_idx["Pitch"]
-        vel_voc_idx = tokenizer.vocab_types_idx["Velocity"]
-        dur_voc_idx = tokenizer.vocab_types_idx["Duration"]
-        pitch_tokens = np.array(tokenizer.token_ids_of_type("Pitch", pitch_voc_idx))
-        vel_tokens = np.array(tokenizer.token_ids_of_type("Velocity", vel_voc_idx))
-        dur_tokens = np.array(tokenizer.token_ids_of_type("Duration", dur_voc_idx))
-    else:
-        pitch_tokens = np.array(
-            tokenizer.token_ids_of_type("Pitch") + tokenizer.token_ids_of_type("NoteOn")
-        )
-        vel_tokens = np.array(tokenizer.token_ids_of_type("Velocity"))
-        dur_tokens = np.array(tokenizer.token_ids_of_type("Duration"))
-        note_off_tokens = np.array(
-            tokenizer.token_ids_of_type("NoteOff")
-        )  # for MidiLike
-    tok_vel_min, tok_vel_max = vel_tokens[0], vel_tokens[-1]
-    tok_dur_min, tok_dur_max = None, None
-    if tokenization != "MIDILike":
-        tok_dur_min, tok_dur_max = dur_tokens[0], dur_tokens[-1]
-
-    for aug_token_path in aug_tokens_paths:
-        # Determine offsets of file
-        parts = aug_token_path.stem.split("§")
-        original_stem, offsets_str = parts[0], parts[1].split("_")
-        offsets = [0, 0, 0]
-        for offset_str in offsets_str:
-            for pos, letter in enumerate(["p", "v", "d"]):
-                if offset_str[0] == letter:
-                    offsets[pos] = int(offset_str[1:])
-
-        # Loads tokens to compare
-        with aug_token_path.open() as json_file:
-            file = json.load(json_file)
-            aug_tokens = file["ids"]
-
-        with (tokens_path / f"{original_stem}.json").open() as json_file:
-            file = json.load(json_file)
-            original_tokens = file["ids"]
-            original_programs = file["programs"] if "programs" in file else None
-
-        # Compare them
-        if tokenizer.one_token_stream:
-            original_tokens, aug_tokens = [original_tokens], [aug_tokens]
-        for ti, (original_track, aug_track) in enumerate(
-            zip(original_tokens, aug_tokens)
-        ):
-            if original_programs is not None and original_programs[ti][1]:  # drums
-                continue
-            for idx, (original_token, aug_token) in enumerate(
-                zip(original_track, aug_track)
-            ):
-                if not tokenizer.is_multi_voc:
-                    if original_token in pitch_tokens:
-                        pitch_offset = offsets[0]
-                        # no offset for drum pitches
-                        if (
-                            tokenizer.one_token_stream
-                            and idx > 0
-                            and tokenizer[original_track[idx - 1]] == "Program_-1"
-                        ):
-                            pitch_offset = 0
-                        assert aug_token == original_token + pitch_offset
-                    elif original_token in vel_tokens:
-                        assert aug_token in [
-                            original_token + offsets[1],
-                            tok_vel_min,
-                            tok_vel_max,
-                        ]
-                    elif original_token in dur_tokens and tokenization != "MIDILike":
-                        assert aug_token in [
-                            original_token + offsets[2],
-                            tok_dur_min,
-                            tok_dur_max,
-                        ]
-                    elif original_token in note_off_tokens:
-                        assert aug_token == original_token + offsets[0]
+            for note_o, note_a in zip(track_ogi.notes, track_aug.notes):
+                if note_a.pitch != note_o.pitch + offsets[0]:
+                    raise ValueError(
+                        f"Pitch assertion failed: expected "
+                        f"{note_o.pitch + offsets[0]}, got {note_a.pitch}"
+                    )
+                if offsets[2] < 0:
+                    dur_exp = max(
+                        note_o.duration + offsets[2],
+                        min(min_duration_ticks, note_o.duration)
+                    )
+                elif offsets[2] > 0:
+                    dur_exp = note_o.duration + offsets[2]
                 else:
-                    if original_token[pitch_voc_idx] in pitch_tokens:
-                        assert (
-                            aug_token[pitch_voc_idx]
-                            == original_token[pitch_voc_idx] + offsets[0]
-                        )
-                    elif original_token[vel_voc_idx] in vel_tokens:
-                        assert aug_token[vel_voc_idx] in [
-                            original_token[vel_voc_idx] + offsets[1],
-                            tok_vel_min,
-                            tok_vel_max,
-                        ]
-                    elif (
-                        original_token[dur_voc_idx] in dur_tokens
-                        and tokenization != "MIDILike"
-                    ):
-                        assert aug_token[dur_voc_idx] in [
-                            original_token[dur_voc_idx] + offsets[2],
-                            tok_dur_min,
-                            tok_dur_max,
-                        ]
-
-
-"""def time_data_augmentation_tokens_vs_mid():
-    from time import time
-    tokenizers = [miditok.TSD(), miditok.REMI()]
-    data_paths = [Path('./tests/One_track_MIDIs'), Path('./tests/Multitrack_MIDIs')]
-
-    for data_path in data_paths:
-        for tokenizer in tokenizers:
-            print(f'\n{data_path.stem} - {type(tokenizer).__name__}')
-            files = list(data_path.glob('**/*.mid'))
-
-            # Testing opening midi -> augment midis -> tokenize midis
-            t0 = time()
-            for file_path in files:
-                # Reads the MIDI
-                try:
-                    midi = MidiFile(Path(file_path))
-                except MIDI_LOADING_EXCEPTION:
-                    continue
-
-                offsets = miditok.data_augmentation.get_offsets(
-                    tokenizer, 2, 2, 2, midi=midi
-                )
-                midis = miditok.data_augmentation.data_augmentation_midi(
-                    midi, tokenizer, *offsets
-                )
-                for _, aug_mid in midis:
-                    _ = tokenizer(aug_mid)
-            tt = time() - t0
-            print(f'Opening midi -> augment midis -> tokenize midis: took {tt:.2f} sec '
-                  f'({tt / len(files):.2f} sec/file)')
-
-            # Testing opening midi -> tokenize midi -> augment tokens
-            t0 = time()
-            for file_path in files:
-                # Reads the MIDI
-                try:
-                    midi = MidiFile(Path(file_path))
-                except MIDI_LOADING_EXCEPTION:
-                    continue
-
-                tokens = tokenizer(midi)
-                for track_tokens in tokens:
-                    offsets = miditok.data_augmentation.get_offsets(
-                        tokenizer, 2, 2, 2, tokens=tokens
+                    dur_exp = note_o.duration
+                if note_a.duration != dur_exp:
+                    raise ValueError(
+                        f"Duration assertion failed: expected "
+                        f"{dur_exp}, got {note_a.duration}"
                     )
-                    _ = miditok.data_augmentation.data_augmentation_tokens(
-                        track_tokens, tokenizer, *offsets
+            # We need to resort the tracks with the velocity key in third position
+            # before checking their values.
+            track_ogi.notes.sort(key=lambda x: (x.start, x.pitch, x.velocity))
+            track_aug.notes.sort(key=lambda x: (x.start, x.pitch, x.velocity))
+            for note_o, note_a in zip(track_ogi.notes, track_aug.notes):
+                if note_a.velocity not in [1, 127, note_o.velocity + offsets[1]]:
+                    raise ValueError(
+                        f"Velocity assertion failed: expected one in "
+                        f"{[1, 127, note_o.velocity + offsets[1]]}, got {note_a.pitch}"
                     )
-            tt = time() - t0
-            print(f'Opening midi -> tokenize midi -> augment tokens: took {tt:.2f} sec '
-                  f'({tt / len(files):.2f} sec/file)')"""

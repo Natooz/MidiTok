@@ -62,8 +62,6 @@ from .constants import (
     TIME_SIGNATURE,
     UNKNOWN_CHORD_PREFIX,
 )
-from .data_augmentation import data_augmentation_tokens
-from .data_augmentation.data_augmentation import get_offsets
 from .utils import (
     convert_ids_tensors_to_list,
     detect_chords,
@@ -1969,7 +1967,6 @@ class MIDITokenizer(ABC, HFHubMixin):
         out_dir: str | Path,
         overwrite_mode: bool = True,
         validation_fn: Callable[[Score], bool] | None = None,
-        data_augment_offsets=None,
         save_programs: bool | None = None,
         logging: bool = True,
     ):
@@ -1995,10 +1992,6 @@ class MIDITokenizer(ABC, HFHubMixin):
             (default: True)
         :param validation_fn: a function checking if the MIDI is valid on your
             requirements (e.g. time signature, minimum/maximum length, instruments...).
-        :param data_augment_offsets: data augmentation arguments, to be passed to the
-            miditok.data_augmentation.data_augmentation_dataset method. Has to be given
-            as a list / tuple of offsets pitch octaves, velocities, durations, and
-            finally their directions (up/down). (default: None)
         :param save_programs: will save the programs of the tracks of the MIDI as an
             entry in the Json file. That this option is probably unnecessary when using
             a multitrack tokenizer (`config.use_programs`), as the program information
@@ -2060,62 +2053,6 @@ class MIDITokenizer(ABC, HFHubMixin):
             # Tokenizing the MIDI, without BPE here as this will be done at the end as
             # we might perform data aug before
             tokens = self(midi, apply_bpe_if_possible=False)
-
-            # Data augmentation on tokens
-            if data_augment_offsets is not None:
-                if isinstance(tokens, TokSequence):
-                    tokens = [tokens]
-                offsets = get_offsets(
-                    self,
-                    *data_augment_offsets,
-                    ids=[seq.ids for seq in tokens],
-                )
-                corrected_offsets = deepcopy(offsets)
-                vel_dim = int(128 / len(self.velocities))
-                corrected_offsets[1] = [
-                    int(off / vel_dim) for off in corrected_offsets[1]
-                ]
-
-                augmented_tokens: dict[
-                    tuple[int, int, int], TokSequence | list[TokSequence]
-                ] = {}
-                for track_seq, is_drum in zip(
-                    tokens, [track.is_drum for track in midi.tracks]
-                ):
-                    if is_drum:
-                        continue
-                    aug = data_augmentation_tokens(
-                        track_seq.ids,
-                        self,
-                        *corrected_offsets,
-                        need_to_decode_bpe=False,
-                    )
-                    if len(aug) == 0:
-                        continue
-                    for aug_offsets, aug_ids in aug:
-                        seq = TokSequence(ids=aug_ids)
-                        if self.one_token_stream:
-                            augmented_tokens[aug_offsets] = seq
-                            continue
-                        try:
-                            augmented_tokens[aug_offsets].append(seq)
-                        except KeyError:
-                            augmented_tokens[aug_offsets] = [seq]
-
-                if not self.one_token_stream:
-                    for i, (seq, is_drum) in enumerate(
-                        zip(tokens, [track.is_drum for track in midi.tracks])
-                    ):  # adding drums to all already augmented
-                        if is_drum:
-                            for aug_offsets in augmented_tokens:
-                                augmented_tokens[aug_offsets].insert(
-                                    i, TokSequence(ids=seq.ids)
-                                )
-
-                tokens = [((0, 0, 0), tokens)]
-                tokens += list(augmented_tokens.items())
-            else:
-                tokens = [((0, 0, 0), tokens)]
 
             # Apply BPE on tokens
             if self.has_bpe:
