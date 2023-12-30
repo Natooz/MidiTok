@@ -73,7 +73,7 @@ def test_augment_midi_dataset(
                 if offsets[2] < 0:
                     dur_exp = max(
                         note_o.duration + offsets[2],
-                        min(min_duration_ticks, note_o.duration)
+                        min(min_duration_ticks, note_o.duration),
                     )
                 elif offsets[2] > 0:
                     dur_exp = note_o.duration + offsets[2]
