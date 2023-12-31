@@ -495,7 +495,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             midi.time_signatures.append(
                 TimeSignature(0, *TIME_SIGNATURE)
             )  # 4/4 by default in this case
-        elif self.config.use_time_signatures and len(midi.time_signatures) > 1:
+        elif self.config.use_time_signatures and len(midi.time_signatures) > 0:
             self._preprocess_time_signatures(midi.time_signatures)
 
         # We do not change key signature changes, markers and lyrics here as they are
@@ -615,12 +615,27 @@ class MIDITokenizer(ABC, HFHubMixin):
         # them by time.
         # Fortunately, sorting is already performed by symusic when loading the MIDI.
 
-        # Gathers times and velocity values in lists
-        # Removes time sigs with a numerator or denominator equal to 0.
+        # Gathers times and values in lists.
+        # Removes time sigs that are not recognized by the tokenizer.
         times, values = [], []
         i = 0
         while i < len(time_sigs):
-            if time_sigs[i].numerator == 0 or time_sigs[i].denominator == 0:
+            if (
+                time_sigs[i].numerator,
+                time_sigs[i].denominator,
+            ) not in self.time_signatures:
+                # Alternatively, we could offer a solution to "mock" unrecognized time
+                # signatures. If one (not both) of the numerator or denominator value
+                # is in the vocabulary, we could mock the other value with 4 (default).
+                warnings.warn(
+                    f"The MIDI contains a time signature ({time_sigs[i]}) outside of "
+                    f"those supported by the tokenizer ({self.time_signatures}). You "
+                    f"should either discard this MIDI or support this time signature, "
+                    f"or alternatively deleting it however if you are using a "
+                    f"beat-based tokenizer (REMI) the bars will be incorrectly "
+                    f"detected.",
+                    stacklevel=2
+                )
                 del time_sigs[i]
                 continue
             times.append(time_sigs[i].time)
@@ -651,12 +666,12 @@ class MIDITokenizer(ABC, HFHubMixin):
                     # times = np.delete(times, idx_to_del)
                     del time_sigs[idx]
 
-        """# Apply new values
-        for time, time_sig in zip(times, time_sigs):
-            time_sig.time = time"""
+        # Apply new values
+        """for time, time_sig in zip(times, time_sigs):
+            time_sig.time = time
 
-        """ticks_per_bar = MIDITokenizer._compute_ticks_per_bar(
-            time_sigs[0], time_division
+        ticks_per_bar = self._compute_ticks_per_bar(
+            time_sigs[0], self.time_division
         )
         previous_tick = 0  # first time signature change is always at tick 0
         prev_ts = time_sigs[0]
@@ -691,8 +706,8 @@ class MIDITokenizer(ABC, HFHubMixin):
                 time_sig.time = previous_tick + bar_offset * ticks_per_bar
 
             # Update values
-            ticks_per_bar = MIDITokenizer._compute_ticks_per_bar(
-                time_sig, time_division
+            ticks_per_bar = self._compute_ticks_per_bar(
+                time_sig, self.time_division
             )
 
             # If the current time signature is now at the same time as the previous
@@ -1085,19 +1100,6 @@ class MIDITokenizer(ABC, HFHubMixin):
         # First adds time signature tokens if specified
         if self.config.use_time_signatures:
             for time_sig in midi.time_signatures:
-                if (
-                    time_sig.numerator,
-                    time_sig.denominator,
-                ) not in self.time_signatures:
-                    warnings.warn(
-                        f"The MIDI contains a time signature ({time_sig}) outside of"
-                        f"those supported by the tokenizer ({self.time_signatures})."
-                        "You should either discard this MIDI or support this time"
-                        "signature, or alternatively deleting it however if you are "
-                        "using a beat-based tokenizer (REMI) the bars will be"
-                        "incorrectly detected.",
-                        stacklevel=2,
-                    )
                 events.append(
                     Event(
                         type="TimeSig",
@@ -1660,7 +1662,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             values.append(dur_vals[index])
             val_ticks = dur_bins[index]
             duration -= val_ticks
-            offset_times.append(val_ticks)
+            offset_times.append(int(val_ticks))
 
         return values, offset_times
 
@@ -1753,7 +1755,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         numerator, denominator = map(int, token_time_sig.split("/"))
         return numerator, denominator
 
-    def validate_midi_time_signatures(self, midi: Score) -> bool:
+    def has_midi_time_signatures_not_in_vocab(self, midi: Score) -> bool:
         r"""Checks if a MIDI contains only time signatures supported by the tokenizer.
 
         :param midi: MIDI file
@@ -2039,28 +2041,12 @@ class MIDITokenizer(ABC, HFHubMixin):
             except MIDI_LOADING_EXCEPTION:
                 continue
 
-            # Checks the time division is valid
-            if midi.ticks_per_quarter < max(self.config.beat_res.values()) * 4:
-                continue
             # Passing the MIDI to validation tests if given
             if validation_fn is not None and not validation_fn(midi):
                 continue
 
-            # Checks if MIDI contains supported time signatures
-            if not self.validate_midi_time_signatures(midi):
-                continue
-
-            # Tokenizing the MIDI, without BPE here as this will be done at the end as
-            # we might perform data aug before
-            tokens = self(midi, apply_bpe_if_possible=False)
-
-            # Apply BPE on tokens
-            if self.has_bpe:
-                if self.one_token_stream:
-                    self.apply_bpe([seq for _, seq in tokens])
-                else:
-                    for _, track_seqs in tokens:
-                        self.apply_bpe(track_seqs)
+            # Tokenizing the MIDI
+            tokens = self.midi_to_tokens(midi)
 
             # Set output file path
             out_path = out_dir / midi_path.parent.relative_to(root_dir)
