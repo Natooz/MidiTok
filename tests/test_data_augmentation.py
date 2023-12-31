@@ -42,7 +42,7 @@ def test_augment_midi_dataset(
         aug_midi_paths, desc="CHECKING DATA AUGMENTATION ON MIDIS"
     ):
         # Determine offsets of file
-        parts = aug_midi_path.stem.split("§")
+        parts = aug_midi_path.stem.split("#")
         # If original non-augmented file
         if len(parts) < 2:
             continue

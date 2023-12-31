@@ -30,7 +30,7 @@ def augment_midi_dataset(
     save_data_aug_report: bool = True,
 ):
     r"""Perform data augmentation on a dataset of MIDI files.
-    The new created files have names in two parts, separated with a '§' character. Make
+    The new created files have names in two parts, separated with a "#" character. Make
     sure your files do not have '§' in their names if you intend to reuse the
     information of the second part in some script.
     **Drum tracks are not augmented.**
@@ -94,7 +94,7 @@ def augment_midi_dataset(
         for aug_offsets, midi_aug in augmented_midis:
             if len(midi_aug.tracks) == 0:
                 continue
-            suffix = "§" + "_".join(
+            suffix = "#" + "_".join(
                 [
                     f"{t}{offset}"
                     for t, offset in zip(["p", "v", "d"], aug_offsets)
@@ -181,6 +181,24 @@ def _create_offsets_tuples(
     all_offset_combinations: bool = False,
     restrict_on_program_tessitura: bool = True,
 ) -> list[tuple[int, int, int]]:
+    """Creates the data augmentation tuples combinations from lists of offsets.
+
+    :param midi: midi object to augment.
+    :param pitch_offsets: list of pitch offsets for augmentation.
+    :param velocity_offsets: list of velocity offsets for augmentation. If you plan to
+        tokenize this MIDI, the velocity offsets should be chosen accordingly to the
+        number of velocities in your tokenizer's vocabulary (``num_velocities``).
+    :param duration_offsets: list of duration offsets for augmentation, to be given
+        either in beats if ``duration_in_ticks`` is ``False``, in ticks otherwise.
+    :param all_offset_combinations: will perform data augmentation on all the possible
+        combinations of offset values. If set to ``False``, the method will only
+        augment on the offsets separately without combining them.
+    :param restrict_on_program_tessitura: if ``True``, the method will consider the
+        recommended pitch values of each instrument/program as the range of possible
+        values after augmentation. Otherwise, the ``(0, 127)`` range will be used.
+        (default: ``True``)
+    :return:
+    """
     # Remove pitch offsets that would cause errors or are out of tessitura
     pitch_offsets = _filter_offset_tuples_to_midi(
         pitch_offsets, midi, restrict_on_program_tessitura
