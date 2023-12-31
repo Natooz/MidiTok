@@ -4,10 +4,12 @@
 Test classes and methods from the pytorch_data module.
 """
 
-from pathlib import Path
-from typing import Optional, Sequence, Union
+from __future__ import annotations
 
-from miditoolkit import MidiFile
+from pathlib import Path
+from typing import Sequence
+
+from symusic import Score
 from torch import randint
 
 import miditok
@@ -30,26 +32,26 @@ def test_split_seq():
 
 def test_dataset_ram(
     tmp_path: Path,
-    midi_paths_one_track: Optional[Sequence[Union[str, Path]]] = None,
-    midi_paths_multitrack: Optional[Sequence[Union[str, Path]]] = None,
+    midi_paths_one_track: Sequence[str | Path] | None = None,
+    midi_paths_multitrack: Sequence[str | Path] | None = None,
 ):
     if midi_paths_one_track is None:
-        midi_paths_one_track = MIDI_PATHS_ONE_TRACK[:3]
+        midi_paths_one_track = MIDI_PATHS_ONE_TRACK[:6]
     if midi_paths_multitrack is None:
-        midi_paths_multitrack = MIDI_PATHS_MULTITRACK[:3]
+        midi_paths_multitrack = MIDI_PATHS_MULTITRACK[:6]
     tokens_os_dir = tmp_path / "multitrack_tokens_os"
     dummy_labels = {
         label: i
         for i, label in enumerate(
-            set(path.name.split("_")[0] for path in midi_paths_one_track)
+            {path.name.split("_")[0] for path in midi_paths_one_track}
         )
     }
 
     def get_labels_one_track(_: Sequence, file_path: Path) -> int:
         return dummy_labels[file_path.name.split("_")[0]]
 
-    def get_labels_multitrack(midi: MidiFile, _: Path) -> int:
-        return len(midi.instruments)
+    def get_labels_multitrack(midi: Score, _: Path) -> int:
+        return len(midi.tracks)
 
     def get_labels_multitrack_one_stream(tokens: Sequence, _: Path) -> int:
         return len(tokens) // 4
@@ -102,9 +104,7 @@ def test_dataset_ram(
     )
 
 
-def test_dataset_io(
-    tmp_path: Path, midi_path: Optional[Sequence[Union[str, Path]]] = None
-):
+def test_dataset_io(tmp_path: Path, midi_path: Sequence[str | Path] | None = None):
     if midi_path is None:
         midi_path = MIDI_PATHS_MULTITRACK[:3]
     tokens_os_dir = tmp_path / "multitrack_tokens_os"
@@ -128,10 +128,10 @@ def test_dataset_io(
 
 def test_split_dataset_to_subsequences(
     tmp_path: Path,
-    midi_path: Optional[Sequence[Union[str, Path]]] = None,
+    midi_paths: Sequence[str | Path] | None = None,
 ):
-    if midi_path is None:
-        midi_path = MIDI_PATHS_MULTITRACK[:3]
+    if midi_paths is None:
+        midi_paths = MIDI_PATHS_MULTITRACK[:3]
     tokens_os_dir = tmp_path / "multitrack_tokens_os"
     tokens_split_dir = tmp_path / "multitrack_tokens_os_split"
     tokens_split_dir_ms = tmp_path / "multitrack_tokens_ms_split"
@@ -140,7 +140,7 @@ def test_split_dataset_to_subsequences(
     if not tokens_os_dir.is_dir():
         config = miditok.TokenizerConfig(use_programs=True)
         tokenizer = miditok.TSD(config)
-        tokenizer.tokenize_midi_dataset(midi_path, tokens_os_dir)
+        tokenizer.tokenize_midi_dataset(midi_paths, tokens_os_dir)
     miditok.pytorch_data.split_dataset_to_subsequences(
         list(tokens_os_dir.glob("**/*.json")),
         tokens_split_dir,
@@ -153,7 +153,7 @@ def test_split_dataset_to_subsequences(
     if not tokens_split_dir_ms.is_dir():
         config = miditok.TokenizerConfig(use_programs=False)
         tokenizer = miditok.TSD(config)
-        tokenizer.tokenize_midi_dataset(midi_path, tokens_split_dir_ms)
+        tokenizer.tokenize_midi_dataset(midi_paths, tokens_split_dir_ms)
     miditok.pytorch_data.split_dataset_to_subsequences(
         list(tokens_split_dir_ms.glob("**/*.json")),
         tokens_split_dir,

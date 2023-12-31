@@ -45,23 +45,23 @@ Here we convert a MIDI to tokens, and the other way around.
 
     # Convert to MIDI and save it
     generated_midi = tokenizer(tokens)  # MidiTok can handle PyTorch / Tensorflow Tensors
-    generated_midi.dump('path/to/save/file.mid')  # could have been done above by giving the path argument
+    generated_midi.dump_midi("path/to/save/file.mid")  # could have been done above by giving the path argument
 
 Tokenize a dataset
 ------------------------
 
-Here we tokenize a whole dataset.
+Here we first train the tokenizer with :ref:`Byte Pair Encoding (BPE)`, then we tokenize a whole dataset.
 We also perform data augmentation on the pitch, velocity and duration dimension.
-Finally, we learn :ref:`Byte Pair Encoding (BPE)` on the tokenized dataset, and apply it.
 
 ..  code-block:: python
 
     from miditok import REMI
+    from miditok.data_augmentation import augment_midi_dataset
     from pathlib import Path
 
     # Creates the tokenizer and list the file paths
     tokenizer = REMI()  # using defaults parameters (constants.py)
-    midi_paths = list(Path('path', 'to', 'dataset').glob('**/*.mid'))
+    midi_paths = list(Path("path", "to", "dataset").glob("**/*.mid"))
 
     # A validation method to discard MIDIs we do not want
     # It can also be used for custom pre-processing, for instance if you want to merge
@@ -69,25 +69,23 @@ Finally, we learn :ref:`Byte Pair Encoding (BPE)` on the tokenized dataset, and 
     def midi_valid(midi) -> bool:
         if any(ts.numerator != 4 for ts in midi.time_signature_changes):
             return False  # time signature different from 4/*, 4 beats per bar
-        if midi.max_tick < 10 * midi.ticks_per_beat:
-            return False  # this MIDI is too short
         return True
 
-    # Converts MIDI files to tokens saved as JSON files
-    data_augmentation_offsets = [2, 2, 1]   # will perform data augmentation on 2 pitch octaves,
+    # Learns the vocabulary with BPE
+    tokenizer.learn_bpe(vocab_size=30000, files_paths=midi_paths)
+
+    # Performs data augmentation on one pitch octave (up and down), velocities and
+    # durations
+    augment_midi_dataset(
+        midi_paths,
+        pitch_offsets=[-12, 12],
+        velocity_offsets=[-4, 5],
+        duration_offsets=[-0.5, 1],
+        out_path=midi_aug_path,
+        Path("to", "new", "location", "augmented"),
+    )
     tokenizer.tokenize_midi_dataset(        # 2 velocity and 1 duration values
         midi_paths,
-        Path('path', 'to', 'tokens_noBPE'),
+        Path("path", "to", "tokens"),
         midi_valid,
-        data_augmentation_offsets,
     )
-
-    # Learns the vocabulary with BPE
-    tokenizer.learn_bpe(
-        vocab_size=500,
-        tokens_paths=list(Path('path', 'to', 'tokens_noBPE').glob("**/*.json")),
-        out_dir=Path('path', 'to', 'tokens_BPE'),
-    )
-
-    # Applies BPE to the previous tokens
-    tokenizer.apply_bpe_to_dataset(Path('path', 'to', 'tokens_noBPE'), Path('path', 'to', 'tokens_BPE'))

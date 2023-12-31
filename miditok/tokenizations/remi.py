@@ -1,26 +1,25 @@
-from math import ceil
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 import numpy as np
-from miditoolkit import (
-    Instrument,
-    MidiFile,
+from symusic import (
     Note,
     Pedal,
     PitchBend,
-    TempoChange,
+    Score,
+    Tempo,
     TimeSignature,
+    Track,
 )
 
 from ..classes import Event, TokenizerConfig, TokSequence
 from ..constants import (
     MIDI_INSTRUMENTS,
-    TIME_DIVISION,
     TIME_SIGNATURE,
 )
-from ..midi_tokenizer import MIDITokenizer, _in_as_seq
-from ..utils import set_midi_max_tick
+from ..midi_tokenizer import MIDITokenizer
 
 
 class REMI(MIDITokenizer):
@@ -58,8 +57,8 @@ class REMI(MIDITokenizer):
     def __init__(
         self,
         tokenizer_config: TokenizerConfig = None,
-        max_bar_embedding: Optional[int] = None,
-        params: Optional[Union[str, Path]] = None,
+        max_bar_embedding: int | None = None,
+        params: str | Path | None = None,
     ):
         if (
             tokenizer_config is not None
@@ -78,18 +77,14 @@ class REMI(MIDITokenizer):
             # tokenizer encounter longer MIDIs
             self.config.additional_params["max_bar_embedding"] = None
 
-    def _add_time_events(self, events: List[Event]) -> List[Event]:
-        r"""
-        Takes a sequence of note events (containing optionally Chord, Tempo and
-        TimeSignature tokens), and insert (not inplace) time tokens (TimeShift, Rest)
-        to complete the sequence.
+    def _add_time_events(self, events: list[Event]) -> list[Event]:
+        r"""Internal method intended to be implemented by inheriting classes.
+        It creates the time events from the list of global and track events, and as
+        such the final token sequence.
 
         :param events: note events to complete.
         :return: the same events, with time events inserted.
         """
-        time_division = self._current_midi_metadata["time_division"]
-        ticks_per_sample = time_division / max(self.config.beat_res.values())
-
         # Add time events
         all_events = []
         current_bar = -1
@@ -99,7 +94,7 @@ class REMI(MIDITokenizer):
         tick_at_last_ts_change = tick_at_current_bar = 0
         current_time_sig = TIME_SIGNATURE
         ticks_per_bar = self._compute_ticks_per_bar(
-            TimeSignature(*current_time_sig, 0), time_division
+            TimeSignature(0, *current_time_sig), self.time_division
         )
         # First look for a TimeSig token, if any is given at tick 0, to update
         # current_time_sig
@@ -108,7 +103,8 @@ class REMI(MIDITokenizer):
                 if event.type == "TimeSig":
                     current_time_sig = list(map(int, event.value.split("/")))
                     ticks_per_bar = self._compute_ticks_per_bar(
-                        TimeSignature(*current_time_sig, event.time), time_division
+                        TimeSignature(event.time, *current_time_sig),
+                        self.time_division,
                     )
                     break
                 elif event.type in [
@@ -149,6 +145,10 @@ class REMI(MIDITokenizer):
                         + (previous_tick - tick_at_last_ts_change) // ticks_per_bar
                     )
                     if real_current_bar > current_bar:
+                        # In case we instantly begin with a Rest,
+                        # we need to update current_bar
+                        if current_bar == -1:
+                            current_bar = 0
                         tick_at_current_bar += (
                             real_current_bar - current_bar
                         ) * ticks_per_bar
@@ -194,9 +194,7 @@ class REMI(MIDITokenizer):
 
                 # Position
                 if event.type != "TimeSig":
-                    pos_index = int(
-                        (event.time - tick_at_current_bar) / ticks_per_sample
-                    )
+                    pos_index = event.time - tick_at_current_bar
                     all_events.append(
                         Event(
                             type="Position",
@@ -216,7 +214,7 @@ class REMI(MIDITokenizer):
                 ) // ticks_per_bar
                 tick_at_last_ts_change = event.time
                 ticks_per_bar = self._compute_ticks_per_bar(
-                    TimeSignature(*current_time_sig, event.time), time_division
+                    TimeSignature(event.time, *current_time_sig), self.time_division
                 )
                 # We decrease the previous tick so that a Position token is enforced
                 # for the next event
@@ -240,34 +238,34 @@ class REMI(MIDITokenizer):
 
         return all_events
 
-    @_in_as_seq()
-    def tokens_to_midi(
+    def _tokens_to_midi(
         self,
-        tokens: Union[
-            Union[TokSequence, List, np.ndarray, Any],
-            List[Union[TokSequence, List, np.ndarray, Any]],
-        ],
-        programs: Optional[List[Tuple[int, bool]]] = None,
-        output_path: Optional[str] = None,
-        time_division: int = TIME_DIVISION,
-    ) -> MidiFile:
+        tokens: TokSequence
+        | list
+        | np.ndarray
+        | Any
+        | list[TokSequence | list | np.ndarray | Any],
+        programs: list[tuple[int, bool]] | None = None,
+        time_division: int | None = None,
+    ) -> Score:
         r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
 
         :param tokens: tokens to convert. Can be either a list of
             :class:`miditok.TokSequence`,
         :param programs: programs of the tracks. If none is given, will default to
             piano, program 0. (default: None)
-        :param output_path: path to save the file. (default: None)
         :param time_division: MIDI time division / resolution, in ticks/beat (of the
             MIDI to create).
         :return: the midi object (:class:`miditoolkit.MidiFile`).
         """
+        if time_division is None:
+            time_division = self.time_division
         # Unsqueeze tokens in case of one_token_stream
         if self.one_token_stream:  # ie single token seq
             tokens = [tokens]
         for i in range(len(tokens)):
             tokens[i] = tokens[i].tokens
-        midi = MidiFile(ticks_per_beat=time_division)
+        midi = Score(time_division)
         if time_division % max(self.config.beat_res.values()) != 0:
             raise ValueError(
                 f"Invalid time division, please give one divisible by"
@@ -276,13 +274,12 @@ class REMI(MIDITokenizer):
         ticks_per_sample = time_division // max(self.config.beat_res.values())
 
         # RESULTS
-        instruments: Dict[int, Instrument] = {}
-        tempo_changes = [TempoChange(self._DEFAULT_TEMPO, -1)]
-        time_signature_changes = []
+        tracks: dict[int, Track] = {}
+        tempo_changes, time_signature_changes = [], []
 
         def check_inst(prog: int):
-            if prog not in instruments:
-                instruments[prog] = Instrument(
+            if prog not in tracks:
+                tracks[prog] = Track(
                     program=0 if prog == -1 else prog,
                     is_drum=prog == -1,
                     name="Drums" if prog == -1 else MIDI_INSTRUMENTS[prog]["name"],
@@ -297,7 +294,7 @@ class REMI(MIDITokenizer):
                         tok_type, tok_val = token.split("_")
                         if tok_type == "TimeSig":
                             time_signature_changes.append(
-                                TimeSignature(*list(map(int, tok_val.split("/"))), 0)
+                                TimeSignature(0, *list(map(int, tok_val.split("/"))))
                             )
                             break
                         elif tok_type in [
@@ -309,7 +306,7 @@ class REMI(MIDITokenizer):
                         ]:
                             break
                 if len(time_signature_changes) == 0:
-                    time_signature_changes.append(TimeSignature(*TIME_SIGNATURE, 0))
+                    time_signature_changes.append(TimeSignature(0, *TIME_SIGNATURE))
             current_time_sig = time_signature_changes[-1]
             ticks_per_bar = self._compute_ticks_per_bar(current_time_sig, time_division)
 
@@ -328,7 +325,7 @@ class REMI(MIDITokenizer):
                 is_drum = False
                 if programs is not None:
                     current_program, is_drum = programs[si]
-                current_instrument = Instrument(
+                current_instrument = Track(
                     program=current_program,
                     is_drum=is_drum,
                     name="Drums"
@@ -354,6 +351,10 @@ class REMI(MIDITokenizer):
                         + (current_tick - tick_at_last_ts_change) // ticks_per_bar
                     )
                     if real_current_bar > current_bar:
+                        # In case we instantly begin with a Rest,
+                        # we need to update current_bar
+                        if current_bar == -1:
+                            current_bar = 0
                         tick_at_current_bar += (
                             real_current_bar - current_bar
                         ) * ticks_per_bar
@@ -383,11 +384,14 @@ class REMI(MIDITokenizer):
                         if vel_type == "Velocity" and dur_type == "Duration":
                             dur = self._token_duration_to_ticks(dur, time_division)
                             new_note = Note(
-                                int(vel), pitch, current_tick, current_tick + dur
+                                current_tick,
+                                dur,
+                                pitch,
+                                int(vel),
                             )
                             if self.one_token_stream:
                                 check_inst(current_program)
-                                instruments[current_program].notes.append(new_note)
+                                tracks[current_program].notes.append(new_note)
                             else:
                                 current_instrument.notes.append(new_note)
                             previous_note_end = max(
@@ -401,12 +405,8 @@ class REMI(MIDITokenizer):
                 elif tok_type == "Program":
                     current_program = int(tok_val)
                 elif tok_type == "Tempo":
-                    # If your encoding include tempo tokens, each Position token should
-                    # be followed by a tempo token, but if it is not the case this
-                    # method will skip this step
-                    tempo = float(tok_val)
-                    if si == 0 and current_tick != tempo_changes[-1].time:
-                        tempo_changes.append(TempoChange(tempo, current_tick))
+                    if si == 0:
+                        tempo_changes.append(Tempo(current_tick, float(tok_val)))
                     previous_note_end = max(previous_note_end, current_tick)
                 elif tok_type == "TimeSig":
                     num, den = self._parse_token_time_signature(tok_val)
@@ -414,7 +414,7 @@ class REMI(MIDITokenizer):
                         num != current_time_sig.numerator
                         or den != current_time_sig.denominator
                     ):
-                        current_time_sig = TimeSignature(num, den, current_tick)
+                        current_time_sig = TimeSignature(current_tick, num, den)
                         if si == 0:
                             time_signature_changes.append(current_time_sig)
                         tick_at_last_ts_change = tick_at_current_bar  # == current_tick
@@ -433,10 +433,10 @@ class REMI(MIDITokenizer):
                             )
                             # Add instrument if it doesn't exist, can happen for the
                             # first tokens
-                            new_pedal = Pedal(current_tick, current_tick + duration)
+                            new_pedal = Pedal(current_tick, duration)
                             if self.one_token_stream:
                                 check_inst(pedal_prog)
-                                instruments[pedal_prog].pedals.append(new_pedal)
+                                tracks[pedal_prog].pedals.append(new_pedal)
                             else:
                                 current_instrument.pedals.append(new_pedal)
                     else:
@@ -447,45 +447,42 @@ class REMI(MIDITokenizer):
                         int(tok_val) if self.config.use_programs else current_program
                     )
                     if pedal_prog in active_pedals:
-                        new_pedal = Pedal(active_pedals[pedal_prog], current_tick)
+                        new_pedal = Pedal(
+                            active_pedals[pedal_prog],
+                            current_tick - active_pedals[pedal_prog],
+                        )
                         if self.one_token_stream:
                             check_inst(pedal_prog)
-                            instruments[pedal_prog].pedals.append(
-                                Pedal(active_pedals[pedal_prog], current_tick)
+                            tracks[pedal_prog].pedals.append(
+                                Pedal(
+                                    active_pedals[pedal_prog],
+                                    current_tick - active_pedals[pedal_prog],
+                                )
                             )
                         else:
                             current_instrument.pedals.append(new_pedal)
                         del active_pedals[pedal_prog]
                 elif tok_type == "PitchBend":
-                    new_pitch_bend = PitchBend(int(tok_val), current_tick)
+                    new_pitch_bend = PitchBend(current_tick, int(tok_val))
                     if self.one_token_stream:
                         check_inst(current_program)
-                        instruments[current_program].pitch_bends.append(new_pitch_bend)
+                        tracks[current_program].pitch_bends.append(new_pitch_bend)
                     else:
                         current_instrument.pitch_bends.append(new_pitch_bend)
 
             # Add current_inst to midi and handle notes still active
             if not self.one_token_stream:
-                midi.instruments.append(current_instrument)
-
-        if len(tempo_changes) > 1:
-            del tempo_changes[0]  # delete mocked tempo change
-        tempo_changes[0].time = 0
+                midi.tracks.append(current_instrument)
 
         # create MidiFile
         if self.one_token_stream:
-            midi.instruments = list(instruments.values())
-        midi.tempo_changes = tempo_changes
-        midi.time_signature_changes = time_signature_changes
-        set_midi_max_tick(midi)
+            midi.tracks = list(tracks.values())
+        midi.tempos = tempo_changes
+        midi.time_signatures = time_signature_changes
 
-        # Write MIDI file
-        if output_path:
-            Path(output_path).mkdir(parents=True, exist_ok=True)
-            midi.dump(output_path)
         return midi
 
-    def _create_base_vocabulary(self) -> List[str]:
+    def _create_base_vocabulary(self) -> list[str]:
         r"""Creates the vocabulary, as a list of string tokens.
         Each token as to be given as the form of "Type_Value", separated with an
         underscore. Example: Pitch_58
@@ -519,9 +516,8 @@ class REMI(MIDITokenizer):
         ]
 
         # POSITION
-        max_nb_beats = max(
-            map(lambda ts: ceil(4 * ts[0] / ts[1]), self.time_signatures)
-        )
+        # max_nb_beats = max(ceil(4 * ts[0] / ts[1]) for ts in self.time_signatures)
+        max_nb_beats = max(ts[0] for ts in self.time_signatures)
         nb_positions = max(self.config.beat_res.values()) * max_nb_beats
         vocab += [f"Position_{i}" for i in range(nb_positions)]
 
@@ -530,13 +526,13 @@ class REMI(MIDITokenizer):
 
         return vocab
 
-    def _create_token_types_graph(self) -> Dict[str, List[str]]:
+    def _create_token_types_graph(self) -> dict[str, list[str]]:
         r"""Returns a graph (as a dictionary) of the possible token
         types successions.
 
         :return: the token types transitions dictionary
         """
-        dic: Dict[str, List[str]] = dict()
+        dic: dict[str, list[str]] = {}
 
         if self.config.use_programs:
             first_note_token_type = (
@@ -595,6 +591,7 @@ class REMI(MIDITokenizer):
             dic["Position"].append("Pedal")
             if self.config.sustain_pedal_duration:
                 dic["Pedal"] = ["Duration"]
+                dic["Duration"].append("Pedal")
             else:
                 dic["PedalOff"] = [
                     "Pedal",
@@ -627,9 +624,9 @@ class REMI(MIDITokenizer):
             # As a Program token will precede PitchBend otherwise
             # Else no need to add Program as its already in
             dic["PitchBend"] = [first_note_token_type, "Position", "Bar"]
-            if self.config.use_programs:
+            if self.config.use_programs and not self.config.program_changes:
                 dic["Program"].append("PitchBend")
-            if not self.config.programs or self.config.program_changes:
+            else:
                 dic["Position"].append("PitchBend")
                 if self.config.use_tempos:
                     dic["Tempo"].append("PitchBend")

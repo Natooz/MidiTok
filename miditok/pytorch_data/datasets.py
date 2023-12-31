@@ -2,13 +2,15 @@
 PyTorch `Dataset` objects, to be used with PyTorch `DataLoaders` to load and send data
 during training.
 """
+from __future__ import annotations
+
 import json
 from abc import ABC
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Callable, List, Mapping, Optional, Sequence, Union
+from typing import Any, Callable, Mapping, Sequence
 
-from miditoolkit import MidiFile
+from symusic import Score
 from torch import LongTensor, randint
 from torch.utils.data import Dataset
 from tqdm import tqdm
@@ -20,7 +22,7 @@ from ..constants import MIDI_FILES_EXTENSIONS
 
 def split_seq_in_subsequences(
     seq: Sequence[any], min_seq_len: int, max_seq_len: int
-) -> List[Sequence[Any]]:
+) -> list[Sequence[Any]]:
     r"""Split a sequence of tokens into subsequences for which
     ``min_seq_len <= len(sub_seq) <= max_seq_len``.
 
@@ -41,8 +43,8 @@ def split_seq_in_subsequences(
 
 
 def split_dataset_to_subsequences(
-    files_paths: Sequence[Union[Path, str]],
-    out_dir: Union[Path, str],
+    files_paths: Sequence[Path | str],
+    out_dir: Path | str,
     min_seq_len: int,
     max_seq_len: int,
     one_token_stream: bool = True,
@@ -98,8 +100,8 @@ class _DatasetABC(Dataset, ABC):
 
     def __init__(
         self,
-        samples: Optional[Sequence[Any]] = None,
-        labels: Optional[Sequence[Any]] = None,
+        samples: Sequence[Any] | None = None,
+        labels: Sequence[Any] | None = None,
         sample_key_name: str = "input_ids",
         labels_key_name: str = "labels",
     ):
@@ -202,9 +204,7 @@ class DatasetTok(_DatasetABC):
         max_seq_len: int,
         tokenizer: MIDITokenizer = None,
         one_token_stream: bool = True,
-        func_to_get_labels: Optional[
-            Callable[[Union[MidiFile, Sequence], Path], int]
-        ] = None,
+        func_to_get_labels: Callable[[Score | Sequence, Path], int] | None = None,
         sample_key_name: str = "input_ids",
         labels_key_name: str = "labels",
     ):
@@ -222,12 +222,10 @@ class DatasetTok(_DatasetABC):
             label = None
             # Loading a MIDI file
             if file_path.suffix in MIDI_FILES_EXTENSIONS:
-                midi = MidiFile(file_path)
+                midi = Score(file_path)
                 if func_to_get_labels is not None:
                     label = func_to_get_labels(midi, file_path)
-                for _ in range(len(midi.instruments) - 1):
-                    del midi.instruments[1]  # removes all tracks except first one
-                tokens_ids = tokenizer.midi_to_tokens(midi)
+                tokens_ids = tokenizer(midi)
                 if one_token_stream:
                     tokens_ids = tokens_ids.ids
                 else:
@@ -284,7 +282,7 @@ class DatasetJsonIO(_DatasetABC):
     def __init__(
         self,
         files_paths: Sequence[Path],
-        max_seq_len: Optional[int] = None,
+        max_seq_len: int | None = None,
     ):
         self.max_seq_len = max_seq_len
         super().__init__(files_paths)

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "miditok"
-version = "2.1.8"
+version = "3.0.0"
 description = "MIDI / symbolic music tokenizers for Deep Learning models."
 readme = "README.md"
 license = "MIT"
@@ -37,7 +37,7 @@ classifiers = [
 ]
 dependencies = [
     "numpy>=1.19",
-    "miditoolkit",
+    "symusic>=0.2.3",
     "tqdm",
     "tokenizers>=0.13.0",
     "huggingface_hub>=0.16.4",
@@ -49,6 +49,7 @@ tests = [
     "pytest-xdist[psutil]",
     "torch",
     "tensorflow",
+    "miditoolkit",
 ]
 
 [project.urls]
@@ -68,9 +69,13 @@ target-version = "py38"
 extend-select = [
     "ARG",
     "A",
+    # "ANN",
     "B",
+    "C4",
+    # "COM",
     "E",
     "F",
+    "FA",
     "G",
     "I",
     "INT",

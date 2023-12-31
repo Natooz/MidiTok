@@ -4,14 +4,16 @@
 BPE.
 """
 
+from __future__ import annotations
+
 import random
-from copy import deepcopy
+from copy import copy, deepcopy
 from pathlib import Path
 from time import time
-from typing import Optional, Sequence, Union
+from typing import Sequence
 
 import pytest
-from miditoolkit import MidiFile
+from symusic import Score
 from tqdm import tqdm
 
 import miditok
@@ -38,7 +40,7 @@ default_params.update(
 def test_bpe_conversion(
     tokenization: str,
     tmp_path: Path,
-    midi_paths: Optional[Sequence[Union[str, Path]]] = None,
+    midi_paths: Sequence[str | Path] | None = None,
     seed: int = SEED,
 ):
     r"""Reads a few MIDI files, convert them into token sequences, convert them back
@@ -61,11 +63,9 @@ def test_bpe_conversion(
     tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
         tokenizer_config=miditok.TokenizerConfig(**params_)
     )
-    # Give a str to dir for coverage
-    tokenizer.tokenize_midi_dataset(midi_paths, tmp_path)
     tokenizer.learn_bpe(
         vocab_size=len(tokenizer) + 400,
-        tokens_paths=list(tmp_path.glob("**/*.json")),
+        files_paths=midi_paths,
         start_from_empty_voc=True,
     )
     tokenizer.save_params(tmp_path / "bpe_config.txt")
@@ -111,8 +111,8 @@ def test_bpe_conversion(
     at_least_one_error = False
     tok_time = 0
     for i, file_path in enumerate(tqdm(midi_paths, desc="Testing BPE unbatched")):
-        midi = MidiFile(file_path)
-        tokens_no_bpe = tokenizer(deepcopy(midi), apply_bpe_if_possible=False)
+        midi = Score(file_path)
+        tokens_no_bpe = tokenizer(copy(midi), apply_bpe_if_possible=False)
         if not tokenizer.one_token_stream:
             tokens_no_bpe = tokens_no_bpe[0]
         tokens_bpe = deepcopy(tokens_no_bpe)  # with BPE
@@ -146,7 +146,7 @@ def test_bpe_conversion(
     samples_no_bpe = []
     for file_path in tqdm(midi_paths, desc="Testing BPE batched"):
         # Reads the midi
-        midi = MidiFile(file_path)
+        midi = Score(file_path)
         tokens_no_bpe = tokenizer(midi, apply_bpe_if_possible=False)
         if not tokenizer.one_token_stream:
             samples_no_bpe.append(tokens_no_bpe[0])

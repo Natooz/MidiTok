@@ -4,21 +4,20 @@
 
 from importlib.metadata import version
 
-from mido.midifiles import KeySignatureError
-
 CURRENT_MIDITOK_VERSION = version("miditok")
 CURRENT_TOKENIZERS_VERSION = version("tokenizers")
+CURRENT_SYMUSIC_VERSION = version("symusic")
 
 MIDI_FILES_EXTENSIONS = [".mid", ".midi", ".MID", ".MIDI"]
 MIDI_LOADING_EXCEPTION = (
+    RuntimeError,
     ValueError,
     OSError,
     FileNotFoundError,
     IOError,
     EOFError,
-    KeySignatureError,
 )
-DEFAULT_TOKENIZER_FILE_NAME = "tokenizer.conf"
+DEFAULT_TOKENIZER_FILE_NAME = "tokenizer.json"
 
 # Starting id of chr() method for BPE, as the 5 (0 to 4 included) firsts are ignored by
 # 🤗tokenizers. We also skip the 32nd (0x20) (space) as it causes issues when loading a
@@ -104,6 +103,9 @@ PROGRAMS = list(range(-1, 128))
 ONE_TOKEN_STREAM_FOR_PROGRAMS = True
 PROGRAM_CHANGES = False
 
+# Other
+REMOVE_DUPLICATED_NOTES = False
+
 
 # Tokenizers specific parameters
 # For MuMIDI, recommended range from the GM2 specs
@@ -113,7 +115,6 @@ DRUM_PITCH_RANGE = (27, 88)
 MMM_DENSITY_BINS_MAX = (10, 20)
 
 # Defaults values when writing new MIDI files
-TIME_DIVISION = 384  # 384 and 480 are convenient as divisible by 4, 8, 12, 16, 24, 32
 TEMPO = 120
 TIME_SIGNATURE = (4, 4)
 DELETE_EQUAL_SUCCESSIVE_TIME_SIG_CHANGES = False
@@ -138,7 +139,7 @@ PITCH_CLASSES = [
 # https://www.midi.org/specifications
 
 # index i = program i+1 in the GM2 specs (7. Appendix A)
-# index i = program i as retrieved by packages like mido or miditoolkit
+# index i = program i as retrieved by packages
 MIDI_INSTRUMENTS = [
     {"name": "Acoustic Grand Piano", "pitch_range": range(21, 109)},
     {"name": "Bright Acoustic Piano", "pitch_range": range(21, 109)},
@@ -322,7 +323,7 @@ CLASS_OF_INST = [
 ]
 
 # index i = program i+1 in the GM2 specs (8. Appendix B)
-# index i = program i as retrieved by packages like mido or miditoolkit
+# index i = program i retrieved by packages
 DRUM_SETS = {
     0: "Standard",
     8: "Room",

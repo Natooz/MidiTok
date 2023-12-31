@@ -23,7 +23,7 @@ Installation
 
     pip install miditok
 
-MidiTok uses `MIDIToolkit <https://github.com/YatingMusic/miditoolkit>`_ and `Mido <https://github.com/mido/mido>`_ to read and write MIDI files, and BPE is backed by `Hugging Face 🤗tokenizers <https://github.com/huggingface/tokenizers>`_ for super fast encoding.
+MidiTok uses `symusic <https://github.com/Yikai-Liao/symusic>`_ to read and write MIDI files, and BPE is backed by `Hugging Face 🤗tokenizers <https://github.com/huggingface/tokenizers>`_ for super fast encoding.
 
 Citation
 ==================
@@ -46,7 +46,7 @@ Contents
 ==================
 
 .. toctree::
-   midi_tokenizer
+   bases
    examples
    tokenizations
    bpe

@@ -65,7 +65,8 @@ MidiTok offers to include additional tokens on music information. You can specif
    :file: additional_tokens_table.csv
    :header-rows: 1
 
-¹: using both time signatures and rests with `CPWord` might result in time alterations, as the time signature is carried by the Bar tokens which are skipped during period of rests. An example is shown below
+¹: using both time signatures and rests with `CPWord` might result in time alterations, as the time signature changes are carried with the Bar tokens which can be skipped during period of rests.
+²: using time signatures with `Octuple` might result in time alterations, as the time signature changes are carried with the note onsets. An example is shown below.
 
 .. image:: /assets/Octuple_TS_Rest/original.png
   :width: 800

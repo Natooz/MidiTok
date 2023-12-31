@@ -1,19 +1,18 @@
+from __future__ import annotations
+
 from copy import deepcopy
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Union, cast
+from typing import Any, List, cast
 
 import numpy as np
-from miditoolkit import Instrument, MidiFile, Note, TempoChange, TimeSignature
+from symusic import Note, Score, Tempo, TimeSignature, Track
 
 from ..classes import Event, TokSequence
 from ..constants import (
     MIDI_INSTRUMENTS,
     MMM_DENSITY_BINS_MAX,
-    TIME_DIVISION,
     TIME_SIGNATURE,
 )
 from ..midi_tokenizer import MIDITokenizer, _in_as_seq
-from ..utils import set_midi_max_tick
 
 
 class MMM(MIDITokenizer):
@@ -61,30 +60,20 @@ class MMM(MIDITokenizer):
                 dtype=np.intc,
             )
 
-    def _add_time_events(self, events: List[Event]) -> List[Event]:
-        r"""
-        Takes a sequence of note events (containing optionally Chord, Tempo and
-        TimeSignature tokens), and insert (not inplace) time tokens (TimeShift, Rest)
-        to complete the sequence.
+    def _add_time_events(self, events: list[Event]) -> list[Event]:
+        r"""Internal method intended to be implemented by inheriting classes.
+        It creates the time events from the list of global and track events, and as
+        such the final token sequence.
 
         :param events: note events to complete.
         :return: the same events, with time events inserted.
         """
-        time_division = self._current_midi_metadata["time_division"]
-        dur_bins = self._durations_ticks[self._current_midi_metadata["time_division"]]
-
         # Creates first events
         all_events = [Event("Bar", "Start", 0)]
 
         # Time events
-        if (
-            self.config.use_time_signatures
-            and len(self._current_midi_metadata["time_sig_changes"]) > 0
-        ):
-            time_sig_change = self._current_midi_metadata["time_sig_changes"][0]
-        else:
-            time_sig_change = TimeSignature(*TIME_SIGNATURE, 0)
-        ticks_per_bar = self._compute_ticks_per_bar(time_sig_change, time_division)
+        time_sig_change = TimeSignature(0, *TIME_SIGNATURE)
+        ticks_per_bar = self._compute_ticks_per_bar(time_sig_change, self.time_division)
         bar_at_last_ts_change = 0
         previous_tick = 0
         current_bar = 0
@@ -97,9 +86,9 @@ class MMM(MIDITokenizer):
                 tick_at_last_ts_change = events[ei].time
                 ticks_per_bar = self._compute_ticks_per_bar(
                     TimeSignature(
-                        *list(map(int, events[ei].value.split("/"))), events[ei].time
+                        events[ei].time, *list(map(int, events[ei].value.split("/")))
                     ),
-                    time_division,
+                    self.time_division,
                 )
             if events[ei].time != previous_tick:
                 # Bar
@@ -135,7 +124,7 @@ class MMM(MIDITokenizer):
                 # TimeShift
                 if events[ei].time != previous_tick:
                     time_shift = events[ei].time - previous_tick
-                    index = np.argmin(np.abs(dur_bins - time_shift))
+                    index = np.argmin(np.abs(self._durations_ticks - time_shift))
                     all_events.append(
                         Event(
                             type="TimeShift",
@@ -156,7 +145,7 @@ class MMM(MIDITokenizer):
         ]
         return all_events
 
-    def _midi_to_tokens(self, midi: MidiFile) -> TokSequence:
+    def _midi_to_tokens(self, midi: Score) -> TokSequence:
         r"""Converts a preprocessed MIDI object to a sequence of tokens.
         Tokenization treating all tracks as a single token sequence might
         override this method, e.g. Octuple or PopMAG.
@@ -175,9 +164,12 @@ class MMM(MIDITokenizer):
         # Adds track tokens
         # Disable use_programs so that _create_track_events do not add Program events
         self.config.use_programs = False
-        for track in midi.instruments:
-            note_density = len(track.notes) / self._current_midi_metadata["max_tick"]
-            note_density = int(np.argmin(np.abs(note_density_bins - note_density)))
+        for track in midi.tracks:
+            note_density = len(track.notes) / (
+                max(note.end for note in track.notes) / midi.ticks_per_quarter
+            )
+            note_density_idx = np.argmin(np.abs(note_density_bins - note_density))
+            note_density = int(note_density_bins[note_density_idx])
             all_events += [
                 Event("Track", "Start", 0),
                 Event(
@@ -202,26 +194,25 @@ class MMM(MIDITokenizer):
         self.complete_sequence(tok_sequence)
         return tok_sequence
 
-    @_in_as_seq()
-    def tokens_to_midi(
+    def _tokens_to_midi(
         self,
-        tokens: Union[TokSequence, List, np.ndarray, Any],
+        tokens: TokSequence | list | np.ndarray | Any,
         _=None,
-        output_path: Optional[str] = None,
-        time_division: int = TIME_DIVISION,
-    ) -> MidiFile:
+        time_division: int | None = None,
+    ) -> Score:
         r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
 
         :param tokens: tokens to convert. Can be either a list of
             :class:`miditok.TokSequence`,
         :param _: unused, to match parent method signature
-        :param output_path: path to save the file. (default: None)
         :param time_division: MIDI time division / resolution, in ticks/beat (of the
             MIDI to create).
         :return: the midi object (:class:`miditoolkit.MidiFile`).
         """
+        if time_division is None:
+            time_division = self.time_division
         tokens = cast(TokSequence, tokens)
-        midi = MidiFile(ticks_per_beat=time_division)
+        midi = Score(time_division)
         if time_division % max(self.config.beat_res.values()) != 0:
             raise ValueError(
                 f"Invalid time division, please give one divisible by"
@@ -230,16 +221,12 @@ class MMM(MIDITokenizer):
         tokens = cast(List[str], tokens.tokens)  # for reducing type errors
 
         # RESULTS
-        instruments: List[Instrument] = []
-        tempo_changes = [
-            TempoChange(self._DEFAULT_TEMPO, -1)
-        ]  # mock the first tempo change to optimize below
-        time_signature_changes = [
-            TimeSignature(*TIME_SIGNATURE, 0)
-        ]  # mock the first time signature change to optimize below
+        tracks: list[Track] = []
+        tempo_changes = []
+        time_signature_changes = []
         ticks_per_bar = self._compute_ticks_per_bar(
-            time_signature_changes[0], time_division
-        )  # init
+            TimeSignature(0, *TIME_SIGNATURE), time_division
+        )
 
         current_tick = tick_at_current_bar = 0
         current_bar = -1
@@ -251,8 +238,8 @@ class MMM(MIDITokenizer):
             tok_type, tok_val = token.split("_")
             if tok_type == "Program":
                 current_program = int(tok_val)
-                instruments.append(
-                    Instrument(
+                tracks.append(
+                    Track(
                         program=0 if current_program == -1 else current_program,
                         is_drum=current_program == -1,
                         name="Drums"
@@ -275,26 +262,18 @@ class MMM(MIDITokenizer):
                     # as this Position token occurs before any Bar token
                     current_bar = 0
                 current_tick += self._token_duration_to_ticks(tok_val, time_division)
-            elif (
+            elif tok_type == "Tempo" and (
                 first_program is None or current_program == first_program
-            ) and tok_type == "Tempo":
-                # If the tokenizer includes tempo tokens, each Position token should be
-                # followed by a tempo token, but if it is not the case this method will
-                # skip this step
-                tempo = float(token.split("_")[1])
-                if current_tick != tempo_changes[-1].time:
-                    tempo_changes.append(TempoChange(tempo, current_tick))
-            elif tok_type == "TimeSig":
+            ):
+                tempo_changes.append(Tempo(current_tick, float(token.split("_")[1])))
+            elif tok_type == "TimeSig" and (
+                first_program is None or current_program == first_program
+            ):
                 num, den = self._parse_token_time_signature(token.split("_")[1])
-                current_time_signature = time_signature_changes[-1]
-                if (
-                    num != current_time_signature.numerator
-                    or den != current_time_signature.denominator
-                ):
-                    time_signature_changes.append(TimeSignature(num, den, current_tick))
-                    ticks_per_bar = self._compute_ticks_per_bar(
-                        time_signature_changes[-1], time_division
-                    )
+                time_signature_changes.append(TimeSignature(current_tick, num, den))
+                ticks_per_bar = self._compute_ticks_per_bar(
+                    time_signature_changes[-1], time_division
+                )
             elif tok_type in ["Pitch", "PitchIntervalTime", "PitchIntervalChord"]:
                 if tok_type == "Pitch":
                     pitch = int(tok_val)
@@ -314,8 +293,8 @@ class MMM(MIDITokenizer):
                     dur_type, dur = tokens[ti + 2].split("_")
                     if vel_type == "Velocity" and dur_type == "Duration":
                         dur = self._token_duration_to_ticks(dur, time_division)
-                        instruments[-1].notes.append(
-                            Note(int(vel), pitch, current_tick, current_tick + dur)
+                        tracks[-1].notes.append(
+                            Note(current_tick, dur, pitch, int(vel))
                         )
                         previous_note_end = max(previous_note_end, current_tick + dur)
                 except IndexError:
@@ -323,24 +302,15 @@ class MMM(MIDITokenizer):
                     # However with generated sequences this can happen, or if the
                     # sequence isn't finished
                     pass
-        if len(tempo_changes) > 1:
-            del tempo_changes[0]  # delete mocked tempo change
-        tempo_changes[0].time = 0
-        if len(time_signature_changes) > 1:
-            del time_signature_changes[0]  # delete mocked time signature change
-        time_signature_changes[0].time = 0
+
         # create MidiFile
-        midi.instruments = instruments
-        midi.tempo_changes = tempo_changes
-        midi.time_signature_changes = time_signature_changes
-        set_midi_max_tick(midi)
-        # Write MIDI file
-        if output_path:
-            Path(output_path).mkdir(parents=True, exist_ok=True)
-            midi.dump(output_path)
+        midi.tracks = tracks
+        midi.tempos = tempo_changes
+        midi.time_signatures = time_signature_changes
+
         return midi
 
-    def _create_base_vocabulary(self) -> List[str]:
+    def _create_base_vocabulary(self) -> list[str]:
         r"""Creates the vocabulary, as a list of string tokens.
         Each token as to be given as the form of "Type_Value", separated with an
         underscore. Example: Pitch_58
@@ -385,22 +355,22 @@ class MMM(MIDITokenizer):
 
         return vocab
 
-    def _create_token_types_graph(self) -> Dict[str, List[str]]:
+    def _create_token_types_graph(self) -> dict[str, list[str]]:
         r"""Returns a graph (as a dictionary) of the possible token
         types successions.
 
         :return: the token types transitions dictionary
         """
-        dic: Dict[str, List[str]] = dict()
-
-        dic["Bar"] = ["Bar", "TimeShift", "Pitch", "Track"]
-        dic["TimeShift"] = ["Pitch"]
-        dic["Track"] = ["Program", "Track"]
-        dic["Program"] = ["NoteDensity"]
-        dic["NoteDensity"] = ["Bar"]
-        dic["Pitch"] = ["Velocity"]
-        dic["Velocity"] = ["Duration"]
-        dic["Duration"] = ["Pitch", "TimeShift", "Bar"]
+        dic: dict[str, list[str]] = {
+            "Bar": ["Bar", "TimeShift", "Pitch", "Track"],
+            "TimeShift": ["Pitch"],
+            "Track": ["Program", "Track"],
+            "Program": ["NoteDensity"],
+            "NoteDensity": ["Bar"],
+            "Pitch": ["Velocity"],
+            "Velocity": ["Duration"],
+            "Duration": ["Pitch", "TimeShift", "Bar"],
+        }
 
         if self.config.use_pitch_intervals:
             for token_type in ("PitchIntervalTime", "PitchIntervalChord"):
@@ -439,7 +409,7 @@ class MMM(MIDITokenizer):
 
     @_in_as_seq(complete=False, decode_bpe=False)
     def tokens_errors(
-        self, tokens_to_check: Union[TokSequence, List[Union[int, List[int]]]]
+        self, tokens_to_check: TokSequence | list[int | list[int]]
     ) -> float:
         tokens_to_check = cast(TokSequence, tokens_to_check)
         nb_tok_predicted = len(tokens_to_check)  # used to norm the score
@@ -474,7 +444,10 @@ class MMM(MIDITokenizer):
             if event_type in self.tokens_types_graph[previous_type]:
                 if event_type in ["Bar", "TimeShift"]:  # reset
                     current_pitches = []
-                elif event_type in note_tokens_types:
+                elif (
+                    self.config.remove_duplicated_notes
+                    and event_type in note_tokens_types
+                ):
                     if event_type == "Pitch":
                         pitch_val = int(event_value)
                         previous_pitch_onset = pitch_val

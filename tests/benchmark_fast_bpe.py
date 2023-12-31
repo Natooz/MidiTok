@@ -3,11 +3,12 @@
 """Benchmark for fast BPE with Hugging Face tokenizers library.
 """
 
+from __future__ import annotations
+
 import random
 from copy import deepcopy
 from pathlib import Path, PurePath
 from time import time
-from typing import Union
 
 from prettytable import PrettyTable
 from tqdm import tqdm
@@ -30,7 +31,7 @@ ADDITIONAL_TOKENS_TEST = {
 }
 
 
-def bpe_benchmark(data_path: Union[str, Path, PurePath] = "./tests/Maestro"):
+def bpe_benchmark(data_path: str | Path | PurePath = "./tests/Maestro"):
     r"""Reads a few MIDI files, convert them into token sequences, convert them back
     to MIDI files. The converted back MIDI files should identical to original one,
     expect with note starting and ending times quantized, and maybe a some duplicated
@@ -93,7 +94,7 @@ def bpe_benchmark(data_path: Union[str, Path, PurePath] = "./tests/Maestro"):
         t0 = time()
         tokenizer.learn_bpe(
             vocab_size=vocab_size,
-            tokens_paths=list(
+            files_paths=list(
                 Path("tests", "test_results", f"{tokenization}_maestro").glob(
                     "**/*.json"
                 )
