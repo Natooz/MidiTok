@@ -1,7 +1,8 @@
 """
-MIDI encoding base class and methods
+Base tokenizer class, acting as a "framework" for all tokenizers.
 # TODO switch from ticks/beat to ticks/quarter logic for time division
 # TODO build docs action, make sure no error / warning https://github.com/readthedocs/actions
+# TODO increase nb of pytest workers in GitHub action?
 """
 from __future__ import annotations
 
@@ -72,6 +73,18 @@ from .utils import (
 from .utils.utils import np_get_closest
 
 
+def _are_ids_bpe_encoded(ids: list[int] | np.ndarray, vocab_size: int) -> bool:
+    r"""A small check telling if a sequence of ids are encoded with BPE.
+    This is performed by checking if any id has a value superior or equal to the
+    length of the base vocabulary.
+
+    :param ids: ids to check.
+    :param vocab_size: number of tokens in the vocabulary.
+    :return: boolean, True if ids are encoded with BPE, False otherwise.
+    """
+    return np.any(np.array(ids) >= vocab_size)
+
+
 def convert_sequence_to_tokseq(
     tokenizer, input_seq, complete_seq: bool = True, decode_bpe: bool = True
 ) -> TokSequence | list[TokSequence]:
@@ -134,12 +147,14 @@ def convert_sequence_to_tokseq(
             kwarg = {arg[0]: obj}
             seq.append(TokSequence(**kwarg))
             if not tokenizer.is_multi_voc and seq[-1].ids is not None:
-                seq[-1].ids_bpe_encoded = tokenizer._are_ids_bpe_encoded(seq[-1].ids)
+                seq[-1].ids_bpe_encoded = _are_ids_bpe_encoded(
+                    seq[-1].ids, len(tokenizer)
+                )
     else:  # 1 subscript, one_token_stream and no multi-voc
         kwarg = {arg[0]: arg[1]}
         seq = TokSequence(**kwarg)
         if not tokenizer.is_multi_voc:
-            seq.ids_bpe_encoded = tokenizer._are_ids_bpe_encoded(seq.ids)
+            seq.ids_bpe_encoded = _are_ids_bpe_encoded(seq.ids, len(tokenizer))
 
     # decode BPE and complete the output sequence(s) if requested
     if tokenizer.has_bpe and decode_bpe:
@@ -608,22 +623,22 @@ class MIDITokenizer(ABC, HFHubMixin):
         There are not delayed to the next bar (anymore since v3.0.0).
         See MIDI 1.0 Detailed specifications, pages 54 - 56, for more information on
         delayed time signature messages.
+        If the ``delete_equal_successive_time_sig_changes`` parameter is set ``True``
+        in the tokenizer's configuration, the time signatures must be sorted by time
+        before calling this method. This is done by symusic when loading a MIDI. If
+        this method is called for a MIDI created from another way, make sure they
+        are sorted: ``midi.time_signatures.sort()``.
 
         :param time_sigs: time signature changes to quantize.
         """
-        # If we delete the successive equal time signature changes, we need to sort
-        # them by time.
-        # Fortunately, sorting is already performed by symusic when loading the MIDI.
-
-        # Gathers times and values in lists.
-        # Removes time sigs that are not recognized by the tokenizer.
-        times, values = [], []
-        i = 0
+        ticks_per_bar = self._compute_ticks_per_bar(time_sigs[0], self.time_division)
+        previous_tick = 0  # first time signature change is always at tick 0
+        prev_ts = (time_sigs[0].numerator, time_sigs[0].denominator)
+        i = 1
         while i < len(time_sigs):
-            if (
-                time_sigs[i].numerator,
-                time_sigs[i].denominator,
-            ) not in self.time_signatures:
+            time_sig = time_sigs[i]
+            del_time_sig = False
+            if (time_sig.numerator, time_sig.denominator) not in self.time_signatures:
                 # Alternatively, we could offer a solution to "mock" unrecognized time
                 # signatures. If one (not both) of the numerator or denominator value
                 # is in the vocabulary, we could mock the other value with 4 (default).
@@ -634,65 +649,12 @@ class MIDITokenizer(ABC, HFHubMixin):
                     f"or alternatively deleting it however if you are using a "
                     f"beat-based tokenizer (REMI) the bars will be incorrectly "
                     f"detected.",
-                    stacklevel=2
+                    stacklevel=2,
                 )
-                del time_sigs[i]
-                continue
-            times.append(time_sigs[i].time)
-            values.append([time_sigs[i].numerator, time_sigs[i].denominator])
-            i += 1
-        times = np.array(times, dtype=np.intc)
-        values = np.array(values, dtype=np.short)
-
-        # TODO Align time on new bars (delayed to the next one)?
-
-        # Find groups of time signatures at the same onset ticks, == consecutive ones
-        if len(time_sigs) > 1:
-            # Keep only last time signature change for groups with same tick
-            idx_groups = np.split(
-                np.arange(len(times)), np.where(np.diff(times) != 0)[0] + 1
-            )
-            for idx_group in reversed(idx_groups):
-                if len(idx_group) > 1:
-                    for idx_to_del in reversed(idx_group[:-1]):
-                        # times = np.delete(times, idx_to_del)
-                        values = np.delete(values, idx_to_del, axis=0)
-                        del time_sigs[idx_to_del]
-            # Deduplicate successive time signature changes with same value
-            if self.config.delete_equal_successive_time_sig_changes:
-                successive_val_eq = np.all(values[:-1] == values[1:], axis=1)
-                idx_to_del = np.where(successive_val_eq)[0] + 1
-                for idx in reversed(idx_to_del):
-                    # times = np.delete(times, idx_to_del)
-                    del time_sigs[idx]
-
-        # Apply new values
-        """for time, time_sig in zip(times, time_sigs):
-            time_sig.time = time
-
-        ticks_per_bar = self._compute_ticks_per_bar(
-            time_sigs[0], self.time_division
-        )
-        previous_tick = 0  # first time signature change is always at tick 0
-        prev_ts = time_sigs[0]
-        # If we delete the successive equal tempo changes, we need to sort them by time
-        # Otherwise it is not required here as the tokens will be sorted by time
-        if self.config.delete_equal_successive_time_sig_changes:
-            time_sigs.sort(key=lambda x: x.time)
-
-        i = 1
-        while i < len(time_sigs):
-            time_sig = time_sigs[i]
-
-            if (
+                del_time_sig = True
+            if del_time_sig or (
                 self.config.delete_equal_successive_time_sig_changes
-                and (
-                    time_sig.numerator,
-                    time_sig.denominator,
-                )
-                == (prev_ts.numerator, prev_ts.denominator)
-                or time_sig.numerator == 0
-                or time_sig.denominator == 0
+                and (time_sig.numerator, time_sig.denominator) == prev_ts
             ):
                 del time_sigs[i]
                 continue
@@ -706,9 +668,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 time_sig.time = previous_tick + bar_offset * ticks_per_bar
 
             # Update values
-            ticks_per_bar = self._compute_ticks_per_bar(
-                time_sig, self.time_division
-            )
+            ticks_per_bar = self._compute_ticks_per_bar(time_sig, self.time_division)
 
             # If the current time signature is now at the same time as the previous
             # one, we delete the previous
@@ -718,7 +678,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
             previous_tick = time_sig.time
             prev_ts = time_sig
-            i += 1"""
+            i += 1
 
     def _preprocess_pitch_bends(self, pitch_bends: PitchBendTickList):
         r"""Resamples the pitch bend events from a track.
@@ -1099,14 +1059,14 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         # First adds time signature tokens if specified
         if self.config.use_time_signatures:
-            for time_sig in midi.time_signatures:
-                events.append(
-                    Event(
-                        type="TimeSig",
-                        value=f"{time_sig.numerator}/" f"{time_sig.denominator}",
-                        time=time_sig.time,
-                    )
+            events += [
+                Event(
+                    type="TimeSig",
+                    value=f"{time_sig.numerator}/" f"{time_sig.denominator}",
+                    time=time_sig.time,
                 )
+                for time_sig in midi.time_signatures
+            ]
 
         # Adds tempo events if specified
         if self.config.use_tempos:
@@ -1928,16 +1888,6 @@ class MIDITokenizer(ABC, HFHubMixin):
             seq.ids = encoded_tokens.ids
             seq.ids_bpe_encoded = True
 
-    def _are_ids_bpe_encoded(self, ids: list[int] | np.ndarray) -> bool:
-        r"""A small check telling if a sequence of ids are encoded with BPE.
-        This is performed by checking if any id has a value superior or equal to the
-        length of the base vocabulary.
-
-        :param ids: ids to check
-        :return: boolean, True if ids are encoded with BPE, False otherwise.
-        """
-        return np.any(np.array(ids) >= len(self._vocab_base))
-
     def decode_bpe(self, seq: TokSequence | list[TokSequence]):
         r"""Decodes (inplace) a sequence of tokens (:class:`miditok.TokSequence`) with
         ids encoded with BPE. This method only modifies the ``.ids`` attribute of the
@@ -1973,13 +1923,13 @@ class MIDITokenizer(ABC, HFHubMixin):
         logging: bool = True,
     ):
         r"""Converts a dataset / list of MIDI files, into their token version and save
-        them as json files. The resulting json files will have an "ids" entry containing
-        the token ids. The format of the ids will correspond to the format of the
-        tokenizer (``tokenizer.io_format``). Note that the file tree of the source
-        files, up to the deepest common root directory if `midi_paths` is given as a
-        list of paths, will be reproducing in ``out_dir``. The config of the tokenizer
-        will be saved as a file named ``tokenizer_config_file_name`` (default:
-        ``tokenizer.json``) in the ``out_dir`` directory.
+        them as json files. The resulting json files will have an ``ids`` entry
+        containing the token ids. The format of the ids will correspond to the format
+        of the tokenizer (``tokenizer.io_format``). Note that the file tree of the
+        source files, up to the deepest common root directory if `midi_paths` is given
+        as a list of paths, will be reproducing in ``out_dir``. The config of the
+        tokenizer will be saved as a file named ``tokenizer_config_file_name``
+        (default: ``tokenizer.json``) in the ``out_dir`` directory.
 
         :param midi_paths: paths of the MIDI files. It can also be a path to a
             directory, in which case this method will recursively find the MIDI files
