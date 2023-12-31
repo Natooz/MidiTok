@@ -380,7 +380,7 @@ class Octuple(MIDITokenizer):
         ]
 
         # POSITION
-        max_nb_beats = max(ceil(4 * ts[0] / ts[1]) for ts in self.time_signatures)
+        max_nb_beats = max(ts[0] for ts in self.time_signatures)
         nb_positions = max(self.config.beat_res.values()) * max_nb_beats
         vocab[3] += [f"Position_{i}" for i in range(nb_positions)]
 

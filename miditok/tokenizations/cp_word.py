@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import warnings
-from math import ceil
 from typing import Any
 
 import numpy as np
@@ -595,7 +594,7 @@ class CPWord(MIDITokenizer):
         vocab[0].append("Family_Note")
 
         # POSITION
-        max_nb_beats = max(ceil(4 * ts[0] / ts[1]) for ts in self.time_signatures)
+        max_nb_beats = max(ts[0] for ts in self.time_signatures)
         nb_positions = max(self.config.beat_res.values()) * max_nb_beats
         vocab[1].append("Ignore_None")
         vocab[1].append("Bar_None")

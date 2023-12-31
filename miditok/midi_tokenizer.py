@@ -389,6 +389,9 @@ class MIDITokenizer(ABC, HFHubMixin):
         self._token_types_indexes = {}
         self._update_token_types_indexes()
 
+        # For logging
+        self._verbose = False
+
     def _tweak_config_before_creating_voc(self):
         # called after setting the tokenizer's TokenizerConfig (.config). To be
         # customized by tokenizer classes.
@@ -506,12 +509,10 @@ class MIDITokenizer(ABC, HFHubMixin):
             self._preprocess_tempos(midi.tempos)
 
         # Process time signature changes
-        if len(midi.time_signatures) == 0:  # can sometimes happen
-            midi.time_signatures.append(
-                TimeSignature(0, *TIME_SIGNATURE)
-            )  # 4/4 by default in this case
-        elif self.config.use_time_signatures and len(midi.time_signatures) > 0:
+        if self.config.use_time_signatures and len(midi.time_signatures) > 0:
             self._preprocess_time_signatures(midi.time_signatures)
+        if len(midi.time_signatures) == 0:  # can sometimes happen
+            midi.time_signatures.append(TimeSignature(0, *TIME_SIGNATURE))
 
         # We do not change key signature changes, markers and lyrics here as they are
         # not used by MidiTok (yet)
@@ -631,6 +632,27 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         :param time_sigs: time signature changes to quantize.
         """
+        # Filter the first time signature
+        while (
+            len(time_sigs) > 0
+            and (time_sigs[0].numerator, time_sigs[0].denominator)
+            not in self.time_signatures
+        ):
+            if self._verbose:
+                warnings.warn(
+                    f"The MIDI contains a time signature ({time_sigs[0]}) outside of "
+                    f"those supported by the tokenizer ({self.time_signatures}). You "
+                    f"should either discard this MIDI or support this time signature, "
+                    f"or alternatively deleting it however if you are using a "
+                    f"beat-based tokenizer (REMI) the bars will be incorrectly "
+                    f"detected.",
+                    stacklevel=2,
+                )
+            del time_sigs[0]
+            continue
+        if len(time_sigs) == 0:
+            return  # the default one will be added in `_preprocess_midi()`
+
         ticks_per_bar = self._compute_ticks_per_bar(time_sigs[0], self.time_division)
         previous_tick = 0  # first time signature change is always at tick 0
         prev_ts = (time_sigs[0].numerator, time_sigs[0].denominator)
@@ -642,15 +664,16 @@ class MIDITokenizer(ABC, HFHubMixin):
                 # Alternatively, we could offer a solution to "mock" unrecognized time
                 # signatures. If one (not both) of the numerator or denominator value
                 # is in the vocabulary, we could mock the other value with 4 (default).
-                warnings.warn(
-                    f"The MIDI contains a time signature ({time_sigs[i]}) outside of "
-                    f"those supported by the tokenizer ({self.time_signatures}). You "
-                    f"should either discard this MIDI or support this time signature, "
-                    f"or alternatively deleting it however if you are using a "
-                    f"beat-based tokenizer (REMI) the bars will be incorrectly "
-                    f"detected.",
-                    stacklevel=2,
-                )
+                if self._verbose:
+                    warnings.warn(
+                        f"The MIDI contains a time signature ({time_sigs[i]}) outside "
+                        f"of those supported by the tokenizer ({self.time_signatures})"
+                        f". You should either discard this MIDI or support this time "
+                        f"signature, or alternatively deleting it however if you are "
+                        f"using a beat-based tokenizer (REMI) the bars will be "
+                        f"incorrectly detected.",
+                        stacklevel=2,
+                    )
                 del_time_sig = True
             if del_time_sig or (
                 self.config.delete_equal_successive_time_sig_changes
@@ -1920,7 +1943,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         overwrite_mode: bool = True,
         validation_fn: Callable[[Score], bool] | None = None,
         save_programs: bool | None = None,
-        logging: bool = True,
+        verbose: bool = True,
     ):
         r"""Converts a dataset / list of MIDI files, into their token version and save
         them as json files. The resulting json files will have an ``ids`` entry
@@ -1941,17 +1964,20 @@ class MIDITokenizer(ABC, HFHubMixin):
             tokenized dataset. If False, if a file already exist, the new one will be
             saved in the same directory, with the same name with a number appended at
             the end. Both token files and tokenizer config are concerned.
-            (default: True)
+            (default: ``True``)
         :param validation_fn: a function checking if the MIDI is valid on your
             requirements (e.g. time signature, minimum/maximum length, instruments...).
+            (default: ``None``)
         :param save_programs: will save the programs of the tracks of the MIDI as an
             entry in the Json file. That this option is probably unnecessary when using
             a multitrack tokenizer (`config.use_programs`), as the program information
             is present within the tokens, and that the tracks having the same programs
-            are likely to have been merged. (default: False if ``config.use_programs``,
-            else True)
-        :param logging: logs progress bar.
+            are likely to have been merged. (default: ``False`` if
+            ``config.use_programs``, else ``True``)
+        :param verbose: will throw warnings of errors when loading MIDI files, or if
+            some MIDI content is incorrect or need your attention. (default: ``True``)
         """
+        self._verbose = verbose
         out_dir = Path(out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1985,7 +2011,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             try:
                 midi = Score(midi_path)
             except FileNotFoundError:
-                if logging:
+                if self._verbose:
                     warnings.warn(f"File not found: {midi_path}", stacklevel=2)
                 continue
             except MIDI_LOADING_EXCEPTION:
@@ -2016,6 +2042,9 @@ class MIDITokenizer(ABC, HFHubMixin):
                 out_path,
                 get_midi_programs(midi) if save_programs else None,
             )
+
+        # Set it back to False
+        self._verbose = False
 
     @_in_as_seq(complete=False, decode_bpe=False)
     def tokens_errors(
