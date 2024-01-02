@@ -1,6 +1,6 @@
 # MidiTok
 
-Python package to tokenize MIDI music files, presented at the ISMIR 2021 LBD.
+Python package to tokenize MIDI music files, presented at the ISMIR 2021 LBDs.
 
 ![MidiTok Logo](docs/assets/logo.png?raw=true "")
 
@@ -13,7 +13,7 @@ Python package to tokenize MIDI music files, presented at the ISMIR 2021 LBD.
 [![Downloads](https://static.pepy.tech/badge/miditok)](https://pepy.tech/project/MidiTok)
 [![Code style](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 
-Using Deep Learning with symbolic music ? MidiTok can take care of converting (tokenizing) your MIDI files into tokens, ready to be fed to models such as Transformer, for any generation, transcription or MIR task.
+MidiTok can tokenize MIDI files, i.e. convert them into sequences of tokens ready to be fed to models such as Transformer, for any generation, transcription or MIR task.
 MidiTok features most known [MIDI tokenizations](https://miditok.readthedocs.io/en/latest/tokenizations.html) (e.g. [REMI](https://arxiv.org/abs/2002.00212), [Compound Word](https://arxiv.org/abs/2101.02402)...), and is built around the idea that they all share common parameters and methods. It supports [Byte Pair Encoding (BPE)](https://arxiv.org/abs/2301.11975) and data augmentation.
 
 **Documentation:** [miditok.readthedocs.com](https://miditok.readthedocs.io/en/latest/index.html)
@@ -23,7 +23,7 @@ MidiTok features most known [MIDI tokenizations](https://miditok.readthedocs.io/
 ```shell
 pip install miditok
 ```
-MidiTok uses [MIDIToolkit](https://github.com/YatingMusic/miditoolkit), which itself uses [Mido](https://github.com/mido/mido) to read and write MIDI files, and BPE is backed by [Hugging Face 🤗tokenizers](https://github.com/huggingface/tokenizers) for super-fast encoding.
+MidiTok uses [Symusic](https://github.com/Yikai-Liao/symusic) to read and write MIDI files, and BPE is backed by [Hugging Face 🤗tokenizers](https://github.com/huggingface/tokenizers) for super-fast encoding.
 
 ## Usage example
 
@@ -31,38 +31,40 @@ The most basic and useful methods are summarized here. And [here](colab-notebook
 
 ```python
 from miditok import REMI, TokenizerConfig
-from miditoolkit import MidiFile
+from miditok.pytorch_data import DatasetTok, DataCollator
 from pathlib import Path
+from symusic import Score
 
 # Creating a multitrack tokenizer configuration, read the doc to explore other parameters
 config = TokenizerConfig(num_velocities=16, use_chords=True, use_programs=True)
 tokenizer = REMI(config)
 
 # Loads a midi, converts to tokens, and back to a MIDI
-midi = MidiFile('path/to/your_midi.mid')
+midi = Score("path/to/your_midi.mid")
 tokens = tokenizer(midi)  # calling the tokenizer will automatically detect MIDIs, paths and tokens
 converted_back_midi = tokenizer(tokens)  # PyTorch / Tensorflow / Numpy tensors supported
 
-# Tokenize a whole dataset and save it at Json files
-midi_paths = list(Path("path", "to", "dataset").glob("**/*.mid"))
-data_augmentation_offsets = [2, 1, 1]  # data augmentation on 2 pitch octaves, 1 velocity and 1 duration values
-tokenizer.tokenize_midi_dataset(midi_paths, Path("path", "to", "tokens_noBPE"),
-                                data_augment_offsets=data_augmentation_offsets)
-
-# Constructs the vocabulary with BPE, from the token files
-tokenizer.learn_bpe(
-    vocab_size=10000,
-    tokens_paths=list(Path("path", "to", "tokens_noBPE").glob("**/*.json")),
-    start_from_empty_voc=False,
-)
-
-# Saving our tokenizer, to retrieve it back later with the load_params method
+# Trains the tokenizer with BPE, and save it to load it back later
+midi_paths = list(Path("path", "to", "midis").glob("**/*.mid"))
+tokenizer.learn_bpe(vocab_size=30000, files_paths=midi_paths)
 tokenizer.save_params(Path("path", "to", "save", "tokenizer.json"))
 # And pushing it to the Hugging Face hub (you can download it back with .from_pretrained)
-tokenizer.push_to_hub("username/model-name", private=True, token="your_hugging_face_token")
+tokenizer.push_to_hub("username/model-name", private=True, token="your_hf_token")
 
-# Applies BPE to the previous tokens
-tokenizer.apply_bpe_to_dataset(Path('path', 'to', 'tokens_noBPE'), Path('path', 'to', 'tokens_BPE'))
+# Creates a Dataset and a collator to be used with a PyTorch DataLoader to train a model
+dataset = DatasetTok(
+    files_paths=midi_paths,
+    min_seq_len=100,
+    max_seq_len=1024,
+    tokenizer=tokenizer,
+)
+collator = DataCollator(
+    tokenizer["PAD_None"], tokenizer["BOS_None"], tokenizer["EOS_None"]
+)
+from torch.utils.data import DataLoader
+data_loader = DataLoader(dataset=dataset, collate_fn=collator)
+for batch in data_loader:
+    print("Train your model on this batch...")
 ```
 
 ## Tokenizations
@@ -88,9 +90,7 @@ Contributions are gratefully welcomed, feel free to open an issue or send a PR i
 
 * Extend unimplemented additional tokens to all compatible tokenizations;
 * Control Change messages;
-* Option to represent pitch values as pitch intervals, as [it seems to improve performances](https://ismir2022program.ismir.net/lbd_369.html);
-* Speeding up MIDI read / load (using a Rust / C++ io library + Python binding ?);
-* Data augmentation on duration values at the MIDI level.
+* Speeding up the MIDI preprocess + global/track events parsing with Rust or C++ binding.
 
 ## Citation
 
