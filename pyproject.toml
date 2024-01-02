@@ -71,10 +71,12 @@ extend-select = [
     "A",
     # "ANN",
     "B",
+    "BLE",
     "C4",
-    # "COM",
+    "COM",
     "E",
     "F",
+    # "FBT",
     "FA",
     "G",
     "I",
@@ -92,6 +94,10 @@ extend-select = [
     "UP",
     "W",
 ]
+# COM812 yields errors for one-line portions without comma.
+# Trailing commas are automatically set with ruff format anyway.
+# This exclusion could be removed when this behavior is fixed in ruff.
+ignore = ["COM812"]
 
 [tool.ruff.per-file-ignores]
 "tests/**" = [
