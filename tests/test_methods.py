@@ -24,6 +24,7 @@ from torch import (
 )
 
 import miditok
+from miditok.utils.utils import miditoolkit_to_symusic
 
 from .utils import HERE, MIDI_PATHS_ALL
 
@@ -214,7 +215,7 @@ def are_midis_equals(midi_mtk: MidiFile, midi_sms: Score) -> bool:
 
 def test_miditoolkit_to_symusic(midi_path: Path = MIDI_PATHS_ALL[0]):
     midi = MidiFile(midi_path)
-    score = miditok.midi_tokenizer.miditoolkit_to_symusic(midi)
+    score = miditoolkit_to_symusic(midi)
 
     assert are_midis_equals(midi, score)
 

@@ -27,7 +27,7 @@ from miditok.utils import (
     merge_same_program_tracks,
     merge_tracks,
     merge_tracks_per_class,
-    nb_bar_pos,
+    num_bar_pos,
     remove_duplicated_notes,
 )
 
@@ -182,12 +182,12 @@ def test_merge_same_program_tracks_and_by_class(midi_path: str | Path):
     )
 
 
-def test_nb_pos():
+def test_num_pos():
     (tok_conf := TokenizerConfig(**TOKENIZER_CONFIG_KWARGS)).use_time_signatures = True
     tokenizer = REMI(tok_conf)
     midi = Score(MIDI_PATHS_ONE_TRACK[0])
     del_invalid_time_sig(midi.time_signatures, tokenizer.time_signatures)
-    _ = nb_bar_pos(
+    _ = num_bar_pos(
         tokenizer.midi_to_tokens(midi)[0].ids,
         tokenizer["Bar_None"],
         tokenizer.token_ids_of_type("Position"),

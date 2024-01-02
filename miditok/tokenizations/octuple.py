@@ -10,7 +10,7 @@ from ..constants import (
     MIDI_INSTRUMENTS,
     TIME_SIGNATURE,
 )
-from ..midi_tokenizer import MIDITokenizer, _in_as_seq
+from ..midi_tokenizer import MIDITokenizer
 from ..utils import get_midi_max_tick
 
 
@@ -173,11 +173,13 @@ class Octuple(MIDITokenizer):
         :return: sequences of tokens
         """
         # Check bar embedding limit, update if needed
-        nb_bars = ceil(get_midi_max_tick(midi) / (midi.ticks_per_quarter * 4))
-        if self.config.additional_params["max_bar_embedding"] < nb_bars:
-            for i in range(self.config.additional_params["max_bar_embedding"], nb_bars):
+        num_bars = ceil(get_midi_max_tick(midi) / (midi.ticks_per_quarter * 4))
+        if self.config.additional_params["max_bar_embedding"] < num_bars:
+            for i in range(
+                self.config.additional_params["max_bar_embedding"], num_bars
+            ):
                 self.add_to_vocab(f"Bar_{i}", 4)
-            self.config.additional_params["max_bar_embedding"] = nb_bars
+            self.config.additional_params["max_bar_embedding"] = num_bars
 
         return super()._midi_to_tokens(midi)
 
@@ -258,9 +260,9 @@ class Octuple(MIDITokenizer):
 
             # Decode tokens
             for time_step in seq:
-                nb_tok_to_check = 6 if self.config.use_programs else 5
+                num_tok_to_check = 6 if self.config.use_programs else 5
                 if any(
-                    tok.split("_")[1] == "None" for tok in time_step[:nb_tok_to_check]
+                    tok.split("_")[1] == "None" for tok in time_step[:num_tok_to_check]
                 ):
                     # Padding or mask: error of prediction or end of sequence anyway
                     continue
@@ -378,9 +380,9 @@ class Octuple(MIDITokenizer):
         ]
 
         # POSITION
-        max_nb_beats = max(ts[0] for ts in self.time_signatures)
-        nb_positions = max(self.config.beat_res.values()) * max_nb_beats
-        vocab[3] += [f"Position_{i}" for i in range(nb_positions)]
+        max_num_beats = max(ts[0] for ts in self.time_signatures)
+        num_positions = max(self.config.beat_res.values()) * max_num_beats
+        vocab[3] += [f"Position_{i}" for i in range(num_positions)]
 
         # BAR (positional encoding)
         vocab[4] += [
@@ -411,13 +413,12 @@ class Octuple(MIDITokenizer):
         """
         return {}
 
-    @_in_as_seq()
-    def tokens_errors(
-        self, tokens: TokSequence | list[int] | np.ndarray
-    ) -> float | list[float]:
-        r"""Checks if a sequence of tokens is made of good token values and
-        returns the error ratio (lower is better).
-        The token types are always the same in Octuple so this methods only checks
+    def _tokens_errors(self, tokens: list[list[str]]) -> int:
+        r"""Checks if a sequence of tokens is made of good token types successions and
+        returns the error ratio (lower is better). This method receives a list of
+        tokens as a list of strings, and returns the absolute number of errors
+        predicted. The number of errors should not be higher than the number of tokens.
+        The token types are always the same in Octuple so this method only checks
         if their values are correct:
             - a bar token value cannot be < to the current bar (it would go back in
                 time)
@@ -425,21 +426,15 @@ class Octuple(MIDITokenizer):
             - a pitch token should not be present if the same pitch is already played
                 at the current position
 
-        :param tokens: sequence of tokens to check
-        :return: the error ratio (lower is better)
+        :param tokens: sequence of tokens string to check.
+        :return: the number of errors predicted (no more than one per token).
         """
-        # If list of TokSequence -> recursive
-        if isinstance(tokens, list):
-            return [self.tokens_errors(tok_seq) for tok_seq in tokens]
-        if len(tokens) == 0:
-            return 0
-
         err = 0
         current_bar = current_pos = -1
         current_pitches = {p: [] for p in self.config.programs}
         current_program = 0
 
-        for token in tokens.tokens:
+        for token in tokens:
             if any(tok.split("_")[1] == "None" for tok in token):
                 err += 1
                 continue
@@ -475,4 +470,4 @@ class Octuple(MIDITokenizer):
             if has_error:
                 err += 1
 
-        return err / len(tokens)
+        return err

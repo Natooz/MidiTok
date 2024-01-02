@@ -155,13 +155,13 @@ class REMI(MIDITokenizer):
                         current_bar = real_current_bar
 
                 # Bar
-                nb_new_bars = (
+                num_new_bars = (
                     bar_at_last_ts_change
                     + (event.time - tick_at_last_ts_change) // ticks_per_bar
                     - current_bar
                 )
-                if nb_new_bars >= 1:
-                    for i in range(nb_new_bars):
+                if num_new_bars >= 1:
+                    for i in range(num_new_bars):
                         all_events.append(
                             Event(
                                 type_="Bar",
@@ -176,7 +176,7 @@ class REMI(MIDITokenizer):
                         # Add a TimeSignature token, except for the last new Bar token
                         # if the current event is a TS
                         if self.config.use_time_signatures and not (
-                            event.type_ == "TimeSig" and i + 1 == nb_new_bars
+                            event.type_ == "TimeSig" and i + 1 == num_new_bars
                         ):
                             all_events.append(
                                 Event(
@@ -186,7 +186,7 @@ class REMI(MIDITokenizer):
                                     desc=0,
                                 )
                             )
-                    current_bar += nb_new_bars
+                    current_bar += num_new_bars
                     tick_at_current_bar = (
                         tick_at_last_ts_change
                         + (current_bar - bar_at_last_ts_change) * ticks_per_bar
@@ -515,10 +515,10 @@ class REMI(MIDITokenizer):
         ]
 
         # POSITION
-        # max_nb_beats = max(ceil(4 * ts[0] / ts[1]) for ts in self.time_signatures)
-        max_nb_beats = max(ts[0] for ts in self.time_signatures)
-        nb_positions = max(self.config.beat_res.values()) * max_nb_beats
-        vocab += [f"Position_{i}" for i in range(nb_positions)]
+        # max_num_beats = max(ceil(4 * ts[0] / ts[1]) for ts in self.time_signatures)
+        max_num_beats = max(ts[0] for ts in self.time_signatures)
+        num_positions = max(self.config.beat_res.values()) * max_num_beats
+        vocab += [f"Position_{i}" for i in range(num_positions)]
 
         # Add additional tokens
         self._add_additional_tokens_to_vocab_list(vocab)

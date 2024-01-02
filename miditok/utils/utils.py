@@ -8,7 +8,18 @@ from collections import Counter
 from typing import Sequence
 
 import numpy as np
-from symusic import Note, Score, Track
+from miditoolkit import MidiFile
+from symusic import (
+    ControlChange,
+    Note,
+    Pedal,
+    PitchBend,
+    Score,
+    Tempo,
+    TextMeta,
+    TimeSignature,
+    Track,
+)
 from symusic.core import NoteTickList, TrackTickList
 
 from miditok.classes import Event
@@ -118,7 +129,7 @@ def detect_chords(
     specify_root_note: bool = True,
     beat_res: int = 4,
     onset_offset: int = 1,
-    unknown_chords_nb_notes_range: tuple[int, int] | None = None,
+    unknown_chords_num_notes_range: tuple[int, int] | None = None,
     simul_notes_limit: int = 10,
 ) -> list[Event]:
     r"""Chord detection method. Make sure to sort notes by start time then pitch
@@ -140,16 +151,16 @@ def detect_chords(
         creating the Event object. (default: None)
     :param specify_root_note: the root note of each chord will be specified in
         Events/tokens. Tokens will look as "Chord_C:maj". (default: True)
-    :param beat_res: beat resolution, i.e. nb of samples per beat (default 4).
+    :param beat_res: beat resolution, i.e. number of samples per beat (default 4).
     :param onset_offset: maximum offset (in samples) ∈ N separating notes starts to
         consider them starting at the same time / onset (default is 1).
-    :param unknown_chords_nb_notes_range: range of number of notes to represent unknown
+    :param unknown_chords_num_notes_range: range of number of notes to represent unknown
         chords. If you want to represent chords that does not match any combination in
         ``chord_maps``, use this argument. Leave ``None`` to not represent unknown
         chords. (default: None)
-    :param simul_notes_limit: nb of simultaneous notes being processed when looking for
-        a chord this parameter allows to speed up the chord detection, and must be >= 5
-        (default 10).
+    :param simul_notes_limit: number of simultaneous notes being processed when looking
+        for a chord this parameter allows to speed up the chord detection, and must be
+        >= 5 (default 10).
     :return: the detected chords as Event objects.
     """
     if simul_notes_limit < 5:
@@ -208,7 +219,7 @@ def detect_chords(
                     break
 
             # We found a chord quality, or we specify unknown chords
-            if unknown_chords_nb_notes_range is not None or not is_unknown_chord:
+            if unknown_chords_num_notes_range is not None or not is_unknown_chord:
                 if specify_root_note:
                     chord_quality = (
                         f"{PITCH_CLASSES[notes[count, 0] % 12]}:{chord_quality}"
@@ -233,7 +244,7 @@ def merge_tracks_per_class(
     midi: Score,
     classes_to_merge: list[int] | None = None,
     new_program_per_class: dict[int, int] | None = None,
-    max_nb_of_tracks_per_inst_class: dict[int, int] | None = None,
+    max_num_of_tracks_per_inst_class: dict[int, int] | None = None,
     valid_programs: list[int] | None = None,
     filter_pitches: bool = True,
 ):
@@ -251,7 +262,7 @@ def merge_tracks_per_class(
         function will still remove non-valid programs/tracks if given. (default: None)
     :param new_program_per_class: new program of the final merged tracks, to be given
         per instrument class as a dict ``{class_id: program}``.
-    :param max_nb_of_tracks_per_inst_class: max number of tracks per instrument class,
+    :param max_num_of_tracks_per_inst_class: max number of tracks per instrument class,
         if the limit is exceeded for one class only the tracks with the maximum notes
         will be kept, give None for no limit. (default: None)
     :param valid_programs: valid program ids to keep, others will be deleted, give None
@@ -276,8 +287,8 @@ def merge_tracks_per_class(
     # merge tracks of the same instrument classes
     if classes_to_merge is not None:
         midi.tracks.sort(key=lambda trac: trac.program)
-        if max_nb_of_tracks_per_inst_class is None:
-            max_nb_of_tracks_per_inst_class = {
+        if max_num_of_tracks_per_inst_class is None:
+            max_num_of_tracks_per_inst_class = {
                 cla: len(midi.tracks) for cla in classes_to_merge
             }  # no limit
         if new_program_per_class is None:
@@ -302,7 +313,7 @@ def merge_tracks_per_class(
             ]
             if len(idx_to_merge) > 0:
                 midi.tracks[idx_to_merge[0]].program = new_program_per_class[ci]
-                if len(idx_to_merge) > max_nb_of_tracks_per_inst_class[ci]:
+                if len(idx_to_merge) > max_num_of_tracks_per_inst_class[ci]:
                     lengths = [len(midi.tracks[idx].notes) for idx in idx_to_merge]
                     idx_to_merge = np.argsort(lengths)
                     # could also be randomly picked
@@ -459,7 +470,7 @@ def get_midi_max_tick(midi: Score) -> int:
     return max_tick
 
 
-def nb_bar_pos(
+def num_bar_pos(
     seq: Sequence[int], bar_token: int, position_tokens: Sequence[int]
 ) -> tuple[int, int]:
     r"""Returns the number of bars and the last position of a sequence of tokens. This
@@ -506,3 +517,50 @@ def np_get_closest(array: np.ndarray, values: np.ndarray) -> np.ndarray:
     idxs[prev_idx_is_less] -= 1
 
     return array[idxs]
+
+
+def miditoolkit_to_symusic(midi: MidiFile) -> Score:
+    score = Score(midi.ticks_per_beat)
+
+    # MIDI events (except key signature)
+    for time_sig in midi.time_signature_changes:
+        score.time_signatures.append(
+            TimeSignature(time_sig.time, time_sig.numerator, time_sig.denominator)
+        )
+    for tempo in midi.tempo_changes:
+        score.tempos.append(Tempo(tempo.time, tempo.tempo))
+    for lyric in midi.lyrics:
+        score.lyrics.append(TextMeta(lyric.time, lyric.text))
+    for marker in midi.markers:
+        score.markers.append(TextMeta(marker.time, marker.text))
+
+    # Track events
+    for inst in midi.instruments:
+        track = Track(
+            name=inst.name,
+            program=inst.program,
+            is_drum=inst.is_drum,
+        )
+        for note in inst.notes:
+            track.notes.append(
+                Note(note.start, note.duration, note.pitch, note.velocity)
+            )
+        track.notes.sort(key=lambda x: (x.start, x.pitch, x.end, x.velocity))
+
+        for control in inst.control_changes:
+            track.controls.append(
+                ControlChange(control.time, control.number, control.value)
+            )
+        track.controls.sort()
+
+        for pb in inst.pitch_bends:
+            track.pitch_bends.append(PitchBend(pb.time, pb.pitch))
+        track.pitch_bends.sort()
+
+        for pedal in inst.pedals:
+            track.pedals.append(Pedal(pedal.start, pedal.duration))
+        track.pedals.sort()
+
+        score.tracks.append(track)
+
+    return score

@@ -5,7 +5,7 @@ from symusic import Note, Pedal, PitchBend, Score, Tempo, TimeSignature, Track
 
 from ..classes import Event, TokSequence
 from ..constants import MIDI_INSTRUMENTS
-from ..midi_tokenizer import MIDITokenizer, _in_as_seq
+from ..midi_tokenizer import MIDITokenizer
 
 
 class MIDILike(MIDITokenizer):
@@ -558,33 +558,15 @@ class MIDILike(MIDITokenizer):
 
         return dic
 
-    @_in_as_seq(complete=False, decode_bpe=False)
-    def tokens_errors(
-        self, tokens: TokSequence | list[int] | np.ndarray
-    ) -> float | list[float]:
-        r"""Checks if a sequence of tokens is made of good token types
-        successions and returns the error ratio (lower is better).
-        The Pitch and Position values are also analyzed:
-            - a NoteOn token should not be present if the same pitch is already being
-                played
-            - a NoteOff token should not be present the note is not being played
+    def _tokens_errors(self, tokens: list[str]) -> int:
+        r"""Checks if a sequence of tokens is made of good token types successions and
+        returns the error ratio (lower is better). This method receives a list of
+        tokens as a list of strings, and returns the absolute number of errors
+        predicted. The number of errors should not be higher than the number of tokens.
 
-        :param tokens: sequence of tokens to check
-        :return: the error ratio (lower is better)
+        :param tokens: sequence of tokens string to check.
+        :return: the number of errors predicted (no more than one per token).
         """
-        # If list of TokSequence -> recursive
-        if isinstance(tokens, list):
-            return [self.tokens_errors(tok_seq) for tok_seq in tokens]
-        if len(tokens) == 0:
-            return 0
-
-        nb_tok_predicted = len(tokens)  # used to norm the score
-        if self.has_bpe:
-            self.decode_bpe(tokens)
-        self.complete_sequence(tokens)
-
-        # Override from here
-
         err = 0
         current_program = 0
         active_pitches: dict[int, dict[int, int]] = {
@@ -605,11 +587,7 @@ class MIDILike(MIDITokenizer):
         previous_pitch_onset = {program: -128 for program in self.config.programs}
         previous_pitch_chord = {program: -128 for program in self.config.programs}
 
-        events = (
-            tokens.events
-            if tokens.events is not None
-            else [Event(*tok.split("_")) for tok in tokens.tokens]
-        )
+        events = [Event(*tok.split("_")) for tok in tokens]
 
         for i in range(len(events)):
             # err_tokens = events[i - 4 : i + 4]  # uncomment for debug
@@ -689,4 +667,4 @@ class MIDILike(MIDITokenizer):
                 elif events[i].type_ in ["TimeShift", "Rest"]:
                     current_pitches_tick = {p: [] for p in self.config.programs}
 
-        return err / nb_tok_predicted
+        return err

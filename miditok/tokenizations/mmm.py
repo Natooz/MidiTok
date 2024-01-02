@@ -11,7 +11,7 @@ from ..constants import (
     MMM_DENSITY_BINS_MAX,
     TIME_SIGNATURE,
 )
-from ..midi_tokenizer import MIDITokenizer, _in_as_seq
+from ..midi_tokenizer import MIDITokenizer
 
 
 class MMM(MIDITokenizer):
@@ -91,13 +91,13 @@ class MMM(MIDITokenizer):
                 )
             if events[ei].time != previous_tick:
                 # Bar
-                nb_new_bars = (
+                num_new_bars = (
                     bar_at_last_ts_change
                     + (events[ei].time - tick_at_last_ts_change) // ticks_per_bar
                     - current_bar
                 )
-                if nb_new_bars > 0:
-                    for i in range(nb_new_bars):
+                if num_new_bars > 0:
+                    for i in range(num_new_bars):
                         all_events += [
                             Event(
                                 type_="Bar",
@@ -113,7 +113,7 @@ class MMM(MIDITokenizer):
                             ),
                         ]
 
-                    current_bar += nb_new_bars
+                    current_bar += num_new_bars
                     tick_at_current_bar = (
                         tick_at_last_ts_change
                         + (current_bar - bar_at_last_ts_change) * ticks_per_bar
@@ -405,17 +405,15 @@ class MMM(MIDITokenizer):
 
         return dic
 
-    @_in_as_seq(complete=False, decode_bpe=False)
-    def tokens_errors(self, tokens: TokSequence | list[int | list[int]]) -> float:
-        nb_tok_predicted = len(tokens)  # used to norm the score
-        if nb_tok_predicted == 0:
-            return 0
-        if self.has_bpe:
-            self.decode_bpe(tokens)
-        self.complete_sequence(tokens)
+    def _tokens_errors(self, tokens: list[str]) -> int:
+        """Checks if a sequence of tokens is made of good token types successions and
+        returns the error ratio (lower is better). This method receives a list of
+        tokens as a list of strings, and returns the absolute number of errors
+        predicted. The number of errors should not be higher than the number of tokens.
 
-        # Override from here
-        tokens = tokens.tokens
+        :param tokens: sequence of tokens string to check.
+        :return: the number of errors predicted (no more than one per token).
+        """
         note_tokens_types = ["Pitch"]
         if self.config.use_pitch_intervals:
             note_tokens_types += ["PitchIntervalTime", "PitchIntervalChord"]
@@ -466,4 +464,4 @@ class MMM(MIDITokenizer):
                 err_type += 1
             previous_type = event_type
 
-        return (err_type + err_note) / nb_tok_predicted
+        return err_type + err_note

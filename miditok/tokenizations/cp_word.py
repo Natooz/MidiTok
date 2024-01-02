@@ -7,7 +7,7 @@ from symusic import Note, Score, Tempo, TimeSignature, Track
 
 from ..classes import Event, TokSequence
 from ..constants import MIDI_INSTRUMENTS, TIME_SIGNATURE
-from ..midi_tokenizer import MIDITokenizer, _in_as_seq
+from ..midi_tokenizer import MIDITokenizer
 
 _ADD_TOK_ATTRIBUTES = [
     "use_programs",
@@ -189,19 +189,19 @@ class CPWord(MIDITokenizer):
                         current_bar = real_current_bar
 
                 # Bar
-                nb_new_bars = (
+                num_new_bars = (
                     bar_at_last_ts_change
                     + (event.time - tick_at_last_ts_change) // ticks_per_bar
                     - current_bar
                 )
-                if nb_new_bars >= 1:
+                if num_new_bars >= 1:
                     if self.config.use_time_signatures:
                         time_sig_arg = f"{current_time_sig[0]}/{current_time_sig[1]}"
                     else:
                         time_sig_arg = None
-                    for i in range(nb_new_bars):
+                    for i in range(num_new_bars):
                         # exception when last bar and event.type == "TimeSig"
-                        if i == nb_new_bars - 1 and event.type_ == "TimeSig":
+                        if i == num_new_bars - 1 and event.type_ == "TimeSig":
                             time_sig_arg = list(map(int, event.value.split("/")))
                             time_sig_arg = f"{time_sig_arg[0]}/{time_sig_arg[1]}"
                         all_events.append(
@@ -212,7 +212,7 @@ class CPWord(MIDITokenizer):
                                 time_signature=time_sig_arg,
                             )
                         )
-                    current_bar += nb_new_bars
+                    current_bar += num_new_bars
                     tick_at_current_bar = (
                         tick_at_last_ts_change
                         + (current_bar - bar_at_last_ts_change) * ticks_per_bar
@@ -594,11 +594,11 @@ class CPWord(MIDITokenizer):
         vocab[0].append("Family_Note")
 
         # POSITION
-        max_nb_beats = max(ts[0] for ts in self.time_signatures)
-        nb_positions = max(self.config.beat_res.values()) * max_nb_beats
+        max_num_beats = max(ts[0] for ts in self.time_signatures)
+        num_positions = max(self.config.beat_res.values()) * max_num_beats
         vocab[1].append("Ignore_None")
         vocab[1].append("Bar_None")
-        vocab[1] += [f"Position_{i}" for i in range(nb_positions)]
+        vocab[1] += [f"Position_{i}" for i in range(num_positions)]
 
         # PITCH
         vocab[2].append("Ignore_None")
@@ -684,38 +684,32 @@ class CPWord(MIDITokenizer):
 
         return dic
 
-    @_in_as_seq()
-    def tokens_errors(
-        self, tokens: TokSequence | list[list[int]] | np.ndarray
-    ) -> float | list[float]:
-        r"""Checks if a sequence of tokens is made of good token types
-        successions and returns the error ratio (lower is better).
-        The Pitch and Position values are also analyzed:
+    def _tokens_errors(self, tokens: list[list[str]]) -> int:
+        r"""Checks if a sequence of tokens is made of good token types successions and
+        returns the error ratio (lower is better). This method receives a list of
+        tokens as a list of strings, and returns the absolute number of errors
+        predicted. The number of errors should not be higher than the number of tokens.
+        The Pitch and Position values are analyzed:
             - a position token cannot have a value <= to the current position (it would
                 go back in time)
             - a pitch token should not be present if the same pitch is already played
                 at the current position
 
-        :param tokens: sequence of tokens to check
-        :return: the error ratio (lower is better)
+        :param tokens: sequence of tokens string to check.
+        :return: the number of errors predicted (no more than one per token).
         """
-        # If list of TokSequence -> recursive
-        if isinstance(tokens, list):
-            return [self.tokens_errors(tok_seq) for tok_seq in tokens]
-        if len(tokens) == 0:
-            return 0
 
-        def cp_token_type(tok: list[int]) -> list[str]:
-            family = self[0, tok[0]].split("_")[1]
+        def cp_token_type(tok: list[str]) -> list[str]:
+            family = tok[0].split("_")[1]
             if family == "Note":
-                return self[2, tok[2]].split("_")
+                return tok[2].split("_")
             elif family == "Metric":
-                bar_pos = self[1, tok[1]].split("_")
+                bar_pos = tok[1].split("_")
                 if bar_pos[0] in ["Bar", "Position"]:
                     return bar_pos
                 else:  # additional token
                     for i in range(1, 5):
-                        decoded_token = self[-i, tok[-i]].split("_")
+                        decoded_token = tok[-i].split("_")
                         if decoded_token[0] != "Ignore":
                             return decoded_token
                 raise RuntimeError("No token type found, unknown error")
@@ -724,7 +718,6 @@ class CPWord(MIDITokenizer):
             else:  # Program
                 raise RuntimeError("No token type found, unknown error")
 
-        tokens = tokens.ids
         err = 0
         previous_type = cp_token_type(tokens[0])[0]
         current_pos = -1
@@ -756,4 +749,4 @@ class CPWord(MIDITokenizer):
                 err += 1
             previous_type = token_type
 
-        return err / len(tokens)
+        return err

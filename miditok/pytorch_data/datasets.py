@@ -115,12 +115,12 @@ class _DatasetABC(Dataset, ABC):
         self.labels_key_name = labels_key_name
         self.__iter_count = 0
 
-    def reduce_nb_samples(self, nb_samples: int) -> None:
-        r"""Reduce the size of the dataset, by keeping `nb_samples` samples.
+    def reduce_num_samples(self, num_samples: int) -> None:
+        r"""Reduce the size of the dataset, by keeping `num_samples` samples.
 
-        :param nb_samples: number of samples to keep. They will be randomly picked.
+        :param num_samples: number of samples to keep. They will be randomly picked.
         """
-        idx = randint(0, len(self), (nb_samples,))
+        idx = randint(0, len(self), (num_samples,))
         self.samples = [self.samples[id_] for id_ in idx.tolist()]
         if self.labels is not None:
             self.labels = [self.labels[id_] for id_ in idx.tolist()]
@@ -178,8 +178,8 @@ class DatasetTok(_DatasetABC):
     allowing to use labels (one label per file).
 
     :param files_paths: list of paths to files to load.
-    :param min_seq_len: minimum sequence length (in nb of tokens)
-    :param max_seq_len: maximum sequence length (in nb of tokens)
+    :param min_seq_len: minimum sequence length (in num of tokens)
+    :param max_seq_len: maximum sequence length (in num of tokens)
     :param tokenizer: tokenizer object, to use to load MIDIs instead of tokens.
         (default: None)
     :param one_token_stream: give False if the token files contains multiple tracks,
@@ -276,7 +276,7 @@ class DatasetJsonIO(_DatasetABC):
     access to limited RAM resources.
 
     :param files_paths: list of paths to files to load.
-    :param max_seq_len: maximum sequence length (in nb of tokens). (default: None)
+    :param max_seq_len: maximum sequence length (in num of tokens). (default: None)
     """
 
     def __init__(

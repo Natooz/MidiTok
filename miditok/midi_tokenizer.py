@@ -17,13 +17,8 @@ import numpy as np
 from huggingface_hub import ModelHubMixin as HFHubMixin
 from huggingface_hub import hf_hub_download
 from symusic import (
-    ControlChange,
-    Note,
-    Pedal,
-    PitchBend,
     Score,
     Tempo,
-    TextMeta,
     TimeSignature,
     Track,
 )
@@ -69,19 +64,7 @@ from .utils import (
     merge_same_program_tracks,
     remove_duplicated_notes,
 )
-from .utils.utils import np_get_closest
-
-
-def _are_ids_bpe_encoded(ids: list[int] | np.ndarray, vocab_size: int) -> bool:
-    r"""A small check telling if a sequence of ids are encoded with BPE.
-    This is performed by checking if any id has a value superior or equal to the
-    length of the base vocabulary.
-
-    :param ids: ids to check.
-    :param vocab_size: number of tokens in the vocabulary.
-    :return: boolean, True if ids are encoded with BPE, False otherwise.
-    """
-    return np.any(np.array(ids) >= vocab_size)
+from .utils.utils import miditoolkit_to_symusic, np_get_closest
 
 
 # TODO delete these decorators, put the logic inside the main class
@@ -122,65 +105,6 @@ def _in_as_seq(complete: bool = True, decode_bpe: bool = True) -> Callable:
         return wrapper
 
     return decorator
-
-
-def _out_as_complete_seq(function: Callable) -> Callable:
-    r"""Decorator completing an output :class:`miditok.TokSequence` object."""
-
-    def wrapper(*args, **kwargs):  # noqa: ANN002, ANN202
-        self = args[0]
-        res = function(*args, **kwargs)
-        self.complete_sequence(res)
-        return res
-
-    return wrapper
-
-
-def miditoolkit_to_symusic(midi: MidiFile) -> Score:
-    score = Score(midi.ticks_per_beat)
-
-    # MIDI events (except key signature)
-    for time_sig in midi.time_signature_changes:
-        score.time_signatures.append(
-            TimeSignature(time_sig.time, time_sig.numerator, time_sig.denominator)
-        )
-    for tempo in midi.tempo_changes:
-        score.tempos.append(Tempo(tempo.time, tempo.tempo))
-    for lyric in midi.lyrics:
-        score.lyrics.append(TextMeta(lyric.time, lyric.text))
-    for marker in midi.markers:
-        score.markers.append(TextMeta(marker.time, marker.text))
-
-    # Track events
-    for inst in midi.instruments:
-        track = Track(
-            name=inst.name,
-            program=inst.program,
-            is_drum=inst.is_drum,
-        )
-        for note in inst.notes:
-            track.notes.append(
-                Note(note.start, note.duration, note.pitch, note.velocity)
-            )
-        track.notes.sort(key=lambda x: (x.start, x.pitch, x.end, x.velocity))
-
-        for control in inst.control_changes:
-            track.controls.append(
-                ControlChange(control.time, control.number, control.value)
-            )
-        track.controls.sort()
-
-        for pb in inst.pitch_bends:
-            track.pitch_bends.append(PitchBend(pb.time, pb.pitch))
-        track.pitch_bends.sort()
-
-        for pedal in inst.pedals:
-            track.pedals.append(Pedal(pedal.start, pedal.duration))
-        track.pedals.sort()
-
-        score.tracks.append(track)
-
-    return score
 
 
 class MIDITokenizer(ABC, HFHubMixin):
@@ -726,7 +650,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             for i in range(len(all_events)):
                 all_events[i] += global_events
 
-        # Adds track tokens
+        # Adds track tokens todo combine with below?
         for ti, track in enumerate(midi.tracks):
             track_events = self._create_track_events(track)
             if self.one_token_stream:
@@ -824,7 +748,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 program=program,
                 specify_root_note=self.config.chord_tokens_with_root_note,
                 beat_res=self._first_beat_res,
-                unknown_chords_nb_notes_range=self.config.chord_unknown,
+                unknown_chords_num_notes_range=self.config.chord_unknown,
             )
             for chord in chords:
                 if self.config.use_programs and not self.config.program_changes:
@@ -1523,7 +1447,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         Example: (2, 5, 8) means the duration is 2 beat long + position 5 / 8 of the
         ongoing beat In pure ticks we have:
         duration = (beat * res + pos) * time_division // res
-        It is equivalent to: duration = nb_of_samples * ticks_per_sample
+        It is equivalent to: duration = num_samples * ticks_per_sample
         So in the last example, if time_division is 384:
         duration = (2 * 8 + 5) * 384 // 8 = 1008 ticks
 
@@ -1623,7 +1547,7 @@ class MIDITokenizer(ABC, HFHubMixin):
     def __create_tempos(self) -> np.ndarray:
         r"""Creates the possible tempos, as a float number array.
 
-        The self.config.nb_tempos tempos are distributed in the self.config.tempo_range
+        The self.config.num_tempos tempos are distributed in the self.config.tempo_range
         using either log or linear scaled values based on the value of
         ``self.config.log_tempos``.
 
@@ -1634,7 +1558,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     def __create_time_signatures(self) -> list[tuple]:
         r"""Creates the possible time signatures, as tuples of the form:
-        (nb_beats, beat_res) where nb_beats is the number of beats per bar.
+        ``(num_beats, beat_res)`` where ``num_beats`` is the number of beats per bar.
         Example: (3, 4) means one bar is 3 beat long and each beat is a quarter note.
 
         :return: the time signatures.
@@ -1649,7 +1573,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                     f"power of 2."
                 )
 
-            time_signatures.extend([(nb_beats, beat_res) for nb_beats in beats])
+            time_signatures.extend([(num_beats, beat_res) for num_beats in beats])
 
         return time_signatures
 
@@ -1769,12 +1693,12 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         # Create new tokenizer model
         if self._bpe_model is None or start_from_empty_voc:
-            nb_bytes = (
+            num_bytes = (
                 len(self.config.special_tokens)
                 if start_from_empty_voc
                 else len(self._vocab_base)
             )
-            voc_start = {chr(i + CHR_ID_START): i for i in range(nb_bytes)}
+            voc_start = {chr(i + CHR_ID_START): i for i in range(num_bytes)}
             self._bpe_model = TokenizerFast(
                 BPE(
                     vocab=voc_start,
@@ -1996,32 +1920,42 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     @_in_as_seq(complete=False, decode_bpe=False)
     def tokens_errors(
-        self, tokens: TokSequence | list[int | list[int]]
+        self, tokens: TokSequence | list[int | list[int]] | np.ndarray
     ) -> float | list[float]:
         r"""Checks if a sequence of tokens is made of good token types successions and
-        returns the error ratio (lower is better). The common implementation in
-        MIDITokenizer class will check token types, duplicated notes and time errors.
-        It works for ``REMI``, ``TSD`` and ``Structured``. Other tokenizations override
-        this method to include other errors (like no *NoteOff* / *NoteOn* for
-        ``MIDILike`` and embedding pooling). Overridden methods must call
-        ``decompose_bpe`` at the beginning if BPE is used.
+        returns the error ratio (lower is better).
 
         :param tokens: sequence of tokens to check.
         :return: the error ratio (lower is better).
         """
+        # TODO replace decorator by method from class
+
         # If list of TokSequence -> recursive
         if isinstance(tokens, list):
             return [self.tokens_errors(tok_seq) for tok_seq in tokens]
         elif len(tokens) == 0:
             return 0
 
-        nb_tok_predicted = len(tokens)  # used to norm the score
+        num_tok_predicted = len(tokens)  # used to norm the score
         if self.has_bpe:
             self.decode_bpe(tokens)
         self.complete_sequence(tokens)
 
-        # Override from here
-        tokens = tokens.tokens
+        # Compute number of errors and norm by number of tokens predicted
+        return self._tokens_errors(tokens.tokens) / num_tok_predicted
+
+    def _tokens_errors(self, tokens: list[str | list[str]]) -> int:
+        r"""Checks if a sequence of tokens is made of good token types successions and
+        returns the error ratio (lower is better). This method receives a list of
+        tokens as a list of strings, and returns the absolute number of errors
+        predicted. The number of errors should not be higher than the number of tokens.
+        This method is intended to be subclasses by tokenizer classes. The
+        implementation in ``MIDITokenizer`` class will check token types, duplicated
+        notes and time errors. It works for ``REMI``, ``TSD`` and ``Structured``.
+
+        :param tokens: sequence of tokens string to check.
+        :return: the number of errors predicted (no more than one per token).
+        """
 
         err_type = 0  # i.e. incompatible next type predicted
         err_time = 0  # i.e. goes back or stay in time (does not go forward)
@@ -2098,7 +2032,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 err_type += 1
             previous_type = event_type
 
-        return (err_type + err_time + err_note) / nb_tok_predicted
+        return err_type + err_time + err_note
 
     def save_tokens(
         self,
@@ -2509,6 +2443,18 @@ class MIDITokenizer(ABC, HFHubMixin):
         )
 
 
+def _are_ids_bpe_encoded(ids: list[int] | np.ndarray, vocab_size: int) -> bool:
+    r"""A small check telling if a sequence of ids are encoded with BPE.
+    This is performed by checking if any id has a value superior or equal to the
+    length of the base vocabulary.
+
+    :param ids: ids to check.
+    :param vocab_size: number of tokens in the vocabulary.
+    :return: boolean, True if ids are encoded with BPE, False otherwise.
+    """
+    return np.any(np.array(ids) >= vocab_size)
+
+
 def convert_sequence_to_tokseq(
     tokenizer: MIDITokenizer,
     input_seq: list[int | str | list[int | str]] | np.ndarray,
@@ -2539,36 +2485,36 @@ def convert_sequence_to_tokseq(
         else:  # list of Event, but unlikely
             arg = ("events", input_seq)
 
-    # Deduce nb of subscripts / dims
-    nb_io_dims = len(tokenizer.io_format)
-    nb_seq_dims = 1
+    # Deduce number of subscripts / dims
+    num_io_dims = len(tokenizer.io_format)
+    num_seq_dims = 1
     if len(arg[1]) > 0 and isinstance(arg[1][0], list):
-        nb_seq_dims += 1
+        num_seq_dims += 1
         if len(arg[1][0]) > 0 and isinstance(arg[1][0][0], list):
-            nb_seq_dims += 1
-        elif len(arg[1][0]) == 0 and nb_seq_dims == nb_io_dims - 1:
+            num_seq_dims += 1
+        elif len(arg[1][0]) == 0 and num_seq_dims == num_io_dims - 1:
             # Special case where the sequence contains no tokens, we increment anyway
-            nb_seq_dims += 1
+            num_seq_dims += 1
 
     # Check the number of dimensions is good
     # In case of no one_token_stream and one dimension short --> unsqueeze
-    if not tokenizer.one_token_stream and nb_seq_dims == nb_io_dims - 1:
+    if not tokenizer.one_token_stream and num_seq_dims == num_io_dims - 1:
         warnings.warn(
-            f"The input sequence has one dimension less than expected ({nb_seq_dims}"
-            f"instead of {nb_io_dims}). It is being unsqueezed to conform with the"
+            f"The input sequence has one dimension less than expected ({num_seq_dims}"
+            f"instead of {num_io_dims}). It is being unsqueezed to conform with the"
             f"tokenizer's i/o format ({tokenizer.io_format})",
             stacklevel=2,
         )
         arg = (arg[0], [arg[1]])
 
-    elif nb_seq_dims != nb_io_dims:
+    elif num_seq_dims != num_io_dims:
         raise ValueError(
             f"The input sequence does not have the expected dimension "
-            f"({nb_seq_dims} instead of {nb_io_dims})."
+            f"({num_seq_dims} instead of {num_io_dims})."
         )
 
     # Convert to TokSequence
-    if not tokenizer.one_token_stream and nb_io_dims == nb_seq_dims:
+    if not tokenizer.one_token_stream and num_io_dims == num_seq_dims:
         seq = []
         for obj in arg[1]:
             kwarg = {arg[0]: obj}

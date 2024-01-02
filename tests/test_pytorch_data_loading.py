@@ -87,7 +87,7 @@ def test_dataset_ram(
         func_to_get_labels=get_labels_multitrack,
     )
     _ = dataset_ms.__repr__()
-    dataset_ms.reduce_nb_samples(2)
+    dataset_ms.reduce_num_samples(2)
     assert len(dataset_ms) == 2
 
     # JSON + one token stream
@@ -119,7 +119,7 @@ def test_dataset_io(tmp_path: Path, midi_path: Sequence[str | Path] | None = Non
         100,
     )
 
-    dataset.reduce_nb_samples(2)
+    dataset.reduce_num_samples(2)
     assert len(dataset) == 2
 
     for _ in dataset:

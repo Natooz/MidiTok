@@ -7,7 +7,7 @@ from .utils import (
     merge_same_program_tracks,
     merge_tracks,
     merge_tracks_per_class,
-    nb_bar_pos,
+    num_bar_pos,
     remove_duplicated_notes,
 )
 
@@ -20,6 +20,6 @@ __all__ = [
     "merge_tracks_per_class",
     "merge_tracks",
     "merge_same_program_tracks",
-    "nb_bar_pos",
+    "num_bar_pos",
     "get_midi_max_tick",
 ]
