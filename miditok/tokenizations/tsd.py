@@ -348,7 +348,7 @@ class TSD(MIDITokenizer):
             )
             dic["Program"] = ["Pitch"]
         else:
-            first_note_token_type = "Pitch"  # noqa: S105
+            first_note_token_type = "Pitch"
         dic["Pitch"] = ["Velocity"]
         dic["Velocity"] = ["Duration"]
         dic["Duration"] = [first_note_token_type, "TimeShift"]

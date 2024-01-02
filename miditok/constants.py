@@ -34,8 +34,8 @@ BEAT_RES = {(0, 4): 8, (4, 12): 4}  # samples per beat
 # nb of velocity bins, velocities values from 0 to 127 will be quantized
 NUM_VELOCITIES = 32
 # default special tokens
-BOS_TOKEN_NAME = "BOS"  # noqa: S105
-EOS_TOKEN_NAME = "EOS"  # noqa: S105
+BOS_TOKEN_NAME = "BOS"
+EOS_TOKEN_NAME = "EOS"
 SPECIAL_TOKENS = ["PAD", BOS_TOKEN_NAME, EOS_TOKEN_NAME, "MASK"]
 
 USE_CHORDS = False

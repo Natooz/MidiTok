@@ -421,7 +421,7 @@ class CPWord(MIDITokenizer):
                 if self.config.use_time_signatures:
                     for compound_token in seq:
                         token_family = compound_token[0].split("_")[1]
-                        if token_family == "Metric":  # noqa: S105
+                        if token_family == "Metric":
                             bar_pos = compound_token[1].split("_")[0]
                             if bar_pos == "Bar":
                                 num, den = self._parse_token_time_signature(
@@ -459,7 +459,7 @@ class CPWord(MIDITokenizer):
             # Decode tokens
             for compound_token in seq:
                 token_family = compound_token[0].split("_")[1]
-                if token_family == "Note":  # noqa: S105
+                if token_family == "Note":
                     pad_range_idx = 6 if self.config.use_programs else 5
                     if any(
                         tok.split("_")[1] == "None"
@@ -481,7 +481,7 @@ class CPWord(MIDITokenizer):
                         current_instrument.notes.append(new_note)
                     previous_note_end = max(previous_note_end, current_tick + duration)
 
-                elif token_family == "Metric":  # noqa: S105
+                elif token_family == "Metric":
                     bar_pos = compound_token[1].split("_")[0]
                     if bar_pos == "Bar":
                         current_bar += 1
@@ -735,19 +735,17 @@ class CPWord(MIDITokenizer):
             token_type, token_value = cp_token_type(token)
             # Good token type
             if token_type in self.tokens_types_graph[previous_type]:
-                if token_type == "Bar":  # noqa: S105
+                if token_type == "Bar":
                     current_pos = -1
                     current_pitches = {p: [] for p in self.config.programs}
-                elif (
-                    self.config.remove_duplicated_notes and token_type == "Pitch"  # noqa: S105
-                ):
+                elif self.config.remove_duplicated_notes and token_type == "Pitch":
                     if self.config.use_programs:
                         program = int(self[5, token[5]].split("_")[1])
                     if int(token_value) in current_pitches[program]:
                         err += 1  # pitch already played at current position
                     else:
                         current_pitches[program].append(int(token_value))
-                elif token_type == "Position":  # noqa: S105
+                elif token_type == "Position":
                     if int(token_value) <= current_pos and previous_type != "Rest":
                         err += 1  # token position value <= to the current position
                     else:

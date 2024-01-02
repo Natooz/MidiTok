@@ -60,7 +60,8 @@ class REMI(MIDITokenizer):
         params: str | Path | None = None,
     ) -> None:
         if (
-            tokenizer_config is not None
+            max_bar_embedding is not None
+            and tokenizer_config is not None
             and "max_bar_embedding" not in tokenizer_config.additional_params
         ):
             # If used, this attribute might increase if the tokenizer encounter longer
@@ -538,7 +539,7 @@ class REMI(MIDITokenizer):
             )
             dic["Program"] = ["Pitch"]
         else:
-            first_note_token_type = "Pitch"  # noqa: S105
+            first_note_token_type = "Pitch"
         dic["Pitch"] = ["Velocity"]
         dic["Velocity"] = ["Duration"]
         dic["Duration"] = [first_note_token_type, "Position", "Bar"]

@@ -352,20 +352,24 @@ class TokenizerConfig:
         tempo_range: tuple[int, int] = TEMPO_RANGE,
         log_tempos: bool = LOG_TEMPOS,
         remove_duplicated_notes: bool = REMOVE_DUPLICATED_NOTES,
-        delete_equal_successive_tempo_changes: bool = DELETE_EQUAL_SUCCESSIVE_TEMPO_CHANGES,  # noqa: E501
+        delete_equal_successive_tempo_changes: bool = (
+            DELETE_EQUAL_SUCCESSIVE_TEMPO_CHANGES
+        ),
         time_signature_range: dict[
             int, list[int] | tuple[int, int]
         ] = TIME_SIGNATURE_RANGE,
         sustain_pedal_duration: bool = SUSTAIN_PEDAL_DURATION,
         pitch_bend_range: tuple[int, int, int] = PITCH_BEND_RANGE,
-        delete_equal_successive_time_sig_changes: bool = DELETE_EQUAL_SUCCESSIVE_TIME_SIG_CHANGES,  # noqa: E501
+        delete_equal_successive_time_sig_changes: bool = (
+            DELETE_EQUAL_SUCCESSIVE_TIME_SIG_CHANGES
+        ),
         programs: Sequence[int] = PROGRAMS,
         one_token_stream_for_programs: bool = ONE_TOKEN_STREAM_FOR_PROGRAMS,
         program_changes: bool = PROGRAM_CHANGES,
         max_pitch_interval: int = MAX_PITCH_INTERVAL,
         pitch_intervals_max_time_dist: bool = PITCH_INTERVALS_MAX_TIME_DIST,
         **kwargs,
-    ) -> None:  # TODO convert to dataclass
+    ) -> None:
         # Checks
         if max_pitch_interval:
             if not 0 <= pitch_range[0] < pitch_range[1] <= 127:

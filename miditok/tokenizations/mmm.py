@@ -250,7 +250,7 @@ class MMM(MIDITokenizer):
                 current_tick = 0
                 current_bar = -1
                 previous_note_end = 0
-            elif token == "Bar_Start":  # noqa: S105
+            elif token == "Bar_Start":
                 current_bar += 1
                 if current_bar > 0:
                     current_tick = tick_at_current_bar + ticks_per_bar

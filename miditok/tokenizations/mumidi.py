@@ -473,22 +473,22 @@ class MuMIDI(MIDITokenizer):
 
             # Good token type
             if token_type in self.tokens_types_graph[previous_type]:
-                if token_type == "Bar":  # noqa: S105
+                if token_type == "Bar":
                     current_bar += 1
                     current_pos = -1
                     current_pitches = []
-                elif self.config.remove_duplicated_notes and token_type == "Pitch":  # noqa: S105
+                elif self.config.remove_duplicated_notes and token_type == "Pitch":
                     if int(token_value) in current_pitches:
                         err += 1  # pitch already played at current position
                     else:
                         current_pitches.append(int(token_value))
-                elif token_type == "Position":  # noqa: S105
+                elif token_type == "Position":
                     if int(token_value) <= current_pos or int(token_value) != pos_value:
                         err += 1  # token position value <= to the current position
                     else:
                         current_pos = int(token_value)
                         current_pitches = []
-                elif token_type == "Program":  # noqa: S105
+                elif token_type == "Program":
                     current_pitches = []
 
                 if pos_value < current_pos or bar_value < current_bar:

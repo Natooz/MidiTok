@@ -96,8 +96,8 @@ extend-select = [
 ]
 
 # Each specific rule exclusion should be justified here.
-# By default, we think it is better to include groups of rules, and exclude specific
-# problematic rules, instead of just including specific rules.
+# By default, we think it is better to select groups of rules (above), and exclude
+# specific problematic rules, instead of selecting specific rules.
 
 # ANN003:
 # Would mostly apply to args/kwargs that are passed to methods from dependencies, for
@@ -106,16 +106,23 @@ extend-select = [
 # adds very few "noqa" exceptions, but ANN003 would add too much complexity.
 
 # ANN101 and ANN102:
-# Yields errors for `self` in methods, which is unecessary.
+# Yields errors for `self` in methods from classes, which is unecessary.
 # https://github.com/astral-sh/ruff/issues/4396
 
 # COM812:
 # Yields errors for one-line portions without comma. Trailing commas are automatically
 # set with ruff format anyway. This exclusion could be removed when this behavior is
 # fixed in ruff.
+
 ignore = ["ANN003", "ANN101", "ANN102", "ANN201", "COM812"]
 
 [tool.ruff.per-file-ignores]
+# S105: we don't use password in MidiTok, only HF token for the interactions with the
+# hub. However we have a lot of variables with "token"(s) in their name, which would
+# yield a lot of lint errors or require a lot of noqa exceptions.
+"miditok/**" = [
+    "S105",
+]
 "tests/**" = [
     "S101",  # allow assertions in tests
     "T201",  # print allowed

@@ -396,7 +396,7 @@ class MIDILike(MIDITokenizer):
             )
             dic["Program"] = ["NoteOn", "NoteOff"]
         else:
-            first_note_token_type = "NoteOn"  # noqa: S105
+            first_note_token_type = "NoteOn"
         dic["Velocity"] = [first_note_token_type, "TimeShift"]
         dic["NoteOff"] = ["NoteOff", first_note_token_type, "TimeShift"]
         dic["TimeShift"] = ["NoteOff", first_note_token_type, "TimeShift"]
