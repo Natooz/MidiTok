@@ -36,7 +36,7 @@ jobs:
           pip install -e ".[tests]"
 
       - name: Test with pytest
-        run: pytest --cov=./ --cov-report=xml -n auto --durations=0 -v tests
+        run: pytest --cov=./ --cov-report=xml -n logical --durations=0 -v tests
         env:
           HF_TOKEN_HUB_TESTS: ${{ secrets.HF_TOKEN_HUB_TESTS }}
 

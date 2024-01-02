@@ -1,6 +1,6 @@
 #!/usr/bin/python3 python
 
-"""Multitrack test file
+"""Testing tokenization, making sure the data integrity is not altered.
 """
 
 from __future__ import annotations
@@ -34,7 +34,6 @@ default_params.update(
         "chord_unknown": False,
         "delete_equal_successive_time_sig_changes": True,
         "delete_equal_successive_tempo_changes": True,
-        "sustain_pedal_duration": True,
         "max_duration": (20, 0, 4),
     }
 )
@@ -99,11 +98,11 @@ for tpi in range(len(TOK_PARAMS_ONE_TRACK_HARD) - 1, -1, -1):
     ):
         del TOK_PARAMS_ONE_TRACK_HARD[tpi]
         continue
-    # Parametrize PedalOff cases for configurations using pedals TODO enable and fix
-    """if params_["use_sustain_pedals"]:
+    # Parametrize PedalOff cases for configurations using pedals
+    if "use_sustain_pedals" in params_ and params_["use_sustain_pedals"]:
         params_copy = deepcopy(params_)
-        params_copy["sustain_pedal_duration"] = False
-        TOK_PARAMS_ONE_TRACK.insert(tpi + 1, (tokenization_, params_copy))"""
+        params_copy["sustain_pedal_duration"] = True
+        TOK_PARAMS_ONE_TRACK.insert(tpi + 1, (tokenization_, params_copy))
 for tokenization_, params_ in TOK_PARAMS_ONE_TRACK_HARD:
     adjust_tok_params_for_tests(tokenization_, params_)
 

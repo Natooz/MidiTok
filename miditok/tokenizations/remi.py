@@ -619,6 +619,12 @@ class REMI(MIDITokenizer):
                 dic["TimeSig"].append("Pedal")
                 if not self.config.sustain_pedal_duration:
                     dic["TimeSig"].append("PedalOff")
+            if self.config.use_pitch_intervals:
+                if self.config.sustain_pedal_duration:
+                    dic["Duration"] += ["PitchIntervalTime", "PitchIntervalChord"]
+                else:
+                    dic["Pedal"] += ["PitchIntervalTime", "PitchIntervalChord"]
+                    dic["PedalOff"] += ["PitchIntervalTime", "PitchIntervalChord"]
 
         if self.config.use_pitch_bends:
             # As a Program token will precede PitchBend otherwise
