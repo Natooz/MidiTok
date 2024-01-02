@@ -476,6 +476,9 @@ class MIDILike(MIDITokenizer):
                 ]
                 dic["Pedal"] = ["Pedal", first_note_token_type, "NoteOff", "TimeShift"]
                 dic["TimeShift"].append("PedalOff")
+                if self.config.use_pitch_intervals:
+                    dic["Pedal"] += ["PitchIntervalTime", "PitchIntervalChord"]
+                    dic["PedalOff"] += ["PitchIntervalTime", "PitchIntervalChord"]
             if self.config.use_chords:
                 dic["Pedal"].append("Chord")
                 if not self.config.sustain_pedal_duration:

@@ -8,7 +8,7 @@ from typing import Sequence
 
 from symusic import Score
 
-from .constants import MIDI_FILES_EXTENSIONS
+from .constants import MIDI_FILES_EXTENSIONS, MIDI_LOADING_EXCEPTION
 
 
 class BPEIterator:
@@ -26,7 +26,10 @@ class BPEIterator:
 
     def load_file(self, path: Path) -> list[str]:
         if path.suffix in MIDI_FILES_EXTENSIONS:
-            midi = Score(path)
+            try:
+                midi = Score(path)
+            except MIDI_LOADING_EXCEPTION:
+                return []
             token_ids = self.tokenizer(midi)
             if self.tokenizer.one_token_stream:
                 token_ids = token_ids.ids

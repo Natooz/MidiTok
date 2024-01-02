@@ -2,7 +2,6 @@
 Base tokenizer class, acting as a "framework" for all tokenizers.
 # TODO switch from ticks/beat to ticks/quarter logic for time division
 # TODO build docs action, make sure no error / warning https://github.com/readthedocs/actions
-# TODO increase nb of pytest workers in GitHub action?
 """
 from __future__ import annotations
 
@@ -743,14 +742,43 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         :param pedals: pedals to preprocess.
         """
-        # Gather durations
-        durations = [pedal.duration for pedal in pedals]
-        durations = np.array(durations, dtype=np.intc)
-        durations = np_get_closest(self._durations_ticks, durations)
+        # Get times and durations
+        times_durations_ends = [[pd.time, pd.duration, pd.end] for pd in pedals]
+        times_durations_ends = np.array(times_durations_ends, dtype=np.intc)
 
-        # Apply new durations
-        for i, duration in enumerate(durations):
-            pedals[i].duration = duration
+        def _adjust_pedals_durations():
+            # Reformat durations according to the tokenizer's vocabulary
+            durations = np_get_closest(
+                self._durations_ticks, times_durations_ends[:, 1]
+            )
+            for pi, duration in enumerate(durations):
+                pedals[pi].duration = duration
+                times_durations_ends[pi, 1] = duration
+                times_durations_ends[pi, 2] = times_durations_ends[pi, 0] + duration
+
+        # Reformat durations according to the tokenizer's vocabulary
+        if self.config.sustain_pedal_duration:
+            _adjust_pedals_durations()
+
+        # Format durations (if needed) and merge successive pedals
+        while np.any(times_durations_ends[:-1, 2] >= times_durations_ends[1:, 0]):
+            # Merge PedalOn periods depending on their durations
+            i = 1
+            while i < len(pedals):
+                if pedals[i - 1].end >= pedals[i].time:
+                    pedals[i - 1].duration = max(
+                        pedals[i - 1].duration, pedals[i - 1].time - pedals[i].end
+                    )
+                    del pedals[i]
+                    times_durations_ends[i - 1, 1] = pedals[i - 1].duration
+                    times_durations_ends[i - 1, 2] = pedals[i - 1].end
+                    times_durations_ends = np.delete(times_durations_ends, i, axis=0)
+                else:
+                    i += 1
+
+            # We need to readjust durations again as they may have changed after merge
+            if self.config.sustain_pedal_duration:
+                _adjust_pedals_durations()
 
     def _midi_to_tokens(self, midi: Score) -> TokSequence | list[TokSequence]:
         r"""Converts a preprocessed MIDI object to a sequence of tokens.
