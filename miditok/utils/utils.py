@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import warnings
 from collections import Counter
-from typing import Any, Sequence
+from typing import Sequence
 
 import numpy as np
 from symusic import Note, Score, Track
@@ -21,7 +21,7 @@ from miditok.constants import (
 )
 
 
-def convert_ids_tensors_to_list(ids: Any):
+def convert_ids_tensors_to_list(ids):  # noqa: ANN001
     """Convert a PyTorch, Tensorflow Tensor or numpy array to a list of integers.
     This method works with Jax too.
     It is recursive and will convert nested Tensors / arrays within lists.
@@ -215,7 +215,7 @@ def detect_chords(
                     )
                 chords.append(
                     Event(
-                        type="Chord",
+                        type_="Chord",
                         value=chord_quality,
                         time=min(chord[:, 1]),
                         program=program,
@@ -486,7 +486,7 @@ def nb_bar_pos(
     return current_bar, current_pos
 
 
-def np_get_closest(array: np.ndarray, values: np.ndarray | list[Any]) -> np.ndarray:
+def np_get_closest(array: np.ndarray, values: np.ndarray) -> np.ndarray:
     """Simple method to find the closest values in an array of the values of another
     reference array.
     Taken from: https://stackoverflow.com/a/46184652

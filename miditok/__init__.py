@@ -25,7 +25,7 @@ class REMIPlus(REMI):
     tokens enabled.
     """
 
-    def _tweak_config_before_creating_voc(self):
+    def _tweak_config_before_creating_voc(self) -> None:
         super()._tweak_config_before_creating_voc()
         self.config.use_programs = True
         self.config.use_time_signatures = True

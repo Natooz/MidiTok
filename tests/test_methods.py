@@ -9,7 +9,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Sequence
 
-from miditoolkit import MidiFile, Pedal
+from miditoolkit import Instrument, MidiFile, Pedal
+from symusic import Score, Track
 from tensorflow import Tensor as tfTensor
 from tensorflow import convert_to_tensor
 from torch import (
@@ -63,7 +64,7 @@ def test_tokenize_datasets_file_tree(
     tokenizer.tokenize_midi_dataset(midi_paths, tmp_path, overwrite_mode=False)
 
 
-def are_notes_equals(note1, note2) -> bool:
+def are_notes_equals(note1, note2) -> bool:  # noqa:ANN001
     attrs_to_check = ("start", "pitch", "velocity", "end")
     for attr_to_check in attrs_to_check:
         if getattr(note1, attr_to_check) != getattr(note2, attr_to_check):
@@ -71,19 +72,19 @@ def are_notes_equals(note1, note2) -> bool:
     return True
 
 
-def are_control_changes_equals(cc1, cc2) -> bool:
+def are_control_changes_equals(cc1, cc2) -> bool:  # noqa:ANN001
     return cc1.time == cc2.time and cc1.number == cc2.number and cc1.value == cc2.value
 
 
-def are_pitch_bends_equals(pb1, pb2) -> bool:
+def are_pitch_bends_equals(pb1, pb2) -> bool:  # noqa:ANN001
     return pb1.time == pb2.time and pb1.pitch == pb2.value
 
 
-def are_pedals_equals(sp1, sp2) -> bool:
+def are_pedals_equals(sp1, sp2) -> bool:  # noqa:ANN001
     return sp1.start == sp2.time and sp1.end == sp2.time + sp2.duration
 
 
-def are_tracks_equals(track1, track2) -> int:
+def are_tracks_equals(track1: Instrument, track2: Track) -> int:
     err = 0
     for attr_ in ("program", "is_drum"):
         if getattr(track1, attr_) != getattr(track2, attr_):
@@ -122,7 +123,7 @@ def are_tracks_equals(track1, track2) -> int:
     return err
 
 
-def are_tempos_equals(tempo_change1, tempo_change2) -> bool:
+def are_tempos_equals(tempo_change1, tempo_change2) -> bool:  # noqa:ANN001
     if tempo_change1.time != tempo_change2.time or round(
         tempo_change1.tempo, 3
     ) != round(tempo_change2.tempo, 3):
@@ -130,7 +131,7 @@ def are_tempos_equals(tempo_change1, tempo_change2) -> bool:
     return True
 
 
-def are_time_signatures_equals(time_sig1, time_sig2) -> bool:
+def are_time_signatures_equals(time_sig1, time_sig2) -> bool:  # noqa:ANN001
     if (
         time_sig1.time != time_sig2.time
         or time_sig1.numerator != time_sig2.numerator
@@ -140,7 +141,7 @@ def are_time_signatures_equals(time_sig1, time_sig2) -> bool:
     return True
 
 
-def are_key_signatures_equals(key_sig1, key_sig2) -> bool:
+def are_key_signatures_equals(key_sig1, key_sig2) -> bool:  # noqa:ANN001
     # if key_sig1.time != key_sig2.time or key_sig1.key_number != key_sig2.key:
     # we don't test key signatures as they are decoded differently
     if key_sig1.time != key_sig2.time:
@@ -148,13 +149,13 @@ def are_key_signatures_equals(key_sig1, key_sig2) -> bool:
     return True
 
 
-def are_lyrics_or_markers_equals(lyric1, lyric2) -> bool:
+def are_lyrics_or_markers_equals(lyric1, lyric2) -> bool:  # noqa:ANN001
     if lyric1.time != lyric2.time or lyric1.text != lyric2.text:
         return False
     return True
 
 
-def are_midis_equals(midi_mtk, midi_sms) -> bool:
+def are_midis_equals(midi_mtk: MidiFile, midi_sms: Score) -> bool:
     err = 0
 
     assert midi_mtk.ticks_per_beat == midi_sms.ticks_per_quarter

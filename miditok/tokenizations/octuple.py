@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from math import ceil
-from typing import Any
 
 import numpy as np
 from symusic import Note, Score, Tempo, TimeSignature, Track
@@ -52,7 +51,7 @@ class Octuple(MIDITokenizer):
     first sequence will be decoded for the whole MIDI.
     """
 
-    def _tweak_config_before_creating_voc(self):
+    def _tweak_config_before_creating_voc(self) -> None:
         self.config.use_chords = False
         self.config.use_rests = False
         self.config.use_sustain_pedals = False
@@ -118,33 +117,33 @@ class Octuple(MIDITokenizer):
                 current_pos = elapsed_tick % ticks_per_bar
                 previous_tick = event.time
 
-            if event.type == "TimeSig":
+            if event.type_ == "TimeSig":
                 current_time_sig = list(map(int, event.value.split("/")))
                 current_bar_from_ts_time = current_bar
                 current_tick_from_ts_time = previous_tick
                 ticks_per_bar = self._compute_ticks_per_bar(
                     TimeSignature(event.time, *current_time_sig), self.time_division
                 )
-            elif event.type == "Tempo":
+            elif event.type_ == "Tempo":
                 current_tempo = event.value
-            elif event.type == "Program":
+            elif event.type_ == "Program":
                 current_program = event.value
-            elif event.type == "Pitch" and e + 2 < len(events):
+            elif event.type_ == "Pitch" and e + 2 < len(events):
                 new_event = [
-                    Event(type="Pitch", value=event.value, time=event.time),
-                    Event(type="Velocity", value=events[e + 1].value, time=event.time),
-                    Event(type="Duration", value=events[e + 2].value, time=event.time),
-                    Event(type="Position", value=current_pos, time=event.time),
-                    Event(type="Bar", value=current_bar, time=event.time),
+                    Event(type_="Pitch", value=event.value, time=event.time),
+                    Event(type_="Velocity", value=events[e + 1].value, time=event.time),
+                    Event(type_="Duration", value=events[e + 2].value, time=event.time),
+                    Event(type_="Position", value=current_pos, time=event.time),
+                    Event(type_="Bar", value=current_bar, time=event.time),
                 ]
                 if self.config.use_programs:
                     new_event.append(Event("Program", current_program))
                 if self.config.use_tempos:
-                    new_event.append(Event(type="Tempo", value=current_tempo))
+                    new_event.append(Event(type_="Tempo", value=current_tempo))
                 if self.config.use_time_signatures:
                     new_event.append(
                         Event(
-                            type="TimeSig",
+                            type_="TimeSig",
                             value=f"{current_time_sig[0]}/{current_time_sig[1]}",
                         )
                     )
@@ -185,10 +184,9 @@ class Octuple(MIDITokenizer):
     def _tokens_to_midi(
         self,
         tokens: TokSequence
-        | list
+        | list[int]
         | np.ndarray
-        | Any
-        | list[TokSequence | list | np.ndarray | Any],
+        | list[TokSequence | list[int] | np.ndarray],
         programs: list[tuple[int, bool]] | None = None,
         time_division: int | None = None,
     ) -> Score:
@@ -222,7 +220,7 @@ class Octuple(MIDITokenizer):
         tempo_changes, time_signature_changes = [Tempo(-1, self.default_tempo)], []
         tempo_changes[0].tempo = -1
 
-        def check_inst(prog: int):
+        def check_inst(prog: int) -> None:
             if prog not in tracks:
                 tracks[prog] = Track(
                     program=0 if prog == -1 else prog,
@@ -415,7 +413,7 @@ class Octuple(MIDITokenizer):
 
     @_in_as_seq()
     def tokens_errors(
-        self, tokens: TokSequence | list | np.ndarray | Any
+        self, tokens: TokSequence | list[int] | np.ndarray
     ) -> float | list[float]:
         r"""Checks if a sequence of tokens is made of good token values and
         returns the error ratio (lower is better).

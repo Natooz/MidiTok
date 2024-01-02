@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Any
-
 import numpy as np
 from symusic import Note, Score, Track
 
@@ -28,7 +26,7 @@ class Structured(MIDITokenizer):
     value. In such cases, the maximum *TimeShift* value will be used.
     """
 
-    def _tweak_config_before_creating_voc(self):
+    def _tweak_config_before_creating_voc(self) -> None:
         self.config.use_chords = False
         self.config.use_rests = False
         self.config.use_tempos = False
@@ -65,7 +63,7 @@ class Structured(MIDITokenizer):
                     time_shift = "0.0.1"
                 events.append(
                     Event(
-                        type="TimeShift",
+                        type_="TimeShift",
                         time=note.start,
                         desc=f"{time_shift_ticks} ticks",
                         value=time_shift,
@@ -74,14 +72,16 @@ class Structured(MIDITokenizer):
             # Note On / Velocity / Duration
             if self.config.use_programs:
                 events.append(
-                    Event(type="Program", value=program, time=note.start, desc=note.end)
+                    Event(
+                        type_="Program", value=program, time=note.start, desc=note.end
+                    )
                 )
             events.append(
-                Event(type="Pitch", value=note.pitch, time=note.start, desc=note.end)
+                Event(type_="Pitch", value=note.pitch, time=note.start, desc=note.end)
             )
             events.append(
                 Event(
-                    type="Velocity",
+                    type_="Velocity",
                     value=note.velocity,
                     time=note.start,
                     desc=f"{note.velocity}",
@@ -90,7 +90,7 @@ class Structured(MIDITokenizer):
             dur = ".".join(map(str, self._durations_ticks_to_tuple[note.duration]))
             events.append(
                 Event(
-                    type="Duration",
+                    type_="Duration",
                     value=dur,
                     time=note.start,
                     desc=f"{note.duration} ticks",
@@ -114,7 +114,7 @@ class Structured(MIDITokenizer):
         # Add "TimeShift" tokens before each "Pitch" tokens
         previous_tick = 0
         for event in events:
-            if event.type == token_type_to_check:
+            if event.type_ == token_type_to_check:
                 # Time shift
                 time_shift_ticks = event.time - previous_tick
                 index = np.argmin(np.abs(self._durations_ticks - time_shift_ticks))
@@ -124,7 +124,7 @@ class Structured(MIDITokenizer):
                     time_shift = "0.0.1"
                 all_events.append(
                     Event(
-                        type="TimeShift",
+                        type_="TimeShift",
                         time=event.time,
                         desc=f"{time_shift_ticks} ticks",
                         value=time_shift,
@@ -177,10 +177,9 @@ class Structured(MIDITokenizer):
     def _tokens_to_midi(
         self,
         tokens: TokSequence
-        | list
+        | list[int]
         | np.ndarray
-        | Any
-        | list[TokSequence | list | np.ndarray | Any],
+        | list[TokSequence | list[int] | np.ndarray],
         programs: list[tuple[int, bool]] | None = None,
         time_division: int | None = None,
     ) -> Score:
@@ -211,7 +210,7 @@ class Structured(MIDITokenizer):
         # RESULTS
         instruments: dict[int, Track] = {}
 
-        def check_inst(prog: int):
+        def check_inst(prog: int) -> None:
             if prog not in instruments:
                 instruments[prog] = Track(
                     program=0 if prog == -1 else prog,

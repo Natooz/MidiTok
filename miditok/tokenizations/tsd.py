@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Any
-
 import numpy as np
 from symusic import (
     Note,
@@ -36,7 +34,7 @@ class TSD(MIDITokenizer):
     sequence will be decoded for the whole MIDI.
     """
 
-    def _tweak_config_before_creating_voc(self):
+    def _tweak_config_before_creating_voc(self) -> None:
         if self.config.use_programs:
             self.one_token_stream = True
 
@@ -67,7 +65,7 @@ class TSD(MIDITokenizer):
                     for dur_value, dur_ticks in zip(*rest_values):
                         all_events.append(
                             Event(
-                                type="Rest",
+                                type_="Rest",
                                 value=".".join(map(str, dur_value)),
                                 time=previous_tick,
                                 desc=f"{event.time - previous_tick} ticks",
@@ -84,7 +82,7 @@ class TSD(MIDITokenizer):
                     ):
                         all_events.append(
                             Event(
-                                type="TimeShift",
+                                type_="TimeShift",
                                 value=".".join(map(str, dur_value)),
                                 time=previous_tick,
                                 desc=f"{time_shift} ticks",
@@ -96,9 +94,9 @@ class TSD(MIDITokenizer):
             all_events.append(event)
 
             # Update max offset time of the notes encountered
-            if event.type in ["Pitch", "PitchIntervalTime", "PitchIntervalChord"]:
+            if event.type_ in ["Pitch", "PitchIntervalTime", "PitchIntervalChord"]:
                 previous_note_end = max(previous_note_end, event.desc)
-            elif event.type in [
+            elif event.type_ in [
                 "Program",
                 "Tempo",
                 "TimeSig",
@@ -114,10 +112,9 @@ class TSD(MIDITokenizer):
     def _tokens_to_midi(
         self,
         tokens: TokSequence
-        | list
+        | list[int]
         | np.ndarray
-        | Any
-        | list[TokSequence | list | np.ndarray | Any],
+        | list[TokSequence | list[int] | np.ndarray],
         programs: list[tuple[int, bool]] | None = None,
         time_division: int | None = None,
     ) -> Score:
@@ -149,7 +146,7 @@ class TSD(MIDITokenizer):
         tracks: dict[int, Track] = {}
         tempo_changes, time_signature_changes = [], []
 
-        def check_inst(prog: int):
+        def check_inst(prog: int) -> None:
             if prog not in tracks:
                 tracks[prog] = Track(
                     program=0 if prog == -1 else prog,

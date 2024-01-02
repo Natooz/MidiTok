@@ -66,18 +66,18 @@ class Event:
     to be sorted by time.
     """
 
-    type: str  # noqa: A003
+    type_: str
     value: str | int
     time: int | float = None
     program: int = None
     desc: Any = None
 
     def __str__(self) -> str:
-        return f"{self.type}_{self.value}"
+        return f"{self.type_}_{self.value}"
 
     def __repr__(self) -> str:
         return (
-            f"Event(type={self.type}, value={self.value}, time={self.time},"
+            f"Event(type={self.type_}, value={self.value}, time={self.time},"
             f" desc={self.desc})"
         )
 
@@ -124,24 +124,24 @@ class TokSequence:
                 " None."
             )
 
-    def __getitem__(self, item):
+    def __getitem__(self, idx: int) -> int | str | Event:
         if self.ids is not None:
-            return self.ids[item]
+            return self.ids[idx]
         elif self.tokens is not None:
-            return self.tokens[item]
+            return self.tokens[idx]
         elif self.events is not None:
-            return self.events[item]
+            return self.events[idx]
         elif self.bytes is not None:
-            return self.bytes[item]
+            return self.bytes[idx]
         elif self._ids_no_bpe is not None:
-            return self._ids_no_bpe[item]
+            return self._ids_no_bpe[idx]
         else:
             raise ValueError(
                 "This TokSequence seems to not be initialized, all its attributes are"
                 " None."
             )
 
-    def __eq__(self, other) -> bool:
+    def __eq__(self, other: TokSequence) -> bool:
         r"""Checks if too sequences are equal.
         This is performed by comparing their attributes (ids, tokens...).
         **Both sequences must have at least one common attribute initialized (not None)
@@ -365,7 +365,7 @@ class TokenizerConfig:
         max_pitch_interval: int = MAX_PITCH_INTERVAL,
         pitch_intervals_max_time_dist: bool = PITCH_INTERVALS_MAX_TIME_DIST,
         **kwargs,
-    ):
+    ) -> None:  # TODO convert to dataclass
         # Checks
         if max_pitch_interval:
             if not 0 <= pitch_range[0] < pitch_range[1] <= 127:
@@ -488,7 +488,7 @@ class TokenizerConfig:
         self.additional_params = kwargs
 
     @classmethod
-    def from_dict(cls, input_dict: dict[str, Any], **kwargs):
+    def from_dict(cls, input_dict: dict[str, Any], **kwargs) -> TokenizerConfig:
         r"""
         Instantiates an ``AdditionalTokensConfig`` from a Python dictionary of
         parameters.
@@ -521,7 +521,7 @@ class TokenizerConfig:
             self.__serialize_dict(dict_config)
         return dict_config
 
-    def __serialize_dict(self, dict_: dict):
+    def __serialize_dict(self, dict_: dict) -> None:
         r"""
         Converts numpy arrays to lists recursively within a dictionary.
 
@@ -582,7 +582,7 @@ class TokenizerConfig:
 
         return cls.from_dict(dict_config)
 
-    def __eq__(self, other):
+    def __eq__(self, other: TokenizerConfig) -> bool:
         # We don't use the == operator as it yields False when comparing lists and
         # tuples containing the same elements. This method is not recursive and only
         # checks the first level of iterable values / attributes

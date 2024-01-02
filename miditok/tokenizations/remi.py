@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 from symusic import (
@@ -59,7 +58,7 @@ class REMI(MIDITokenizer):
         tokenizer_config: TokenizerConfig = None,
         max_bar_embedding: int | None = None,
         params: str | Path | None = None,
-    ):
+    ) -> None:
         if (
             tokenizer_config is not None
             and "max_bar_embedding" not in tokenizer_config.additional_params
@@ -69,7 +68,7 @@ class REMI(MIDITokenizer):
             tokenizer_config.additional_params["max_bar_embedding"] = max_bar_embedding
         super().__init__(tokenizer_config, params)
 
-    def _tweak_config_before_creating_voc(self):
+    def _tweak_config_before_creating_voc(self) -> None:
         # In case the tokenizer has been created without specifying any config or
         # params file path
         if "max_bar_embedding" not in self.config.additional_params:
@@ -100,14 +99,14 @@ class REMI(MIDITokenizer):
         # current_time_sig
         if self.config.use_time_signatures:
             for event in events:
-                if event.type == "TimeSig":
+                if event.type_ == "TimeSig":
                     current_time_sig = list(map(int, event.value.split("/")))
                     ticks_per_bar = self._compute_ticks_per_bar(
                         TimeSignature(event.time, *current_time_sig),
                         self.time_division,
                     )
                     break
-                elif event.type in [
+                elif event.type_ in [
                     "Pitch",
                     "Velocity",
                     "Duration",
@@ -131,7 +130,7 @@ class REMI(MIDITokenizer):
                     for dur_value, dur_ticks in zip(*rest_values):
                         all_events.append(
                             Event(
-                                type="Rest",
+                                type_="Rest",
                                 value=".".join(map(str, dur_value)),
                                 time=previous_tick,
                                 desc=f"{event.time - previous_tick} ticks",
@@ -164,7 +163,7 @@ class REMI(MIDITokenizer):
                     for i in range(nb_new_bars):
                         all_events.append(
                             Event(
-                                type="Bar",
+                                type_="Bar",
                                 value=str(current_bar + i + 1)
                                 if self.config.additional_params["max_bar_embedding"]
                                 is not None
@@ -176,11 +175,11 @@ class REMI(MIDITokenizer):
                         # Add a TimeSignature token, except for the last new Bar token
                         # if the current event is a TS
                         if self.config.use_time_signatures and not (
-                            event.type == "TimeSig" and i + 1 == nb_new_bars
+                            event.type_ == "TimeSig" and i + 1 == nb_new_bars
                         ):
                             all_events.append(
                                 Event(
-                                    type="TimeSig",
+                                    type_="TimeSig",
                                     value=f"{current_time_sig[0]}/{current_time_sig[1]}",
                                     time=(current_bar + i + 1) * ticks_per_bar,
                                     desc=0,
@@ -193,11 +192,11 @@ class REMI(MIDITokenizer):
                     )
 
                 # Position
-                if event.type != "TimeSig":
+                if event.type_ != "TimeSig":
                     pos_index = event.time - tick_at_current_bar
                     all_events.append(
                         Event(
-                            type="Position",
+                            type_="Position",
                             value=pos_index,
                             time=event.time,
                             desc=event.time,
@@ -207,7 +206,7 @@ class REMI(MIDITokenizer):
                 previous_tick = event.time
 
             # Update time signature time variables, after adjusting the time (above)
-            if event.type == "TimeSig":
+            if event.type_ == "TimeSig":
                 current_time_sig = list(map(int, event.value.split("/")))
                 bar_at_last_ts_change += (
                     event.time - tick_at_last_ts_change
@@ -223,9 +222,9 @@ class REMI(MIDITokenizer):
             all_events.append(event)
 
             # Update max offset time of the notes encountered
-            if event.type in ["Pitch", "PitchIntervalTime", "PitchIntervalChord"]:
+            if event.type_ in ["Pitch", "PitchIntervalTime", "PitchIntervalChord"]:
                 previous_note_end = max(previous_note_end, event.desc)
-            elif event.type in [
+            elif event.type_ in [
                 "Program",
                 "Tempo",
                 "TimeSig",
@@ -241,10 +240,9 @@ class REMI(MIDITokenizer):
     def _tokens_to_midi(
         self,
         tokens: TokSequence
-        | list
+        | list[int]
         | np.ndarray
-        | Any
-        | list[TokSequence | list | np.ndarray | Any],
+        | list[TokSequence | list[int] | np.ndarray],
         programs: list[tuple[int, bool]] | None = None,
         time_division: int | None = None,
     ) -> Score:
@@ -277,7 +275,7 @@ class REMI(MIDITokenizer):
         tracks: dict[int, Track] = {}
         tempo_changes, time_signature_changes = [], []
 
-        def check_inst(prog: int):
+        def check_inst(prog: int) -> None:
             if prog not in tracks:
                 tracks[prog] = Track(
                     program=0 if prog == -1 else prog,

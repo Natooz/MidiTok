@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from typing import Any, List, cast
 
 import numpy as np
 from symusic import Note, Score, Tempo, TimeSignature, Track
@@ -34,7 +33,7 @@ class MMM(MIDITokenizer):
     will be decoded.
     """
 
-    def _tweak_config_before_creating_voc(self):
+    def _tweak_config_before_creating_voc(self) -> None:
         self.config.one_token_stream_for_programs = True
         self.config.program_changes = False
         self.config.use_programs = True
@@ -79,7 +78,7 @@ class MMM(MIDITokenizer):
         current_bar = 0
         tick_at_last_ts_change = 0
         for ei in range(len(events)):
-            if events[ei].type == "TimeSig":
+            if events[ei].type_ == "TimeSig":
                 bar_at_last_ts_change += (
                     events[ei].time - tick_at_last_ts_change
                 ) // ticks_per_bar
@@ -101,13 +100,13 @@ class MMM(MIDITokenizer):
                     for i in range(nb_new_bars):
                         all_events += [
                             Event(
-                                type="Bar",
+                                type_="Bar",
                                 value="End",
                                 time=(current_bar + i + 1) * ticks_per_bar,
                                 desc=0,
                             ),
                             Event(
-                                type="Bar",
+                                type_="Bar",
                                 value="Start",
                                 time=(current_bar + i + 1) * ticks_per_bar,
                                 desc=0,
@@ -127,7 +126,7 @@ class MMM(MIDITokenizer):
                     index = np.argmin(np.abs(self._durations_ticks - time_shift))
                     all_events.append(
                         Event(
-                            type="TimeShift",
+                            type_="TimeShift",
                             value=".".join(map(str, self.durations[index])),
                             time=previous_tick,
                             desc=f"{time_shift} ticks",
@@ -173,12 +172,12 @@ class MMM(MIDITokenizer):
             all_events += [
                 Event("Track", "Start", 0),
                 Event(
-                    type="Program",
+                    type_="Program",
                     value=-1 if track.is_drum else track.program,
                     time=0,
                 ),
                 Event(
-                    type="NoteDensity",
+                    type_="NoteDensity",
                     value=note_density,
                     time=0,
                 ),
@@ -196,8 +195,8 @@ class MMM(MIDITokenizer):
 
     def _tokens_to_midi(
         self,
-        tokens: TokSequence | list | np.ndarray | Any,
-        _=None,
+        tokens: TokSequence | list[int] | np.ndarray,
+        _: None = None,
         time_division: int | None = None,
     ) -> Score:
         r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
@@ -211,14 +210,13 @@ class MMM(MIDITokenizer):
         """
         if time_division is None:
             time_division = self.time_division
-        tokens = cast(TokSequence, tokens)
         midi = Score(time_division)
         if time_division % max(self.config.beat_res.values()) != 0:
             raise ValueError(
                 f"Invalid time division, please give one divisible by"
                 f"{max(self.config.beat_res.values())}"
             )
-        tokens = cast(List[str], tokens.tokens)  # for reducing type errors
+        tokens = tokens.tokens
 
         # RESULTS
         tracks: list[Track] = []
@@ -408,19 +406,16 @@ class MMM(MIDITokenizer):
         return dic
 
     @_in_as_seq(complete=False, decode_bpe=False)
-    def tokens_errors(
-        self, tokens_to_check: TokSequence | list[int | list[int]]
-    ) -> float:
-        tokens_to_check = cast(TokSequence, tokens_to_check)
-        nb_tok_predicted = len(tokens_to_check)  # used to norm the score
+    def tokens_errors(self, tokens: TokSequence | list[int | list[int]]) -> float:
+        nb_tok_predicted = len(tokens)  # used to norm the score
         if nb_tok_predicted == 0:
             return 0
         if self.has_bpe:
-            self.decode_bpe(tokens_to_check)
-        self.complete_sequence(tokens_to_check)
+            self.decode_bpe(tokens)
+        self.complete_sequence(tokens)
 
         # Override from here
-        tokens = cast(List[str], tokens_to_check.tokens)
+        tokens = tokens.tokens
         note_tokens_types = ["Pitch"]
         if self.config.use_pitch_intervals:
             note_tokens_types += ["PitchIntervalTime", "PitchIntervalChord"]

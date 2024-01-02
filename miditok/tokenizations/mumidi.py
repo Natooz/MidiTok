@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from math import ceil
-from typing import Any
 
 import numpy as np
 from symusic import Note, Score, Tempo, Track
@@ -45,7 +44,7 @@ class MuMIDI(MIDITokenizer):
         * Tracks with the same *Program* will be merged.
     """
 
-    def _tweak_config_before_creating_voc(self):
+    def _tweak_config_before_creating_voc(self) -> None:
         self.config.use_rests = False
         self.config.use_time_signatures = False
         self.config.use_sustain_pedals = False
@@ -209,7 +208,7 @@ class MuMIDI(MIDITokenizer):
                 tokens.append(
                     [
                         Event(
-                            type="Pitch",
+                            type_="Pitch",
                             value=note.pitch,
                             time=note.start,
                             desc=track.program,
@@ -222,7 +221,7 @@ class MuMIDI(MIDITokenizer):
                 tokens.append(
                     [
                         Event(
-                            type="DrumPitch",
+                            type_="DrumPitch",
                             value=note.pitch,
                             time=note.start,
                             desc=-1,
@@ -254,8 +253,8 @@ class MuMIDI(MIDITokenizer):
 
     def _tokens_to_midi(
         self,
-        tokens: TokSequence | list | np.ndarray | Any,
-        _=None,
+        tokens: TokSequence | list[int] | np.ndarray,
+        _: None = None,
         time_division: int | None = None,
     ) -> Score:
         r"""Override the parent class method
@@ -439,7 +438,7 @@ class MuMIDI(MIDITokenizer):
         return dic
 
     @_in_as_seq()
-    def tokens_errors(self, tokens: TokSequence | list | np.ndarray | Any) -> float:
+    def tokens_errors(self, tokens: TokSequence | list[int] | np.ndarray) -> float:
         r"""Checks if a sequence of tokens is made of good token types
         successions and returns the error ratio (lower is better).
         The Pitch and Position values are also analyzed:
