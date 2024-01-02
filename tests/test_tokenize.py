@@ -102,7 +102,7 @@ for tpi in range(len(TOK_PARAMS_ONE_TRACK_HARD) - 1, -1, -1):
     if "use_sustain_pedals" in params_ and params_["use_sustain_pedals"]:
         params_copy = deepcopy(params_)
         params_copy["sustain_pedal_duration"] = True
-        TOK_PARAMS_ONE_TRACK.insert(tpi + 1, (tokenization_, params_copy))
+        TOK_PARAMS_ONE_TRACK_HARD.insert(tpi + 1, (tokenization_, params_copy))
 for tokenization_, params_ in TOK_PARAMS_ONE_TRACK_HARD:
     adjust_tok_params_for_tests(tokenization_, params_)
 
