@@ -25,6 +25,11 @@ from .utils import (
     tokenize_and_check_equals,
 )
 
+# Removing "hard" MIDIs from the list
+MIDI_PATHS_ONE_TRACK = [
+    p for p in MIDI_PATHS_ONE_TRACK if p not in MIDI_PATHS_ONE_TRACK_HARD
+]
+
 # One track params
 default_params = deepcopy(TOKENIZER_CONFIG_KWARGS)
 default_params.update(
