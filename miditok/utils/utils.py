@@ -124,7 +124,7 @@ def fix_offsets_overlapping_notes(notes: NoteTickList) -> None:
 
 def detect_chords(
     notes: NoteTickList,
-    time_division: int,
+    time_division: int,  # TODO convert usage to ticks/quarter?
     chord_maps: dict[str, Sequence[int]],
     program: int | None = None,
     specify_root_note: bool = True,

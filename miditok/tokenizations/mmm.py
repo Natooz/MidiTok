@@ -12,7 +12,7 @@ from ..constants import (
     TIME_SIGNATURE,
 )
 from ..midi_tokenizer import MIDITokenizer
-from ..utils import compute_ticks_per_bar
+from ..utils import compute_ticks_per_bar, compute_ticks_per_beat, get_midi_max_tick
 
 
 class MMM(MIDITokenizer):
@@ -161,6 +161,31 @@ class MMM(MIDITokenizer):
         # Global events (Tempo, TimeSignature)
         global_events = self._create_midi_events(midi)
 
+        # Compute ticks_per_beat sections depending on the time signatures
+        ticks_per_beat = [
+            [
+                midi.time_signatures[tsi + 1].time,
+                compute_ticks_per_beat(
+                    midi.time_signatures[tsi].denominator, self.time_division
+                ),
+            ]
+            for tsi in range(len(midi.time_signatures) - 1)
+        ]
+        ticks_per_beat.append(
+            [
+                get_midi_max_tick(midi),
+                compute_ticks_per_beat(
+                    midi.time_signatures[-1].denominator, self.time_division
+                ),
+            ]
+        )
+        # Remove equal successive ones
+        for i in range(len(ticks_per_beat) - 1, -1, 0):
+            if ticks_per_beat[i][1] == ticks_per_beat[i - 1][1]:
+                ticks_per_beat[i - 1][0] = ticks_per_beat[i][0]
+                del ticks_per_beat[i]
+        ticks_per_beat = np.array([ticks_per_beat])
+
         # Adds track tokens
         # Disable use_programs so that _create_track_events do not add Program events
         self.config.use_programs = False
@@ -184,7 +209,9 @@ class MMM(MIDITokenizer):
                 ),
             ]
 
-            track_events = deepcopy(global_events) + self._create_track_events(track)
+            track_events = deepcopy(global_events) + self._create_track_events(
+                track, ticks_per_beat
+            )
             track_events.sort(key=lambda x: x.time)
             all_events += self._add_time_events(track_events)
             all_events.append(Event("Track", "End", all_events[-1].time + 1))
