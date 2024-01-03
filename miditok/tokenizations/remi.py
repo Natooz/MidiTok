@@ -18,6 +18,7 @@ from ..constants import (
     TIME_SIGNATURE,
 )
 from ..midi_tokenizer import MIDITokenizer
+from ..utils import compute_ticks_per_bar
 
 
 class REMI(MIDITokenizer):
@@ -92,7 +93,7 @@ class REMI(MIDITokenizer):
         previous_note_end = 0
         tick_at_last_ts_change = tick_at_current_bar = 0
         current_time_sig = TIME_SIGNATURE
-        ticks_per_bar = self._compute_ticks_per_bar(
+        ticks_per_bar = compute_ticks_per_bar(
             TimeSignature(0, *current_time_sig), self.time_division
         )
         # First look for a TimeSig token, if any is given at tick 0, to update
@@ -101,7 +102,7 @@ class REMI(MIDITokenizer):
             for event in events:
                 if event.type_ == "TimeSig":
                     current_time_sig = list(map(int, event.value.split("/")))
-                    ticks_per_bar = self._compute_ticks_per_bar(
+                    ticks_per_bar = compute_ticks_per_bar(
                         TimeSignature(event.time, *current_time_sig),
                         self.time_division,
                     )
@@ -212,7 +213,7 @@ class REMI(MIDITokenizer):
                     event.time - tick_at_last_ts_change
                 ) // ticks_per_bar
                 tick_at_last_ts_change = event.time
-                ticks_per_bar = self._compute_ticks_per_bar(
+                ticks_per_bar = compute_ticks_per_bar(
                     TimeSignature(event.time, *current_time_sig), self.time_division
                 )
                 # We decrease the previous tick so that a Position token is enforced
@@ -303,7 +304,7 @@ class REMI(MIDITokenizer):
                 if len(time_signature_changes) == 0:
                     time_signature_changes.append(TimeSignature(0, *TIME_SIGNATURE))
             current_time_sig = time_signature_changes[-1]
-            ticks_per_bar = self._compute_ticks_per_bar(current_time_sig, time_division)
+            ticks_per_bar = compute_ticks_per_bar(current_time_sig, time_division)
 
             # Set tracking variables
             current_tick = tick_at_last_ts_change = tick_at_current_bar = 0
@@ -414,7 +415,7 @@ class REMI(MIDITokenizer):
                             time_signature_changes.append(current_time_sig)
                         tick_at_last_ts_change = tick_at_current_bar  # == current_tick
                         bar_at_last_ts_change = current_bar
-                        ticks_per_bar = self._compute_ticks_per_bar(
+                        ticks_per_bar = compute_ticks_per_bar(
                             current_time_sig, time_division
                         )
                 elif tok_type == "Pedal":

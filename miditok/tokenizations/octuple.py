@@ -10,7 +10,7 @@ from ..constants import (
     TIME_SIGNATURE,
 )
 from ..midi_tokenizer import MIDITokenizer
-from ..utils import get_midi_max_tick
+from ..utils import compute_ticks_per_bar, get_midi_max_tick
 
 
 class Octuple(MIDITokenizer):
@@ -103,7 +103,7 @@ class Octuple(MIDITokenizer):
         current_time_sig = TIME_SIGNATURE
         current_tempo = self.default_tempo
         current_program = None
-        ticks_per_bar = self._compute_ticks_per_bar(
+        ticks_per_bar = compute_ticks_per_bar(
             TimeSignature(0, *current_time_sig), self.time_division
         )
         for e, event in enumerate(events):
@@ -120,7 +120,7 @@ class Octuple(MIDITokenizer):
                 current_time_sig = list(map(int, event.value.split("/")))
                 current_bar_from_ts_time = current_bar
                 current_tick_from_ts_time = previous_tick
-                ticks_per_bar = self._compute_ticks_per_bar(
+                ticks_per_bar = compute_ticks_per_bar(
                     TimeSignature(event.time, *current_time_sig), self.time_division
                 )
             elif event.type_ == "Tempo":
@@ -240,7 +240,7 @@ class Octuple(MIDITokenizer):
             else:
                 time_signature_changes.append(TimeSignature(0, *TIME_SIGNATURE))
             current_time_sig = time_signature_changes[0]
-            ticks_per_bar = self._compute_ticks_per_bar(current_time_sig, time_division)
+            ticks_per_bar = compute_ticks_per_bar(current_time_sig, time_division)
             # Set track / sequence program if needed
             if not self.one_token_stream:
                 is_drum = False
@@ -324,7 +324,7 @@ class Octuple(MIDITokenizer):
                         if si == 0:
                             time_signature_changes.append(current_time_sig)
                         bar_at_last_ts_change = event_bar
-                        ticks_per_bar = self._compute_ticks_per_bar(
+                        ticks_per_bar = compute_ticks_per_bar(
                             current_time_sig, time_division
                         )
 

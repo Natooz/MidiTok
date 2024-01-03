@@ -12,6 +12,7 @@ from ..constants import (
     TIME_SIGNATURE,
 )
 from ..midi_tokenizer import MIDITokenizer
+from ..utils import compute_ticks_per_bar
 
 
 class MMM(MIDITokenizer):
@@ -72,7 +73,7 @@ class MMM(MIDITokenizer):
 
         # Time events
         time_sig_change = TimeSignature(0, *TIME_SIGNATURE)
-        ticks_per_bar = self._compute_ticks_per_bar(time_sig_change, self.time_division)
+        ticks_per_bar = compute_ticks_per_bar(time_sig_change, self.time_division)
         bar_at_last_ts_change = 0
         previous_tick = 0
         current_bar = 0
@@ -83,7 +84,7 @@ class MMM(MIDITokenizer):
                     events[ei].time - tick_at_last_ts_change
                 ) // ticks_per_bar
                 tick_at_last_ts_change = events[ei].time
-                ticks_per_bar = self._compute_ticks_per_bar(
+                ticks_per_bar = compute_ticks_per_bar(
                     TimeSignature(
                         events[ei].time, *list(map(int, events[ei].value.split("/")))
                     ),
@@ -222,7 +223,7 @@ class MMM(MIDITokenizer):
         tracks: list[Track] = []
         tempo_changes = []
         time_signature_changes = []
-        ticks_per_bar = self._compute_ticks_per_bar(
+        ticks_per_bar = compute_ticks_per_bar(
             TimeSignature(0, *TIME_SIGNATURE), time_division
         )
 
@@ -269,7 +270,7 @@ class MMM(MIDITokenizer):
             ):
                 num, den = self._parse_token_time_signature(token.split("_")[1])
                 time_signature_changes.append(TimeSignature(current_tick, num, den))
-                ticks_per_bar = self._compute_ticks_per_bar(
+                ticks_per_bar = compute_ticks_per_bar(
                     time_signature_changes[-1], time_division
                 )
             elif tok_type in ["Pitch", "PitchIntervalTime", "PitchIntervalChord"]:

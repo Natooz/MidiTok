@@ -57,6 +57,7 @@ from .constants import (
     UNKNOWN_CHORD_PREFIX,
 )
 from .utils import (
+    compute_ticks_per_bar,
     convert_ids_tensors_to_list,
     detect_chords,
     get_midi_programs,
@@ -421,9 +422,10 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     def _preprocess_time_signatures(self, time_sigs: TimeSignatureTickList) -> None:
         r"""Resamples the time signature changes.
-        There are not delayed to the next bar (anymore since v3.0.0).
-        See MIDI 1.0 Detailed specifications, pages 54 - 56, for more information on
-        delayed time signature messages.
+
+        Time signature will be delayed to the next bar. See MIDI 1.0 Detailed
+        specifications, pages 54 - 56, for more information on delayed time signature
+        messages.
         If the ``delete_equal_successive_time_sig_changes`` parameter is set ``True``
         in the tokenizer's configuration, the time signatures must be sorted by time
         before calling this method. This is done by symusic when loading a MIDI. If
@@ -453,7 +455,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         if len(time_sigs) == 0:
             return  # the default one will be added in `_preprocess_midi()`
 
-        ticks_per_bar = self._compute_ticks_per_bar(time_sigs[0], self.time_division)
+        ticks_per_bar = compute_ticks_per_bar(time_sigs[0], self.time_division)
         previous_tick = 0  # first time signature change is always at tick 0
         prev_ts = (time_sigs[0].numerator, time_sigs[0].denominator)
         i = 1
@@ -491,7 +493,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 time_sig.time = previous_tick + bar_offset * ticks_per_bar
 
             # Update values
-            ticks_per_bar = self._compute_ticks_per_bar(time_sig, self.time_division)
+            ticks_per_bar = compute_ticks_per_bar(time_sig, self.time_division)
 
             # If the current time signature is now at the same time as the previous
             # one, we delete the previous
@@ -1644,17 +1646,6 @@ class MIDITokenizer(ABC, HFHubMixin):
         :return: the pitch bend values.
         """
         return np.linspace(*self.config.pitch_bend_range, dtype=np.int32)
-
-    @staticmethod
-    def _compute_ticks_per_bar(time_sig: TimeSignature, time_division: int) -> int:
-        r"""Computes time resolution of one bar in ticks.
-
-        :param time_sig: time signature object
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the
-            MIDI being parsed)
-        :return: MIDI bar resolution, in ticks/bar
-        """
-        return int(time_division * 4 * time_sig.numerator / time_sig.denominator)
 
     @staticmethod
     def _parse_token_time_signature(token_time_sig: str) -> tuple[int, int]:

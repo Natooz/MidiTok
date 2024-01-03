@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import warnings
 from collections import Counter
+from copy import copy
+from math import ceil
 from typing import Sequence
 
 import numpy as np
@@ -26,6 +28,7 @@ from miditok.constants import (
     INSTRUMENT_CLASSES,
     MIDI_INSTRUMENTS,
     PITCH_CLASSES,
+    TIME_SIGNATURE,
     UNKNOWN_CHORD_PREFIX,
 )
 
@@ -278,7 +281,7 @@ def merge_tracks_per_class(
             if midi.tracks[i].program not in valid_programs:
                 del midi.tracks[i]
                 if len(midi.tracks) == 0:
-                    return False
+                    return
             else:
                 i += 1
 
@@ -562,3 +565,82 @@ def miditoolkit_to_symusic(midi: MidiFile) -> Score:
         score.tracks.append(track)
 
     return score
+
+
+def compute_ticks_per_beat(
+    time_sig_denominator: int, time_division: int
+) -> float | int:
+    r"""Computes the number of ticks that constitute a beat at a given time signature
+    depending on the time division of a MIDI.
+
+    * time_division: ticks/quarter
+    * denominator: beat length in "note type"
+
+    :param time_sig_denominator: time signature denominator.
+    :param time_division: MIDI time division in ticks/quarter.
+    :return: number of ticks per beat at the given time signature. This is given as a
+        floating point number, as we consider all types of time signature denominators
+        (including irrational) and time divisions.
+    """
+    if time_sig_denominator == 4:
+        return time_division
+    # factor to multiply the time_division depending on the denominator
+    # if we have a */2 time sig, one beat is an eighth note so one beat is
+    # `time_division * 0.5` ticks.
+    time_div_factor = 4 / time_sig_denominator
+    return time_division * time_div_factor
+
+
+def compute_ticks_per_bar(time_sig: TimeSignature, time_division: int) -> int:
+    r"""Computes the number of ticks that constitute a bar at a given time signature
+    depending on the time division of a MIDI.
+
+    * time_division: ticks/quarter
+    * numerator: beats/bar
+    * denominator: beat length in "note type"
+
+    :param time_sig: time signature object.
+    :param time_division: MIDI time division in ticks/quarter.
+    :return: MIDI bar resolution, in ticks/bar
+    """
+    return int(
+        compute_ticks_per_beat(time_sig.denominator, time_division) * time_sig.numerator
+    )
+
+
+def get_bars_ticks(midi: Score) -> list[int]:
+    """Compute the ticks of the bars of a MIDI.
+
+    **Note:** When encountering multiple time signature messages at a same tick, we
+    this method will automatically consider the last one (coming in the list). Other
+    software can proceed differently. Logic Pro, for example, uses the first one.
+    I haven't found documentation or recommendations for this specific situation. It
+    might be better to use the first one and discard the others.
+
+    :param midi: MIDI to analyze.
+    :return: list of ticks for each bar.
+    """
+    max_tick = get_midi_max_tick(midi)
+    bars_ticks = []
+    time_sigs = copy(midi.time_signatures)
+    # Mock the last one to cover the last section in the loop below
+    if time_sigs[-1].time != max_tick:
+        time_sigs.append(TimeSignature(max_tick, *TIME_SIGNATURE))
+
+    # Section from tick 0 to first time sig is 4/4 if first time sig time is not 0
+    if time_sigs[0].time == 0:
+        current_time_sig = time_sigs[0]
+    else:
+        current_time_sig = TimeSignature(0, *TIME_SIGNATURE)
+
+    # Compute bars, one time signature portion at a time
+    for time_signature in time_sigs:
+        ticks_per_bar = compute_ticks_per_bar(current_time_sig, midi.ticks_per_quarter)
+        ticks_diff = time_signature.time - current_time_sig.time
+        num_bars = ceil(ticks_diff / ticks_per_bar)
+        bars_ticks += [
+            current_time_sig.time + ticks_per_bar * i for i in range(num_bars)
+        ]
+        current_time_sig = time_signature
+
+    return bars_ticks

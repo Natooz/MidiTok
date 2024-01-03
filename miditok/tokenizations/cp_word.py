@@ -8,6 +8,7 @@ from symusic import Note, Score, Tempo, TimeSignature, Track
 from ..classes import Event, TokSequence
 from ..constants import MIDI_INSTRUMENTS, TIME_SIGNATURE
 from ..midi_tokenizer import MIDITokenizer
+from ..utils import compute_ticks_per_bar
 
 _ADD_TOK_ATTRIBUTES = [
     "use_programs",
@@ -108,7 +109,7 @@ class CPWord(MIDITokenizer):
         else:
             current_tempo = self.default_tempo
         current_program = None
-        ticks_per_bar = self._compute_ticks_per_bar(
+        ticks_per_bar = compute_ticks_per_bar(
             TimeSignature(0, *current_time_sig), self.time_division
         )
         # First look for a TimeSig token, if any is given at tick 0, to update
@@ -117,7 +118,7 @@ class CPWord(MIDITokenizer):
             for event in events:
                 if event.type_ == "TimeSig":
                     current_time_sig = list(map(int, event.value.split("/")))
-                    ticks_per_bar = self._compute_ticks_per_bar(
+                    ticks_per_bar = compute_ticks_per_bar(
                         TimeSignature(event.time, *current_time_sig),
                         self.time_division,
                     )
@@ -240,7 +241,7 @@ class CPWord(MIDITokenizer):
                     event.time - tick_at_last_ts_change
                 ) // ticks_per_bar
                 tick_at_last_ts_change = event.time
-                ticks_per_bar = self._compute_ticks_per_bar(
+                ticks_per_bar = compute_ticks_per_bar(
                     TimeSignature(event.time, *current_time_sig), self.time_division
                 )
                 # We decrease the previous tick so that a Position token is enforced
@@ -435,7 +436,7 @@ class CPWord(MIDITokenizer):
                 if len(time_signature_changes) == 0:
                     time_signature_changes.append(TimeSignature(0, *TIME_SIGNATURE))
             current_time_sig = time_signature_changes[0]
-            ticks_per_bar = self._compute_ticks_per_bar(current_time_sig, time_division)
+            ticks_per_bar = compute_ticks_per_bar(current_time_sig, time_division)
             # Set track / sequence program if needed
             if not self.one_token_stream:
                 current_tick = tick_at_last_ts_change = tick_at_current_bar = 0
@@ -501,7 +502,7 @@ class CPWord(MIDITokenizer):
                                     time_signature_changes.append(current_time_sig)
                                 tick_at_last_ts_change = tick_at_current_bar
                                 bar_at_last_ts_change = current_bar
-                                ticks_per_bar = self._compute_ticks_per_bar(
+                                ticks_per_bar = compute_ticks_per_bar(
                                     current_time_sig, time_division
                                 )
                     elif bar_pos == "Position":  # i.e. its a position
