@@ -142,11 +142,11 @@ def test_split_dataset_to_subsequences(
         tokenizer = miditok.TSD(config)
         tokenizer.tokenize_midi_dataset(midi_paths, tokens_os_dir)
     miditok.pytorch_data.split_dataset_to_subsequences(
-        list(tokens_os_dir.glob("**/*.json")),
-        tokens_split_dir,
-        50,
-        100,
-        True,
+        files_paths=list(tokens_os_dir.glob("**/*.json")),
+        out_dir=tokens_split_dir,
+        min_seq_len=50,
+        max_seq_len=100,
+        one_token_stream=True,
     )
 
     # Multiple token streams
@@ -155,11 +155,11 @@ def test_split_dataset_to_subsequences(
         tokenizer = miditok.TSD(config)
         tokenizer.tokenize_midi_dataset(midi_paths, tokens_split_dir_ms)
     miditok.pytorch_data.split_dataset_to_subsequences(
-        list(tokens_split_dir_ms.glob("**/*.json")),
-        tokens_split_dir,
-        50,
-        100,
-        False,
+        files_paths=list(tokens_split_dir_ms.glob("**/*.json")),
+        out_dir=tokens_split_dir,
+        min_seq_len=50,
+        max_seq_len=100,
+        one_token_stream=False,
     )
 
 

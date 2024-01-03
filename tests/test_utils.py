@@ -255,7 +255,9 @@ def test_remove_duplicated_notes():
 
     for notes, diff, diff_with_duration in sets:
         remove_duplicated_notes(notes_filtered := copy(notes))
-        remove_duplicated_notes(notes_filtered_dur := copy(notes), True)
+        remove_duplicated_notes(
+            notes_filtered_dur := copy(notes), consider_duration=True
+        )
 
         if diff == 0:
             assert notes == notes_filtered

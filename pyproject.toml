@@ -76,7 +76,7 @@ extend-select = [
     "COM",
     "E",
     "F",
-    # "FBT",
+    "FBT",
     "FA",
     "G",
     "I",
@@ -109,12 +109,17 @@ extend-select = [
 # Yields errors for `self` in methods from classes, which is unecessary.
 # https://github.com/astral-sh/ruff/issues/4396
 
+# FBT001 and FB002
+# Refactoring all the methods to make boolean arguments keyword only would add
+# complexity and could break code of users. It's ok to have booleans as positional
+# arguments with default values. For code redability though, we enable FB003.
+
 # COM812:
 # Yields errors for one-line portions without comma. Trailing commas are automatically
 # set with ruff format anyway. This exclusion could be removed when this behavior is
 # fixed in ruff.
 
-ignore = ["ANN003", "ANN101", "ANN102", "ANN201", "COM812"]
+ignore = ["ANN003", "ANN101", "ANN102", "ANN201", "FBT001", "FBT002", "COM812"]
 
 [tool.ruff.per-file-ignores]
 # S105: we don't use password in MidiTok, only HF token for the interactions with the

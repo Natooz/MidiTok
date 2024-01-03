@@ -341,10 +341,14 @@ class MuMIDI(MIDITokenizer):
         # Appends created notes to MIDI object
         for program, notes in tracks.items():
             if int(program) == -1:
-                midi.tracks.append(Track("Drums", 0, True))
+                midi.tracks.append(Track(name="Drums", program=0, is_drum=True))
             else:
                 midi.tracks.append(
-                    Track(MIDI_INSTRUMENTS[int(program)]["name"], int(program), False)
+                    Track(
+                        name=MIDI_INSTRUMENTS[int(program)]["name"],
+                        program=int(program),
+                        is_drum=False,
+                    )
                 )
             midi.tracks[-1].notes = notes
 
