@@ -363,10 +363,7 @@ class CPWord(MIDITokenizer):
 
     def _tokens_to_midi(
         self,
-        tokens: TokSequence
-        | list[list[int]]
-        | np.ndarray
-        | list[TokSequence | list[list[int]] | np.ndarray],
+        tokens: TokSequence | list[TokSequence],
         programs: list[tuple[int, bool]] | None = None,
         time_division: int | None = None,
     ) -> Score:

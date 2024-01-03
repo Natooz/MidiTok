@@ -32,7 +32,7 @@ from miditok.constants import (
 )
 
 
-def convert_ids_tensors_to_list(ids):  # noqa: ANN001
+def convert_ids_tensors_to_list(ids) -> list[int] | list[list[int]]:  # noqa: ANN001
     """Convert a PyTorch, Tensorflow Tensor or numpy array to a list of integers.
     This method works with Jax too.
     It is recursive and will convert nested Tensors / arrays within lists.

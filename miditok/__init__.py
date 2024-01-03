@@ -1,7 +1,7 @@
 from miditok import data_augmentation
 
 from .classes import Event, TokenizerConfig, TokSequence
-from .midi_tokenizer import MIDITokenizer, convert_sequence_to_tokseq
+from .midi_tokenizer import MIDITokenizer
 from .tokenizations import (
     MMM,
     REMI,
@@ -34,7 +34,6 @@ class REMIPlus(REMI):
 
 __all__ = [
     "MIDITokenizer",
-    "convert_sequence_to_tokseq",
     "Event",
     "TokSequence",
     "TokenizerConfig",

@@ -67,46 +67,6 @@ from .utils import (
 from .utils.utils import miditoolkit_to_symusic, np_get_closest
 
 
-# TODO delete these decorators, put the logic inside the main class
-# TODO dynamic "tokenizer-wise" type annotation for tokens? i/o format, tensors avail
-def _in_as_seq(complete: bool = True, decode_bpe: bool = True) -> Callable:
-    r"""Decorator creating if necessary and completing a :class:`miditok.TokSequence`
-    object before that the function is called. This decorator is made to be used by the
-    :py:meth:`miditok.MIDITokenizer.tokens_to_midi` method.
-
-    :param complete: will complete the sequence, i.e. complete its ``ids`` , ``tokens``
-        and ``events`` .
-    :param decode_bpe: will decode BPE, if applicable. This step is performed before
-        completing the sequence.
-    """
-
-    def decorator(function: Callable) -> Callable:
-        def wrapper(*args, **kwargs):  # noqa: ANN002, ANN202
-            tokenizer = args[0]
-            seq = args[1]
-            if not isinstance(seq, TokSequence) and not all(
-                isinstance(seq_, TokSequence) for seq_ in seq
-            ):
-                seq = convert_sequence_to_tokseq(tokenizer, seq, complete, decode_bpe)
-            else:
-                if tokenizer.has_bpe and decode_bpe:
-                    tokenizer.decode_bpe(seq)
-                if complete:
-                    if isinstance(seq, TokSequence):
-                        tokenizer.complete_sequence(seq)
-                    else:
-                        for seq_ in seq:
-                            tokenizer.complete_sequence(seq_)
-
-            args = list(args)
-            args[1] = seq
-            return function(*args, **kwargs)
-
-        return wrapper
-
-    return decorator
-
-
 class MIDITokenizer(ABC, HFHubMixin):
     r"""MIDI tokenizer base class, containing common methods and attributes for all
     tokenizers.
@@ -650,7 +610,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             for i in range(len(all_events)):
                 all_events[i] += global_events
 
-        # Adds track tokens todo combine with below?
+        # Adds track tokens
         for ti, track in enumerate(midi.tracks):
             track_events = self._create_track_events(track)
             if self.one_token_stream:
@@ -666,7 +626,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 all_events[ti].sort(key=lambda x: (x.time, self.__order(x)))
         if self.one_token_stream:
             all_events.sort(key=lambda x: (x.time, self.__order(x)))
-            # Add ProgramChange (named Program) tokens if requested
+            # Add ProgramChange (named Program) tokens if requested.
             if self.config.program_changes:
                 self._insert_program_change_events(all_events)
 
@@ -1147,10 +1107,102 @@ class MIDITokenizer(ABC, HFHubMixin):
             tokens.append(token_str if as_str else Event(*token_str.split("_")))
         return [tok for toks in tokens for tok in toks]  # flatten
 
-    @_in_as_seq()
+    def _convert_sequence_to_tokseq(
+        self,
+        input_seq: list[int | str | list[int | str]] | np.ndarray,
+        complete_seq: bool = False,
+        decode_bpe: bool = False,
+    ) -> TokSequence | list[TokSequence]:
+        r"""Converts a sequence into a :class:`miditok.TokSequence` or list of
+        :class:`miditok.TokSequence` objects with the appropriate format of the
+        tokenizer being used.
+
+        :param input_seq: sequence to convert. It can be a list of ids (integers),
+            tokens (string) or events (Event). It can also be a Pytorch or TensorFlow
+            tensor, or Numpy array representing ids.
+        :param complete_seq: will complete the output sequence(s). (default: ``False``)
+        :param decode_bpe: if the input sequence contains ids, and that they contain
+            BPE tokens, these tokens will be decoded. (default: ``False``)
+        :return: the input sequence as a (list of) :class:`miditok.TokSequence`.
+        """
+        # Deduce the type of data (ids/tokens/events)
+        try:
+            arg = ("ids", convert_ids_tensors_to_list(input_seq))
+        except (AttributeError, ValueError, TypeError, IndexError):
+            if isinstance(input_seq[0], str) or (
+                isinstance(input_seq[0], list) and isinstance(input_seq[0][0], str)
+            ):
+                arg = ("tokens", input_seq)
+            else:  # list of Event, but unlikely
+                arg = ("events", input_seq)
+
+        # Deduce number of subscripts / dims
+        num_io_dims = len(self.io_format)
+        num_seq_dims = 1
+        if len(arg[1]) > 0 and isinstance(arg[1][0], list):
+            num_seq_dims += 1
+            if len(arg[1][0]) > 0 and isinstance(arg[1][0][0], list):
+                num_seq_dims += 1
+            elif len(arg[1][0]) == 0 and num_seq_dims == num_io_dims - 1:
+                # Special case where the sequence contains no tokens, we increment
+                num_seq_dims += 1
+
+        # Check the number of dimensions is good
+        # In case of no one_token_stream and one dimension short --> unsqueeze
+        if not self.one_token_stream and num_seq_dims == num_io_dims - 1:
+            warnings.warn(
+                f"The input sequence has one dimension less than expected ("
+                f"{num_seq_dims} instead of {num_io_dims}). It is being unsqueezed to "
+                f"conform with the tokenizer's i/o format ({self.io_format})",
+                stacklevel=2,
+            )
+            arg = (arg[0], [arg[1]])
+
+        elif num_seq_dims != num_io_dims:
+            raise ValueError(
+                f"The input sequence does not have the expected dimension "
+                f"({num_seq_dims} instead of {num_io_dims})."
+            )
+
+        # Convert to TokSequence
+        if not self.one_token_stream and num_io_dims == num_seq_dims:
+            seq = []
+            for obj in arg[1]:
+                kwarg = {arg[0]: obj}
+                seq.append(TokSequence(**kwarg))
+                if not self.is_multi_voc and seq[-1].ids is not None:
+                    seq[-1].ids_bpe_encoded = self._are_ids_bpe_encoded(seq[-1].ids)
+        else:  # 1 subscript, one_token_stream and no multi-voc
+            kwarg = {arg[0]: arg[1]}
+            seq = TokSequence(**kwarg)
+            if not self.is_multi_voc:
+                seq.ids_bpe_encoded = self._are_ids_bpe_encoded(seq.ids)
+
+        # decode BPE and complete the output sequence(s) if requested
+        if self.has_bpe and decode_bpe:
+            self.decode_bpe(seq)
+        if complete_seq:
+            if isinstance(seq, TokSequence):
+                self.complete_sequence(seq)
+            else:
+                for seq_ in seq:
+                    self.complete_sequence(seq_)
+
+        return seq
+
+    def _are_ids_bpe_encoded(self, ids: list[int] | np.ndarray) -> bool:
+        r"""A small check telling if a sequence of ids are encoded with BPE.
+        This is performed by checking if any id has a value superior or equal to the
+        length of the base vocabulary.
+
+        :param ids: ids to check.
+        :return: boolean, True if ids are encoded with BPE, False otherwise.
+        """
+        return np.any(np.array(ids) >= len(self))
+
     def tokens_to_midi(
         self,
-        tokens: TokSequence | list[int] | np.ndarray,
+        tokens: TokSequence | list[TokSequence] | list[int | list[int]] | np.ndarray,
         programs: list[tuple[int, bool]] | None = None,
         output_path: str | None = None,
         time_division: int | None = None,
@@ -1166,11 +1218,19 @@ class MIDITokenizer(ABC, HFHubMixin):
             single token sequence (``tokenizer.one_token_stream == True``).
         :param programs: programs of the tracks. If none is given, will default to
             piano, program 0. (default: None)
-        :param output_path: path to save the file. (default: None)
+        :param output_path: path to save the file. (default: ``None``)
         :param time_division: MIDI time division / resolution, in ticks/beat (of the
-            MIDI to create).
-        :return: the midi object (symusic.Score).
+            MIDI to create). (default: ``tokenizer.time_division``)
+        :return: the midi object (``symusic.Score``).
         """
+        if not isinstance(tokens, (TokSequence, list)) or (
+            isinstance(tokens, list)
+            and any(not isinstance(seq, TokSequence) for seq in tokens)
+        ):
+            tokens = self._convert_sequence_to_tokseq(
+                tokens, complete_seq=True, decode_bpe=True
+            )
+
         midi = self._tokens_to_midi(tokens, programs, time_division)
 
         # Set default tempo and time signatures at tick 0 if not present
@@ -1187,7 +1247,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     def _tokens_to_midi(
         self,
-        tokens: TokSequence | list[int] | np.ndarray,
+        tokens: TokSequence | list[TokSequence],
         programs: list[tuple[int, bool]] | None = None,
         time_division: int | None = None,
     ) -> Score:
@@ -1918,9 +1978,9 @@ class MIDITokenizer(ABC, HFHubMixin):
         # Set it back to False
         self._verbose = False
 
-    @_in_as_seq(complete=False, decode_bpe=False)
     def tokens_errors(
-        self, tokens: TokSequence | list[int | list[int]] | np.ndarray
+        self,
+        tokens: TokSequence | list[TokSequence] | list[int | list[int]] | np.ndarray,
     ) -> float | list[float]:
         r"""Checks if a sequence of tokens is made of good token types successions and
         returns the error ratio (lower is better).
@@ -1928,7 +1988,11 @@ class MIDITokenizer(ABC, HFHubMixin):
         :param tokens: sequence of tokens to check.
         :return: the error ratio (lower is better).
         """
-        # TODO replace decorator by method from class
+        if not isinstance(tokens, (TokSequence, list)) or (
+            isinstance(tokens, list)
+            and any(not isinstance(seq, TokSequence) for seq in tokens)
+        ):
+            tokens = self._convert_sequence_to_tokseq(tokens)
 
         # If list of TokSequence -> recursive
         if isinstance(tokens, list):
@@ -2441,102 +2505,3 @@ class MIDITokenizer(ABC, HFHubMixin):
             and self._vocab_base_byte_to_token == other._vocab_base_byte_to_token
             and self.config == other.config
         )
-
-
-def _are_ids_bpe_encoded(ids: list[int] | np.ndarray, vocab_size: int) -> bool:
-    r"""A small check telling if a sequence of ids are encoded with BPE.
-    This is performed by checking if any id has a value superior or equal to the
-    length of the base vocabulary.
-
-    :param ids: ids to check.
-    :param vocab_size: number of tokens in the vocabulary.
-    :return: boolean, True if ids are encoded with BPE, False otherwise.
-    """
-    return np.any(np.array(ids) >= vocab_size)
-
-
-def convert_sequence_to_tokseq(
-    tokenizer: MIDITokenizer,
-    input_seq: list[int | str | list[int | str]] | np.ndarray,
-    complete_seq: bool = True,
-    decode_bpe: bool = True,
-) -> TokSequence | list[TokSequence]:
-    r"""Converts a sequence into a :class:`miditok.TokSequence` or list of
-    :class:`miditok.TokSequence` objects with the appropriate format of the tokenizer
-    being used.
-
-    :param tokenizer: tokenizer being used with the sequence.
-    :param input_seq: sequence to convert. It can be a list of ids (integers), tokens
-        (string) or events (Event). It can also be a Pytorch or TensorFlow tensor, or
-        Numpy array representing ids.
-    :param complete_seq: will complete the output sequence(s). (default: True)
-    :param decode_bpe: if the input sequence contains ids, and that they contain BPE
-        tokens, these tokens will be decoded. (default: True)
-    :return:
-    """
-    # Deduce the type of data (ids/tokens/events)
-    try:
-        arg = ("ids", convert_ids_tensors_to_list(input_seq))
-    except (AttributeError, ValueError, TypeError, IndexError):
-        if isinstance(input_seq[0], str) or (
-            isinstance(input_seq[0], list) and isinstance(input_seq[0][0], str)
-        ):
-            arg = ("tokens", input_seq)
-        else:  # list of Event, but unlikely
-            arg = ("events", input_seq)
-
-    # Deduce number of subscripts / dims
-    num_io_dims = len(tokenizer.io_format)
-    num_seq_dims = 1
-    if len(arg[1]) > 0 and isinstance(arg[1][0], list):
-        num_seq_dims += 1
-        if len(arg[1][0]) > 0 and isinstance(arg[1][0][0], list):
-            num_seq_dims += 1
-        elif len(arg[1][0]) == 0 and num_seq_dims == num_io_dims - 1:
-            # Special case where the sequence contains no tokens, we increment anyway
-            num_seq_dims += 1
-
-    # Check the number of dimensions is good
-    # In case of no one_token_stream and one dimension short --> unsqueeze
-    if not tokenizer.one_token_stream and num_seq_dims == num_io_dims - 1:
-        warnings.warn(
-            f"The input sequence has one dimension less than expected ({num_seq_dims}"
-            f"instead of {num_io_dims}). It is being unsqueezed to conform with the"
-            f"tokenizer's i/o format ({tokenizer.io_format})",
-            stacklevel=2,
-        )
-        arg = (arg[0], [arg[1]])
-
-    elif num_seq_dims != num_io_dims:
-        raise ValueError(
-            f"The input sequence does not have the expected dimension "
-            f"({num_seq_dims} instead of {num_io_dims})."
-        )
-
-    # Convert to TokSequence
-    if not tokenizer.one_token_stream and num_io_dims == num_seq_dims:
-        seq = []
-        for obj in arg[1]:
-            kwarg = {arg[0]: obj}
-            seq.append(TokSequence(**kwarg))
-            if not tokenizer.is_multi_voc and seq[-1].ids is not None:
-                seq[-1].ids_bpe_encoded = _are_ids_bpe_encoded(
-                    seq[-1].ids, len(tokenizer)
-                )
-    else:  # 1 subscript, one_token_stream and no multi-voc
-        kwarg = {arg[0]: arg[1]}
-        seq = TokSequence(**kwarg)
-        if not tokenizer.is_multi_voc:
-            seq.ids_bpe_encoded = _are_ids_bpe_encoded(seq.ids, len(tokenizer))
-
-    # decode BPE and complete the output sequence(s) if requested
-    if tokenizer.has_bpe and decode_bpe:
-        tokenizer.decode_bpe(seq)
-    if complete_seq:
-        if isinstance(seq, TokSequence):
-            tokenizer.complete_sequence(seq)
-        else:
-            for seq_ in seq:
-                tokenizer.complete_sequence(seq_)
-
-    return seq

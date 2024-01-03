@@ -256,7 +256,7 @@ class MuMIDI(MIDITokenizer):
 
     def _tokens_to_midi(
         self,
-        tokens: TokSequence | list[int] | np.ndarray,
+        tokens: TokSequence,
         _: None = None,
         time_division: int | None = None,
     ) -> Score:

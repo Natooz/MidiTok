@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import numpy as np
 from symusic import Note, Pedal, PitchBend, Score, Tempo, TimeSignature, Track
 
 from ..classes import Event, TokSequence
@@ -114,10 +113,7 @@ class MIDILike(MIDITokenizer):
 
     def _tokens_to_midi(
         self,
-        tokens: TokSequence
-        | list[int]
-        | np.ndarray
-        | list[TokSequence | list[int] | np.ndarray],
+        tokens: TokSequence | list[TokSequence],
         programs: list[tuple[int, bool]] | None = None,
         time_division: int | None = None,
     ) -> Score:
