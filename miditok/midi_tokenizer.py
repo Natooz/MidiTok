@@ -973,7 +973,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         return tokens
 
-    def complete_sequence(self, seq: TokSequence):
+    def complete_sequence(self, seq: TokSequence) -> None:
         r"""Completes (inplace) a :class:`miditok.TokSequence` object by converting its
         attributes. The input sequence can miss some of its attributes (ids, tokens),
         but needs at least one for reference. This method will create the missing ones
@@ -1393,7 +1393,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         vocab_idx: int | None = None,
         byte_: str | None = None,
         add_to_bpe_model: bool = False,
-    ):
+    ) -> None:
         r"""Adds an event to the vocabulary. Its index (int) will be the length of the
         vocab.
 
@@ -1690,7 +1690,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         files_paths: list[Path | str] | None = None,
         start_from_empty_voc: bool = False,
         **kwargs,
-    ):
+    ) -> None:
         r"""Method to construct the vocabulary from BPE, backed by the 🤗tokenizers
         library. The data used for training can either be given through the
         ``iterator`` argument as an iterable object yielding strings, or by
@@ -1821,7 +1821,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         self.has_bpe = True
 
-    def apply_bpe(self, seq: TokSequence | list[TokSequence]):
+    def apply_bpe(self, seq: TokSequence | list[TokSequence]) -> None:
         """Applies Byte Pair Encoding (BPE) to a TokSequence, or list of TokSequences.
         If a list is given, BPE will be applied by batch on all sequences at the time.
 
@@ -1843,7 +1843,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             seq.ids = encoded_tokens.ids
             seq.ids_bpe_encoded = True
 
-    def decode_bpe(self, seq: TokSequence | list[TokSequence]):
+    def decode_bpe(self, seq: TokSequence | list[TokSequence]) -> None:
         r"""Decodes (inplace) a sequence of tokens (:class:`miditok.TokSequence`) with
         ids encoded with BPE. This method only modifies the ``.ids`` attribute of the
         input sequence(s) only and does not complete it. This method can also receive a
@@ -1876,7 +1876,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         validation_fn: Callable[[Score], bool] | None = None,
         save_programs: bool | None = None,
         verbose: bool = True,
-    ):
+    ) -> None:
         r"""Converts a dataset / list of MIDI files, into their token version and save
         them as json files. The resulting json files will have an ``ids`` entry
         containing the token ids. The format of the ids will correspond to the format

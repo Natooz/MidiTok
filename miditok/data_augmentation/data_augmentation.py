@@ -28,7 +28,7 @@ def augment_midi_dataset(
     out_path: Path | str | None = None,
     copy_original_in_new_location: bool = True,
     save_data_aug_report: bool = True,
-):
+) -> None:
     r"""Perform data augmentation on a dataset of MIDI files.
     The new created files have names in two parts, separated with a "#" character. Make
     sure your files do not have '§' in their names if you intend to reuse the

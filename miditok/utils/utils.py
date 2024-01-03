@@ -79,7 +79,7 @@ def get_midi_programs(midi: Score) -> list[tuple[int, bool]]:
 
 def remove_duplicated_notes(
     notes: NoteTickList | list[Note], consider_duration: bool = False
-):
+) -> None:
     r"""Removes (inplace) duplicated notes, i.e. with the same pitch and starting
     (onset) time. `consider_duration` can be used to also consider their duration
     (i.e. offset time) too. The velocities are ignored in this method.
@@ -103,7 +103,7 @@ def remove_duplicated_notes(
         del notes[idx]
 
 
-def fix_offsets_overlapping_notes(notes: NoteTickList):
+def fix_offsets_overlapping_notes(notes: NoteTickList) -> None:
     r"""Reduces the durations of overlapping notes, so that when a note starts, if it
     was previously being played, the previous note will end. Before running this
     method make sure the notes has been sorted by start then pitch then end values:
@@ -247,7 +247,7 @@ def merge_tracks_per_class(
     max_num_of_tracks_per_inst_class: dict[int, int] | None = None,
     valid_programs: list[int] | None = None,
     filter_pitches: bool = True,
-):
+) -> None:
     r"""Merges per instrument class the tracks which are in the class in
     ``classes_to_merge``.
     Example, a list of tracks / programs `[0, 3, 8, 10, 11, 24, 25, 44, 47]`` will
@@ -394,7 +394,7 @@ def merge_tracks(
     return tracks_[0]
 
 
-def merge_same_program_tracks(tracks: list[Track] | TrackTickList):
+def merge_same_program_tracks(tracks: list[Track] | TrackTickList) -> None:
     r"""Takes a list of tracks and merge the ones with the same programs.
     NOTE: Control change messages are not considered
 

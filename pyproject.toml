@@ -119,7 +119,7 @@ extend-select = [
 # set with ruff format anyway. This exclusion could be removed when this behavior is
 # fixed in ruff.
 
-ignore = ["ANN003", "ANN101", "ANN102", "ANN201", "FBT001", "FBT002", "COM812"]
+ignore = ["ANN003", "ANN101", "ANN102", "FBT001", "FBT002", "COM812"]
 
 [tool.ruff.per-file-ignores]
 # S105: we don't use password in MidiTok, only HF token for the interactions with the
@@ -129,6 +129,7 @@ ignore = ["ANN003", "ANN101", "ANN102", "ANN201", "FBT001", "FBT002", "COM812"]
     "S105",
 ]
 "tests/**" = [
+    "ANN201",  # allow no return type hint for pytest methods
     "S101",  # allow assertions in tests
     "T201",  # print allowed
 ]

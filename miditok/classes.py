@@ -537,7 +537,7 @@ class TokenizerConfig:
             elif isinstance(dict_[key], ndarray):
                 dict_[key] = dict_[key].tolist()
 
-    def save_to_json(self, out_path: str | Path):
+    def save_to_json(self, out_path: str | Path) -> None:
         r"""
         Saves a tokenizer configuration object to the `out_path` path, so that it can
         be re-loaded later.

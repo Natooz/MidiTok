@@ -48,7 +48,7 @@ def split_dataset_to_subsequences(
     min_seq_len: int,
     max_seq_len: int,
     one_token_stream: bool = True,
-):
+) -> None:
     """
 
     :param files_paths: list of files of tokens to split.
