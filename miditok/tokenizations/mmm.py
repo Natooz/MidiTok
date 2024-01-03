@@ -180,7 +180,7 @@ class MMM(MIDITokenizer):
             ]
         )
         # Remove equal successive ones
-        for i in range(len(ticks_per_beat) - 1, -1, 0):
+        for i in range(len(ticks_per_beat) - 1, 0, -1):
             if ticks_per_beat[i][1] == ticks_per_beat[i - 1][1]:
                 ticks_per_beat[i - 1][0] = ticks_per_beat[i][0]
                 del ticks_per_beat[i]

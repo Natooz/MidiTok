@@ -642,7 +642,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             ]
         )
         # Remove equal successive ones
-        for i in range(len(ticks_per_beat) - 1, -1, 0):
+        for i in range(len(ticks_per_beat) - 1, 0, -1):
             if ticks_per_beat[i][1] == ticks_per_beat[i - 1][1]:
                 ticks_per_beat[i - 1][0] = ticks_per_beat[i][0]
                 del ticks_per_beat[i]
@@ -1647,7 +1647,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         """
         return {
             tpb: {v: k for k, v in ticks_to_tokens.items()}
-            for tpb, ticks_to_tokens in self._tpb_ticks_to_tokens
+            for tpb, ticks_to_tokens in self._tpb_ticks_to_tokens.items()
         }
 
     @staticmethod
