@@ -74,6 +74,7 @@ extend-select = [
     "BLE",
     "C4",
     "COM",
+    # "D",
     "E",
     "F",
     "FBT",
@@ -109,6 +110,10 @@ extend-select = [
 # Yields errors for `self` in methods from classes, which is unecessary.
 # https://github.com/astral-sh/ruff/issues/4396
 
+# D107
+# We document classes at the class level (D101). This documentation should cover the
+# way classes are initialized. So we do not document `__init__` methods.
+
 # FBT001 and FB002
 # Refactoring all the methods to make boolean arguments keyword only would add
 # complexity and could break code of users. It's ok to have booleans as positional
@@ -119,7 +124,7 @@ extend-select = [
 # set with ruff format anyway. This exclusion could be removed when this behavior is
 # fixed in ruff.
 
-ignore = ["ANN003", "ANN101", "ANN102", "FBT001", "FBT002", "COM812"]
+ignore = ["ANN003", "ANN101", "ANN102", "D107", "FBT001", "FBT002", "COM812"]
 
 [tool.ruff.per-file-ignores]
 # S105: we don't use password in MidiTok, only HF token for the interactions with the
@@ -130,6 +135,7 @@ ignore = ["ANN003", "ANN101", "ANN102", "FBT001", "FBT002", "COM812"]
 ]
 "tests/**" = [
     "ANN201",  # allow no return type hint for pytest methods
+    "D103",  # no need to document pytest methods
     "S101",  # allow assertions in tests
     "T201",  # print allowed
 ]

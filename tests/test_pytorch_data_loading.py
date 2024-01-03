@@ -1,8 +1,6 @@
 #!/usr/bin/python3 python
 
-"""
-Test classes and methods from the pytorch_data module.
-"""
+"""Test classes and methods from the pytorch_data module."""
 
 from __future__ import annotations
 

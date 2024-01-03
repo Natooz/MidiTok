@@ -1,8 +1,6 @@
 #!/usr/bin/python3 python
 
-"""
-Testing the possible I/O formats of the tokenizers.
-"""
+"""Testing the possible I/O formats of the tokenizers."""
 
 from __future__ import annotations
 

@@ -1,6 +1,4 @@
-"""
-Common classes.
-"""
+"""Common classes."""
 
 from __future__ import annotations
 
@@ -145,7 +143,7 @@ class TokSequence:
         r"""Checks if too sequences are equal.
         This is performed by comparing their attributes (ids, tokens...).
         **Both sequences must have at least one common attribute initialized (not None)
-        for this method to work, otherwise it will return False.**
+        for this method to work, otherwise it will return False.**.
 
         :param other: other sequence to compare.
         :return: True if the sequences have equal attributes.
@@ -163,8 +161,7 @@ class TokSequence:
 
 
 class TokenizerConfig:
-    r"""
-    MIDI tokenizer base class, containing common methods and attributes for all
+    r"""MIDI tokenizer base class, containing common methods and attributes for all
     tokenizers.
 
     :param pitch_range: range of MIDI pitches to use. Pitches can take values between
@@ -493,8 +490,7 @@ class TokenizerConfig:
 
     @classmethod
     def from_dict(cls, input_dict: dict[str, Any], **kwargs) -> TokenizerConfig:
-        r"""
-        Instantiates an ``AdditionalTokensConfig`` from a Python dictionary of
+        r"""Instantiates an ``AdditionalTokensConfig`` from a Python dictionary of
         parameters.
 
         :param input_dict: Dictionary that will be used to instantiate the
@@ -512,8 +508,7 @@ class TokenizerConfig:
         return cls(**input_dict, **kwargs)
 
     def to_dict(self, serialize: bool = False) -> dict[str, Any]:
-        r"""
-        Serializes this instance to a Python dictionary.
+        r"""Serializes this instance to a Python dictionary.
 
         :param serialize: will serialize the dictionary before returning it, so it can
             be saved to a JSON file.
@@ -526,8 +521,7 @@ class TokenizerConfig:
         return dict_config
 
     def __serialize_dict(self, dict_: dict) -> None:
-        r"""
-        Converts numpy arrays to lists recursively within a dictionary.
+        r"""Converts numpy arrays to lists recursively within a dictionary.
 
         :param dict_: dictionary to serialize
         """
@@ -538,9 +532,8 @@ class TokenizerConfig:
                 dict_[key] = dict_[key].tolist()
 
     def save_to_json(self, out_path: str | Path) -> None:
-        r"""
-        Saves a tokenizer configuration object to the `out_path` path, so that it can
-        be re-loaded later.
+        r"""Saves a tokenizer configuration object to the `out_path` path, so that it
+        can be re-loaded later.
 
         :param out_path: path to the output configuration JSON file.
         """
@@ -562,8 +555,7 @@ class TokenizerConfig:
 
     @classmethod
     def load_from_json(cls, config_file_path: str | Path) -> TokenizerConfig:
-        r"""
-        Loads a tokenizer configuration from the `config_path` path.
+        r"""Loads a tokenizer configuration from the `config_path` path.
 
         :param config_file_path: path to the configuration JSON file to load.
         """

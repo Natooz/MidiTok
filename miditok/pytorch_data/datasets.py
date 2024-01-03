@@ -1,6 +1,5 @@
-"""
-PyTorch `Dataset` objects, to be used with PyTorch `DataLoaders` to load and send data
-during training.
+"""PyTorch `Dataset` objects, to be used with PyTorch `DataLoaders` to load and send
+data during training.
 """
 from __future__ import annotations
 
@@ -49,9 +48,7 @@ def split_dataset_to_subsequences(
     max_seq_len: int,
     one_token_stream: bool = True,
 ) -> None:
-    """
-
-    :param files_paths: list of files of tokens to split.
+    """:param files_paths: list of files of tokens to split.
     :param out_dir: output directory to save the subsequences.
     :param min_seq_len: minimum sequence length.
     :param max_seq_len: maximum sequence length.

@@ -1,6 +1,4 @@
-"""
-Common classes.
-"""
+"""Iterator to be used when training a tokenizer with the 🤗tokenizers library."""
 from __future__ import annotations
 
 from pathlib import Path

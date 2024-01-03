@@ -26,16 +26,16 @@ class CPWord(MIDITokenizer):
     *Duration*) are first independently converted to embeddings which are then merged
     (pooled) into a single one.
     Each compound token will be a list of the form (index: Token type):
-    * 0: Family
-    * 1: Bar/Position
-    * 2: Pitch
-    * 3: Velocity
-    * 4: Duration
-    * (+ Optional) Program: associated with notes (pitch/velocity/duration) or chords
-    * (+ Optional) Chord: chords occurring with position tokens
-    * (+ Optional) Rest: rest acting as a TimeShift token
-    * (+ Optional) Tempo: occurring with position tokens
-    * (+ Optional) TimeSig: occurring with bar tokens
+    * 0: Family;
+    * 1: Bar/Position;
+    * 2: Pitch;
+    * 3: Velocity;
+    * 4: Duration;
+    * (+ Optional) Program: associated with notes (pitch/velocity/duration) or chords;
+    * (+ Optional) Chord: chords occurring with position tokens;
+    * (+ Optional) Rest: rest acting as a TimeShift token;
+    * (+ Optional) Tempo: occurring with position tokens;
+    * (+ Optional) TimeSig: occurring with bar tokens.
 
     The output hidden states of the model will then be fed to several output layers
     (one per token type). This means that the training requires to add multiple losses.
@@ -584,7 +584,6 @@ class CPWord(MIDITokenizer):
 
         :return: the vocabulary as a list of string.
         """
-
         vocab = [[] for _ in range(5)]
 
         vocab[0].append("Family_Metric")
@@ -690,7 +689,7 @@ class CPWord(MIDITokenizer):
             - a position token cannot have a value <= to the current position (it would
                 go back in time)
             - a pitch token should not be present if the same pitch is already played
-                at the current position
+                at the current position.
 
         :param tokens: sequence of tokens string to check.
         :return: the number of errors predicted (no more than one per token).

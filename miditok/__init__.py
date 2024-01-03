@@ -1,3 +1,8 @@
+"""Root module.
+
+Here we only import tokenizer classes and submodules.
+"""
+
 from miditok import data_augmentation
 
 from .classes import Event, TokenizerConfig, TokSequence

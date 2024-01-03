@@ -1,6 +1,4 @@
-"""Data augmentation methods
-
-"""
+"""Data augmentation methods."""
 from __future__ import annotations
 
 import json
@@ -33,7 +31,7 @@ def augment_midi_dataset(
     The new created files have names in two parts, separated with a "#" character. Make
     sure your files do not have '§' in their names if you intend to reuse the
     information of the second part in some script.
-    **Drum tracks are not augmented.**
+    **Drum tracks are not augmented.**.
 
     :param data_path: root path to the folder containing tokenized json files.
     :param pitch_offsets: list of pitch offsets for augmentation.

@@ -48,7 +48,6 @@ class MIDILike(MIDITokenizer):
         :param events: note events to complete.
         :return: the same events, with time events inserted.
         """
-
         # Add time events
         all_events = []
         previous_tick = 0

@@ -1,8 +1,6 @@
 #!/usr/bin/python3 python
 
-"""Test methods
-
-"""
+"""Test methods."""
 
 from __future__ import annotations
 

@@ -1,7 +1,6 @@
-"""
-Base tokenizer class, acting as a "framework" for all tokenizers.
+"""Base tokenizer class, acting as a "framework" for all tokenizers.
 # TODO switch from ticks/beat to ticks/quarter logic for time division
-# TODO build docs action, make sure no error / warning https://github.com/readthedocs/actions
+# TODO build docs action, make sure no error / warning https://github.com/readthedocs/actions.
 """
 from __future__ import annotations
 
@@ -1020,7 +1019,7 @@ class MIDITokenizer(ABC, HFHubMixin):
     ) -> list[str | Event | list[str | Event]]:
         r"""Converts a sequence of ids (int) to their associated tokens (str or Event).
         **This method will not work with ids encoded with BPE. You will need to decode
-        them first (:py:meth:`miditok.MIDITokenizer.decode_bpe`).**
+        them first (:py:meth:`miditok.MIDITokenizer.decode_bpe`)**.
 
         :param ids: sequence of ids (int) to convert.
         :param as_str: return the tokens as string objects, otherwise Event objects
@@ -1072,7 +1071,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         r"""Converts a list of ids into their associated bytes.
         It can be returned either as a list of bytes or as a unique string of bytes.
         **This method will not work with ids encoded with BPE. You will need to decode
-        them first (:py:meth:`miditok.MIDITokenizer.decode_bpe`).**
+        them first (:py:meth:`miditok.MIDITokenizer.decode_bpe`)**.
 
         :param ids: token ids (int) to convert.
         :param as_one_str: will return the bytes all concatenated into one string.
@@ -1477,7 +1476,8 @@ class MIDITokenizer(ABC, HFHubMixin):
         r"""Creates a dictionary describing the possible token type successions.
         This method is unimplemented and need to be overridden by inheriting classes.
         See other classes (:class:`miditok.REMI._create_token_types_graph`, ...)
-        for examples of how to implement it."""
+        for examples of how to implement it.
+        """
         raise NotImplementedError
 
     def _add_special_tokens_to_types_graph(self) -> None:
@@ -1509,7 +1509,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         duration = (beat * res + pos) * time_division // res
         It is equivalent to: duration = num_samples * ticks_per_sample
         So in the last example, if time_division is 384:
-        duration = (2 * 8 + 5) * 384 // 8 = 1008 ticks
+        duration = (2 * 8 + 5) * 384 // 8 = 1008 ticks.
 
         :return: the duration bins.
         """
@@ -1852,7 +1852,6 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         :param seq: token sequence to decompose.
         """
-
         if isinstance(seq, list):
             [self.decode_bpe(seq_) for seq_ in seq]
 
@@ -2020,7 +2019,6 @@ class MIDITokenizer(ABC, HFHubMixin):
         :param tokens: sequence of tokens string to check.
         :return: the number of errors predicted (no more than one per token).
         """
-
         err_type = 0  # i.e. incompatible next type predicted
         err_time = 0  # i.e. goes back or stay in time (does not go forward)
         err_note = 0  # i.e. duplicated

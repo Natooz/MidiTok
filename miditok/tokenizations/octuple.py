@@ -19,14 +19,14 @@ class Octuple(MIDITokenizer):
     represents a single note. Tokens (*Pitch*, *Velocity*...) are first independently
     converted to embeddings which are then merged (pooled) into a single one.
     Each pooled token will be a list of the form (index: Token type):
-    * 0: Pitch
-    * 1: Velocity
-    * 2: Duration
-    * 3: Position
-    * 4: Bar
-    * (+ Optional) Program
-    * (+ Optional) Tempo
-    * (+ Optional) TimeSignature
+    * 0: Pitch;
+    * 1: Velocity;
+    * 2: Duration;
+    * 3: Position;
+    * 4: Bar;
+    * (+ Optional) Program;
+    * (+ Optional) Tempo;
+    * (+ Optional) TimeSignature.
 
     Its considerably reduces the sequence lengths, while handling multitrack.
     The output hidden states of the model will then be fed to several output layers
@@ -81,14 +81,14 @@ class Octuple(MIDITokenizer):
         such the final token sequence.
         A time step is a list of tokens where:
             (list index: token type)
-            0: Pitch
-            1: Velocity
-            2: Duration
-            3: Position
-            4: Bar
-            (5: Program)
-            (6: Tempo)
-            (7: TimeSignature)
+            0: Pitch;
+            1: Velocity;
+            2: Duration;
+            3: Position;
+            4: Bar;
+            (5: Program);
+            (6: Tempo);
+            (7: TimeSignature).
 
         :param events: note events to complete.
         :return: the same events, with time events inserted.
@@ -420,7 +420,7 @@ class Octuple(MIDITokenizer):
                 time)
             - same for positions
             - a pitch token should not be present if the same pitch is already played
-                at the current position
+                at the current position.
 
         :param tokens: sequence of tokens string to check.
         :return: the number of errors predicted (no more than one per token).

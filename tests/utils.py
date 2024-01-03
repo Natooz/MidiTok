@@ -1,6 +1,4 @@
-"""
-Test validation methods.
-"""
+"""Test validation methods."""
 
 from __future__ import annotations
 

@@ -1,6 +1,4 @@
-"""Useful methods
-
-"""
+"""Useful methods."""
 from __future__ import annotations
 
 import warnings
@@ -85,7 +83,7 @@ def remove_duplicated_notes(
     (i.e. offset time) too. The velocities are ignored in this method.
     **The notes need to be sorted by time, then pitch, and duration if
     consider_duration is True:**
-    ``notes.sort(key=lambda x: (x.start, x.pitch, x.duration))``
+    ``notes.sort(key=lambda x: (x.start, x.pitch, x.duration))``.
 
     :param notes: notes to analyse
     :param consider_duration: if given ``True``, the method will also consider the
@@ -107,7 +105,7 @@ def fix_offsets_overlapping_notes(notes: NoteTickList) -> None:
     r"""Reduces the durations of overlapping notes, so that when a note starts, if it
     was previously being played, the previous note will end. Before running this
     method make sure the notes has been sorted by start then pitch then end values:
-    `notes.sort(key=lambda x: (x.start, x.pitch, x.end))`
+    `notes.sort(key=lambda x: (x.start, x.pitch, x.end))`.
 
     :param notes: notes to fix.
     """
@@ -139,7 +137,7 @@ def detect_chords(
     hundreds of seconds per MIDI depending on your cpu.
     This method works by iterating over each note, find if it played with other notes,
     and if it forms a chord from the chord maps. **It does not consider chord
-    inversion.**
+    inversion.**.
 
     :param notes: notes to analyse (sorted by starting time, them pitch).
     :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI
@@ -396,7 +394,7 @@ def merge_tracks(
 
 def merge_same_program_tracks(tracks: list[Track] | TrackTickList) -> None:
     r"""Takes a list of tracks and merge the ones with the same programs.
-    NOTE: Control change messages are not considered
+    NOTE: Control change messages are not considered.
 
     :param tracks: list of tracks
     """
@@ -500,7 +498,7 @@ def num_bar_pos(
 def np_get_closest(array: np.ndarray, values: np.ndarray) -> np.ndarray:
     """Simple method to find the closest values in an array of the values of another
     reference array.
-    Taken from: https://stackoverflow.com/a/46184652
+    Taken from: https://stackoverflow.com/a/46184652.
 
     :param array: reference values array.
     :param values: array to filter.

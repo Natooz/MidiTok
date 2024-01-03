@@ -23,12 +23,12 @@ class MuMIDI(MIDITokenizer):
     positional encoding. As in the original paper, the pitches of drums are distinct
     from those of all other instruments.
     Each pooled token will be a list of the form (index: Token type):
-    * 0: Pitch / DrumPitch / Position / Bar / Program / (Chord) / (Rest)
-    * 1: BarPosEnc
-    * 2: PositionPosEnc
-    * (-3 / 3: Tempo)
-    * -2: Velocity
-    * -1: Duration
+    * 0: Pitch / DrumPitch / Position / Bar / Program / (Chord) / (Rest);
+    * 1: BarPosEnc;
+    * 2: PositionPosEnc;
+    * (-3 / 3: Tempo);
+    * -2: Velocity;
+    * -1: Duration.
 
     The output hidden states of the model will then be fed to several output layers
     (one per token type). This means that the training requires to add multiple losses.
@@ -82,11 +82,11 @@ class MuMIDI(MIDITokenizer):
         r"""Tokenize a MIDI file.
         Each pooled token will be a list of the form (index: Token type):
         * 0: Pitch / DrumPitch / Position / Bar / Program / (Chord) / (Rest)
-        * 1: BarPosEnc
-        * 2: PositionPosEnc
-        * (-3 / 3: Tempo)
-        * -2: Velocity
-        * -1: Duration
+        * 1: BarPosEnc;
+        * 2: PositionPosEnc;
+        * (-3 / 3: Tempo);
+        * -2: Velocity;
+        * -1: Duration.
 
         :param midi: the MIDI object to convert
         :return: sequences of tokens
@@ -192,9 +192,9 @@ class MuMIDI(MIDITokenizer):
         r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
         (:class:`miditok.TokSequence`). For each note, it creates a time step as a
         list of tokens where (list index: token type):
-        * 0: Pitch (as an Event object for sorting purpose afterward)
-        * 1: Velocity
-        * 2: Duration
+        * 0: Pitch (as an Event object for sorting purpose afterward);
+        * 1: Velocity;
+        * 2: Duration.
 
         :param track: track object to convert.
         :return: sequence of corresponding tokens.
@@ -265,12 +265,12 @@ class MuMIDI(MIDITokenizer):
         The tokens will be converted to event objects and then to a
         miditoolkit.MidiFile object.
         A time step is a list of tokens where (list index: token type):
-        * 0: Pitch / DrumPitch / Position / Bar / Program / (Chord) / (Rest)
-        * 1: BarPosEnc
-        * 2: PositionPosEnc
-        * (-3 / 3: Tempo)
-        * -2: Velocity
-        * -1: Duration
+        * 0: Pitch / DrumPitch / Position / Bar / Program / (Chord) / (Rest);
+        * 1: BarPosEnc;
+        * 2: PositionPosEnc;
+        * (-3 / 3: Tempo);
+        * -2: Velocity;
+        * -1: Duration.
 
         :param tokens: tokens to convert. Can be either a Tensor (PyTorch and
             Tensorflow are supported), a numpy array, a Python list or a TokSequence.
@@ -454,7 +454,7 @@ class MuMIDI(MIDITokenizer):
                 time)
             - same for positions
             - a pitch token should not be present if the same pitch is already played
-                at the current position
+                at the current position.
 
         :param tokens: sequence of tokens string to check.
         :return: the number of errors predicted (no more than one per token).

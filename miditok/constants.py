@@ -1,6 +1,4 @@
-"""Constants for data encoding
-
-"""
+"""Constants for data encoding."""
 
 from importlib.metadata import version
 

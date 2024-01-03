@@ -1,6 +1,4 @@
-"""
-Collator objects for PyTorch `DataLoader`s.
-"""
+"""Collator objects for PyTorch `DataLoader`s."""
 from __future__ import annotations
 
 import warnings
