@@ -646,7 +646,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             if ticks_per_beat[i][1] == ticks_per_beat[i - 1][1]:
                 ticks_per_beat[i - 1][0] = ticks_per_beat[i][0]
                 del ticks_per_beat[i]
-        ticks_per_beat = np.array([ticks_per_beat])
+        ticks_per_beat = np.array(ticks_per_beat)
 
         # Adds track tokens
         for ti, track in enumerate(midi.tracks):
@@ -778,7 +778,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 )
                 # PedalOff or Duration
                 if self.config.sustain_pedal_duration:
-                    if ticks_per_beat[tpb_idx, 0] >= pedal.time:
+                    if pedal.time >= ticks_per_beat[tpb_idx, 0]:
                         tpb_idx += 1
                     # TODO determine the nb of beats depending on tpb
                     dur = ".".join(

@@ -78,6 +78,9 @@ class MuMIDI(MIDITokenizer):
         if self.config.use_tempos:
             self.vocab_types_idx["Tempo"] = -3
 
+    def _add_time_events(self, events: list[Event]) -> list[Event]:
+        pass
+
     def _midi_to_tokens(self, midi: Score) -> TokSequence:
         r"""Tokenize a MIDI file.
         Each pooled token will be a list of the form (index: Token type):
