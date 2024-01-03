@@ -1,6 +1,4 @@
-"""Constants for data encoding
-
-"""
+"""Constants for data encoding."""
 
 from importlib.metadata import version
 
@@ -31,11 +29,11 @@ CHR_ID_START = 33
 # the recommended pitches for piano in the GM2 specs are from 21 to 108
 PITCH_RANGE = (21, 109)
 BEAT_RES = {(0, 4): 8, (4, 12): 4}  # samples per beat
-# nb of velocity bins, velocities values from 0 to 127 will be quantized
+# number of velocity bins, velocities values from 0 to 127 will be quantized
 NUM_VELOCITIES = 32
 # default special tokens
-BOS_TOKEN_NAME = "BOS"  # noqa: S105
-EOS_TOKEN_NAME = "EOS"  # noqa: S105
+BOS_TOKEN_NAME = "BOS"
+EOS_TOKEN_NAME = "EOS"
 SPECIAL_TOKENS = ["PAD", BOS_TOKEN_NAME, EOS_TOKEN_NAME, "MASK"]
 
 USE_CHORDS = False
@@ -81,7 +79,7 @@ CHORD_UNKNOWN = None
 UNKNOWN_CHORD_PREFIX = "ukn"  # only used in methods
 
 # Tempo params
-# nb of tempo bins for additional tempo tokens, quantized like velocities
+# number of tempo bins for additional tempo tokens, quantized like velocities
 NUM_TEMPOS = 32
 TEMPO_RANGE = (40, 250)  # (min_tempo, max_tempo)
 LOG_TEMPOS = False  # log or linear scale tempos

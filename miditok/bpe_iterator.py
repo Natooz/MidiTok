@@ -1,14 +1,15 @@
-"""
-Common classes.
-"""
+"""Iterator to be used when training a tokenizer with the 🤗tokenizers library."""
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Sequence
+from typing import TYPE_CHECKING, Sequence
 
 from symusic import Score
 
 from .constants import MIDI_FILES_EXTENSIONS, MIDI_LOADING_EXCEPTION
+
+if TYPE_CHECKING:
+    from .midi_tokenizer import MIDITokenizer
 
 
 class BPEIterator:
@@ -19,7 +20,7 @@ class BPEIterator:
     :param files_paths: sequence of paths of files to load for training.
     """
 
-    def __init__(self, tokenizer, files_paths: Sequence[Path]):
+    def __init__(self, tokenizer: MIDITokenizer, files_paths: Sequence[Path]) -> None:
         self.tokenizer = tokenizer
         self.files_paths = files_paths
         self.__iter_count = 0
@@ -45,16 +46,16 @@ class BPEIterator:
 
         return bytes_
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.files_paths)
 
-    def __getitem__(self, idx) -> list[str]:
+    def __getitem__(self, idx: int) -> list[str]:
         return self.load_file(self.files_paths[idx])
 
-    def __iter__(self):
+    def __iter__(self) -> BPEIterator:
         return self
 
-    def __next__(self):
+    def __next__(self) -> list[str]:
         if self.__iter_count >= len(self):
             self.__iter_count = 0
             raise StopIteration

@@ -1,7 +1,6 @@
 #!/usr/bin/python3 python
 
-"""Testing tokenization, making sure the data integrity is not altered.
-"""
+"""Testing tokenization, making sure the data integrity is not altered."""
 
 from __future__ import annotations
 
@@ -39,7 +38,7 @@ default_params.update(
         "chord_unknown": False,
         "delete_equal_successive_time_sig_changes": True,
         "delete_equal_successive_tempo_changes": True,
-        "max_duration": (20, 0, 4),
+        "additional_params": {"max_duration": (20, 0, 4)},
     }
 )
 TOK_PARAMS_ONE_TRACK = []
@@ -163,7 +162,7 @@ def _test_tokenize(
     tok_params_set: tuple[str, dict[str, Any]],
     saving_erroneous_midis: bool = False,
     save_failed_midi_as_one_midi: bool = True,
-):
+) -> None:
     r"""Reads a MIDI file, converts it into tokens, convert it back to a MIDI object.
     The decoded MIDI should be identical to the original one after downsampling, and
     potentially notes deduplication. We only parametrize for midi files, as it would

@@ -1,6 +1,4 @@
-"""
-Common classes.
-"""
+"""Common classes."""
 
 from __future__ import annotations
 
@@ -66,18 +64,18 @@ class Event:
     to be sorted by time.
     """
 
-    type: str  # noqa: A003
+    type_: str
     value: str | int
     time: int | float = None
     program: int = None
     desc: Any = None
 
     def __str__(self) -> str:
-        return f"{self.type}_{self.value}"
+        return f"{self.type_}_{self.value}"
 
     def __repr__(self) -> str:
         return (
-            f"Event(type={self.type}, value={self.value}, time={self.time},"
+            f"Event(type={self.type_}, value={self.value}, time={self.time},"
             f" desc={self.desc})"
         )
 
@@ -124,28 +122,28 @@ class TokSequence:
                 " None."
             )
 
-    def __getitem__(self, item):
+    def __getitem__(self, idx: int) -> int | str | Event:
         if self.ids is not None:
-            return self.ids[item]
+            return self.ids[idx]
         elif self.tokens is not None:
-            return self.tokens[item]
+            return self.tokens[idx]
         elif self.events is not None:
-            return self.events[item]
+            return self.events[idx]
         elif self.bytes is not None:
-            return self.bytes[item]
+            return self.bytes[idx]
         elif self._ids_no_bpe is not None:
-            return self._ids_no_bpe[item]
+            return self._ids_no_bpe[idx]
         else:
             raise ValueError(
                 "This TokSequence seems to not be initialized, all its attributes are"
                 " None."
             )
 
-    def __eq__(self, other) -> bool:
+    def __eq__(self, other: TokSequence) -> bool:
         r"""Checks if too sequences are equal.
         This is performed by comparing their attributes (ids, tokens...).
         **Both sequences must have at least one common attribute initialized (not None)
-        for this method to work, otherwise it will return False.**
+        for this method to work, otherwise it will return False.**.
 
         :param other: other sequence to compare.
         :return: True if the sequences have equal attributes.
@@ -163,8 +161,7 @@ class TokSequence:
 
 
 class TokenizerConfig:
-    r"""
-    MIDI tokenizer base class, containing common methods and attributes for all
+    r"""MIDI tokenizer base class, containing common methods and attributes for all
     tokenizers.
 
     :param pitch_range: range of MIDI pitches to use. Pitches can take values between
@@ -352,20 +349,24 @@ class TokenizerConfig:
         tempo_range: tuple[int, int] = TEMPO_RANGE,
         log_tempos: bool = LOG_TEMPOS,
         remove_duplicated_notes: bool = REMOVE_DUPLICATED_NOTES,
-        delete_equal_successive_tempo_changes: bool = DELETE_EQUAL_SUCCESSIVE_TEMPO_CHANGES,  # noqa: E501
+        delete_equal_successive_tempo_changes: bool = (
+            DELETE_EQUAL_SUCCESSIVE_TEMPO_CHANGES
+        ),
         time_signature_range: dict[
             int, list[int] | tuple[int, int]
         ] = TIME_SIGNATURE_RANGE,
         sustain_pedal_duration: bool = SUSTAIN_PEDAL_DURATION,
         pitch_bend_range: tuple[int, int, int] = PITCH_BEND_RANGE,
-        delete_equal_successive_time_sig_changes: bool = DELETE_EQUAL_SUCCESSIVE_TIME_SIG_CHANGES,  # noqa: E501
+        delete_equal_successive_time_sig_changes: bool = (
+            DELETE_EQUAL_SUCCESSIVE_TIME_SIG_CHANGES
+        ),
         programs: Sequence[int] = PROGRAMS,
         one_token_stream_for_programs: bool = ONE_TOKEN_STREAM_FOR_PROGRAMS,
         program_changes: bool = PROGRAM_CHANGES,
         max_pitch_interval: int = MAX_PITCH_INTERVAL,
         pitch_intervals_max_time_dist: bool = PITCH_INTERVALS_MAX_TIME_DIST,
         **kwargs,
-    ):
+    ) -> None:
         # Checks
         if max_pitch_interval:
             if not 0 <= pitch_range[0] < pitch_range[1] <= 127:
@@ -488,9 +489,8 @@ class TokenizerConfig:
         self.additional_params = kwargs
 
     @classmethod
-    def from_dict(cls, input_dict: dict[str, Any], **kwargs):
-        r"""
-        Instantiates an ``AdditionalTokensConfig`` from a Python dictionary of
+    def from_dict(cls, input_dict: dict[str, Any], **kwargs) -> TokenizerConfig:
+        r"""Instantiates an ``AdditionalTokensConfig`` from a Python dictionary of
         parameters.
 
         :param input_dict: Dictionary that will be used to instantiate the
@@ -508,8 +508,7 @@ class TokenizerConfig:
         return cls(**input_dict, **kwargs)
 
     def to_dict(self, serialize: bool = False) -> dict[str, Any]:
-        r"""
-        Serializes this instance to a Python dictionary.
+        r"""Serializes this instance to a Python dictionary.
 
         :param serialize: will serialize the dictionary before returning it, so it can
             be saved to a JSON file.
@@ -521,9 +520,8 @@ class TokenizerConfig:
             self.__serialize_dict(dict_config)
         return dict_config
 
-    def __serialize_dict(self, dict_: dict):
-        r"""
-        Converts numpy arrays to lists recursively within a dictionary.
+    def __serialize_dict(self, dict_: dict) -> None:
+        r"""Converts numpy arrays to lists recursively within a dictionary.
 
         :param dict_: dictionary to serialize
         """
@@ -533,10 +531,9 @@ class TokenizerConfig:
             elif isinstance(dict_[key], ndarray):
                 dict_[key] = dict_[key].tolist()
 
-    def save_to_json(self, out_path: str | Path):
-        r"""
-        Saves a tokenizer configuration object to the `out_path` path, so that it can
-        be re-loaded later.
+    def save_to_json(self, out_path: str | Path) -> None:
+        r"""Saves a tokenizer configuration object to the `out_path` path, so that it
+        can be re-loaded later.
 
         :param out_path: path to the output configuration JSON file.
         """
@@ -558,8 +555,7 @@ class TokenizerConfig:
 
     @classmethod
     def load_from_json(cls, config_file_path: str | Path) -> TokenizerConfig:
-        r"""
-        Loads a tokenizer configuration from the `config_path` path.
+        r"""Loads a tokenizer configuration from the `config_path` path.
 
         :param config_file_path: path to the configuration JSON file to load.
         """
@@ -582,7 +578,7 @@ class TokenizerConfig:
 
         return cls.from_dict(dict_config)
 
-    def __eq__(self, other):
+    def __eq__(self, other: TokenizerConfig) -> bool:
         # We don't use the == operator as it yields False when comparing lists and
         # tuples containing the same elements. This method is not recursive and only
         # checks the first level of iterable values / attributes

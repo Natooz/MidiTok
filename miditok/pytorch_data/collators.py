@@ -1,6 +1,4 @@
-"""
-Collator objects for PyTorch `DataLoader`s.
-"""
+"""Collator objects for PyTorch `DataLoader`s."""
 from __future__ import annotations
 
 import warnings
@@ -23,7 +21,7 @@ class DataCollator:
         labels_pad_idx: int = -100,
         inputs_kwarg_name: str = "input_ids",
         labels_kwarg_name: str = "labels",
-    ):
+    ) -> None:
         r"""Multifunction data collator, applying padding (right or left), allowing to
         add ``BOS`` and ``EOS`` tokens. It will also add an "attention_mask" entry to
         the batch, following the padding applied.
@@ -124,7 +122,7 @@ def _add_bos_eos_tokens_to_batch(
     batch: list[LongTensor],
     bos_tok_id: int | None = None,
     eos_tok_id: int | None = None,
-):
+) -> None:
     """Adds (inplace) BOS and EOS tokens to inputs.
 
     :param batch: batch as a list of Tensors.

@@ -1,6 +1,6 @@
-"""
-Pytest configuration file.
-Doc: https://docs.pytest.org/en/latest/reference/reference.html
+"""Pytest configuration file.
+
+Doc: https://docs.pytest.org/en/latest/reference/reference.html.
 """
 
 import os
@@ -10,8 +10,7 @@ import pytest
 
 @pytest.fixture()
 def hf_token() -> str:
-    """
-    Get the Hugging Face token from the environment variable HF_TOKEN_HUB_TESTS.
+    """Get the Hugging Face token from the environment variable HF_TOKEN_HUB_TESTS.
 
     If the variable is not set, the test using this fixture will be skipped.
     """

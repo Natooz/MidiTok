@@ -149,8 +149,8 @@ Magic methods
     :noindex:
 ..  code-block:: python
 
-    nb_classes = len(tokenizer)
-    nb_classes_per_vocab = tokenizer.len  # applicable to tokenizer with embedding pooling, e.g. CPWord or Octuple
+    num_classes = len(tokenizer)
+    num_classes_per_vocab = tokenizer.len  # applicable to tokenizer with embedding pooling, e.g. CPWord or Octuple
 
 .. autofunction:: miditok.MIDITokenizer.__eq__
     :noindex:

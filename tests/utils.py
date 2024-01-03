@@ -1,6 +1,4 @@
-"""
-Test validation methods.
-"""
+"""Test validation methods."""
 
 from __future__ import annotations
 
@@ -66,7 +64,7 @@ TOKENIZER_CONFIG_KWARGS = {
 }
 
 
-def adjust_tok_params_for_tests(tokenization: str, params: dict[str, Any]):
+def adjust_tok_params_for_tests(tokenization: str, params: dict[str, Any]) -> None:
     """Adjusts parameters (as dictionary for keyword arguments) depending on the
     tokenization.
 
@@ -93,7 +91,7 @@ def adjust_tok_params_for_tests(tokenization: str, params: dict[str, Any]):
         params["use_rests"] = False
 
 
-def sort_midi(midi: Score, sort_tracks: bool = True):
+def sort_midi(midi: Score, sort_tracks: bool = True) -> None:
     """Sorts a MIDI: its notes and other track events, and the tracks themselves.
 
     :param midi: midi to sort.
@@ -114,7 +112,9 @@ def sort_midi(midi: Score, sort_tracks: bool = True):
         midi.tracks.sort(key=lambda x: (x.program, x.is_drum))
 
 
-def adapt_ref_midi_before_tokenize(midi: Score, tokenizer: miditok.MIDITokenizer):
+def adapt_ref_midi_before_tokenize(
+    midi: Score, tokenizer: miditok.MIDITokenizer
+) -> None:
     """Adapt (inplace) the contents of a MIDI before it is tokenized.
 
     :param midi: MIDI object to adapt.
@@ -365,7 +365,7 @@ def tokenize_and_check_equals(
 
 def del_invalid_time_sig(
     time_sigs: list[TimeSignature], time_sigs_tokenizer: list[TimeSignature]
-):
+) -> None:
     r"""Will adapt the times of tempo changes depending on the
     onset times of the notes of the MIDI.
     This is needed to pass the tempo tests for Octuple as the tempos
@@ -389,7 +389,7 @@ def adapt_tempo_changes_times(
     tracks: list[Track],
     tempo_changes: list[Tempo],
     default_tempo: int,
-):
+) -> None:
     r"""Will adapt the times of tempo changes depending on the
     onset times of the notes of the MIDI.
     This is needed to pass the tempo tests for Octuple as the tempos
@@ -441,7 +441,7 @@ def adapt_tempo_changes_times(
 def clip_durations(
     notes_pedals: list[Note] | list[Pedal],
     max_duration: int,
-):
+) -> None:
     """Adapt notes and pedals offset times so that they match the possible durations
     covered by a tokenizer.
 

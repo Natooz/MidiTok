@@ -46,7 +46,7 @@ def test_bpe_conversion(
     r"""Reads a few MIDI files, convert them into token sequences, convert them back
     to MIDI files. The converted back MIDI files should identical to original one,
     expect with note starting and ending times quantized, and maybe a some duplicated
-    notes removed
+    notes removed.
 
     :param tokenization: name of the tokenizer class to test.
     :param midi_paths: list of paths of MIDI files to use for the tests.

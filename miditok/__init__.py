@@ -1,7 +1,12 @@
+"""Root module.
+
+Here we only import tokenizer classes and submodules.
+"""
+
 from miditok import data_augmentation
 
 from .classes import Event, TokenizerConfig, TokSequence
-from .midi_tokenizer import MIDITokenizer, convert_sequence_to_tokseq
+from .midi_tokenizer import MIDITokenizer
 from .tokenizations import (
     MMM,
     REMI,
@@ -25,7 +30,7 @@ class REMIPlus(REMI):
     tokens enabled.
     """
 
-    def _tweak_config_before_creating_voc(self):
+    def _tweak_config_before_creating_voc(self) -> None:
         super()._tweak_config_before_creating_voc()
         self.config.use_programs = True
         self.config.use_time_signatures = True
@@ -34,7 +39,6 @@ class REMIPlus(REMI):
 
 __all__ = [
     "MIDITokenizer",
-    "convert_sequence_to_tokseq",
     "Event",
     "TokSequence",
     "TokenizerConfig",

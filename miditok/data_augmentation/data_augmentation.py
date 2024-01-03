@@ -1,6 +1,4 @@
-"""Data augmentation methods
-
-"""
+"""Data augmentation methods."""
 from __future__ import annotations
 
 import json
@@ -28,12 +26,12 @@ def augment_midi_dataset(
     out_path: Path | str | None = None,
     copy_original_in_new_location: bool = True,
     save_data_aug_report: bool = True,
-):
+) -> None:
     r"""Perform data augmentation on a dataset of MIDI files.
     The new created files have names in two parts, separated with a "#" character. Make
     sure your files do not have '§' in their names if you intend to reuse the
     information of the second part in some script.
-    **Drum tracks are not augmented.**
+    **Drum tracks are not augmented.**.
 
     :param data_path: root path to the folder containing tokenized json files.
     :param pitch_offsets: list of pitch offsets for augmentation.
@@ -73,7 +71,7 @@ def augment_midi_dataset(
         out_path.mkdir(parents=True, exist_ok=True)
     files_paths = list(Path(data_path).glob("**/*.mid"))
 
-    nb_augmentations, nb_tracks_augmented = 0, 0
+    num_augmentations, num_tracks_augmented = 0, 0
     for file_path in tqdm(files_paths, desc="Performing data augmentation"):
         try:
             midi = Score(file_path)
@@ -105,8 +103,8 @@ def augment_midi_dataset(
             saving_path.mkdir(parents=True, exist_ok=True)
             saving_path /= f"{file_path.stem}{suffix}.mid"
             midi_aug.dump_midi(saving_path)
-            nb_augmentations += 1
-            nb_tracks_augmented += len(midi_aug.tracks)
+            num_augmentations += 1
+            num_tracks_augmented += len(midi_aug.tracks)
         if copy_original_in_new_location and out_path != data_path:
             saving_path = out_path / file_path.relative_to(data_path)
             saving_path.parent.mkdir(parents=True, exist_ok=True)
@@ -118,9 +116,9 @@ def augment_midi_dataset(
         with Path.open(out_path / "data_augmentation_report.txt", "w") as outfile:
             json.dump(
                 {
-                    "nb_tracks_augmented": nb_tracks_augmented,
-                    "nb_files_before": len(files_paths),
-                    "nb_files_after": len(files_paths) + nb_augmentations,
+                    "num_tracks_augmented": num_tracks_augmented,
+                    "num_files_before": len(files_paths),
+                    "num_files_after": len(files_paths) + num_augmentations,
                 },
                 outfile,
             )

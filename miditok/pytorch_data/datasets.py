@@ -1,6 +1,5 @@
-"""
-PyTorch `Dataset` objects, to be used with PyTorch `DataLoaders` to load and send data
-during training.
+"""PyTorch `Dataset` objects, to be used with PyTorch `DataLoaders` to load and send
+data during training.
 """
 from __future__ import annotations
 
@@ -48,10 +47,8 @@ def split_dataset_to_subsequences(
     min_seq_len: int,
     max_seq_len: int,
     one_token_stream: bool = True,
-):
-    """
-
-    :param files_paths: list of files of tokens to split.
+) -> None:
+    """:param files_paths: list of files of tokens to split.
     :param out_dir: output directory to save the subsequences.
     :param min_seq_len: minimum sequence length.
     :param max_seq_len: maximum sequence length.
@@ -104,7 +101,7 @@ class _DatasetABC(Dataset, ABC):
         labels: Sequence[Any] | None = None,
         sample_key_name: str = "input_ids",
         labels_key_name: str = "labels",
-    ):
+    ) -> None:
         if samples is not None and labels is not None and len(samples) != len(labels):
             raise ValueError(
                 "The number of samples must be the same as the number of labels"
@@ -115,12 +112,12 @@ class _DatasetABC(Dataset, ABC):
         self.labels_key_name = labels_key_name
         self.__iter_count = 0
 
-    def reduce_nb_samples(self, nb_samples: int):
-        r"""Reduce the size of the dataset, by keeping `nb_samples` samples.
+    def reduce_num_samples(self, num_samples: int) -> None:
+        r"""Reduce the size of the dataset, by keeping `num_samples` samples.
 
-        :param nb_samples: number of samples to keep. They will be randomly picked.
+        :param num_samples: number of samples to keep. They will be randomly picked.
         """
-        idx = randint(0, len(self), (nb_samples,))
+        idx = randint(0, len(self), (num_samples,))
         self.samples = [self.samples[id_] for id_ in idx.tolist()]
         if self.labels is not None:
             self.labels = [self.labels[id_] for id_ in idx.tolist()]
@@ -128,17 +125,17 @@ class _DatasetABC(Dataset, ABC):
     def __len__(self) -> int:
         return len(self.samples)
 
-    def __getitem__(self, idx) -> Mapping[str, Any]:
+    def __getitem__(self, idx: int) -> Mapping[str, Any]:
         item = {self.sample_key_name: self.samples[idx]}
         if self.labels is not None:
             item[self.labels_key_name] = self.labels[idx]
 
         return item
 
-    def __iter__(self):
+    def __iter__(self) -> _DatasetABC:
         return self
 
-    def __next__(self):
+    def __next__(self) -> Mapping[str, Any]:
         if self.__iter_count >= len(self):
             self.__iter_count = 0
             raise StopIteration
@@ -146,7 +143,7 @@ class _DatasetABC(Dataset, ABC):
             self.__iter_count += 1
             return self[self.__iter_count - 1]
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.__str__()
 
     def __str__(self) -> str:
@@ -178,8 +175,8 @@ class DatasetTok(_DatasetABC):
     allowing to use labels (one label per file).
 
     :param files_paths: list of paths to files to load.
-    :param min_seq_len: minimum sequence length (in nb of tokens)
-    :param max_seq_len: maximum sequence length (in nb of tokens)
+    :param min_seq_len: minimum sequence length (in num of tokens)
+    :param max_seq_len: maximum sequence length (in num of tokens)
     :param tokenizer: tokenizer object, to use to load MIDIs instead of tokens.
         (default: None)
     :param one_token_stream: give False if the token files contains multiple tracks,
@@ -207,7 +204,7 @@ class DatasetTok(_DatasetABC):
         func_to_get_labels: Callable[[Score | Sequence, Path], int] | None = None,
         sample_key_name: str = "input_ids",
         labels_key_name: str = "labels",
-    ):
+    ) -> None:
         labels = None if func_to_get_labels is None else []
         samples = []
         if tokenizer is not None:
@@ -276,18 +273,18 @@ class DatasetJsonIO(_DatasetABC):
     access to limited RAM resources.
 
     :param files_paths: list of paths to files to load.
-    :param max_seq_len: maximum sequence length (in nb of tokens). (default: None)
+    :param max_seq_len: maximum sequence length (in num of tokens). (default: None)
     """
 
     def __init__(
         self,
         files_paths: Sequence[Path],
         max_seq_len: int | None = None,
-    ):
+    ) -> None:
         self.max_seq_len = max_seq_len
         super().__init__(files_paths)
 
-    def __getitem__(self, idx) -> Mapping[str, LongTensor]:
+    def __getitem__(self, idx: int) -> Mapping[str, LongTensor]:
         with self.samples[idx].open() as json_file:
             token_ids = json.load(json_file)["ids"]
         if self.max_seq_len is not None and len(token_ids) > self.max_seq_len:

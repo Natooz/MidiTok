@@ -1,13 +1,10 @@
 from __future__ import annotations
 
-from typing import Any
-
-import numpy as np
 from symusic import Note, Pedal, PitchBend, Score, Tempo, TimeSignature, Track
 
 from ..classes import Event, TokSequence
 from ..constants import MIDI_INSTRUMENTS
-from ..midi_tokenizer import MIDITokenizer, _in_as_seq
+from ..midi_tokenizer import MIDITokenizer
 
 
 class MIDILike(MIDITokenizer):
@@ -40,7 +37,7 @@ class MIDILike(MIDITokenizer):
     sequence will be decoded for the whole MIDI.
     """
 
-    def _tweak_config_before_creating_voc(self):
+    def _tweak_config_before_creating_voc(self) -> None:
         self._note_on_off = True
 
     def _add_time_events(self, events: list[Event]) -> list[Event]:
@@ -51,7 +48,6 @@ class MIDILike(MIDITokenizer):
         :param events: note events to complete.
         :return: the same events, with time events inserted.
         """
-
         # Add time events
         all_events = []
         previous_tick = 0
@@ -71,7 +67,7 @@ class MIDILike(MIDITokenizer):
                     for dur_value, dur_ticks in zip(*rest_values):
                         all_events.append(
                             Event(
-                                type="Rest",
+                                type_="Rest",
                                 value=".".join(map(str, dur_value)),
                                 time=previous_tick,
                                 desc=f"{event.time - previous_tick} ticks",
@@ -88,7 +84,7 @@ class MIDILike(MIDITokenizer):
                     ):
                         all_events.append(
                             Event(
-                                type="TimeShift",
+                                type_="TimeShift",
                                 value=".".join(map(str, dur_value)),
                                 time=previous_tick,
                                 desc=f"{time_shift} ticks",
@@ -100,9 +96,9 @@ class MIDILike(MIDITokenizer):
             all_events.append(event)
 
             # Update max offset time of the notes encountered
-            if event.type in ["NoteOn", "PitchIntervalTime", "PitchIntervalChord"]:
+            if event.type_ in ["NoteOn", "PitchIntervalTime", "PitchIntervalChord"]:
                 previous_note_end = max(previous_note_end, event.desc)
-            elif event.type in [
+            elif event.type_ in [
                 "Program",
                 "Tempo",
                 "Pedal",
@@ -116,11 +112,7 @@ class MIDILike(MIDITokenizer):
 
     def _tokens_to_midi(
         self,
-        tokens: TokSequence
-        | list
-        | np.ndarray
-        | Any
-        | list[TokSequence | list | np.ndarray | Any],
+        tokens: TokSequence | list[TokSequence],
         programs: list[tuple[int, bool]] | None = None,
         time_division: int | None = None,
     ) -> Score:
@@ -164,7 +156,7 @@ class MIDILike(MIDITokenizer):
             for prog in self.config.programs
         }
 
-        def check_inst(prog: int):
+        def check_inst(prog: int) -> None:
             if prog not in tracks:
                 tracks[prog] = Track(
                     program=0 if prog == -1 else prog,
@@ -172,7 +164,7 @@ class MIDILike(MIDITokenizer):
                     name="Drums" if prog == -1 else MIDI_INSTRUMENTS[prog]["name"],
                 )
 
-        def clear_active_notes():
+        def clear_active_notes() -> None:
             if max_duration is not None:
                 if self.one_token_stream:
                     for program, active_notes_ in active_notes.items():
@@ -399,7 +391,7 @@ class MIDILike(MIDITokenizer):
             )
             dic["Program"] = ["NoteOn", "NoteOff"]
         else:
-            first_note_token_type = "NoteOn"  # noqa: S105
+            first_note_token_type = "NoteOn"
         dic["Velocity"] = [first_note_token_type, "TimeShift"]
         dic["NoteOff"] = ["NoteOff", first_note_token_type, "TimeShift"]
         dic["TimeShift"] = ["NoteOff", first_note_token_type, "TimeShift"]
@@ -561,33 +553,15 @@ class MIDILike(MIDITokenizer):
 
         return dic
 
-    @_in_as_seq(complete=False, decode_bpe=False)
-    def tokens_errors(
-        self, tokens: TokSequence | list | np.ndarray | Any
-    ) -> float | list[float]:
-        r"""Checks if a sequence of tokens is made of good token types
-        successions and returns the error ratio (lower is better).
-        The Pitch and Position values are also analyzed:
-            - a NoteOn token should not be present if the same pitch is already being
-                played
-            - a NoteOff token should not be present the note is not being played
+    def _tokens_errors(self, tokens: list[str]) -> int:
+        r"""Checks if a sequence of tokens is made of good token types successions and
+        returns the error ratio (lower is better). This method receives a list of
+        tokens as a list of strings, and returns the absolute number of errors
+        predicted. The number of errors should not be higher than the number of tokens.
 
-        :param tokens: sequence of tokens to check
-        :return: the error ratio (lower is better)
+        :param tokens: sequence of tokens string to check.
+        :return: the number of errors predicted (no more than one per token).
         """
-        # If list of TokSequence -> recursive
-        if isinstance(tokens, list):
-            return [self.tokens_errors(tok_seq) for tok_seq in tokens]
-        if len(tokens) == 0:
-            return 0
-
-        nb_tok_predicted = len(tokens)  # used to norm the score
-        if self.has_bpe:
-            self.decode_bpe(tokens)
-        self.complete_sequence(tokens)
-
-        # Override from here
-
         err = 0
         current_program = 0
         active_pitches: dict[int, dict[int, int]] = {
@@ -608,33 +582,29 @@ class MIDILike(MIDITokenizer):
         previous_pitch_onset = {program: -128 for program in self.config.programs}
         previous_pitch_chord = {program: -128 for program in self.config.programs}
 
-        events = (
-            tokens.events
-            if tokens.events is not None
-            else [Event(*tok.split("_")) for tok in tokens.tokens]
-        )
+        events = [Event(*tok.split("_")) for tok in tokens]
 
         for i in range(len(events)):
             # err_tokens = events[i - 4 : i + 4]  # uncomment for debug
             # Bad token type
             if (
                 i > 0
-                and events[i].type not in self.tokens_types_graph[events[i - 1].type]
+                and events[i].type_ not in self.tokens_types_graph[events[i - 1].type_]
             ):
                 err += 1
             # Good token type
             else:
-                if events[i].type in [
+                if events[i].type_ in [
                     "NoteOn",
                     "PitchIntervalTime",
                     "PitchIntervalChord",
                 ]:
                     current_program_noff = current_program
-                    if events[i].type == "NoteOn":
+                    if events[i].type_ == "NoteOn":
                         pitch_val = int(events[i].value)
                         previous_pitch_onset[current_program] = pitch_val
                         previous_pitch_chord[current_program] = pitch_val
-                    elif events[i].type == "PitchIntervalTime":
+                    elif events[i].type_ == "PitchIntervalTime":
                         pitch_val = previous_pitch_onset[current_program] + int(
                             events[i].value
                         )
@@ -661,7 +631,7 @@ class MIDILike(MIDITokenizer):
                     offset_sample = 0
                     for j in range(i + 1, len(events)):
                         if (
-                            events[j].type == "NoteOff"
+                            events[j].type_ == "NoteOff"
                             and int(events[j].value) == pitch_val
                         ):
                             if (
@@ -671,25 +641,25 @@ class MIDILike(MIDITokenizer):
                                 break  # all good
                             else:
                                 break  # all good
-                        elif events[j].type in ["TimeShift", "Rest"]:
+                        elif events[j].type_ in ["TimeShift", "Rest"]:
                             offset_sample += self._token_duration_to_ticks(
                                 events[j].value, self.time_division
                             )
-                        elif events[j].type == "Program":
+                        elif events[j].type_ == "Program":
                             current_program_noff = events[j].value
 
                         # will not look for Note Off beyond
                         if offset_sample > max_duration:
                             err += 1
                             break
-                elif events[i].type == "NoteOff":
+                elif events[i].type_ == "NoteOff":
                     if active_pitches[current_program][int(events[i].value)] == 0:
                         err += 1  # this pitch wasn't being played
                     else:
                         active_pitches[current_program][int(events[i].value)] -= 1
-                elif events[i].type == "Program" and i + 1 < len(events):
+                elif events[i].type_ == "Program" and i + 1 < len(events):
                     current_program = int(events[i].value)
-                elif events[i].type in ["TimeShift", "Rest"]:
+                elif events[i].type_ in ["TimeShift", "Rest"]:
                     current_pitches_tick = {p: [] for p in self.config.programs}
 
-        return err / nb_tok_predicted
+        return err

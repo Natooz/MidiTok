@@ -1,8 +1,6 @@
 #!/usr/bin/python3 python
 
-"""
-Test classes and methods from the pytorch_data module.
-"""
+"""Test classes and methods from the pytorch_data module."""
 
 from __future__ import annotations
 
@@ -87,7 +85,7 @@ def test_dataset_ram(
         func_to_get_labels=get_labels_multitrack,
     )
     _ = dataset_ms.__repr__()
-    dataset_ms.reduce_nb_samples(2)
+    dataset_ms.reduce_num_samples(2)
     assert len(dataset_ms) == 2
 
     # JSON + one token stream
@@ -119,7 +117,7 @@ def test_dataset_io(tmp_path: Path, midi_path: Sequence[str | Path] | None = Non
         100,
     )
 
-    dataset.reduce_nb_samples(2)
+    dataset.reduce_num_samples(2)
     assert len(dataset) == 2
 
     for _ in dataset:
@@ -142,11 +140,11 @@ def test_split_dataset_to_subsequences(
         tokenizer = miditok.TSD(config)
         tokenizer.tokenize_midi_dataset(midi_paths, tokens_os_dir)
     miditok.pytorch_data.split_dataset_to_subsequences(
-        list(tokens_os_dir.glob("**/*.json")),
-        tokens_split_dir,
-        50,
-        100,
-        True,
+        files_paths=list(tokens_os_dir.glob("**/*.json")),
+        out_dir=tokens_split_dir,
+        min_seq_len=50,
+        max_seq_len=100,
+        one_token_stream=True,
     )
 
     # Multiple token streams
@@ -155,11 +153,11 @@ def test_split_dataset_to_subsequences(
         tokenizer = miditok.TSD(config)
         tokenizer.tokenize_midi_dataset(midi_paths, tokens_split_dir_ms)
     miditok.pytorch_data.split_dataset_to_subsequences(
-        list(tokens_split_dir_ms.glob("**/*.json")),
-        tokens_split_dir,
-        50,
-        100,
-        False,
+        files_paths=list(tokens_split_dir_ms.glob("**/*.json")),
+        out_dir=tokens_split_dir,
+        min_seq_len=50,
+        max_seq_len=100,
+        one_token_stream=False,
     )
 
 
