@@ -10,7 +10,7 @@ from ..constants import (
     TIME_SIGNATURE,
 )
 from ..midi_tokenizer import MIDITokenizer
-from ..utils import compute_ticks_per_bar, get_midi_max_tick
+from ..utils import compute_ticks_per_bar, compute_ticks_per_beat, get_midi_max_tick
 
 
 class Octuple(MIDITokenizer):
@@ -186,7 +186,6 @@ class Octuple(MIDITokenizer):
         self,
         tokens: TokSequence | list[TokSequence],
         programs: list[tuple[int, bool]] | None = None,
-        time_division: int | None = None,
     ) -> Score:
         r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
 
@@ -194,24 +193,14 @@ class Octuple(MIDITokenizer):
             :class:`miditok.TokSequence`,
         :param programs: programs of the tracks. If none is given, will default to
             piano, program 0. (default: None)
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the
-            MIDI to create).
         :return: the midi object (:class:`miditoolkit.MidiFile`).
         """
-        if time_division is None:
-            time_division = self.time_division
         # Unsqueeze tokens in case of one_token_stream
         if self.one_token_stream:  # ie single token seq
             tokens = [tokens]
         for i in range(len(tokens)):
             tokens[i] = tokens[i].tokens
-        midi = Score(time_division)
-        if time_division % max(self.config.beat_res.values()) != 0:
-            raise ValueError(
-                f"Invalid time division, please give one divisible by"
-                f"{max(self.config.beat_res.values())}"
-            )
-        ticks_per_sample = time_division // max(self.config.beat_res.values())
+        midi = Score(self.time_division)
 
         # RESULTS
         tracks: dict[int, Track] = {}
@@ -240,7 +229,10 @@ class Octuple(MIDITokenizer):
             else:
                 time_signature_changes.append(TimeSignature(0, *TIME_SIGNATURE))
             current_time_sig = time_signature_changes[0]
-            ticks_per_bar = compute_ticks_per_bar(current_time_sig, time_division)
+            ticks_per_bar = compute_ticks_per_bar(current_time_sig, self.time_division)
+            ticks_per_beat = compute_ticks_per_beat(
+                current_time_sig.denominator, self.time_division
+            )
             # Set track / sequence program if needed
             if not self.one_token_stream:
                 is_drum = False
@@ -266,9 +258,9 @@ class Octuple(MIDITokenizer):
                 # Note attributes
                 pitch = int(time_step[0].split("_")[1])
                 vel = int(time_step[1].split("_")[1])
-                duration = self._token_duration_to_ticks(
-                    time_step[2].split("_")[1], time_division
-                )
+                duration = self._tpb_tokens_to_ticks[ticks_per_beat][
+                    time_step[2].split("_")[1]
+                ]
                 if self.config.use_programs:
                     current_program = int(time_step[5].split("_")[1])
 
@@ -278,7 +270,7 @@ class Octuple(MIDITokenizer):
                 current_tick = (
                     tick_at_last_ts_change
                     + (event_bar - bar_at_last_ts_change) * ticks_per_bar
-                    + event_pos * ticks_per_sample
+                    + event_pos
                 )
 
                 # Append the created note
@@ -325,7 +317,10 @@ class Octuple(MIDITokenizer):
                             time_signature_changes.append(current_time_sig)
                         bar_at_last_ts_change = event_bar
                         ticks_per_bar = compute_ticks_per_bar(
-                            current_time_sig, time_division
+                            current_time_sig, self.time_division
+                        )
+                        ticks_per_beat = compute_ticks_per_beat(
+                            current_time_sig.denominator, self.time_division
                         )
 
             # Add current_inst to midi and handle notes still active

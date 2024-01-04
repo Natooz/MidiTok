@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from math import ceil
 
-import numpy as np
 from symusic import Note, Score, Tempo, Track
 
 from ..classes import Event, TokSequence
@@ -209,7 +208,7 @@ class MuMIDI(MIDITokenizer):
         for note in track.notes:
             # Note
             duration = note.end - note.start
-            dur_idx = np.argmin(np.abs(self._durations_ticks - duration))
+            dur_token = self._tpb_ticks_to_tokens[self.time_division][duration]
             if not track.is_drum:
                 tokens.append(
                     [
@@ -220,7 +219,7 @@ class MuMIDI(MIDITokenizer):
                             desc=track.program,
                         ),
                         f"Velocity_{note.velocity}",
-                        f'Duration_{".".join(map(str, self.durations[dur_idx]))}',
+                        f"Duration_{dur_token}",
                     ]
                 )
             else:
@@ -233,7 +232,7 @@ class MuMIDI(MIDITokenizer):
                             desc=-1,
                         ),
                         f"Velocity_{note.velocity}",
-                        f'Duration_{".".join(map(str, self.durations[dur_idx]))}',
+                        f"Duration_{dur_token}",
                     ]
                 )
 
@@ -261,7 +260,6 @@ class MuMIDI(MIDITokenizer):
         self,
         tokens: TokSequence,
         _: None = None,
-        time_division: int | None = None,
     ) -> Score:
         r"""Override the parent class method
         Convert multiple sequences of tokens into a multitrack MIDI and save it.
@@ -281,18 +279,9 @@ class MuMIDI(MIDITokenizer):
             first list corresponds to a track
         :param _: unused, to match parent method signature
             leave None to not save the file
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the
-            MIDI to create)
         :return: the midi object (miditoolkit.MidiFile)
         """
-        if time_division is None:
-            time_division = self.time_division
-        if time_division % max(self.config.beat_res.values()) != 0:
-            raise ValueError(
-                f"Invalid time division, please give one divisible by"
-                f"{max(self.config.beat_res.values())}"
-            )
-        midi = Score(time_division)
+        midi = Score(self.time_division)
 
         # Tempos
         if self.config.use_tempos and len(tokens) > 0:
@@ -301,7 +290,6 @@ class MuMIDI(MIDITokenizer):
             first_tempo = self.default_tempo
         midi.tempos.append(Tempo(0, first_tempo))
 
-        ticks_per_sample = time_division // max(self.config.beat_res.values())
         tracks = {}
         current_tick = 0
         current_bar = -1
@@ -310,15 +298,13 @@ class MuMIDI(MIDITokenizer):
             tok_type, tok_val = time_step[0].split("_")
             if tok_type == "Bar":
                 current_bar += 1
-                current_tick = current_bar * time_division * 4
+                current_tick = current_bar * self.time_division * 4
             elif tok_type == "Position":
                 if current_bar == -1:
                     current_bar = (
                         0  # as this Position token occurs before any Bar token
                     )
-                current_tick = (
-                    current_bar * time_division * 4 + int(tok_val) * ticks_per_sample
-                )
+                current_tick = current_bar * self.time_division * 4 + int(tok_val)
             elif tok_type == "Program":
                 current_track = tok_val
                 try:
@@ -331,7 +317,7 @@ class MuMIDI(MIDITokenizer):
                     continue
                 pitch = int(tok_val)
                 vel = int(vel)
-                duration = self._token_duration_to_ticks(duration, time_division)
+                duration = self._tpb_tokens_to_ticks[self.time_division][duration]
 
                 tracks[current_track].append(Note(current_tick, duration, pitch, vel))
 

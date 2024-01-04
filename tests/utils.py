@@ -134,11 +134,12 @@ def adapt_ref_midi_before_tokenize(
         # tokenizing, otherwise these notes will be tokenized with durations > to this
         # limit, which would yield errors when checking TSE.
         if "max_duration" in tokenizer.config.additional_params:
-            max_duration = tokenizer._token_duration_to_ticks(
+            max_duration = tokenizer._time_token_to_ticks(
                 tokenizer.config.additional_params["max_duration"],
                 midi.ticks_per_quarter,
             )
             for track in midi.tracks:
+                # TODO adapt this for different tpb / max durations
                 clip_durations(track.notes, max_duration)
 
         # Now we can sort the notes

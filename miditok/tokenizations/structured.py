@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import numpy as np
 from symusic import Note, Score, Track
 
 from ..classes import Event, TokSequence
@@ -36,12 +35,15 @@ class Structured(MIDITokenizer):
         self.config.use_pitch_intervals = False
         self.config.program_changes = False
 
-    def _create_track_events(self, track: Track) -> list[Event]:
+    def _create_track_events(self, track: Track, _: None = None) -> list[Event]:
         r"""Extract the tokens / events of individual tracks: *Pitch*, *Velocity*,
         *Duration*, *NoteOn*, *NoteOff* and optionally *Chord*, from a track
         (``miditoolkit.Instrument``).
 
         :param track: MIDI track to convert.
+        :param _: in place of ``ticks_per_beat``, unused here as we do not support
+            time signatures, hence the ticks_per_beat value is always the same and
+            equal to the MIDI's time division.
         :return: sequence of corresponding Events.
         """
         # Make sure the notes are sorted first by their onset (start) times, second by
@@ -56,9 +58,10 @@ class Structured(MIDITokenizer):
             # call __add_time_note_events and avoid delay cause by event sorting
             if not self.one_token_stream:
                 time_shift_ticks = note.start - previous_tick
-                index = np.argmin(np.abs(self._durations_ticks - time_shift_ticks))
                 if time_shift_ticks != 0:
-                    time_shift = ".".join(map(str, self.durations[index]))
+                    time_shift = self._tpb_ticks_to_tokens[self.time_division][
+                        time_shift_ticks
+                    ]
                 else:
                     time_shift = "0.0.1"
                 events.append(
@@ -87,7 +90,7 @@ class Structured(MIDITokenizer):
                     desc=f"{note.velocity}",
                 )
             )
-            dur = ".".join(map(str, self._durations_ticks_to_tuple[note.duration]))
+            dur = self._tpb_ticks_to_tokens[self.time_division][note.duration]
             events.append(
                 Event(
                     type_="Duration",
@@ -117,9 +120,10 @@ class Structured(MIDITokenizer):
             if event.type_ == token_type_to_check:
                 # Time shift
                 time_shift_ticks = event.time - previous_tick
-                index = np.argmin(np.abs(self._durations_ticks - time_shift_ticks))
                 if time_shift_ticks != 0:
-                    time_shift = ".".join(map(str, self.durations[index]))
+                    time_shift = self._tpb_ticks_to_tokens[self.time_division][
+                        time_shift_ticks
+                    ]
                 else:
                     time_shift = "0.0.1"
                 all_events.append(
@@ -178,7 +182,6 @@ class Structured(MIDITokenizer):
         self,
         tokens: TokSequence | list[TokSequence],
         programs: list[tuple[int, bool]] | None = None,
-        time_division: int | None = None,
     ) -> Score:
         r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
 
@@ -186,23 +189,14 @@ class Structured(MIDITokenizer):
             :class:`miditok.TokSequence`,
         :param programs: programs of the tracks. If none is given, will default to
             piano, program 0. (default: None)
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the
-            MIDI to create).
         :return: the midi object (:class:`miditoolkit.MidiFile`).
         """
-        if time_division is None:
-            time_division = self.time_division
         # Unsqueeze tokens in case of one_token_stream
         if self.one_token_stream:  # ie single token seq
             tokens = [tokens]
         for i in range(len(tokens)):
             tokens[i] = tokens[i].tokens
-        midi = Score(time_division)
-        if time_division % max(self.config.beat_res.values()) != 0:
-            raise ValueError(
-                f"Invalid time division, please give one divisible by"
-                f"{max(self.config.beat_res.values())}"
-            )
+        midi = Score(self.time_division)
 
         # RESULTS
         instruments: dict[int, Track] = {}
@@ -235,11 +229,12 @@ class Structured(MIDITokenizer):
 
             # Decode tokens
             for ti, token in enumerate(seq):
-                if token.split("_")[0] == "TimeShift":
-                    current_tick += self._token_duration_to_ticks(
-                        token.split("_")[1], time_division
-                    )
-                elif token.split("_")[0] == "Pitch":
+                token_type, token_val = token.split("_")
+                if token_type == "TimeShift" and token_val != "0.0.1":
+                    current_tick += self._tpb_tokens_to_ticks[self.time_division][
+                        token_val
+                    ]
+                elif token_type == "Pitch":
                     try:
                         if (
                             seq[ti + 1].split("_")[0] == "Velocity"
@@ -247,9 +242,9 @@ class Structured(MIDITokenizer):
                         ):
                             pitch = int(seq[ti].split("_")[1])
                             vel = int(seq[ti + 1].split("_")[1])
-                            duration = self._token_duration_to_ticks(
-                                seq[ti + 2].split("_")[1], time_division
-                            )
+                            duration = self._tpb_tokens_to_ticks[self.time_division][
+                                seq[ti + 2].split("_")[1]
+                            ]
                             new_note = Note(current_tick, duration, pitch, vel)
                             if self.one_token_stream:
                                 check_inst(current_program)
@@ -261,8 +256,8 @@ class Structured(MIDITokenizer):
                         # however with generated sequences this can happen, or if the
                         # sequence isn't finished
                         pass
-                elif token.split("_")[0] == "Program":
-                    current_program = int(token.split("_")[1])
+                elif token_type == "Program":
+                    current_program = int(token_val)
 
             # Add current_inst to midi and handle notes still active
             if not self.one_token_stream:

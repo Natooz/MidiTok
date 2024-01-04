@@ -567,9 +567,7 @@ def miditoolkit_to_symusic(midi: MidiFile) -> Score:
     return score
 
 
-def compute_ticks_per_beat(
-    time_sig_denominator: int, time_division: int
-) -> float | int:
+def compute_ticks_per_beat(time_sig_denominator: int, time_division: int) -> int:
     r"""Computes the number of ticks that constitute a beat at a given time signature
     depending on the time division of a MIDI.
 
@@ -588,7 +586,7 @@ def compute_ticks_per_beat(
     # if we have a */2 time sig, one beat is an eighth note so one beat is
     # `time_division * 0.5` ticks.
     time_div_factor = 4 / time_sig_denominator
-    return time_division * time_div_factor
+    return int(time_division * time_div_factor)
 
 
 def compute_ticks_per_bar(time_sig: TimeSignature, time_division: int) -> int:
@@ -644,3 +642,42 @@ def get_bars_ticks(midi: Score) -> list[int]:
         current_time_sig = time_signature
 
     return bars_ticks
+
+
+def get_midi_ticks_per_beat(midi: Score) -> np.ndarray:
+    """Computes the portions of numbers of ticks in a beat in a MIDI.
+
+    The method returns a numpy array of shape ``(N,2)``, for N ticks-per-beat changes,
+    and the second dimension corresponding to the ending tick and the number of ticks
+    per beat of the portion.
+
+    :param midi: MIDI to analyze.
+    :return: ticks per beat values as a numpy array.
+    """
+    ticks_per_beat = [
+        [
+            midi.time_signatures[tsi + 1].time,
+            compute_ticks_per_beat(
+                midi.time_signatures[tsi].denominator, midi.ticks_per_quarter
+            ),
+        ]
+        for tsi in range(len(midi.time_signatures) - 1)
+    ]
+
+    # Handles the last one up to the max tick of the MIDI
+    ticks_per_beat.append(
+        [
+            get_midi_max_tick(midi),
+            compute_ticks_per_beat(
+                midi.time_signatures[-1].denominator, midi.ticks_per_quarter
+            ),
+        ]
+    )
+
+    # Remove equal successive ones
+    for i in range(len(ticks_per_beat) - 1, 0, -1):
+        if ticks_per_beat[i][1] == ticks_per_beat[i - 1][1]:
+            ticks_per_beat[i - 1][0] = ticks_per_beat[i][0]
+            del ticks_per_beat[i]
+
+    return np.array(ticks_per_beat)

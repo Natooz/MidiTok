@@ -11,10 +11,9 @@ from symusic import (
 )
 
 from ..classes import Event, TokSequence
-from ..constants import (
-    MIDI_INSTRUMENTS,
-)
+from ..constants import MIDI_INSTRUMENTS, TIME_SIGNATURE
 from ..midi_tokenizer import MIDITokenizer
+from ..utils import compute_ticks_per_beat
 
 
 class TSD(MIDITokenizer):
@@ -49,17 +48,18 @@ class TSD(MIDITokenizer):
         all_events = []
         previous_tick = 0
         previous_note_end = 0
+        ticks_per_beat = compute_ticks_per_beat(TIME_SIGNATURE[1], self.time_division)
         for event in events:
             # No time shift
             if event.time != previous_tick:
                 # (Rest)
                 if (
                     self.config.use_rests
-                    and event.time - previous_note_end >= self._min_rest
+                    and event.time - previous_note_end >= self._min_rest(ticks_per_beat)
                 ):
                     previous_tick = previous_note_end
-                    rest_values = self._ticks_to_duration_tokens(
-                        event.time - previous_tick, rest=True
+                    rest_values = self._time_ticks_to_tokens(
+                        event.time - previous_tick, ticks_per_beat, rest=True
                     )
                     for dur_value, dur_ticks in zip(*rest_values):
                         all_events.append(
@@ -77,7 +77,7 @@ class TSD(MIDITokenizer):
                 if event.time != previous_tick:
                     time_shift = event.time - previous_tick
                     for dur_value, dur_ticks in zip(
-                        *self._ticks_to_duration_tokens(time_shift)
+                        *self._time_ticks_to_tokens(time_shift, ticks_per_beat)
                     ):
                         all_events.append(
                             Event(
@@ -89,6 +89,12 @@ class TSD(MIDITokenizer):
                         )
                         previous_tick += dur_ticks
                 previous_tick = event.time
+
+            # Time Signature: Update ticks per beat
+            if event.type_ == "TimeSig":
+                ticks_per_beat = compute_ticks_per_beat(
+                    int(event.value.split("/")[1]), self.time_division
+                )
 
             all_events.append(event)
 
@@ -112,7 +118,6 @@ class TSD(MIDITokenizer):
         self,
         tokens: TokSequence | list[TokSequence],
         programs: list[tuple[int, bool]] | None = None,
-        time_division: int | None = None,
     ) -> Score:
         r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
 
@@ -120,23 +125,14 @@ class TSD(MIDITokenizer):
             :class:`miditok.TokSequence`,
         :param programs: programs of the tracks. If none is given, will default to
             piano, program 0. (default: None)
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the
-            MIDI to create).
         :return: the midi object (:class:`miditoolkit.MidiFile`).
         """
-        if time_division is None:
-            time_division = self.time_division
         # Unsqueeze tokens in case of one_token_stream
         if self.one_token_stream:  # ie single token seq
             tokens = [tokens]
         for i in range(len(tokens)):
             tokens[i] = tokens[i].tokens
-        midi = Score(time_division)
-        if time_division % max(self.config.beat_res.values()) != 0:
-            raise ValueError(
-                f"Invalid time division, please give one divisible by"
-                f"{max(self.config.beat_res.values())}"
-            )
+        midi = Score(self.time_division)
 
         # RESULTS
         tracks: dict[int, Track] = {}
@@ -159,6 +155,9 @@ class TSD(MIDITokenizer):
             previous_pitch_onset = {prog: -128 for prog in self.config.programs}
             previous_pitch_chord = {prog: -128 for prog in self.config.programs}
             active_pedals = {}
+            ticks_per_beat = compute_ticks_per_beat(
+                TIME_SIGNATURE[1], self.time_division
+            )
 
             # Set track / sequence program if needed
             if not self.one_token_stream:
@@ -176,12 +175,11 @@ class TSD(MIDITokenizer):
             # Decode tokens
             for ti, token in enumerate(seq):
                 tok_type, tok_val = token.split("_")
-                if tok_type in ["TimeShift", "Rest"]:
-                    if tok_type == "Rest":
-                        current_tick = max(previous_note_end, current_tick)
-                    current_tick += self._token_duration_to_ticks(
-                        tok_val, time_division
-                    )
+                if tok_type == "TimeShift":
+                    current_tick += self._tpb_tokens_to_ticks[ticks_per_beat][tok_val]
+                elif tok_type == "Rest":
+                    current_tick = max(previous_note_end, current_tick)
+                    current_tick += self._tpb_rests_to_ticks[ticks_per_beat][tok_val]
                 elif tok_type in ["Pitch", "PitchIntervalTime", "PitchIntervalChord"]:
                     if tok_type == "Pitch":
                         pitch = int(tok_val)
@@ -200,7 +198,7 @@ class TSD(MIDITokenizer):
                         vel_type, vel = seq[ti + 1].split("_")
                         dur_type, dur = seq[ti + 2].split("_")
                         if vel_type == "Velocity" and dur_type == "Duration":
-                            dur = self._token_duration_to_ticks(dur, time_division)
+                            dur = self._tpb_tokens_to_ticks[ticks_per_beat][dur]
                             new_note = Note(current_tick, dur, pitch, int(vel))
                             if self.one_token_stream:
                                 check_inst(current_program)
@@ -219,18 +217,22 @@ class TSD(MIDITokenizer):
                     current_program = int(tok_val)
                 elif tok_type == "Tempo" and si == 0:
                     tempo_changes.append(Tempo(current_tick, float(tok_val)))
-                elif si == 0 and tok_type == "TimeSig":
+                elif tok_type == "TimeSig":
                     num, den = self._parse_token_time_signature(tok_val)
-                    time_signature_changes.append(TimeSignature(current_tick, num, den))
+                    if si == 0:
+                        time_signature_changes.append(
+                            TimeSignature(current_tick, num, den)
+                        )
+                    ticks_per_beat = compute_ticks_per_beat(den, self.time_division)
                 elif tok_type == "Pedal":
                     pedal_prog = (
                         int(tok_val) if self.config.use_programs else current_program
                     )
                     if self.config.sustain_pedal_duration and ti + 1 < len(seq):
                         if seq[ti + 1].split("_")[0] == "Duration":
-                            duration = self._token_duration_to_ticks(
-                                seq[ti + 1].split("_")[1], time_division
-                            )
+                            duration = self._tpb_tokens_to_ticks[ticks_per_beat][
+                                seq[ti + 1].split("_")[1]
+                            ]
                             # Add instrument if it doesn't exist, can happen for the
                             # first tokens
                             new_pedal = Pedal(current_tick, duration)

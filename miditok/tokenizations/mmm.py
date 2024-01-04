@@ -12,7 +12,11 @@ from ..constants import (
     TIME_SIGNATURE,
 )
 from ..midi_tokenizer import MIDITokenizer
-from ..utils import compute_ticks_per_bar, compute_ticks_per_beat, get_midi_max_tick
+from ..utils import (
+    compute_ticks_per_bar,
+    compute_ticks_per_beat,
+    get_midi_ticks_per_beat,
+)
 
 
 class MMM(MIDITokenizer):
@@ -74,6 +78,9 @@ class MMM(MIDITokenizer):
         # Time events
         time_sig_change = TimeSignature(0, *TIME_SIGNATURE)
         ticks_per_bar = compute_ticks_per_bar(time_sig_change, self.time_division)
+        ticks_per_beat = compute_ticks_per_beat(
+            time_sig_change.denominator, self.time_division
+        )
         bar_at_last_ts_change = 0
         previous_tick = 0
         current_bar = 0
@@ -84,12 +91,12 @@ class MMM(MIDITokenizer):
                     events[ei].time - tick_at_last_ts_change
                 ) // ticks_per_bar
                 tick_at_last_ts_change = events[ei].time
+                num, denom = list(map(int, events[ei].value.split("/")))
                 ticks_per_bar = compute_ticks_per_bar(
-                    TimeSignature(
-                        events[ei].time, *list(map(int, events[ei].value.split("/")))
-                    ),
+                    TimeSignature(events[ei].time, num, denom),
                     self.time_division,
                 )
+                ticks_per_beat = compute_ticks_per_beat(denom, self.time_division)
             if events[ei].time != previous_tick:
                 # Bar
                 num_new_bars = (
@@ -124,11 +131,13 @@ class MMM(MIDITokenizer):
                 # TimeShift
                 if events[ei].time != previous_tick:
                     time_shift = events[ei].time - previous_tick
-                    index = np.argmin(np.abs(self._durations_ticks - time_shift))
+                    dur_token = self._tpb_ticks_to_tokens[self.time_division][
+                        ticks_per_beat
+                    ]
                     all_events.append(
                         Event(
                             type_="TimeShift",
-                            value=".".join(map(str, self.durations[index])),
+                            value=dur_token,
                             time=previous_tick,
                             desc=f"{time_shift} ticks",
                         )
@@ -162,29 +171,7 @@ class MMM(MIDITokenizer):
         global_events = self._create_midi_events(midi)
 
         # Compute ticks_per_beat sections depending on the time signatures
-        ticks_per_beat = [
-            [
-                midi.time_signatures[tsi + 1].time,
-                compute_ticks_per_beat(
-                    midi.time_signatures[tsi].denominator, self.time_division
-                ),
-            ]
-            for tsi in range(len(midi.time_signatures) - 1)
-        ]
-        ticks_per_beat.append(
-            [
-                get_midi_max_tick(midi),
-                compute_ticks_per_beat(
-                    midi.time_signatures[-1].denominator, self.time_division
-                ),
-            ]
-        )
-        # Remove equal successive ones
-        for i in range(len(ticks_per_beat) - 1, 0, -1):
-            if ticks_per_beat[i][1] == ticks_per_beat[i - 1][1]:
-                ticks_per_beat[i - 1][0] = ticks_per_beat[i][0]
-                del ticks_per_beat[i]
-        ticks_per_beat = np.array([ticks_per_beat])
+        ticks_per_beat = get_midi_ticks_per_beat(midi)
 
         # Adds track tokens
         # Disable use_programs so that _create_track_events do not add Program events
@@ -225,25 +212,15 @@ class MMM(MIDITokenizer):
         self,
         tokens: TokSequence,
         _: None = None,
-        time_division: int | None = None,
     ) -> Score:
         r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
 
         :param tokens: tokens to convert. Can be either a list of
             :class:`miditok.TokSequence`,
         :param _: unused, to match parent method signature
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the
-            MIDI to create).
         :return: the midi object (:class:`miditoolkit.MidiFile`).
         """
-        if time_division is None:
-            time_division = self.time_division
-        midi = Score(time_division)
-        if time_division % max(self.config.beat_res.values()) != 0:
-            raise ValueError(
-                f"Invalid time division, please give one divisible by"
-                f"{max(self.config.beat_res.values())}"
-            )
+        midi = Score(self.time_division)
         tokens = tokens.tokens
 
         # RESULTS
@@ -251,8 +228,9 @@ class MMM(MIDITokenizer):
         tempo_changes = []
         time_signature_changes = []
         ticks_per_bar = compute_ticks_per_bar(
-            TimeSignature(0, *TIME_SIGNATURE), time_division
+            TimeSignature(0, *TIME_SIGNATURE), self.time_division
         )
+        ticks_per_beat = compute_ticks_per_beat(TIME_SIGNATURE[1], self.time_division)
 
         current_tick = tick_at_current_bar = 0
         current_bar = -1
@@ -287,19 +265,18 @@ class MMM(MIDITokenizer):
                 if current_bar == -1:
                     # as this Position token occurs before any Bar token
                     current_bar = 0
-                current_tick += self._token_duration_to_ticks(tok_val, time_division)
+                current_tick += self._tpb_tokens_to_ticks[ticks_per_beat][tok_val]
             elif tok_type == "Tempo" and (
                 first_program is None or current_program == first_program
             ):
                 tempo_changes.append(Tempo(current_tick, float(token.split("_")[1])))
-            elif tok_type == "TimeSig" and (
-                first_program is None or current_program == first_program
-            ):
+            elif tok_type == "TimeSig":
                 num, den = self._parse_token_time_signature(token.split("_")[1])
-                time_signature_changes.append(TimeSignature(current_tick, num, den))
-                ticks_per_bar = compute_ticks_per_bar(
-                    time_signature_changes[-1], time_division
-                )
+                time_sig = TimeSignature(current_tick, num, den)
+                if first_program is None or current_program == first_program:
+                    time_signature_changes.append(time_sig)
+                ticks_per_bar = compute_ticks_per_bar(time_sig, self.time_division)
+                ticks_per_beat = compute_ticks_per_beat(den, self.time_division)
             elif tok_type in ["Pitch", "PitchIntervalTime", "PitchIntervalChord"]:
                 if tok_type == "Pitch":
                     pitch = int(tok_val)
@@ -318,7 +295,7 @@ class MMM(MIDITokenizer):
                     vel_type, vel = tokens[ti + 1].split("_")
                     dur_type, dur = tokens[ti + 2].split("_")
                     if vel_type == "Velocity" and dur_type == "Duration":
-                        dur = self._token_duration_to_ticks(dur, time_division)
+                        dur = self._tpb_tokens_to_ticks[ticks_per_beat][dur]
                         tracks[-1].notes.append(
                             Note(current_tick, dur, pitch, int(vel))
                         )
