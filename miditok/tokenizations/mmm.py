@@ -15,6 +15,7 @@ from ..midi_tokenizer import MIDITokenizer
 from ..utils import (
     compute_ticks_per_bar,
     compute_ticks_per_beat,
+    get_midi_max_tick,
     get_midi_ticks_per_beat,
 )
 
@@ -171,7 +172,21 @@ class MMM(MIDITokenizer):
         global_events = self._create_midi_events(midi)
 
         # Compute ticks_per_beat sections depending on the time signatures
-        ticks_per_beat = get_midi_ticks_per_beat(midi)
+        # This has to be computed several times, in preprocess after resampling & here.
+        if (
+            not self._note_on_off
+            or (self.config.use_sustain_pedals and self.config.sustain_pedal_duration)
+            or self.config.use_chords
+            or self.config.use_pitch_intervals
+        ):
+            if self.config.use_time_signatures:
+                ticks_per_beat = get_midi_ticks_per_beat(midi)
+            else:
+                ticks_per_beat = np.array(
+                    [[get_midi_max_tick(midi), self.time_division]]
+                )
+        else:
+            ticks_per_beat = None
 
         # Adds track tokens
         # Disable use_programs so that _create_track_events do not add Program events

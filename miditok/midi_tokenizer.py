@@ -713,7 +713,20 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         # Compute ticks_per_beat sections depending on the time signatures
         # This has to be computed several times, in preprocess after resampling & here.
-        ticks_per_beat = get_midi_ticks_per_beat(midi)
+        if (
+            not self._note_on_off
+            or (self.config.use_sustain_pedals and self.config.sustain_pedal_duration)
+            or self.config.use_chords
+            or self.config.use_pitch_intervals
+        ):
+            if self.config.use_time_signatures:
+                ticks_per_beat = get_midi_ticks_per_beat(midi)
+            else:
+                ticks_per_beat = np.array(
+                    [[get_midi_max_tick(midi), self.time_division]]
+                )
+        else:
+            ticks_per_beat = None
 
         # Adds track tokens
         for ti, track in enumerate(midi.tracks):
@@ -783,7 +796,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             return 10
 
     def _create_track_events(
-        self, track: Track, ticks_per_beat: np.ndarray
+        self, track: Track, ticks_per_beat: np.ndarray = None
     ) -> list[Event]:
         r"""Extract the tokens / events of individual tracks: *Pitch*, *Velocity*,
         *Duration*, *NoteOn*, *NoteOff* and optionally *Chord*, from a track
@@ -797,6 +810,8 @@ class MIDITokenizer(ABC, HFHubMixin):
             the MIDI being parsed. The array has a shape ``(N,2)``, for ``N`` changes
             of ticks per beat, and the second dimension representing the end tick of
             each portion and the number of ticks per beat respectively.
+            This argument is not required if the tokenizer is not using *Duration*,
+            *PitchInterval* or *Chord* tokens. (default: `None`)
         :return: sequence of corresponding ``Event``s.
         """
         program = track.program if not track.is_drum else -1
