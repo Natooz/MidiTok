@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from copy import deepcopy
-
 import numpy as np
 from symusic import Note, Score, Tempo, TimeSignature, Track
 
@@ -15,8 +13,6 @@ from ..midi_tokenizer import MIDITokenizer
 from ..utils import (
     compute_ticks_per_bar,
     compute_ticks_per_beat,
-    get_midi_max_tick,
-    get_midi_ticks_per_beat,
 )
 
 
@@ -73,8 +69,12 @@ class MMM(MIDITokenizer):
         :param events: note events to complete.
         :return: the same events, with time events inserted.
         """
-        # Creates first events
-        all_events = [Event("Bar", "Start", 0)]
+        # Creates first events by pop the *Track*, *Program* and *NoteDensity* events
+        if len(events) < 3:  # empty list
+            return events
+        all_events = [
+            events.pop(0), events.pop(0), events.pop(0), Event("Bar", "Start", 0)
+        ]
 
         # Time events
         time_sig_change = TimeSignature(0, *TIME_SIGNATURE)
@@ -132,17 +132,18 @@ class MMM(MIDITokenizer):
                 # TimeShift
                 if events[ei].time != previous_tick:
                     time_shift = events[ei].time - previous_tick
-                    dur_token = self._tpb_ticks_to_tokens[self.time_division][
-                        ticks_per_beat
-                    ]
-                    all_events.append(
-                        Event(
-                            type_="TimeShift",
-                            value=dur_token,
-                            time=previous_tick,
-                            desc=f"{time_shift} ticks",
+                    for dur_value, dur_ticks in zip(
+                        *self._time_ticks_to_tokens(time_shift, ticks_per_beat)
+                    ):
+                        all_events.append(
+                            Event(
+                                type_="TimeShift",
+                                value=".".join(map(str, dur_value)),
+                                time=previous_tick,
+                                desc=f"{time_shift} ticks",
+                            )
                         )
-                    )
+                        previous_tick += dur_ticks
 
                 previous_tick = events[ei].time
 
@@ -155,73 +156,104 @@ class MMM(MIDITokenizer):
         ]
         return all_events
 
+    def _create_track_events(
+        self, track: Track, ticks_per_beat: np.ndarray = None
+    ) -> list[Event]:
+        # Call parent method to create the track events
+        events = super()._create_track_events(track, ticks_per_beat)
+
+        # Add special MMM tokens
+        note_density_bins = self.config.additional_params["note_densities"]
+        note_density = len(track.notes) / (
+            max(note.end for note in track.notes) / self.time_division
+        )
+        note_density_idx = np.argmin(np.abs(note_density_bins - note_density))
+        note_density = int(note_density_bins[note_density_idx])
+
+        events.insert(0, Event("Track", "Start", 0))
+        events.insert(
+            1,
+            Event(
+                type_="Program",
+                value=-1 if track.is_drum else track.program,
+                time=0,
+            ),
+        )
+        events.insert(
+            2,
+            Event(
+                type_="NoteDensity",
+                value=note_density,
+                time=0,
+            ),
+        )
+
+        return events
+
+    @staticmethod
+    def _order(event: Event) -> int:
+        """Overriden in order to put *Track* and *NoteDensity* tokens first.
+
+        :param event: event to determine priority.
+        :return: priority as an int
+        """
+        # Special MMM tokens
+        if event.type_ in ["Track", "Program", "NoteDensity"]:
+            return -1
+        # Global MIDI tokens
+        elif event.type_ in ["Tempo", "TimeSig"]:
+            return 0
+        # Then NoteOff
+        elif event.type_ == "NoteOff" or (
+            event.type_ == "Program" and event.desc == "ProgramNoteOff"
+        ):
+            return 1
+        # Then track effects
+        elif event.type_ in ["Pedal", "PedalOff"] or (
+            event.type_ == "Duration" and event.desc == "PedalDuration"
+        ):
+            return 2
+        elif event.type_ == "PitchBend" or (
+            event.type_ == "Program" and event.desc == "ProgramPitchBend"
+        ):
+            return 3
+        elif event.type_ == "ControlChange":
+            return 4
+        # Track notes then
+        else:
+            return 10
+
     def _midi_to_tokens(self, midi: Score) -> TokSequence:
         r"""Converts a preprocessed MIDI object to a sequence of tokens.
-        Tokenization treating all tracks as a single token sequence might
-        override this method, e.g. Octuple or PopMAG.
+
+        We need to override the parent method, as the tokenizer is
+        `one_token_stream` and it would order the `Event`s created by the
+        `_create_track_events` method, which we do not need/want as we
+        add time events for each track separately.
+        We also disable `config.use_programs` so that the parent
+        `_add_track_events` method do not add *Program* tokens as this is done
+        in the overridden method.
 
         :param midi: the MIDI object to convert.
         :return: sequences of tokens.
         """
-        note_density_bins = self.config.additional_params["note_densities"]
-
-        # Create events list
-        all_events = []
-
-        # Global events (Tempo, TimeSignature)
-        global_events = self._create_midi_events(midi)
-
-        # Compute ticks_per_beat sections depending on the time signatures
-        # This has to be computed several times, in preprocess after resampling & here.
-        if (
-            not self._note_on_off
-            or (self.config.use_sustain_pedals and self.config.sustain_pedal_duration)
-            or self.config.use_chords
-            or self.config.use_pitch_intervals
-        ):
-            if self.config.use_time_signatures:
-                ticks_per_beat = get_midi_ticks_per_beat(midi)
-            else:
-                ticks_per_beat = np.array(
-                    [[get_midi_max_tick(midi), self.time_division]]
-                )
-        else:
-            ticks_per_beat = None
-
-        # Adds track tokens
-        # Disable use_programs so that _create_track_events do not add Program events
+        self.one_token_stream = False
         self.config.use_programs = False
-        for track in midi.tracks:
-            note_density = len(track.notes) / (
-                max(note.end for note in track.notes) / midi.ticks_per_quarter
-            )
-            note_density_idx = np.argmin(np.abs(note_density_bins - note_density))
-            note_density = int(note_density_bins[note_density_idx])
-            all_events += [
-                Event("Track", "Start", 0),
-                Event(
-                    type_="Program",
-                    value=-1 if track.is_drum else track.program,
-                    time=0,
-                ),
-                Event(
-                    type_="NoteDensity",
-                    value=note_density,
-                    time=0,
-                ),
-            ]
-
-            track_events = deepcopy(global_events) + self._create_track_events(
-                track, ticks_per_beat
-            )
-            track_events.sort(key=lambda x: x.time)
-            all_events += self._add_time_events(track_events)
-            all_events.append(Event("Track", "End", all_events[-1].time + 1))
-
+        seq = super()._midi_to_tokens(midi)
+        self.one_token_stream = True
         self.config.use_programs = True
-        tok_sequence = TokSequence(events=all_events)
-        self.complete_sequence(tok_sequence)
-        return tok_sequence
+
+        # Concatenate the sequences
+        if len(seq) == 1:
+            return seq[0]
+        tokens_concat, ids_concat = [], []
+        for track_seq in seq:
+            for token, id_ in zip(track_seq.tokens, track_seq.ids):
+                tokens_concat.append(token)
+                ids_concat.append(id_)
+        seq = TokSequence(tokens=tokens_concat, ids=ids_concat)
+
+        return seq
 
     def _tokens_to_midi(
         self,

@@ -741,9 +741,9 @@ class MIDITokenizer(ABC, HFHubMixin):
                         0, Event("Program", track.program, 0, desc="ProgramNoteOff")
                     )
                 all_events[ti] += track_events
-                all_events[ti].sort(key=lambda x: (x.time, self.__order(x)))
+                all_events[ti].sort(key=lambda x: (x.time, self._order(x)))
         if self.one_token_stream:
-            all_events.sort(key=lambda x: (x.time, self.__order(x)))
+            all_events.sort(key=lambda x: (x.time, self._order(x)))
             # Add ProgramChange (named Program) tokens if requested.
             if self.config.program_changes:
                 self._insert_program_change_events(all_events)
@@ -763,7 +763,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         return tok_sequence
 
     @staticmethod
-    def __order(event: Event) -> int:
+    def _order(event: Event) -> int:
         """Internal method used to sort events (tokens) depending on their type or
         context of appearance. This is required, especially for multitrack
         one-token-stream situations where there can be several tokens appearing at
