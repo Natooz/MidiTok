@@ -512,9 +512,9 @@ class REMI(MIDITokenizer):
         ]
 
         # POSITION
-        # max_num_beats = max(ceil(4 * ts[0] / ts[1]) for ts in self.time_signatures)
+        # self.time_division is equal to the maximum possible ticks/beat value.
         max_num_beats = max(ts[0] for ts in self.time_signatures)
-        num_positions = max(self.config.beat_res.values()) * max_num_beats
+        num_positions = self.time_division * max_num_beats
         vocab += [f"Position_{i}" for i in range(num_positions)]
 
         # Add additional tokens

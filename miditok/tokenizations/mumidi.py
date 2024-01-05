@@ -383,7 +383,7 @@ class MuMIDI(MIDITokenizer):
         ]
         vocab[0] += ["Bar_None"]  # new bar token
         max_num_beats = max(ts[0] for ts in self.time_signatures)
-        num_positions = max(self.config.beat_res.values()) * max_num_beats
+        num_positions = self.time_division * max_num_beats
         vocab[0] += [f"Position_{i}" for i in range(num_positions)]
         vocab[0] += [f"Program_{program}" for program in self.config.programs]
 
