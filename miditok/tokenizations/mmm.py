@@ -73,7 +73,10 @@ class MMM(MIDITokenizer):
         if len(events) < 3:  # empty list
             return events
         all_events = [
-            events.pop(0), events.pop(0), events.pop(0), Event("Bar", "Start", 0)
+            events.pop(0),
+            events.pop(0),
+            events.pop(0),
+            Event("Bar", "Start", 0),
         ]
 
         # Time events
