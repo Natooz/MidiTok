@@ -6,6 +6,7 @@ from copy import copy, deepcopy
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 from symusic import (
     Note,
     Pedal,
@@ -134,13 +135,21 @@ def adapt_ref_midi_before_tokenize(
         # tokenizing, otherwise these notes will be tokenized with durations > to this
         # limit, which would yield errors when checking TSE.
         if "max_duration" in tokenizer.config.additional_params:
-            max_duration = tokenizer._time_token_to_ticks(
-                tokenizer.config.additional_params["max_duration"],
-                midi.ticks_per_quarter,
+            max_durations = np.array(
+                [
+                    [
+                        end_tick,
+                        tokenizer._time_token_to_ticks(
+                            tokenizer.config.additional_params["max_duration"],
+                            tpb,
+                        ),
+                    ]
+                    for end_tick, tpb in miditok.utils.get_midi_ticks_per_beat(midi)
+                ],
+                dtype=np.intc,
             )
             for track in midi.tracks:
-                # TODO adapt this for different tpb / max durations
-                clip_durations(track.notes, max_duration)
+                clip_durations(track.notes, max_durations)
 
         # Now we can sort the notes
         sort_midi(midi, sort_tracks=False)
@@ -441,14 +450,21 @@ def adapt_tempo_changes_times(
 
 def clip_durations(
     notes_pedals: list[Note] | list[Pedal],
-    max_duration: int,
+    max_durations: np.ndarray,
 ) -> None:
     """Adapt notes and pedals offset times so that they match the possible durations
     covered by a tokenizer.
 
     :param notes_pedals: list of Note or Pedal objects to adapt.
-    :param max_duration: max_duration in ticks
+    :param max_durations: max duration values, per tick section, as a numpy array of
+        shape ``(N,2)`` for ``N`` sections, and the second dimension corresponding to
+        the end tick and the max duration in ticks of each section. Processing by
+        sections is required as the original maximum duration is given in beats, and
+        the length of the beats of a MIDI can very with time signature changes.
     """
+    tpb_idx = 0
     for note_pedal in notes_pedals:
-        if note_pedal.duration > max_duration:
-            note_pedal.duration = max_duration
+        if note_pedal.time > max_durations[tpb_idx, 0]:
+            tpb_idx += 1
+        if note_pedal.duration > max_durations[tpb_idx, 1]:
+            note_pedal.duration = max_durations[tpb_idx, 1]

@@ -1,5 +1,4 @@
 """Base tokenizer class, acting as a "framework" for all tokenizers.
-# TODO search for all usages of time division
 # TODO build docs action, make sure no error / warning https://github.com/readthedocs/actions.
 """
 from __future__ import annotations
@@ -138,11 +137,38 @@ class MIDITokenizer(ABC, HFHubMixin):
         # The tokenizer's time division is chosen in order to make sure that is equal
         # to the lowest possible ticks per beat value, which depends on the supported
         # time signatures.
-        # TODO document this somewhere
+        # It shouldn't be used in place of the real ticks/beat value, which depends on
+        # the current time signature denominator. The only exception is for tokenizers
+        # which does not support time signature, i.e. which only consider 4/4.
+        # TODO this doesn't work as is yet for non-beat-based tokenizers, as the
+        #   `midi.resample` operation will keep too much accuracy for sections where
+        #   the time signature is < 8, i.e. ticks per beat < to tokenizer.time_division
+        #   We would need to resample per ticks/beat.
+        #   Setting
+        #   `self.time_division = max(res for res in self.config.beat_res.values())`
+        #   makes the tests pass as no MIDI in the tests has a time signature of */8.
+        #   https://github.com/Yikai-Liao/symusic/issues/10
+        # TODO document this somewhere.
+        #   Ideally the tokenizer's time division is set to the highest possible
+        #   ticks per beat value, which depends on the highest `config.beat_res` given
+        #   by the user and the maximum time signature denominator supported.
+        #   This would allow to keep the maximum time information when tokenizing.
+        #   In practice, if we do this, we would need to resample the time (onsets)
+        #   of all the MIDI messages differently for every every portions having
+        #   different ticks/beat values (can vary depending on the time signatures).
+        #   This would add a significant additional preprocessing time if we do it in
+        #   Python, so we do not do it. Instead we select the time division as the
+        #   highest ticks/beat in `config.beat_res`, and round the duration values of
+        #   the concerned tokens (note and time durations), even for
+        #   *NoteOff*/*PedalOff* tokens (which is necessary).
+        #   Ultimately, a resampling by ticks/beat could be implemented in a C++
+        #   preprocessing step with pybind. We could then remove the `ceil` from the
+        #   `MIDITokenizer_time_token_to_ticks` method.
+        # self.time_division = max(res for res in self.config.beat_res.values())
         tpb_max_tokens = max(res for res in self.config.beat_res.values())
-        denom_min = min(ts[1] for ts in self.time_signatures)
-        quarter_factor = 4 // denom_min
-        self.time_division = tpb_max_tokens * quarter_factor
+        denom_max = max(ts[1] for ts in self.time_signatures)
+        quarter_factor = denom_max / 4  # can be < 1 if only */2 time sigs
+        self.time_division = int(tpb_max_tokens * quarter_factor)
 
         # Durations
         # Usages:
@@ -289,6 +315,9 @@ class MIDITokenizer(ABC, HFHubMixin):
         :param midi: MIDI object to preprocess.
         """
         # Resample time, not inplace
+        # We do it even if the tokenizer's time division is superior to the MIDI's, as
+        # it is the one used in all the downstream methods to compute the number of
+        # ticks per bar/beat.
         if self.time_division != midi.ticks_per_quarter:
             midi = midi.resample(self.time_division, min_dur=1)
 
@@ -352,13 +381,13 @@ class MIDITokenizer(ABC, HFHubMixin):
         deleted.
 
         :param notes: notes to preprocess.
-        :param ticks_per_beat: array indicating the number of ticks per beat per
-            portions. The numbers of ticks per beat depend on the time signatures of
-            the MIDI being parsed. The array has a shape ``(N,2)``, for ``N`` changes
-            of ticks per beat, and the second dimension representing the end tick of
-            each portion and the number of ticks per beat respectively. This argument
-            is not required if ``tokenizer.config.sustain_pedal_duration`` is disabled.
-            (default: None)
+        :param ticks_per_beat: array indicating the number of ticks per beat per time
+            signature denominator section. The numbers of ticks per beat depend on the
+            time signatures of the MIDI being parsed. The array has a shape ``(N,2)``,
+            for ``N`` changes of ticks per beat, and the second dimension representing
+            the end tick of each section and the number of ticks per beat respectively.
+            This argument is not required if
+            ``tokenizer.config.sustain_pedal_duration`` is disabled. (default: None)
         """
         # Gather times and velocity values in lists
         durations, velocities = [], []
@@ -782,7 +811,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         if self.config.use_chords and not track.is_drum:
             chords = detect_chords(
                 track.notes,
-                self.time_division,
+                ticks_per_beat,
                 chord_maps=self.config.chord_maps,
                 program=program,
                 specify_root_note=self.config.chord_tokens_with_root_note,

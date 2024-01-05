@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from math import ceil
 
+import numpy as np
 from symusic import Note, Score, Tempo, Track
 
 from ..classes import Event, TokSequence
@@ -10,7 +11,7 @@ from ..constants import (
     MIDI_INSTRUMENTS,
 )
 from ..midi_tokenizer import MIDITokenizer
-from ..utils import detect_chords, get_midi_max_tick
+from ..utils import detect_chords, get_midi_max_tick, get_midi_ticks_per_beat
 
 
 class MuMIDI(MIDITokenizer):
@@ -103,10 +104,14 @@ class MuMIDI(MIDITokenizer):
             self.config.additional_params["max_bar_embedding"] = num_bars
 
         # Convert each track to tokens (except first pos to track time)
+        if self.config.use_chords:
+            ticks_per_beat = get_midi_ticks_per_beat(midi)
+        else:
+            ticks_per_beat = None
         note_tokens = []
         for track in midi.tracks:
             if track.program in self.config.programs:
-                note_tokens += self._track_to_tokens(track, midi.ticks_per_quarter)
+                note_tokens += self._track_to_tokens(track, ticks_per_beat)
 
         note_tokens.sort(
             key=lambda x: (x[0].time, x[0].desc)
@@ -189,7 +194,7 @@ class MuMIDI(MIDITokenizer):
         return tokens
 
     def _track_to_tokens(
-        self, track: Track, time_division: int
+        self, track: Track, ticks_per_beat: np.ndarray = None
     ) -> list[list[Event | str]]:
         r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
         (:class:`miditok.TokSequence`). For each note, it creates a time step as a
@@ -199,6 +204,12 @@ class MuMIDI(MIDITokenizer):
         * 2: Duration.
 
         :param track: track object to convert.
+        :param ticks_per_beat: array indicating the number of ticks per beat per
+            time signature denominator section. The numbers of ticks per beat depend on
+            the time signatures of the MIDI being parsed. The array has a shape
+            ``(N,2)``, for ``N`` changes of ticks per beat, and the second dimension
+            representing the end tick of each section and the number of ticks per beat
+            respectively. Only used when using chords. (default: ``None``)
         :return: sequence of corresponding tokens.
         """
         # Make sure the notes are sorted first by their onset (start) times, second by
@@ -240,7 +251,7 @@ class MuMIDI(MIDITokenizer):
         if self.config.use_chords and not track.is_drum:
             chords = detect_chords(
                 track.notes,
-                time_division,
+                ticks_per_beat,
                 chord_maps=self.config.chord_maps,
                 specify_root_note=self.config.chord_tokens_with_root_note,
                 beat_res=self._first_beat_res,

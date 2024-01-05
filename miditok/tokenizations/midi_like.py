@@ -586,6 +586,7 @@ class MIDILike(MIDITokenizer):
             for prog in self.config.programs
         }
         current_pitches_tick = {p: [] for p in self.config.programs}
+        ticks_per_beat = compute_ticks_per_beat(TIME_SIGNATURE[1], self.time_division)
         max_duration_str = self.config.additional_params.get("max_duration", None)
         if max_duration_str is not None:
             max_duration = self._time_token_to_ticks(
@@ -598,7 +599,6 @@ class MIDILike(MIDITokenizer):
 
         events = [Event(*tok.split("_")) for tok in tokens]
         current_tick = 0
-        ticks_per_beat = compute_ticks_per_beat(TIME_SIGNATURE[1], self.time_division)
 
         for i in range(len(events)):
             # err_tokens = events[i - 4 : i + 4]  # uncomment for debug
@@ -641,7 +641,7 @@ class MIDILike(MIDITokenizer):
 
                     current_pitches_tick[current_program].append(pitch_val)
                 elif events[i].type_ == "NoteOff":
-                    if len(active_pitches[current_program][int(events[i].value)]):
+                    if len(active_pitches[current_program][int(events[i].value)]) == 0:
                         err += 1  # this pitch wasn't being played
                         continue
                     # Check if duration is not exceeding limit

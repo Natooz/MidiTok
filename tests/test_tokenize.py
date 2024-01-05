@@ -38,7 +38,7 @@ default_params.update(
         "chord_unknown": False,
         "delete_equal_successive_time_sig_changes": True,
         "delete_equal_successive_tempo_changes": True,
-        "additional_params": {"max_duration": (20, 0, 4)},
+        "max_duration": (20, 0, 4),
     }
 )
 TOK_PARAMS_ONE_TRACK = []

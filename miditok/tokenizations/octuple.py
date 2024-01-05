@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from math import ceil
-
 from symusic import Note, Score, Tempo, TimeSignature, Track
 
 from ..classes import Event, TokSequence
@@ -10,7 +8,7 @@ from ..constants import (
     TIME_SIGNATURE,
 )
 from ..midi_tokenizer import MIDITokenizer
-from ..utils import compute_ticks_per_bar, compute_ticks_per_beat, get_midi_max_tick
+from ..utils import compute_ticks_per_bar, compute_ticks_per_beat, get_bars_ticks
 
 
 class Octuple(MIDITokenizer):
@@ -172,7 +170,7 @@ class Octuple(MIDITokenizer):
         :return: sequences of tokens
         """
         # Check bar embedding limit, update if needed
-        num_bars = ceil(get_midi_max_tick(midi) / (midi.ticks_per_quarter * 4))
+        num_bars = len(get_bars_ticks(midi))
         if self.config.additional_params["max_bar_embedding"] < num_bars:
             for i in range(
                 self.config.additional_params["max_bar_embedding"], num_bars

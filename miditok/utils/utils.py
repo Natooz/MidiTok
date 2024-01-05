@@ -124,7 +124,7 @@ def fix_offsets_overlapping_notes(notes: NoteTickList) -> None:
 
 def detect_chords(
     notes: NoteTickList,
-    time_division: int,  # TODO convert usage to ticks/quarter?
+    ticks_per_beat: np.array,
     chord_maps: dict[str, Sequence[int]],
     program: int | None = None,
     specify_root_note: bool = True,
@@ -143,8 +143,11 @@ def detect_chords(
     inversion.**.
 
     :param notes: notes to analyse (sorted by starting time, them pitch).
-    :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI
-        being parsed).
+    :param ticks_per_beat: array indicating the number of ticks per beat per
+        time signature denominator section. The numbers of ticks per beat depend on the
+        time signatures of the MIDI being parsed. The array has a shape ``(N,2)``, for
+        ``N`` changes of ticks per beat, and the second dimension representing the end
+        tick of each section and the number of ticks per beat respectively.
     :param chord_maps: list of chord maps, to be given as a dictionary where keys are
         chord qualities (e.g. "maj") and values pitch maps as tuples of integers
         (e.g. (0, 4, 7)). You can use ``miditok.constants.CHORD_MAPS`` as an example.
@@ -175,8 +178,9 @@ def detect_chords(
         [(note.pitch, int(note.start), int(note.end)) for note in notes]
     )  # (N,3)
 
-    time_div_half = time_division // 2
-    onset_offset = time_division * onset_offset / beat_res
+    tpb_idx = 0
+    tpb_half = ticks_per_beat[tpb_idx, 1] // 2
+    onset_offset_tick = ticks_per_beat[tpb_idx, 1] * onset_offset / beat_res
 
     count = 0
     previous_tick = -1
@@ -186,24 +190,27 @@ def detect_chords(
         if notes[count, 1] == previous_tick:
             count += 1
             continue
+        # Update the time offset the time signature denom/ticks per beat changed
+        elif notes[count, 1] > ticks_per_beat[tpb_idx, 0]:
+            tpb_idx += 1
+            tpb_half = ticks_per_beat[tpb_idx, 1] // 2
+            onset_offset_tick = ticks_per_beat[tpb_idx, 1] * onset_offset / beat_res
 
         # Gathers the notes around the same time step
         onset_notes = notes[count : count + simul_notes_limit]  # reduces the scope
         onset_notes = onset_notes[
-            np.where(onset_notes[:, 1] <= onset_notes[0, 1] + onset_offset)
+            np.where(onset_notes[:, 1] <= onset_notes[0, 1] + onset_offset_tick)
         ]
 
         # If it is ambiguous, e.g. the notes lengths are too different
-        if np.any(np.abs(onset_notes[:, 2] - onset_notes[0, 2]) > time_div_half):
+        if np.any(np.abs(onset_notes[:, 2] - onset_notes[0, 2]) > tpb_half):
             count += len(onset_notes)
             continue
 
         # Selects the possible chords notes
-        if notes[count, 2] - notes[count, 1] <= time_div_half:
+        if notes[count, 2] - notes[count, 1] <= tpb_half:
             onset_notes = onset_notes[np.where(onset_notes[:, 1] == onset_notes[0, 1])]
-        chord = onset_notes[
-            np.where(onset_notes[:, 2] - onset_notes[0, 2] <= time_div_half)
-        ]
+        chord = onset_notes[np.where(onset_notes[:, 2] - onset_notes[0, 2] <= tpb_half)]
 
         # Creates the "chord map" and see if it has a "known" quality, append a chord
         # event if it is valid

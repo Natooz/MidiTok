@@ -316,12 +316,12 @@ class TSD(MIDITokenizer):
 
         # DURATION
         vocab += [
-            f'Duration_{".".join(map(str, duration))}' for duration in self.durations
+            f"Duration_{'.'.join(map(str, duration))}" for duration in self.durations
         ]
 
         # TIME SHIFTS
         vocab += [
-            f'TimeShift_{".".join(map(str, self.durations[i]))}'
+            f"TimeShift_{'.'.join(map(str, self.durations[i]))}"
             for i in range(len(self.durations))
         ]
 

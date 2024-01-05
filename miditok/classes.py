@@ -6,6 +6,7 @@ import json
 import warnings
 from copy import deepcopy
 from dataclasses import dataclass
+from math import log2
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -368,22 +369,29 @@ class TokenizerConfig:
         **kwargs,
     ) -> None:
         # Checks
-        if max_pitch_interval:
-            if not 0 <= pitch_range[0] < pitch_range[1] <= 127:
-                raise ValueError(
-                    "`pitch_range` must be within 0 and 127, and an first value"
-                    f" greater than the second (received {pitch_range})"
-                )
-            if not 1 <= num_velocities <= 127:
-                raise ValueError(
-                    "`num_velocities` must be within 1 and 127 (received"
-                    f" {num_velocities})"
-                )
-            if not 0 <= max_pitch_interval <= 127:
-                raise ValueError(
-                    "`max_pitch_interval` must be within 0 and 127 (received"
-                    f" {max_pitch_interval})."
-                )
+        if not 0 <= pitch_range[0] < pitch_range[1] <= 127:
+            raise ValueError(
+                "`pitch_range` must be within 0 and 127, and an first value"
+                f" greater than the second (received {pitch_range})"
+            )
+        if not 1 <= num_velocities <= 127:
+            raise ValueError(
+                "`num_velocities` must be within 1 and 127 (received"
+                f" {num_velocities})"
+            )
+        if max_pitch_interval and not 0 <= max_pitch_interval <= 127:
+            raise ValueError(
+                "`max_pitch_interval` must be within 0 and 127 (received"
+                f" {max_pitch_interval})."
+            )
+        if use_time_signatures:
+            for denominator in time_signature_range:
+                if not log2(denominator).is_integer():
+                    raise ValueError(
+                        "`time_signature_range` contains an invalid time signature "
+                        "denominator. The MIDI norm only supports powers of 2"
+                        f"denominators. Received {denominator}"
+                    )
 
         # Global parameters
         self.pitch_range: tuple[int, int] = pitch_range
@@ -444,13 +452,13 @@ class TokenizerConfig:
         )
 
         # Time signature params
-        self.time_signature_range: dict[int, list[int]] = {
-            beat_res: (
-                list(range(beats[0], beats[1] + 1))
-                if isinstance(beats, tuple)
-                else beats
+        self.time_signature_range = {
+            denominator: (
+                list(range(numerators[0], numerators[1] + 1))
+                if isinstance(numerators, tuple)
+                else numerators
             )
-            for beat_res, beats in time_signature_range.items()
+            for denominator, numerators in time_signature_range.items()
         }
         self.delete_equal_successive_time_sig_changes = (
             delete_equal_successive_time_sig_changes
