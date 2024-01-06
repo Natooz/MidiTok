@@ -1,4 +1,5 @@
 """Base tokenizer class, acting as a "framework" for all tokenizers.
+
 # TODO build docs action, make sure no error / warning https://github.com/readthedocs/actions.
 """
 from __future__ import annotations
@@ -653,7 +654,6 @@ class MIDITokenizer(ABC, HFHubMixin):
             of ticks per beat, and the second dimension representing the end tick of
             each portion and the number of ticks per beat respectively.
         """
-
         # Batch by tpb section
         dur_idx_first = 0
         for tpb_idx, (last_tick_tpb, tpb) in enumerate(ticks_per_beat):
@@ -1363,7 +1363,6 @@ class MIDITokenizer(ABC, HFHubMixin):
         :param output_path: path to save the file. (default: ``None``)
         :return: the midi object (``symusic.Score``).
         """
-
         if not isinstance(tokens, (TokSequence, list)) or (
             isinstance(tokens, list)
             and any(not isinstance(seq, TokSequence) for seq in tokens)
@@ -1772,7 +1771,7 @@ class MIDITokenizer(ABC, HFHubMixin):
     ) -> tuple[list[tuple[int, int, int]], list[int]]:
         r"""Converts a duration in ticks into a sequence of *TimeShift*/*Rest* values.
         This method is not used for *Duration* tokens, as their values are rounded to
-        the closest values in
+        the closest values in.
 
         :param duration: duration in tick to convert.
         :param ticks_per_beat: number of ticks in a beat. This depends on the current

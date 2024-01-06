@@ -170,10 +170,13 @@ def adapt_ref_midi_before_tokenize(
 def adapt_ref_midi_for_tests_assertion(
     midi: Score, tokenizer: miditok.MIDITokenizer
 ) -> Score:
-    """Adapt the reference tokenized MIDI so that its contents fit what is expected to
-    be retrieved when decoding the tokens.
-    The new MIDI will be preprocessed (`tokenizer.preprocess_midi()`), and other
-    attributes such as tempos or time signature times may be altered.
+    """Adapt a reference raw/unprocessed MIDI for test assertions.
+
+    This method is meant to be used with a reference MIDI, and preprocess it so that
+    its contents match exactly those of the MIDI decoded from the tokens of this
+    reference MIDI.
+    The transformed MIDI will be preprocessed (`tokenizer.preprocess_midi()`), and
+    other attributes such as tempos or time signature times may be altered.
 
     :param midi: midi reference.
     :param tokenizer: in order to downsample the MIDI before sorting its content.
@@ -182,16 +185,10 @@ def adapt_ref_midi_for_tests_assertion(
     tokenization = type(tokenizer).__name__ if tokenizer is not None else None
     new_midi = copy(midi)
 
-    # merging is performed in preprocess only in one_token_stream mode
+    # Merging is performed in preprocess only in one_token_stream mode
     # but in multi token stream, decoding will actually keep one track per program
     if tokenizer.config.use_programs and tokenizer.one_token_stream:
         miditok.utils.merge_same_program_tracks(new_midi.tracks)
-
-    # We delete time sigs outside of those covered by the tokenizer.
-    # This is not done in ``preprocess_midi`` as the time signature alters the beat
-    # structure of the music, bars will be incorrectly calculated. It is preferable
-    # that to throw an error in this case.
-    del_invalid_time_sig(new_midi.time_signatures, tokenizer.time_signatures)
 
     # Preprocess the MIDI: downsample it, remove notes outside of pitch range...
     new_midi = tokenizer.preprocess_midi(new_midi)
@@ -215,8 +212,9 @@ def adapt_ref_midi_for_tests_assertion(
 def midis_notes_equals(
     midi1: Score, midi2: Score
 ) -> list[tuple[int, str, list[tuple[str, Note | int, int]]]]:
-    """Checks if the notes from two MIDIs are all equal, and if not returns the list of
-    errors.
+    """Check that the notes from two MIDIs are all equal.
+
+    If they are not all equal, the method returns the list of errors.
 
     :param midi1: first MIDI.
     :param midi2: second MIDI.
@@ -378,10 +376,10 @@ def tokenize_and_check_equals(
 def del_invalid_time_sig(
     time_sigs: list[TimeSignature], time_sigs_tokenizer: list[TimeSignature]
 ) -> None:
-    r"""Will adapt the times of tempo changes depending on the
-    onset times of the notes of the MIDI.
-    This is needed to pass the tempo tests for Octuple as the tempos
-    will be decoded only from the notes.
+    r"""Delete time signatures of a MIDI outside those supported by a tokenizer.
+
+    This is actually unused in our tokenization test pipeline, as removing the
+    invalid time signature is already done in ``preprocess_midi``.
 
     :param time_sigs: time signatures to filter
     :param time_sigs_tokenizer:
@@ -402,8 +400,8 @@ def adapt_tempo_changes_times(
     tempo_changes: list[Tempo],
     default_tempo: int,
 ) -> None:
-    r"""Will adapt the times of tempo changes depending on the
-    onset times of the notes of the MIDI.
+    r"""Align the times of tempo changes on those of reference notes.
+
     This is needed to pass the tempo tests for Octuple as the tempos
     will be decoded only from the notes.
 
@@ -454,8 +452,13 @@ def clip_durations(
     notes_pedals: list[Note] | list[Pedal],
     max_durations: np.ndarray,
 ) -> None:
-    """Adapt notes and pedals offset times so that they match the possible durations
-    covered by a tokenizer.
+    """Clip the duration of notes or pedals to a specific limit.
+
+    This method is applied in the tokenization tests to a preprocessed reference MIDI
+    to make sure that the there are no note/pedal durations that exceed the limit, as
+    the MIDI decoded from tokens will have limited durations. This applies to
+    tokenizers using *NoteOff* and *PedalOff* tokens, as otherwise (i.e. using
+    *Duration* tokens) the durations are already clipped during the preprocessing step.
 
     :param notes_pedals: list of Note or Pedal objects to adapt.
     :param max_durations: max duration values, per tick section, as a numpy array of

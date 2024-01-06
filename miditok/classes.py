@@ -57,9 +57,10 @@ IGNORED_CONFIG_KEY_DICT = [
 
 @dataclass
 class Event:
-    r"""Event class, representing a token and its characteristics
-    The type corresponds to the token type (e.g. Pitch, Position ...) and its value.
-    These two attributes are used to build its string representation (__str__),
+    r"""Event class, representing a token and its characteristics.
+
+    The type corresponds to the token type (e.g. *Pitch*, *Position*...) and its value.
+    These two attributes are used to build its string representation (``__str__``),
     used in the Vocabulary class to map an event to its corresponding token.
     This class is mainly used during tokenization when the tokens / events have
     to be sorted by time.
@@ -72,9 +73,17 @@ class Event:
     desc: Any = None
 
     def __str__(self) -> str:
+        """Return the string value of the ``Event``.
+
+        :return: string value of the ``Event`` as a combination of its type and value.
+        """
         return f"{self.type_}_{self.value}"
 
     def __repr__(self) -> str:
+        """Return the representation of this ``Event``.
+
+        :return: representation of the event.
+        """
         return (
             f"Event(type={self.type_}, value={self.value}, time={self.time},"
             f" desc={self.desc})"
@@ -83,7 +92,8 @@ class Event:
 
 @dataclass
 class TokSequence:
-    r"""Represents a sequence of token.
+    r"""Sequence of token.
+
     A ``TokSequence`` can represent tokens by their several forms:
 
     * tokens (list of str): tokens as sequence of strings.
@@ -107,6 +117,10 @@ class TokSequence:
     _ids_no_bpe: list[int | list[int]] = None
 
     def __len__(self) -> int:
+        """Return the length of the sequence.
+
+        :return: number of elements in the sequence.
+        """
         if self.ids is not None:
             return len(self.ids)
         elif self.tokens is not None:
@@ -124,6 +138,13 @@ class TokSequence:
             )
 
     def __getitem__(self, idx: int) -> int | str | Event:
+        """Return the ``idx``th element of the sequence.
+
+        It checks by order: ids, tokens, events, bytes.
+
+        :param idx: index of the element to retrieve.
+        :return: ``idx``th element.
+        """
         if self.ids is not None:
             return self.ids[idx]
         elif self.tokens is not None:
@@ -141,13 +162,14 @@ class TokSequence:
             )
 
     def __eq__(self, other: TokSequence) -> bool:
-        r"""Checks if too sequences are equal.
+        r"""Check that too sequences are equal.
+
         This is performed by comparing their attributes (ids, tokens...).
         **Both sequences must have at least one common attribute initialized (not None)
         for this method to work, otherwise it will return False.**.
 
         :param other: other sequence to compare.
-        :return: True if the sequences have equal attributes.
+        :return: ``True`` if the sequences have equal attributes.
         """
         # Start from True assumption as some attributes might be unfilled (None)
         attributes = ["tokens", "ids", "bytes", "events"]
@@ -162,8 +184,7 @@ class TokSequence:
 
 
 class TokenizerConfig:
-    r"""MIDI tokenizer base class, containing common methods and attributes for all
-    tokenizers.
+    r"""Tokenizer configuration, to be used with all tokenizers.
 
     :param pitch_range: range of MIDI pitches to use. Pitches can take values between
         0 and 127 (included). The `General MIDI 2 (GM2) specifications
@@ -498,15 +519,13 @@ class TokenizerConfig:
 
     @classmethod
     def from_dict(cls, input_dict: dict[str, Any], **kwargs) -> TokenizerConfig:
-        r"""Instantiates an ``AdditionalTokensConfig`` from a Python dictionary of
-        parameters.
+        r"""Instantiate an ``TokenizerConfig`` from a Python dictionary.
 
         :param input_dict: Dictionary that will be used to instantiate the
             configuration object.
         :param kwargs: Additional parameters from which to initialize the
             configuration object.
-        :returns: ``AdditionalTokensConfig``: The configuration object instantiated
-            from those parameters.
+        :returns: The ``TokenizerConfig`` object instantiated from those parameters.
         """
         input_dict.update(**input_dict["additional_params"])
         input_dict.pop("additional_params")
@@ -516,7 +535,7 @@ class TokenizerConfig:
         return cls(**input_dict, **kwargs)
 
     def to_dict(self, serialize: bool = False) -> dict[str, Any]:
-        r"""Serializes this instance to a Python dictionary.
+        r"""Serialize this configuration to a Python dictionary.
 
         :param serialize: will serialize the dictionary before returning it, so it can
             be saved to a JSON file.
@@ -529,7 +548,7 @@ class TokenizerConfig:
         return dict_config
 
     def __serialize_dict(self, dict_: dict) -> None:
-        r"""Converts numpy arrays to lists recursively within a dictionary.
+        r"""Convert numpy arrays to lists recursively within a dictionary.
 
         :param dict_: dictionary to serialize
         """
@@ -540,8 +559,7 @@ class TokenizerConfig:
                 dict_[key] = dict_[key].tolist()
 
     def save_to_json(self, out_path: str | Path) -> None:
-        r"""Saves a tokenizer configuration object to the `out_path` path, so that it
-        can be re-loaded later.
+        r"""Save a tokenizer configuration object to the `out_path` path.
 
         :param out_path: path to the output configuration JSON file.
         """
@@ -563,7 +581,7 @@ class TokenizerConfig:
 
     @classmethod
     def load_from_json(cls, config_file_path: str | Path) -> TokenizerConfig:
-        r"""Loads a tokenizer configuration from the `config_path` path.
+        r"""Load a tokenizer configuration from the `config_path` path.
 
         :param config_file_path: path to the configuration JSON file to load.
         """
@@ -587,6 +605,11 @@ class TokenizerConfig:
         return cls.from_dict(dict_config)
 
     def __eq__(self, other: TokenizerConfig) -> bool:
+        """Check two configs are equal.
+
+        :param other: other config object to compare.
+        :return: `True` if all attributes are equal, `False` otherwise.
+        """
         # We don't use the == operator as it yields False when comparing lists and
         # tuples containing the same elements. This method is not recursive and only
         # checks the first level of iterable values / attributes
