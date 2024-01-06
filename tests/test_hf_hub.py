@@ -1,9 +1,6 @@
 #!/usr/bin/python3 python
 
-"""Test the Hugging Face Hub integration: pushing and retrieving MidiTok tokenizers to
-and from the hub.
-
-"""
+"""Test the integration of the Hugging Face Hub."""
 import warnings
 from pathlib import Path
 from time import sleep

@@ -13,8 +13,10 @@ if TYPE_CHECKING:
 
 
 class BPEIterator:
-    r"""Iterator class that loads MIDI files and tokenize them on the fly, to be used
-    with the Hugging Face tokenizers library to build a vocabulary with BPE.
+    r"""An iterable class to be used when training a tokenizer with BPE.
+
+    It loads MIDI files and tokenize them on the fly, to be used with the Hugging Face
+    tokenizers library to build a vocabulary with BPE.
 
     :param tokenizer: tokenizer to use for training.
     :param files_paths: sequence of paths of files to load for training.
@@ -26,6 +28,11 @@ class BPEIterator:
         self.__iter_count = 0
 
     def load_file(self, path: Path) -> list[str]:
+        """Load a MIDI file and convert it to its byte representation.
+
+        :param path: path to the file to load.
+        :return: the byte representation of the file.
+        """
         if path.suffix in MIDI_FILES_EXTENSIONS:
             try:
                 midi = Score(path)
@@ -47,9 +54,18 @@ class BPEIterator:
         return bytes_
 
     def __len__(self) -> int:
+        """Return the number of files in the training corpus.
+
+        :return: number of files in the training corpus.
+        """
         return len(self.files_paths)
 
     def __getitem__(self, idx: int) -> list[str]:
+        """Convert the ``idx``th file to its byte representation.
+
+        :param idx: idx of the file to convert.
+        :return: byte representation of the file.
+        """
         return self.load_file(self.files_paths[idx])
 
     def __iter__(self) -> BPEIterator:
@@ -64,4 +80,8 @@ class BPEIterator:
             return self[self.__iter_count - 1]
 
     def __str__(self) -> str:
+        """Return the ``str`` representation of the iterator.
+
+        :return: string description.
+        """
         return f"{self.tokenizer} - {len(self)} files"

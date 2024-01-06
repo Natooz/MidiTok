@@ -28,18 +28,21 @@ def augment_midi_dataset(
     save_data_aug_report: bool = True,
 ) -> None:
     r"""Perform data augmentation on a dataset of MIDI files.
+
     The new created files have names in two parts, separated with a "#" character. Make
     sure your files do not have '§' in their names if you intend to reuse the
     information of the second part in some script.
     **Drum tracks are not augmented.**.
 
     :param data_path: root path to the folder containing tokenized json files.
-    :param pitch_offsets: list of pitch offsets for augmentation.
+    :param pitch_offsets: list of pitch offsets for augmentation. (default: ``None``)
     :param velocity_offsets: list of velocity offsets for augmentation. If you plan to
         tokenize this MIDI, the velocity offsets should be chosen accordingly to the
         number of velocities in your tokenizer's vocabulary (``num_velocities``).
+        (default: ``None``)
     :param duration_offsets: list of duration offsets for augmentation, to be given
         either in beats if ``duration_in_ticks`` is ``False``, in ticks otherwise.
+        (default: ``None``)
     :param all_offset_combinations: will perform data augmentation on all the possible
         combinations of offset values. If set to ``False``, the method will only
         augment on the offsets separately without combining them.
@@ -129,7 +132,7 @@ def _filter_offset_tuples_to_midi(
     midi: Score,
     restrict_on_program_tessitura: bool,
 ) -> list[int]:
-    r"""Removes pitch offset values that would cause errors or are out of tessitura.
+    r"""Remove pitch offset values that would cause errors or are out of tessitura.
 
     :param pitch_offsets: list of pitch offsets for augmentation.
     :param midi: midi object to augment (default: None)
@@ -179,7 +182,7 @@ def _create_offsets_tuples(
     all_offset_combinations: bool = False,
     restrict_on_program_tessitura: bool = True,
 ) -> list[tuple[int, int, int]]:
-    """Creates the data augmentation tuples combinations from lists of offsets.
+    """Create the data augmentation tuples combinations from lists of offsets.
 
     :param midi: midi object to augment.
     :param pitch_offsets: list of pitch offsets for augmentation.
@@ -234,29 +237,31 @@ def augment_midi(
     duration_in_ticks: bool = False,
     min_duration: int | float = 0.03125,
 ) -> Score:
-    r"""Augments a MIDI object, by shifting its note attribute values. Velocity and
-    duration values will be clipped according to the ``velocity_range`` and
-    ``min_duration`` arguments. Drum tracks are only augmented on the velocity.
+    r"""Augment a MIDI object by shifting its pitch, velocity and/or duration values.
+
+    Velocity and duration values will be clipped according to the ``velocity_range``
+    and ``min_duration`` arguments. Drum tracks are only augmented on the velocity.
     If you are using a pitch offset, make sure the MIDI doesn't contain notes with
     pitches that would end outside the conventional ``(0, 127)`` range, the method will
     otherwise crash.
 
     :param midi: midi object to augment.
-    :param pitch_offset: pitch offset for augmentation. (default: 0)
+    :param pitch_offset: pitch offset for augmentation. (default: ``0``)
     :param velocity_offset: velocity offset for augmentation. If you plan to tokenize
         this MIDI, the velocity offset should be chosen accordingly to the number of
-        velocities in your tokenizer's vocabulary (``num_velocities``). (default: 0)
+        velocities in your tokenizer's vocabulary (``num_velocities``).
+        (default: ``0``)
     :param duration_offset: duration offset for augmentation, to be given
         either in beats if ``duration_in_ticks`` is ``False``, in ticks otherwise.
-        (default: 0)
+        (default: ``0``)
     :param velocity_range: minimum and maximum velocity values. (default: ``(1, 127)``)
     :param duration_in_ticks: if given ``True``, the ``duration_offset`` argument will
         be considered as expressed in ticks. Otherwise, it is considered in beats, and
         the equivalent in ticks will be determined by multiplying it by the MIDI's
-        time division. (default: False)
+        time division. (default: ``False``)
     :param min_duration: minimum duration limit to apply if ``duration_offset`` is
         negative. If ``duration_in_ticks`` is ``True``, it must be given in ticks,
-        otherwise in beats as a float or integer. (default: 0.03125)
+        otherwise in beats as a float or integer. (default: ``0.03125``)
     :return: the augmented MIDI object.
     """
     midi_aug = copy(midi)
@@ -310,6 +315,7 @@ def augment_midi_multiple_offsets(
     min_duration: int | float = 0.03125,
 ) -> list[tuple[tuple[int, int, int], Score]]:
     r"""Perform data augmentations on a MIDI object with multiple offset values.
+
     Velocity and duration values will be clipped according to the ``velocity_range`` and
     ``min_duration`` arguments. Drum tracks are only augmented on the velocity.
 
@@ -318,11 +324,13 @@ def augment_midi_multiple_offsets(
     :param velocity_offsets: list of velocity offsets for augmentation. If you plan to
         tokenize this MIDI, the velocity offsets should be chosen accordingly to the
         number of velocities in your tokenizer's vocabulary (``num_velocities``).
+        (default: ``None``)
     :param duration_offsets: list of duration offsets for augmentation, to be given
         either in beats if ``duration_in_ticks`` is ``False``, in ticks otherwise.
+        (default: ``None``)
     :param all_offset_combinations: will perform data augmentation on all the possible
         combinations of offset values. If set to ``False``, the method will only
-        augment on the offsets separately without combining them.
+        augment on the offsets separately without combining them. (default: ``None``)
     :param restrict_on_program_tessitura: if ``True``, the method will consider the
         recommended pitch values of each instrument/program as the range of possible
         values after augmentation. Otherwise, the ``(0, 127)`` range will be used.

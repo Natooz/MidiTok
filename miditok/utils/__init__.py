@@ -1,3 +1,5 @@
+"""Module containing utils methods than can be used outside of tokenization."""
+
 from .utils import (
     convert_ids_tensors_to_list,
     detect_chords,

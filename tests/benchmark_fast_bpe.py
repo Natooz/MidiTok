@@ -31,10 +31,7 @@ ADDITIONAL_TOKENS_TEST = {
 
 
 def bpe_benchmark(data_path: str | Path | PurePath = "./tests/Maestro") -> None:
-    r"""Reads a few MIDI files, convert them into token sequences, convert them back
-    to MIDI files. The converted back MIDI files should identical to original one,
-    expect with note starting and ending times quantized, and maybe a some duplicated
-    notes removed.
+    r"""Benchmark BPE encoding, batched and un-batched.
 
     :param data_path: root path to the data to test
     """
