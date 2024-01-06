@@ -65,8 +65,10 @@ TOKENIZER_CONFIG_KWARGS = {
 
 
 def adjust_tok_params_for_tests(tokenization: str, params: dict[str, Any]) -> None:
-    """Adjusts parameters (as dictionary for keyword arguments) depending on the
-    tokenization.
+    """Adjust tokenizer config parameters for tests.
+
+    Depending on the tokenization, some adjustments are necessary to ensure that the
+    MIDI decoded from tokens is identical to the original one.
 
     :param tokenization: tokenization.
     :param params: parameters as a dictionary of keyword arguments.

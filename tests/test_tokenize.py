@@ -163,10 +163,10 @@ def _test_tokenize(
     saving_erroneous_midis: bool = False,
     save_failed_midi_as_one_midi: bool = True,
 ) -> None:
-    r"""Reads a MIDI file, converts it into tokens, convert it back to a MIDI object.
+    r"""Tokenize a MIDI file, decode it back and make sure it is identical to the ogi.
+
     The decoded MIDI should be identical to the original one after downsampling, and
-    potentially notes deduplication. We only parametrize for midi files, as it would
-    otherwise require to load them multiple times each.
+    potentially notes deduplication.
 
     :param midi_path: path to the MIDI file to test.
     :param tok_params_set: tokenizer and its parameters to run.
