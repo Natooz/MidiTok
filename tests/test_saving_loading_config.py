@@ -1,9 +1,6 @@
 #!/usr/bin/python3 python
 
-"""Tests to create tokenizers, save their config, and load it back.
-If all went well the tokenizer should be identical.
-
-"""
+"""Tests for the saving/loading methods of tokenizers."""
 
 from pathlib import Path
 
@@ -41,8 +38,10 @@ def test_saving_loading_tokenizer_config(tokenization: str, tmp_path: Path):
 
 @pytest.mark.parametrize("tokenization", ALL_TOKENIZATIONS)
 def test_saving_loading_tokenizer(tokenization: str, tmp_path: Path):
-    r"""Tests to create tokenizers, save their config, and load it back.
-    If all went well the tokenizer should be identical.
+    r"""Make sure saving and loading end with the identical tokenizer.
+
+    Create a tokenizer, save its config, and load it back.
+    If all went well the reloaded tokenizer should be identical.
     """
     tokenizer_config = miditok.TokenizerConfig(**ADDITIONAL_TOKENS_TEST)
     tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(

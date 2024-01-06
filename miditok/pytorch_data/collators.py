@@ -1,4 +1,4 @@
-"""Collator objects for PyTorch `DataLoader`s."""
+"""Collator objects for PyTorch ``DataLoader``s."""
 from __future__ import annotations
 
 import warnings
@@ -10,6 +10,30 @@ from torch import LongTensor
 
 
 class DataCollator:
+    r"""All-in-one data collator for PyTorch ``DataLoader``.
+
+    It allows to apply padding (right or left side of sequences), prepend or append
+    *BOS* and *EOS* tokens. It will also add an ``"attention_mask"`` entry to the
+    batch, following the padding applied.
+
+    :param pad_token_id: padding token id.
+    :param bos_token_id: BOS token id. (default: ``None``)
+    :param eos_token_id: EOS token id. (default: ``None``)
+    :param pad_on_left: if given True, it will pad the sequences on the left. This
+        can be required when using some libraries expecting padding on left, for
+        example when generating with Hugging Face Transformers. (default: ``False``)
+    :param copy_inputs_as_labels: will add a labels entry (``inputs_kwarg_name``) to
+        the batch (or replace the existing one), which is a copy to the input entry
+        (``labels_kwarg_name``). (default: ``False``)
+    :param shift_labels: will shift inputs and labels for autoregressive
+        training/teacher forcing. (default: ``False``)
+    :param labels_pad_idx: padding id for labels. (default: -100)
+    :param inputs_kwarg_name: name of dict / kwarg key for inputs.
+        (default: ``"input_ids"``)
+    :param labels_kwarg_name: name of dict / kwarg key for inputs.
+        (default: ``"labels"``)
+    """
+
     def __init__(
         self,
         pad_token_id: int,
@@ -22,27 +46,6 @@ class DataCollator:
         inputs_kwarg_name: str = "input_ids",
         labels_kwarg_name: str = "labels",
     ) -> None:
-        r"""Multifunction data collator, applying padding (right or left), allowing to
-        add ``BOS`` and ``EOS`` tokens. It will also add an "attention_mask" entry to
-        the batch, following the padding applied.
-
-        :param pad_token_id: padding token id.
-        :param bos_token_id: BOS token id. (default: None)
-        :param eos_token_id: EOS token id. (default: None)
-        :param pad_on_left: if given True, it will pad the sequences on the left. This
-            can be required when using some libraries expecting padding on left, for
-            example when generating with Hugging Face Transformers. (default: False)
-        :param copy_inputs_as_labels: will add a labels entry (`inputs_kwarg_name`) to
-            the batch (or replace the existing one), which is a copy to the input entry
-            (`labels_kwarg_name`). (default: False)
-        :param shift_labels: will shift inputs and labels for autoregressive
-            training/teacher forcing. (default: False)
-        :param labels_pad_idx: padding id for labels. (default: -100)
-        :param inputs_kwarg_name: name of dict / kwarg key for inputs.
-            (default: "input_ids")
-        :param labels_kwarg_name: name of dict / kwarg key for inputs.
-            (default: "labels")
-        """
         self.pad_token = pad_token_id
         self.bos_token = bos_token_id
         self.eos_token = eos_token_id
@@ -54,6 +57,13 @@ class DataCollator:
         self.labels_kwarg_name = labels_kwarg_name
 
     def __call__(self, batch: list[Mapping[str, Any]]) -> Mapping[str, LongTensor]:
+        """Collate the sequences of a batch, make them ready to be fed to a model.
+
+        :param batch: batch of sequences, as a list of dictionaries containing input ids
+            and optionally labels.
+        :return: the output batch as a dictionary linking to input and optionally target
+            tensors.
+        """
         out_batch = {}
         x, y = None, None
 
@@ -123,11 +133,11 @@ def _add_bos_eos_tokens_to_batch(
     bos_tok_id: int | None = None,
     eos_tok_id: int | None = None,
 ) -> None:
-    """Adds (inplace) BOS and EOS tokens to inputs.
+    """Add (inplace) **BOS** and **EOS** tokens to inputs.
 
     :param batch: batch as a list of Tensors.
-    :param bos_tok_id: BOS token id. (default: None)
-    :param eos_tok_id: EOS token id. (default: None)
+    :param bos_tok_id: BOS token id. (default: ``None``)
+    :param eos_tok_id: EOS token id. (default: ``None``)
     """
     if bos_tok_id is None and eos_tok_id is None:
         return
@@ -185,9 +195,11 @@ def _pad_batch(
 
 
 def _pad_left(batch: list[LongTensor], pad_token_id: int) -> LongTensor:
-    r"""Here the sequences are padded to the left, so that the last token along the
-    time dimension is always the last token of each seq, allowing to efficiently
-    generate by batch.
+    r"""Pad sequences on the left, i.e. on the first indices.
+
+    Padding on the left make the last element of each sequence the last token, which is
+    convenient when generating autoregressively as a method can more easily and
+    efficiently append the newly generated tokens.
 
     :param batch: batch as a list of Tensors.
     :param pad_token_id: padding token id.

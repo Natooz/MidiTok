@@ -22,13 +22,9 @@ REMI
 REMIPlus
 ------------------------
 
-.. image:: /assets/remiplus.png
-  :width: 800
-  :alt: REMI+ sequence, REMI plus *TimeSignature* and *Program* tokens
+REMI+ is an extended version of :ref:`REMI` (Huang and Yang) for general multi-track, multi-signature symbolic music sequences, introduced in `FIGARO (Rütte et al.) <https://arxiv.org/abs/2201.10936>`, which handle multiple instruments by adding ``Program`` tokens before the ``Pitch`` ones.
 
-.. autoclass:: miditok.REMIPlus
-    :noindex:
-    :show-inheritance:
+In the previous versions of MidiTok, we used to implement REMI+ as a dedicated class. Now that all the tokenizers supports the additional tokens in a more flexible way, you can get the REMI+ tokenization by using the :ref:`REMI` tokenizer with ``config.use_programs`` and ``config.one_token_stream_for_programs`` and ``config.use_time_signatures`` set to ``True``.
 
 MIDI-Like
 ------------------------

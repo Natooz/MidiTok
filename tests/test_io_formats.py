@@ -75,10 +75,7 @@ def test_io_formats(
     tok_params_set: tuple[str, dict[str, Any]],
     midi_path: str | Path = HERE / "MIDIs_multitrack" / "Funkytown.mid",
 ):
-    r"""Reads a few MIDI files, convert them into token sequences, convert them back to
-    MIDI files. The converted back MIDI files should identical to original one, expect
-    with note starting and ending times quantized, and maybe a some duplicated notes
-    removed.
+    r"""Tokenize and decode a MIDI back to make sure the possible I/O format are ok.
 
     :param tok_params_set: tokenizer and its parameters to run.
     :param midi_path: path to the MIDI file to test.

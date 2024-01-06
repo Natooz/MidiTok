@@ -19,24 +19,6 @@ from .tokenizations import (
 )
 from .utils import utils
 
-
-class REMIPlus(REMI):
-    r"""REMI+ is an extended version of :ref:`REMI` (Huang and Yang) for general
-    multi-track, multi-signature symbolic music sequences, introduced in
-    `FIGARO (Rütte et al.) <https://arxiv.org/abs/2201.10936>`, which handle multiple
-    instruments by adding ``Program`` tokens before the ``Pitch`` ones.
-
-    This class is identical to :ref:`REMI` with ``Program`` and ``TimeSignature``
-    tokens enabled.
-    """
-
-    def _tweak_config_before_creating_voc(self) -> None:
-        super()._tweak_config_before_creating_voc()
-        self.config.use_programs = True
-        self.config.use_time_signatures = True
-        self.one_token_stream = True
-
-
 __all__ = [
     "MIDITokenizer",
     "Event",
@@ -44,7 +26,6 @@ __all__ = [
     "TokenizerConfig",
     "MIDILike",
     "REMI",
-    "REMIPlus",
     "TSD",
     "Structured",
     "Octuple",

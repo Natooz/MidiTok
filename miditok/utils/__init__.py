@@ -1,3 +1,5 @@
+"""Module containing utils methods than can be used outside of tokenization."""
+
 from .utils import (
     compute_ticks_per_bar,
     compute_ticks_per_beat,
