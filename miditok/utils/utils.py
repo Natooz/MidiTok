@@ -578,19 +578,14 @@ def compute_ticks_per_beat(time_sig_denominator: int, time_division: int) -> int
     r"""Computes the number of ticks that constitute a beat at a given time signature
     depending on the time division of a MIDI.
 
-    * time_division: ticks/quarter
-    * denominator: beat length in "note type"
-
     :param time_sig_denominator: time signature denominator.
     :param time_division: MIDI time division in ticks/quarter.
-    :return: number of ticks per beat at the given time signature. This is given as a
-        floating point number, as we consider all types of time signature denominators
-        (including irrational) and time divisions.
+    :return: number of ticks per beat at the given time signature.
     """
     if time_sig_denominator == 4:
         return time_division
     # factor to multiply the time_division depending on the denominator
-    # if we have a */2 time sig, one beat is an eighth note so one beat is
+    # if we have a */8 time sig, one beat is an eighth note so one beat is
     # `time_division * 0.5` ticks.
     time_div_factor = 4 / time_sig_denominator
     return int(time_division * time_div_factor)
@@ -674,7 +669,7 @@ def get_midi_ticks_per_beat(midi: Score) -> np.ndarray:
     # Handles the last one up to the max tick of the MIDI
     ticks_per_beat.append(
         [
-            get_midi_max_tick(midi),
+            get_midi_max_tick(midi) + 1,
             compute_ticks_per_beat(
                 midi.time_signatures[-1].denominator, midi.ticks_per_quarter
             ),
