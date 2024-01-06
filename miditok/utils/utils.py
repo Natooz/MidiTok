@@ -620,7 +620,7 @@ def get_bars_ticks(midi: Score) -> list[int]:
     :param midi: MIDI to analyze.
     :return: list of ticks for each bar.
     """
-    max_tick = get_midi_max_tick(midi)
+    max_tick = midi.end()
     bars_ticks = []
     time_sigs = copy(midi.time_signatures)
     # Mock the last one to cover the last section in the loop below
@@ -669,7 +669,7 @@ def get_midi_ticks_per_beat(midi: Score) -> np.ndarray:
     # Handles the last one up to the max tick of the MIDI
     ticks_per_beat.append(
         [
-            get_midi_max_tick(midi) + 1,
+            midi.end() + 1,
             compute_ticks_per_beat(
                 midi.time_signatures[-1].denominator, midi.ticks_per_quarter
             ),

@@ -11,7 +11,7 @@ from ..constants import (
     MIDI_INSTRUMENTS,
 )
 from ..midi_tokenizer import MIDITokenizer
-from ..utils import detect_chords, get_midi_max_tick, get_midi_ticks_per_beat
+from ..utils import detect_chords, get_midi_ticks_per_beat
 
 
 class MuMIDI(MIDITokenizer):
@@ -95,7 +95,7 @@ class MuMIDI(MIDITokenizer):
         :return: sequences of tokens
         """
         # Check bar embedding limit, update if needed
-        num_bars = ceil(get_midi_max_tick(midi) / (midi.ticks_per_quarter * 4))
+        num_bars = ceil(midi.end() / (midi.ticks_per_quarter * 4))
         if self.config.additional_params["max_bar_embedding"] < num_bars:
             for i in range(
                 self.config.additional_params["max_bar_embedding"], num_bars

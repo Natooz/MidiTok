@@ -60,7 +60,6 @@ from .utils import (
     compute_ticks_per_beat,
     convert_ids_tensors_to_list,
     detect_chords,
-    get_midi_max_tick,
     get_midi_programs,
     get_midi_ticks_per_beat,
     merge_same_program_tracks,
@@ -343,9 +342,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             if self.config.use_time_signatures:
                 ticks_per_beat = get_midi_ticks_per_beat(midi)
             else:
-                ticks_per_beat = np.array(
-                    [[get_midi_max_tick(midi), self.time_division]]
-                )
+                ticks_per_beat = np.array([[midi.end(), self.time_division]])
         else:
             ticks_per_beat = None
 
@@ -722,9 +719,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             if self.config.use_time_signatures:
                 ticks_per_beat = get_midi_ticks_per_beat(midi)
             else:
-                ticks_per_beat = np.array(
-                    [[get_midi_max_tick(midi), self.time_division]]
-                )
+                ticks_per_beat = np.array([[midi.end(), self.time_division]])
         else:
             ticks_per_beat = None
 
