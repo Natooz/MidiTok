@@ -4,11 +4,9 @@ from __future__ import annotations
 
 from symusic import Note, Score, Track
 
-from ..classes import Event, TokSequence
-from ..constants import (
-    MIDI_INSTRUMENTS,
-)
-from ..midi_tokenizer import MIDITokenizer
+from miditok.classes import Event, TokSequence
+from miditok.constants import MIDI_INSTRUMENTS
+from miditok.midi_tokenizer import MIDITokenizer
 
 
 class Structured(MIDITokenizer):

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from symusic import (
     Note,
@@ -14,13 +14,13 @@ from symusic import (
     Track,
 )
 
-from ..classes import Event, TokenizerConfig, TokSequence
-from ..constants import (
-    MIDI_INSTRUMENTS,
-    TIME_SIGNATURE,
-)
-from ..midi_tokenizer import MIDITokenizer
-from ..utils import compute_ticks_per_bar, compute_ticks_per_beat
+from miditok.classes import Event, TokenizerConfig, TokSequence
+from miditok.constants import MIDI_INSTRUMENTS, TIME_SIGNATURE
+from miditok.midi_tokenizer import MIDITokenizer
+from miditok.utils import compute_ticks_per_bar, compute_ticks_per_beat
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class REMI(MIDITokenizer):
@@ -118,7 +118,7 @@ class REMI(MIDITokenizer):
                         current_time_sig[1], self.time_division
                     )
                     break
-                elif event.type_ in [
+                if event.type_ in [
                     "Pitch",
                     "Velocity",
                     "Duration",
@@ -300,7 +300,7 @@ class REMI(MIDITokenizer):
                                 TimeSignature(0, *list(map(int, tok_val.split("/"))))
                             )
                             break
-                        elif tok_type in [
+                        if tok_type in [
                             "Pitch",
                             "Velocity",
                             "Duration",
@@ -446,9 +446,8 @@ class REMI(MIDITokenizer):
                                 tracks[pedal_prog].pedals.append(new_pedal)
                             else:
                                 current_instrument.pedals.append(new_pedal)
-                    else:
-                        if pedal_prog not in active_pedals:
-                            active_pedals[pedal_prog] = current_tick
+                    elif pedal_prog not in active_pedals:
+                        active_pedals[pedal_prog] = current_tick
                 elif tok_type == "PedalOff":
                     pedal_prog = (
                         int(tok_val) if self.config.use_programs else current_program

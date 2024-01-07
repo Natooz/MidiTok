@@ -1,12 +1,9 @@
-#!/usr/bin/python3 python
-
 """Testing the possible I/O formats of the tokenizers."""
 
 from __future__ import annotations
 
 from copy import deepcopy
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 from symusic import Score
@@ -20,6 +17,9 @@ from .utils import (
     adjust_tok_params_for_tests,
     tokenize_and_check_equals,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 default_params = deepcopy(TOKENIZER_CONFIG_KWARGS)
 default_params.update(

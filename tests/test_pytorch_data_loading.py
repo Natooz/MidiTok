@@ -1,18 +1,19 @@
-#!/usr/bin/python3 python
-
 """Test classes and methods from the pytorch_data module."""
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Sequence
+from typing import TYPE_CHECKING, Sequence
 
-from symusic import Score
 from torch import randint
 
 import miditok
 
 from .utils import MIDI_PATHS_MULTITRACK, MIDI_PATHS_ONE_TRACK
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from symusic import Score
 
 
 def test_split_seq():

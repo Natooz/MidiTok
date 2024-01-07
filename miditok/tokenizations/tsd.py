@@ -12,10 +12,10 @@ from symusic import (
     Track,
 )
 
-from ..classes import Event, TokSequence
-from ..constants import MIDI_INSTRUMENTS, TIME_SIGNATURE
-from ..midi_tokenizer import MIDITokenizer
-from ..utils import compute_ticks_per_beat
+from miditok.classes import Event, TokSequence
+from miditok.constants import MIDI_INSTRUMENTS, TIME_SIGNATURE
+from miditok.midi_tokenizer import MIDITokenizer
+from miditok.utils import compute_ticks_per_beat
 
 
 class TSD(MIDITokenizer):
@@ -253,9 +253,8 @@ class TSD(MIDITokenizer):
                                 tracks[pedal_prog].pedals.append(new_pedal)
                             else:
                                 current_instrument.pedals.append(new_pedal)
-                    else:
-                        if pedal_prog not in active_pedals:
-                            active_pedals[pedal_prog] = current_tick
+                    elif pedal_prog not in active_pedals:
+                        active_pedals[pedal_prog] = current_tick
                 elif tok_type == "PedalOff":
                     pedal_prog = (
                         int(tok_val) if self.config.use_programs else current_program

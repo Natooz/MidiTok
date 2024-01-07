@@ -5,16 +5,17 @@ import json
 from abc import ABC
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Callable, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 
 from symusic import Score
 from torch import LongTensor, randint
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
-from miditok import MIDITokenizer
+from miditok.constants import MIDI_FILES_EXTENSIONS
 
-from ..constants import MIDI_FILES_EXTENSIONS
+if TYPE_CHECKING:
+    from miditok import MIDITokenizer
 
 
 def split_seq_in_subsequences(
@@ -113,9 +114,8 @@ class _DatasetABC(Dataset, ABC):
         labels_key_name: str = "labels",
     ) -> None:
         if samples is not None and labels is not None and len(samples) != len(labels):
-            raise ValueError(
-                "The number of samples must be the same as the number of labels"
-            )
+            msg = "The number of samples must be the same as the number of labels"
+            raise ValueError(msg)
         self.samples = samples if samples is not None else []
         self.labels = labels
         self.sample_key_name = sample_key_name
@@ -150,9 +150,9 @@ class _DatasetABC(Dataset, ABC):
         if self.__iter_count >= len(self):
             self.__iter_count = 0
             raise StopIteration
-        else:
-            self.__iter_count += 1
-            return self[self.__iter_count - 1]
+
+        self.__iter_count += 1
+        return self[self.__iter_count - 1]
 
     def __repr__(self) -> str:
         return self.__str__()

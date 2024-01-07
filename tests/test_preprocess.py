@@ -1,5 +1,3 @@
-#!/usr/bin/python3 python
-
 """Tests on the preprocessing steps of MIDI files, before tokenization."""
 
 from pathlib import Path

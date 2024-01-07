@@ -1,5 +1,3 @@
-#!/usr/bin/python3 python
-
 """Tests for the saving/loading methods of tokenizers."""
 
 from pathlib import Path

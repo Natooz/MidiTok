@@ -1,14 +1,11 @@
-#!/usr/bin/python3 python
-
 """Tests BPE encoding-decoding, and saving-loading tokenizers with BPE."""
 
 from __future__ import annotations
 
 import random
 from copy import copy, deepcopy
-from pathlib import Path
 from time import time
-from typing import Sequence
+from typing import TYPE_CHECKING, Sequence
 
 import pytest
 from symusic import Score
@@ -23,6 +20,9 @@ from .utils import (
     TOKENIZER_CONFIG_KWARGS,
     adjust_tok_params_for_tests,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 default_params = deepcopy(TOKENIZER_CONFIG_KWARGS)
 default_params.update(

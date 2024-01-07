@@ -1,14 +1,10 @@
-#!/usr/bin/python3 python
-
 """Test methods."""
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Sequence
+from typing import TYPE_CHECKING, Sequence
 
 from miditoolkit import Instrument, MidiFile, Pedal
-from symusic import Score, Track
 from tensorflow import Tensor as tfTensor
 from tensorflow import convert_to_tensor
 from torch import (
@@ -25,6 +21,11 @@ import miditok
 from miditok.utils.utils import miditoolkit_to_symusic
 
 from .utils import HERE, MIDI_PATHS_ALL
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from symusic import Score, Track
 
 
 def test_convert_tensors():
@@ -110,7 +111,7 @@ def are_tracks_equals(track1: Instrument, track2: Track) -> int:
         for control_change in track1.control_changes:
             if control_change.number != 64:
                 continue
-            elif last_pedal_on_time is not None and control_change.value < 64:
+            if last_pedal_on_time is not None and control_change.value < 64:
                 pedals_track1.append(Pedal(last_pedal_on_time, control_change.time))
                 last_pedal_on_time = None
             elif last_pedal_on_time is None and control_change.value >= 64:

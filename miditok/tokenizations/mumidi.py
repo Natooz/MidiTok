@@ -3,17 +3,17 @@
 from __future__ import annotations
 
 from math import ceil
+from typing import TYPE_CHECKING
 
-import numpy as np
 from symusic import Note, Score, Tempo, Track
 
-from ..classes import Event, TokSequence
-from ..constants import (
-    DRUM_PITCH_RANGE,
-    MIDI_INSTRUMENTS,
-)
-from ..midi_tokenizer import MIDITokenizer
-from ..utils import detect_chords, get_midi_ticks_per_beat
+from miditok.classes import Event, TokSequence
+from miditok.constants import DRUM_PITCH_RANGE, MIDI_INSTRUMENTS
+from miditok.midi_tokenizer import MIDITokenizer
+from miditok.utils import detect_chords, get_midi_ticks_per_beat
+
+if TYPE_CHECKING:
+    import numpy as np
 
 
 class MuMIDI(MIDITokenizer):
@@ -325,7 +325,7 @@ class MuMIDI(MIDITokenizer):
                     _ = tracks[current_track]
                 except KeyError:
                     tracks[current_track] = []
-            elif tok_type == "Pitch" or tok_type == "DrumPitch":
+            elif tok_type in ("Pitch", "DrumPitch"):
                 vel, duration = (time_step[i].split("_")[1] for i in (-2, -1))
                 if any(val == "None" for val in (vel, duration)):
                     continue

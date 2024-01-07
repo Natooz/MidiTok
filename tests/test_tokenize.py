@@ -1,5 +1,3 @@
-#!/usr/bin/python3 python
-
 """Testing tokenization, making sure the data integrity is not altered."""
 
 from __future__ import annotations

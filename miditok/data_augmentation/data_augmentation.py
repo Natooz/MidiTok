@@ -10,7 +10,7 @@ import numpy as np
 from symusic import Score
 from tqdm import tqdm
 
-from ..constants import MIDI_INSTRUMENTS, MIDI_LOADING_EXCEPTION
+from miditok.constants import MIDI_INSTRUMENTS, MIDI_LOADING_EXCEPTION
 
 
 def augment_midi_dataset(

@@ -1,7 +1,6 @@
 """Iterator to be used when training a tokenizer with the 🤗tokenizers library."""
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING, Sequence
 
 from symusic import Score
@@ -9,6 +8,8 @@ from symusic import Score
 from .constants import MIDI_FILES_EXTENSIONS, MIDI_LOADING_EXCEPTION
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from .midi_tokenizer import MIDITokenizer
 
 
@@ -79,9 +80,9 @@ class BPEIterator:
         if self.__iter_count >= len(self):
             self.__iter_count = 0
             raise StopIteration
-        else:
-            self.__iter_count += 1
-            return self[self.__iter_count - 1]
+
+        self.__iter_count += 1
+        return self[self.__iter_count - 1]
 
     def __str__(self) -> str:
         """

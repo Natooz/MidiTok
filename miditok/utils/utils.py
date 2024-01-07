@@ -4,10 +4,9 @@ from __future__ import annotations
 import warnings
 from copy import copy
 from math import ceil
-from typing import Sequence
+from typing import TYPE_CHECKING, Sequence
 
 import numpy as np
-from miditoolkit import MidiFile
 from symusic import (
     ControlChange,
     Note,
@@ -19,7 +18,6 @@ from symusic import (
     TimeSignature,
     Track,
 )
-from symusic.core import NoteTickList, TrackTickList
 
 from miditok.classes import Event
 from miditok.constants import (
@@ -30,6 +28,10 @@ from miditok.constants import (
     TIME_SIGNATURE,
     UNKNOWN_CHORD_PREFIX,
 )
+
+if TYPE_CHECKING:
+    from miditoolkit import MidiFile
+    from symusic.core import NoteTickList, TrackTickList
 
 
 def convert_ids_tensors_to_list(ids) -> list[int] | list[list[int]]:  # noqa: ANN001
@@ -47,10 +49,11 @@ def convert_ids_tensors_to_list(ids) -> list[int] | list[list[int]]:  # noqa: AN
         if type(ids).__name__ in ["Tensor", "EagerTensor"]:
             ids = ids.numpy()
         if not isinstance(ids, np.ndarray):
-            raise TypeError(
+            msg = (
                 "The tokens must be given as a list of integers, np.ndarray, or"
                 "PyTorch/Tensorflow tensor"
             )
+            raise TypeError(msg)
         ids = ids.astype(int).tolist()
     else:
         # Recursively checks the content are ints (only check first item)
@@ -198,8 +201,9 @@ def detect_chords(
         if notes[count, 1] == previous_tick:
             count += 1
             continue
+
         # Update the time offset the time signature denom/ticks per beat changed
-        elif notes[count, 1] > ticks_per_beat[tpb_idx, 0]:
+        if notes[count, 1] > ticks_per_beat[tpb_idx, 0]:
             tpb_idx += 1
             tpb_half = ticks_per_beat[tpb_idx, 1] // 2
             onset_offset_tick = ticks_per_beat[tpb_idx, 1] * onset_offset / beat_res
@@ -316,11 +320,12 @@ def merge_tracks_per_class(
         else:
             for cla, program in new_program_per_class.items():
                 if program not in INSTRUMENT_CLASSES[cla]["program_range"]:
-                    raise ValueError(
+                    msg = (
                         f"Error in program value, got {program} for instrument class"
                         f"{cla} ({INSTRUMENT_CLASSES[cla]['name']}), required value in"
                         f"{INSTRUMENT_CLASSES[cla]['program_range']}"
                     )
+                    raise ValueError(msg)
 
         for ci in classes_to_merge:
             idx_to_merge = [

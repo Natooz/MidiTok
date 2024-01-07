@@ -5,17 +5,10 @@ from __future__ import annotations
 import numpy as np
 from symusic import Note, Score, Tempo, TimeSignature, Track
 
-from ..classes import Event, TokSequence
-from ..constants import (
-    MIDI_INSTRUMENTS,
-    MMM_DENSITY_BINS_MAX,
-    TIME_SIGNATURE,
-)
-from ..midi_tokenizer import MIDITokenizer
-from ..utils import (
-    compute_ticks_per_bar,
-    compute_ticks_per_beat,
-)
+from miditok.classes import Event, TokSequence
+from miditok.constants import MIDI_INSTRUMENTS, MMM_DENSITY_BINS_MAX, TIME_SIGNATURE
+from miditok.midi_tokenizer import MIDITokenizer
+from miditok.utils import compute_ticks_per_bar, compute_ticks_per_beat
 
 
 class MMM(MIDITokenizer):
@@ -231,27 +224,26 @@ class MMM(MIDITokenizer):
         if event.type_ in ["Track", "Program", "NoteDensity"]:
             return -1
         # Global MIDI tokens
-        elif event.type_ in ["Tempo", "TimeSig"]:
+        if event.type_ in ["Tempo", "TimeSig"]:
             return 0
         # Then NoteOff
-        elif event.type_ == "NoteOff" or (
+        if event.type_ == "NoteOff" or (
             event.type_ == "Program" and event.desc == "ProgramNoteOff"
         ):
             return 1
         # Then track effects
-        elif event.type_ in ["Pedal", "PedalOff"] or (
+        if event.type_ in ["Pedal", "PedalOff"] or (
             event.type_ == "Duration" and event.desc == "PedalDuration"
         ):
             return 2
-        elif event.type_ == "PitchBend" or (
+        if event.type_ == "PitchBend" or (
             event.type_ == "Program" and event.desc == "ProgramPitchBend"
         ):
             return 3
-        elif event.type_ == "ControlChange":
+        if event.type_ == "ControlChange":
             return 4
         # Track notes then
-        else:
-            return 10
+        return 10
 
     def _midi_to_tokens(self, midi: Score) -> TokSequence:
         r"""
@@ -283,9 +275,8 @@ class MMM(MIDITokenizer):
             for token, id_ in zip(track_seq.tokens, track_seq.ids):
                 tokens_concat.append(token)
                 ids_concat.append(id_)
-        seq = TokSequence(tokens=tokens_concat, ids=ids_concat)
 
-        return seq
+        return TokSequence(tokens=tokens_concat, ids=ids_concat)
 
     def _tokens_to_midi(
         self,

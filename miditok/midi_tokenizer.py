@@ -117,10 +117,9 @@ class MIDITokenizer(ABC, HFHubMixin):
         if params is not None:
             # Will overwrite self.config
             self._load_params(params)
-        else:
-            # If no TokenizerConfig is given, we falls back to the default parameters
-            if self.config is None:
-                self.config = TokenizerConfig()
+        # If no TokenizerConfig is given, we falls back to the default parameters
+        elif self.config is None:
+            self.config = TokenizerConfig()
 
         # Tweak the tokenizer's configuration and / or attributes before creating the
         # vocabulary. This method is intended to be overridden by inheriting tokenizer
@@ -280,8 +279,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         """
         if not self.has_bpe:
             return None
-        else:
-            return self._bpe_model.get_vocab()
+        return self._bpe_model.get_vocab()
 
     @property
     def special_tokens(self) -> list[str]:
@@ -314,8 +312,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         """
         if not self.config.use_rests:
             return 0
-        else:
-            return int(self._tpb_to_rest_array[ticks_per_beat][0])
+        return int(self._tpb_to_rest_array[ticks_per_beat][0])
 
     def preprocess_midi(self, midi: Score) -> Score:
         r"""
@@ -792,24 +789,23 @@ class MIDITokenizer(ABC, HFHubMixin):
         if event.type_ in ["Tempo", "TimeSig"]:
             return 0
         # Then NoteOff
-        elif event.type_ == "NoteOff" or (
+        if event.type_ == "NoteOff" or (
             event.type_ == "Program" and event.desc == "ProgramNoteOff"
         ):
             return 1
         # Then track effects
-        elif event.type_ in ["Pedal", "PedalOff"] or (
+        if event.type_ in ["Pedal", "PedalOff"] or (
             event.type_ == "Duration" and event.desc == "PedalDuration"
         ):
             return 2
-        elif event.type_ == "PitchBend" or (
+        if event.type_ == "PitchBend" or (
             event.type_ == "Program" and event.desc == "ProgramPitchBend"
         ):
             return 3
-        elif event.type_ == "ControlChange":
+        if event.type_ == "ControlChange":
             return 4
         # Track notes then
-        else:
-            return 10
+        return 10
 
     def _create_track_events(
         self, track: Track, ticks_per_beat: np.ndarray = None
@@ -1080,7 +1076,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             events += [
                 Event(
                     type_="TimeSig",
-                    value=f"{time_sig.numerator}/" f"{time_sig.denominator}",
+                    value=f"{time_sig.numerator}/{time_sig.denominator}",
                     time=time_sig.time,
                 )
                 for time_sig in midi.time_signatures
@@ -1336,10 +1332,11 @@ class MIDITokenizer(ABC, HFHubMixin):
             arg = (arg[0], [arg[1]])
 
         elif num_seq_dims != num_io_dims:
-            raise ValueError(
+            msg = (
                 f"The input sequence does not have the expected dimension "
                 f"({num_seq_dims} instead of {num_io_dims})."
             )
+            raise ValueError(msg)
 
         # Convert to TokSequence
         if not self.one_token_stream and num_io_dims == num_seq_dims:
@@ -1909,10 +1906,11 @@ class MIDITokenizer(ABC, HFHubMixin):
         time_signatures = []
         for beat_res, beats in time_signature_range.items():
             if beat_res <= 0 or not math.log2(beat_res).is_integer():
-                raise ValueError(
+                msg = (
                     f"The beat resolution ({beat_res}) in time signature must be a"
                     f"power of 2."
                 )
+                raise ValueError(msg)
 
             time_signatures.extend([(num_beats, beat_res) for num_beats in beats])
 
@@ -2008,10 +2006,11 @@ class MIDITokenizer(ABC, HFHubMixin):
             )
             return
         if iterator is None and files_paths is None:
-            raise ValueError(
+            msg = (
                 "You must give an iterator or a list of paths to tokens to train the"
                 "tokenizer with BPE."
             )
+            raise ValueError(msg)
 
         if vocab_size <= len(self.vocab):
             warnings.warn(
@@ -2274,7 +2273,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         # If list of TokSequence -> recursive
         if isinstance(tokens, list):
             return [self.tokens_errors(tok_seq) for tok_seq in tokens]
-        elif len(tokens) == 0:
+        if len(tokens) == 0:
             return 0
 
         num_tok_predicted = len(tokens)  # used to norm the score
@@ -2556,15 +2555,15 @@ class MIDITokenizer(ABC, HFHubMixin):
         for key, value in params.items():
             if key in ["tokenization", "miditok_version"]:
                 continue
-            elif key == "_vocab_base":
+            if key == "_vocab_base":
                 self._vocab_base = value
                 self.__vocab_base_inv = {v: k for k, v in value.items()}
                 continue
-            elif key == "_bpe_model":
+            if key == "_bpe_model":
                 # using 🤗tokenizers builtin method
                 self._bpe_model = TokenizerFast.from_str(value)
                 continue
-            elif key == "_vocab_base_byte_to_token":
+            if key == "_vocab_base_byte_to_token":
                 self._vocab_base_byte_to_token = value
                 token_to_byte = {v: k for k, v in value.items()}
                 self._vocab_base_id_to_byte = {
@@ -2575,7 +2574,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                     for k in self._bpe_model.get_vocab()
                 }
                 continue
-            elif key == "config":
+            if key == "config":
                 for beat_res_key in ["beat_res", "beat_res_rest"]:
                     # check here for previous versions (< v2.1.5)
                     if beat_res_key in value:
@@ -2593,7 +2592,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                         (0, value["rest_range"][1]): value["rest_range"][0]
                     }
                 value = TokenizerConfig.from_dict(value)
-            elif key in config_attributes:
+            if key in config_attributes:
                 if key == "beat_res":
                     value = {
                         tuple(map(int, beat_range.split("_"))): res
@@ -2606,7 +2605,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                     key = old_add_tokens_attr[key]
                 setattr(self.config, key, value)
                 continue
-            elif key == "unique_track":
+            if key == "unique_track":
                 # For config files <= v2.1.1 before the attribute is renamed
                 self.one_token_stream = value
 
@@ -2656,17 +2655,17 @@ class MIDITokenizer(ABC, HFHubMixin):
             return self.midi_to_tokens(obj, *args, **kwargs)
 
         # Loads a file (.mid or .json)
-        elif isinstance(obj, (str, Path)):
+        if isinstance(obj, (str, Path)):
             path = Path(obj)
             if path.suffix in MIDI_FILES_EXTENSIONS:
                 midi = Score(obj)
                 return self.midi_to_tokens(midi, *args, **kwargs)
-            else:
-                tokens = self.load_tokens(path)
-                return self.tokens_to_midi(tokens["ids"], *args, **kwargs)
+
+            tokens = self.load_tokens(path)
+            return self.tokens_to_midi(tokens["ids"], *args, **kwargs)
 
         # Depreciated miditoolkit object
-        elif MidiFile is not None and isinstance(obj, MidiFile):
+        if MidiFile is not None and isinstance(obj, MidiFile):
             warnings.warn(
                 "You are using a depreciated `miditoolkit.MidiFile` object. MidiTok"
                 "is now (>v3.0.0) using symusic.Score as MIDI backend. Your MIDI will"
@@ -2676,8 +2675,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             return self.midi_to_tokens(miditoolkit_to_symusic(obj), *args, **kwargs)
 
         # Consider it tokens --> converts to MIDI
-        else:
-            return self.tokens_to_midi(obj, *args, **kwargs)
+        return self.tokens_to_midi(obj, *args, **kwargs)
 
     def __len__(self) -> int:
         r"""
@@ -2693,7 +2691,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         """
         if self.is_multi_voc:
             return sum([len(v) for v in self.vocab])
-        elif self.has_bpe:
+        if self.has_bpe:
             return len(self._bpe_model.get_vocab())
         return len(self.vocab)
 
@@ -2743,19 +2741,20 @@ class MIDITokenizer(ABC, HFHubMixin):
         """
         if isinstance(item, tuple) and self.is_multi_voc:
             return self.__get_from_voc(item[1], item[0])
-        elif self.is_multi_voc and isinstance(item, str):
+        if self.is_multi_voc and isinstance(item, str):
             if all(item in voc for voc in self.vocab):
                 return [voc[item] for voc in self.vocab]
-            else:
-                raise ValueError(
-                    "This tokenizer uses multiple vocabularies / embedding pooling. To"
-                    "index it you must either provide a token (string) that is within"
-                    "all vocabularies (e.g. special tokens), or a tuple where the"
-                    "first element in the index of the vocabulary and the second the"
-                    "element to index."
-                )
-        else:
-            return self.__get_from_voc(item)
+
+            msg = (
+                "This tokenizer uses multiple vocabularies / embedding pooling. To"
+                "index it you must either provide a token (string) that is within"
+                "all vocabularies (e.g. special tokens), or a tuple where the"
+                "first element in the index of the vocabulary and the second the"
+                "element to index."
+            )
+            raise ValueError(msg)
+
+        return self.__get_from_voc(item)
 
     def __get_from_voc(self, item: int | str, vocab_id: int | None = None) -> int | str:
         r"""

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from symusic import Note, Pedal, PitchBend, Score, Tempo, TimeSignature, Track
 
-from ..classes import Event, TokSequence
-from ..constants import MIDI_INSTRUMENTS, TIME_SIGNATURE
-from ..midi_tokenizer import MIDITokenizer
-from ..utils import compute_ticks_per_beat
+from miditok.classes import Event, TokSequence
+from miditok.constants import MIDI_INSTRUMENTS, TIME_SIGNATURE
+from miditok.midi_tokenizer import MIDITokenizer
+from miditok.utils import compute_ticks_per_beat
 
 
 class MIDILike(MIDITokenizer):
@@ -306,9 +306,8 @@ class MIDILike(MIDITokenizer):
                                 tracks[pedal_prog].pedals.append(new_pedal)
                             else:
                                 current_instrument.pedals.append(new_pedal)
-                    else:
-                        if pedal_prog not in active_pedals:
-                            active_pedals[pedal_prog] = current_tick
+                    elif pedal_prog not in active_pedals:
+                        active_pedals[pedal_prog] = current_tick
                 elif tok_type == "PedalOff":
                     pedal_prog = (
                         int(tok_val) if self.config.use_programs else current_program
@@ -626,67 +625,66 @@ class MIDILike(MIDITokenizer):
             ):
                 err += 1
             # Good token type
-            else:
-                if events[i].type_ in [
-                    "NoteOn",
-                    "PitchIntervalTime",
-                    "PitchIntervalChord",
-                ]:
-                    if events[i].type_ == "NoteOn":
-                        pitch_val = int(events[i].value)
-                        previous_pitch_onset[current_program] = pitch_val
-                        previous_pitch_chord[current_program] = pitch_val
-                    elif events[i].type_ == "PitchIntervalTime":
-                        pitch_val = previous_pitch_onset[current_program] + int(
-                            events[i].value
-                        )
-                        previous_pitch_onset[current_program] = pitch_val
-                        previous_pitch_chord[current_program] = pitch_val
-                    else:  # PitchIntervalChord
-                        pitch_val = previous_pitch_chord[current_program] + int(
-                            events[i].value
-                        )
-                        previous_pitch_chord[current_program] = pitch_val
+            elif events[i].type_ in [
+                "NoteOn",
+                "PitchIntervalTime",
+                "PitchIntervalChord",
+            ]:
+                if events[i].type_ == "NoteOn":
+                    pitch_val = int(events[i].value)
+                    previous_pitch_onset[current_program] = pitch_val
+                    previous_pitch_chord[current_program] = pitch_val
+                elif events[i].type_ == "PitchIntervalTime":
+                    pitch_val = previous_pitch_onset[current_program] + int(
+                        events[i].value
+                    )
+                    previous_pitch_onset[current_program] = pitch_val
+                    previous_pitch_chord[current_program] = pitch_val
+                else:  # PitchIntervalChord
+                    pitch_val = previous_pitch_chord[current_program] + int(
+                        events[i].value
+                    )
+                    previous_pitch_chord[current_program] = pitch_val
 
-                    active_pitches[current_program][pitch_val].append(current_tick)
-                    if (
-                        self.config.remove_duplicated_notes
-                        and pitch_val in current_pitches_tick[current_program]
-                    ):
-                        err += 1  # note already being played at current tick
-                        continue
+                active_pitches[current_program][pitch_val].append(current_tick)
+                if (
+                    self.config.remove_duplicated_notes
+                    and pitch_val in current_pitches_tick[current_program]
+                ):
+                    err += 1  # note already being played at current tick
+                    continue
 
-                    current_pitches_tick[current_program].append(pitch_val)
-                elif events[i].type_ == "NoteOff":
-                    if len(active_pitches[current_program][int(events[i].value)]) == 0:
-                        err += 1  # this pitch wasn't being played
-                        continue
-                    # Check if duration is not exceeding limit
-                    note_onset_tick = active_pitches[current_program][
-                        int(events[i].value)
-                    ].pop(0)
-                    duration = current_tick - note_onset_tick
-                    if max_duration is not None and duration > max_duration:
-                        err += 1
-                elif events[i].type_ == "Program" and i + 1 < len(events):
-                    current_program = int(events[i].value)
-                elif events[i].type_ in ["TimeShift", "Rest"]:
-                    current_pitches_tick = {p: [] for p in self.config.programs}
-                    if events[i].type_ == "TimeShift":
-                        current_tick += self._tpb_tokens_to_ticks[ticks_per_beat][
-                            events[i].value
-                        ]
-                    else:
-                        current_tick += self._tpb_rests_to_ticks[ticks_per_beat][
-                            events[i].value
-                        ]
-                elif events[i].type_ == "TimeSig":
-                    num, den = self._parse_token_time_signature(events[i].value)
-                    ticks_per_beat = compute_ticks_per_beat(den, self.time_division)
-                    if max_duration is not None:
-                        max_duration = self._time_token_to_ticks(
-                            max_duration_str, ticks_per_beat
-                        )
+                current_pitches_tick[current_program].append(pitch_val)
+            elif events[i].type_ == "NoteOff":
+                if len(active_pitches[current_program][int(events[i].value)]) == 0:
+                    err += 1  # this pitch wasn't being played
+                    continue
+                # Check if duration is not exceeding limit
+                note_onset_tick = active_pitches[current_program][
+                    int(events[i].value)
+                ].pop(0)
+                duration = current_tick - note_onset_tick
+                if max_duration is not None and duration > max_duration:
+                    err += 1
+            elif events[i].type_ == "Program" and i + 1 < len(events):
+                current_program = int(events[i].value)
+            elif events[i].type_ in ["TimeShift", "Rest"]:
+                current_pitches_tick = {p: [] for p in self.config.programs}
+                if events[i].type_ == "TimeShift":
+                    current_tick += self._tpb_tokens_to_ticks[ticks_per_beat][
+                        events[i].value
+                    ]
+                else:
+                    current_tick += self._tpb_rests_to_ticks[ticks_per_beat][
+                        events[i].value
+                    ]
+            elif events[i].type_ == "TimeSig":
+                num, den = self._parse_token_time_signature(events[i].value)
+                ticks_per_beat = compute_ticks_per_beat(den, self.time_division)
+                if max_duration is not None:
+                    max_duration = self._time_token_to_ticks(
+                        max_duration_str, ticks_per_beat
+                    )
 
         # Check for un-ended notes
         for pitches in active_pitches.values():

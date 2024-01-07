@@ -4,13 +4,10 @@ from __future__ import annotations
 
 from symusic import Note, Score, Tempo, TimeSignature, Track
 
-from ..classes import Event, TokSequence
-from ..constants import (
-    MIDI_INSTRUMENTS,
-    TIME_SIGNATURE,
-)
-from ..midi_tokenizer import MIDITokenizer
-from ..utils import compute_ticks_per_bar, compute_ticks_per_beat, get_bars_ticks
+from miditok.classes import Event, TokSequence
+from miditok.constants import MIDI_INSTRUMENTS, TIME_SIGNATURE
+from miditok.midi_tokenizer import MIDITokenizer
+from miditok.utils import compute_ticks_per_bar, compute_ticks_per_beat, get_bars_ticks
 
 
 class Octuple(MIDITokenizer):

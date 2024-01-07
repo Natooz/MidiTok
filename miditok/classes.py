@@ -128,19 +128,20 @@ class TokSequence:
         """
         if self.ids is not None:
             return len(self.ids)
-        elif self.tokens is not None:
+        if self.tokens is not None:
             return len(self.tokens)
-        elif self.events is not None:
+        if self.events is not None:
             return len(self.events)
-        elif self.bytes is not None:
+        if self.bytes is not None:
             return len(self.bytes)
-        elif self._ids_no_bpe is not None:
+        if self._ids_no_bpe is not None:
             return len(self._ids_no_bpe)
-        else:
-            raise ValueError(
-                "This TokSequence seems to not be initialized, all its attributes are"
-                " None."
-            )
+
+        msg = (
+            "This TokSequence seems to not be initialized, all its attributes "
+            "are None."
+        )
+        raise ValueError(msg)
 
     def __getitem__(self, idx: int) -> int | str | Event:
         """
@@ -153,19 +154,20 @@ class TokSequence:
         """
         if self.ids is not None:
             return self.ids[idx]
-        elif self.tokens is not None:
+        if self.tokens is not None:
             return self.tokens[idx]
-        elif self.events is not None:
+        if self.events is not None:
             return self.events[idx]
-        elif self.bytes is not None:
+        if self.bytes is not None:
             return self.bytes[idx]
-        elif self._ids_no_bpe is not None:
+        if self._ids_no_bpe is not None:
             return self._ids_no_bpe[idx]
-        else:
-            raise ValueError(
-                "This TokSequence seems to not be initialized, all its attributes are"
-                " None."
-            )
+
+        msg = (
+            "This TokSequence seems to not be initialized, all its attributes "
+            "are None."
+        )
+        raise ValueError(msg)
 
     def __eq__(self, other: TokSequence) -> bool:
         r"""
@@ -401,28 +403,32 @@ class TokenizerConfig:
     ) -> None:
         # Checks
         if not 0 <= pitch_range[0] < pitch_range[1] <= 127:
-            raise ValueError(
-                "`pitch_range` must be within 0 and 127, and an first value"
-                f" greater than the second (received {pitch_range})"
+            msg = (
+                "`pitch_range` must be within 0 and 127, and an first value "
+                f"greater than the second (received {pitch_range})"
             )
+            raise ValueError(msg)
         if not 1 <= num_velocities <= 127:
-            raise ValueError(
-                "`num_velocities` must be within 1 and 127 (received"
-                f" {num_velocities})"
+            msg = (
+                "`num_velocities` must be within 1 and 127 (received "
+                f"{num_velocities})"
             )
+            raise ValueError(msg)
         if max_pitch_interval and not 0 <= max_pitch_interval <= 127:
-            raise ValueError(
-                "`max_pitch_interval` must be within 0 and 127 (received"
-                f" {max_pitch_interval})."
+            msg = (
+                "`max_pitch_interval` must be within 0 and 127 (received "
+                f"{max_pitch_interval})."
             )
+            raise ValueError(msg)
         if use_time_signatures:
             for denominator in time_signature_range:
                 if not log2(denominator).is_integer():
-                    raise ValueError(
+                    msg = (
                         "`time_signature_range` contains an invalid time signature "
                         "denominator. The MIDI norm only supports powers of 2"
                         f"denominators. Received {denominator}"
                     )
+                    raise ValueError(msg)
 
         # Global parameters
         self.pitch_range: tuple[int, int] = pitch_range
@@ -460,12 +466,13 @@ class TokenizerConfig:
             max_rest_res = max(self.beat_res_rest.values())
             max_global_res = max(self.beat_res.values())
             if max_rest_res > max_global_res:
-                raise ValueError(
+                msg = (
                     "The maximum resolution of the rests must be inferior or equal to"
                     "the maximum resolution of the global beat resolution"
                     f"(``config.beat_res``). Expected <= {max_global_res},"
                     f"{max_rest_res} was given."
                 )
+                raise ValueError(msg)
 
         # Chord params
         self.chord_maps: dict[str, tuple] = chord_maps

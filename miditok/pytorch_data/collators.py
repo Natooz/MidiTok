@@ -192,10 +192,10 @@ def _pad_batch(
     # Creating the full tensor and filling it with our data.
     if pad_on_left:
         return _pad_left(batch, pad_token_id)
-    else:
-        return torch.nn.utils.rnn.pad_sequence(
-            batch, batch_first=True, padding_value=pad_token_id
-        ).long()
+
+    return torch.nn.utils.rnn.pad_sequence(
+        batch, batch_first=True, padding_value=pad_token_id
+    ).long()
 
 
 def _pad_left(batch: list[LongTensor], pad_token_id: int) -> LongTensor:

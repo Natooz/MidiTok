@@ -1,10 +1,8 @@
-#!/usr/bin/python3 python
-
 """Test methods."""
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from symusic import Score
 from tqdm import tqdm
@@ -14,6 +12,9 @@ from miditok.data_augmentation import (
 )
 
 from .utils import HERE
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_augment_midi_dataset(
@@ -64,10 +65,11 @@ def test_augment_midi_dataset(
             track_aug.notes.sort(key=lambda x: (x.start, x.pitch, x.end, x.velocity))
             for note_o, note_a in zip(track_ogi.notes, track_aug.notes):
                 if note_a.pitch != note_o.pitch + offsets[0]:
-                    raise ValueError(
+                    msg = (
                         f"Pitch assertion failed: expected "
                         f"{note_o.pitch + offsets[0]}, got {note_a.pitch}"
                     )
+                    raise ValueError(msg)
                 if offsets[2] < 0:
                     dur_exp = max(
                         note_o.duration + offsets[2],
@@ -78,17 +80,19 @@ def test_augment_midi_dataset(
                 else:
                     dur_exp = note_o.duration
                 if note_a.duration != dur_exp:
-                    raise ValueError(
-                        f"Duration assertion failed: expected "
-                        f"{dur_exp}, got {note_a.duration}"
+                    msg = (
+                        f"Duration assertion failed: expected {dur_exp}, got "
+                        f"{note_a.duration}"
                     )
+                    raise ValueError(msg)
             # We need to resort the tracks with the velocity key in third position
             # before checking their values.
             track_ogi.notes.sort(key=lambda x: (x.start, x.pitch, x.velocity))
             track_aug.notes.sort(key=lambda x: (x.start, x.pitch, x.velocity))
             for note_o, note_a in zip(track_ogi.notes, track_aug.notes):
                 if note_a.velocity not in [1, 127, note_o.velocity + offsets[1]]:
-                    raise ValueError(
+                    msg = (
                         f"Velocity assertion failed: expected one in "
                         f"{[1, 127, note_o.velocity + offsets[1]]}, got {note_a.pitch}"
                     )
+                    raise ValueError(msg)

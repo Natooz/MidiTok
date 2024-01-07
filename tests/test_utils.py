@@ -1,11 +1,9 @@
-#!/usr/bin/python3 python
-
 """Test methods."""
 
 from __future__ import annotations
 
 from copy import copy
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 from symusic import (
@@ -39,6 +37,9 @@ from .utils import (
     check_midis_equals,
     del_invalid_time_sig,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_containers_assertions():

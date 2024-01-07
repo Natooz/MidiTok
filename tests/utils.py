@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from copy import copy, deepcopy
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from symusic import (
@@ -16,10 +16,12 @@ from symusic import (
     TimeSignature,
     Track,
 )
-from symusic.core import TempoTickList
 
 import miditok
 from miditok.constants import CHORD_MAPS, TIME_SIGNATURE, TIME_SIGNATURE_RANGE
+
+if TYPE_CHECKING:
+    from symusic.core import TempoTickList
 
 SEED = 777
 
@@ -249,11 +251,11 @@ def tracks_notes_equals(
 def notes_equals(note1: Note, note2: Note) -> str:
     if note1.start != note2.start:
         return "start"
-    elif note1.end != note2.end:
+    if note1.end != note2.end:
         return "end"
-    elif note1.pitch != note2.pitch:
+    if note1.pitch != note2.pitch:
         return "pitch"
-    elif note1.velocity != note2.velocity:
+    if note1.velocity != note2.velocity:
         return "velocity"
     return ""
 

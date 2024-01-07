@@ -7,10 +7,10 @@ import warnings
 import numpy as np
 from symusic import Note, Score, Tempo, TimeSignature, Track
 
-from ..classes import Event, TokSequence
-from ..constants import MIDI_INSTRUMENTS, TIME_SIGNATURE
-from ..midi_tokenizer import MIDITokenizer
-from ..utils import compute_ticks_per_bar, compute_ticks_per_beat
+from miditok.classes import Event, TokSequence
+from miditok.constants import MIDI_INSTRUMENTS, TIME_SIGNATURE
+from miditok.midi_tokenizer import MIDITokenizer
+from miditok.utils import compute_ticks_per_bar, compute_ticks_per_beat
 
 _ADD_TOK_ATTRIBUTES = [
     "use_programs",
@@ -135,7 +135,7 @@ class CPWord(MIDITokenizer):
                         current_time_sig[1], self.time_division
                     )
                     break
-                elif event.type_ in [
+                if event.type_ in [
                     "Pitch",
                     "Velocity",
                     "Duration",
@@ -150,7 +150,7 @@ class CPWord(MIDITokenizer):
                 if event.type_ == "Tempo":
                     current_tempo = event.value
                     break
-                elif event.type_ in [
+                if event.type_ in [
                     "Pitch",
                     "Velocity",
                     "Duration",
@@ -707,22 +707,22 @@ class CPWord(MIDITokenizer):
 
         def cp_token_type(tok: list[str]) -> list[str]:
             family = tok[0].split("_")[1]
+            msg_err = "No token type found, unknown error"
             if family == "Note":
                 return tok[2].split("_")
-            elif family == "Metric":
+            if family == "Metric":
                 bar_pos = tok[1].split("_")
                 if bar_pos[0] in ["Bar", "Position"]:
                     return bar_pos
-                else:  # additional token
-                    for i in range(1, 5):
-                        decoded_token = tok[-i].split("_")
-                        if decoded_token[0] != "Ignore":
-                            return decoded_token
-                raise RuntimeError("No token type found, unknown error")
-            elif family == "None":
+                # additional token
+                for i in range(1, 5):
+                    decoded_token = tok[-i].split("_")
+                    if decoded_token[0] != "Ignore":
+                        return decoded_token
+                raise RuntimeError(msg_err)
+            if family == "None":
                 return ["PAD", "None"]
-            else:  # Program
-                raise RuntimeError("No token type found, unknown error")
+            raise RuntimeError(msg_err)
 
         err = 0
         previous_type = cp_token_type(tokens[0])[0]
