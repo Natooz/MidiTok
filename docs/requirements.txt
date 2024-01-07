@@ -1,4 +1,4 @@
-symusic>0.2.5
+symusic>=0.2.5
 miditoolkit>=1.0.1
 tqdm>=4.64.0
 numpy>=1.19,<1.24
