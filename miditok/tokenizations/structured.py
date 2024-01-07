@@ -1,3 +1,5 @@
+"""Structured tokenizer."""
+
 from __future__ import annotations
 
 from symusic import Note, Score, Track
@@ -10,7 +12,10 @@ from ..midi_tokenizer import MIDITokenizer
 
 
 class Structured(MIDITokenizer):
-    r"""Introduced with the `Piano Inpainting Application <https://arxiv.org/abs/2002.00212>`_,
+    r"""
+    Structured tokenizer, with a recurrent token type succession.
+
+    Introduced with the `Piano Inpainting Application <https://arxiv.org/abs/2002.00212>`_,
     it is similar to :ref:`TSD` but is based on a consistent token type successions.
     Token types always follow the same pattern: *Pitch* -> *Velocity* -> *Duration* ->
     *TimeShift*. The latter is set to 0 for simultaneous notes. To keep this property,
@@ -36,15 +41,19 @@ class Structured(MIDITokenizer):
         self.config.program_changes = False
 
     def _create_track_events(self, track: Track, _: None = None) -> list[Event]:
-        r"""Extract the tokens / events of individual tracks: *Pitch*, *Velocity*,
-        *Duration*, *NoteOn*, *NoteOff* and optionally *Chord*, from a track
-        (``miditoolkit.Instrument``).
+        r"""
+        Extract the tokens/events from a track (``symusic.Track``).
 
-        :param track: MIDI track to convert.
-        :param _: in place of ``ticks_per_beat``, unused here as we do not support
-            time signatures, hence the ticks_per_beat value is always the same and
-            equal to the MIDI's time division.
-        :return: sequence of corresponding Events.
+        Concerned events are: *Pitch*, *Velocity*, *Duration*, *NoteOn*, *NoteOff* and
+        optionally *Chord*, *Pedal* and *PitchBend*.
+        **If the tokenizer is using pitch intervals, the notes must be sorted by time
+        then pitch values. This is done in** ``preprocess_midi``.
+
+        :param track: ``symusic.Track`` to extract events from.
+        :param _: in place of ``ticks_per_beat``, unused here as Structured do not
+            support time signatures, hence the ticks_per_beat value is always the same
+            and equal to the MIDI's time division.
+        :return: sequence of corresponding ``Event``s.
         """
         # Make sure the notes are sorted first by their onset (start) times, second by
         # pitch: notes.sort(key=lambda x: (x.start, x.pitch)) done in midi_to_tokens
@@ -104,11 +113,14 @@ class Structured(MIDITokenizer):
         return events
 
     def _add_time_events(self, events: list[Event]) -> list[Event]:
-        r"""Internal method intended to be implemented by inheriting classes.
-        It creates the time events from the list of global and track events, and as
-        such the final token sequence.
+        r"""
+        Create the time events from a list of global and track events.
 
-        :param events: note events to complete.
+        Internal method intended to be implemented by child classes.
+        The returned sequence is the final token sequence ready to be converted to ids
+        to be fed to a model.
+
+        :param events: sequence of global and track events to create tokens time from.
         :return: the same events, with time events inserted.
         """
         all_events = []
@@ -141,13 +153,20 @@ class Structured(MIDITokenizer):
         return all_events
 
     def _midi_to_tokens(self, midi: Score) -> TokSequence | list[TokSequence]:
-        r"""Converts a preprocessed MIDI object to a sequence of tokens.
-        We override the parent method to handle the "non-program" case where
-        `TimeShift` events have already been added by `_notes_to_events`.
+        r"""
+        Convert a **preprocessed** MIDI object to a sequence of tokens.
 
-        :param midi: the MIDI object to convert.
-        :return: a :class:`miditok.TokSequence` if `tokenizer.one_token_stream` is
-            true, else a list of :class:`miditok.TokSequence` objects.
+        We override the parent method to handle the "non-program" case where
+        *TimeShift* events have already been added by `_notes_to_events`.
+        The workflow of this method is as follows: the global events (*Tempo*,
+        *TimeSignature*...) and track events (*Pitch*, *Velocity*, *Pedal*...) are
+        gathered into a list, then the time events are added. If `one_token_stream` is
+        ``True``, all events of all tracks are treated all at once, otherwise the
+        events of each track are treated independently.
+
+        :param midi: the MIDI :class:`symusic.Score` object to convert.
+        :return: a :class:`miditok.TokSequence` if ``tokenizer.one_token_stream`` is
+            ``True``, else a list of :class:`miditok.TokSequence` objects.
         """
         # Convert each track to tokens
         all_events = []
@@ -183,13 +202,17 @@ class Structured(MIDITokenizer):
         tokens: TokSequence | list[TokSequence],
         programs: list[tuple[int, bool]] | None = None,
     ) -> Score:
-        r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
+        r"""
+        Convert tokens (:class:`miditok.TokSequence`) into a MIDI.
+
+        This is an internal method called by ``self.tokens_to_midi``, intended to be
+        implemented by classes inheriting :class:`miditok.MidiTokenizer`.
 
         :param tokens: tokens to convert. Can be either a list of
-            :class:`miditok.TokSequence`,
+            :class:`miditok.TokSequence` or a list of :class:`miditok.TokSequence`s.
         :param programs: programs of the tracks. If none is given, will default to
-            piano, program 0. (default: None)
-        :return: the midi object (:class:`miditoolkit.MidiFile`).
+            piano, program 0. (default: ``None``)
+        :return: the midi object (:class:`symusic.Score`).
         """
         # Unsqueeze tokens in case of one_token_stream
         if self.one_token_stream:  # ie single token seq
@@ -270,9 +293,11 @@ class Structured(MIDITokenizer):
         return midi
 
     def _create_base_vocabulary(self) -> list[str]:
-        r"""Creates the vocabulary, as a list of string tokens.
-        Each token as to be given as the form of "Type_Value", separated with an
-        underscore. Example: Pitch_58
+        r"""
+        Create the vocabulary, as a list of string tokens.
+
+        Each token is given as the form ``"Type_Value"``, with its type and value
+        separated with an underscore. Example: ``Pitch_58``.
         The :class:`miditok.MIDITokenizer` main class will then create the "real"
         vocabulary as a dictionary. Special tokens have to be given when creating the
         tokenizer, and will be added to the vocabulary by
@@ -306,12 +331,10 @@ class Structured(MIDITokenizer):
         return vocab
 
     def _create_token_types_graph(self) -> dict[str, list[str]]:
-        r"""Returns a graph (as a dictionary) of the possible token
-        types successions.
-        NOTE: Program type is not referenced here, you can add it manually by
-        modifying the tokens_types_graph class attribute following your strategy.
+        r"""
+        Return a graph/dictionary of the possible token types successions.
 
-        :return: the token types transitions dictionary
+        :return: the token types transitions dictionary.
         """
         dic = {
             "Pitch": ["Velocity"],

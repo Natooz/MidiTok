@@ -1,4 +1,5 @@
-"""Root module.
+"""
+Root module.
 
 Here we only import tokenizer classes and submodules.
 """

@@ -116,7 +116,17 @@ extend-select = [
 # We document classes at the class level (D101). This documentation should cover the
 # way classes are initialized. So we do not document `__init__` methods.
 
-# FBT001 and FB002
+# D203
+# "one-blank-line-before-class", incompatible with D211 (blank-line-before-class).
+# We follow PEP 257 and other conventions by preferring D211 over D203.
+
+# D212
+# "multi-line-summary-first-line", incompatible with D213
+# (multi-line-summary-second-line).
+# We follow PEP 257, which recommend to set put the summary line on the second line
+# after the blank line of the opening quotes.
+
+# FBT001 and FBT002
 # Refactoring all the methods to make boolean arguments keyword only would add
 # complexity and could break code of users. It's ok to have booleans as positional
 # arguments with default values. For code redability though, we enable FB003.
@@ -126,7 +136,9 @@ extend-select = [
 # set with ruff format anyway. This exclusion could be removed when this behavior is
 # fixed in ruff.
 
-ignore = ["ANN003", "ANN101", "ANN102", "D107", "FBT001", "FBT002", "COM812"]
+ignore = [
+    "ANN003", "ANN101", "ANN102", "D107", "D203", "D212", "FBT001", "FBT002", "COM812"
+]
 
 [tool.ruff.per-file-ignores]
 # S105:

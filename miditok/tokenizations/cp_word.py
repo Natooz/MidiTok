@@ -1,3 +1,5 @@
+"""Compound Word tokenizer."""
+
 from __future__ import annotations
 
 import warnings
@@ -20,7 +22,10 @@ _ADD_TOK_ATTRIBUTES = [
 
 
 class CPWord(MIDITokenizer):
-    r"""Introduced with the
+    r"""
+    Compound Word tokenizer.
+
+    Introduced with the
     `Compound Word Transformer (Hsiao et al.) <https://ojs.aaai.org/index.php/AAAI/article/view/16091>`_,
     this tokenization is similar to :ref:`REMI` but uses embedding pooling operations
     to reduce the overall sequence length: note tokens (*Pitch*, *Velocity* and
@@ -86,11 +91,14 @@ class CPWord(MIDITokenizer):
         self.vocab_types_idx["Bar"] = 1  # same as position
 
     def _add_time_events(self, events: list[Event]) -> list[list[Event]]:
-        r"""Internal method intended to be implemented by inheriting classes.
-        It creates the time events from the list of global and track events, and as
-        such the final token sequence.
+        r"""
+        Create the time events from a list of global and track events.
 
-        :param events: note events to complete.
+        Internal method intended to be implemented by child classes.
+        The returned sequence is the final token sequence ready to be converted to ids
+        to be fed to a model.
+
+        :param events: sequence of global and track events to create tokens time from.
         :return: the same events, with time events inserted.
         """
         # Add time events
@@ -293,20 +301,23 @@ class CPWord(MIDITokenizer):
         program: int | None = None,
         desc: str = "",
     ) -> list[Event]:
-        r"""Create a CP Word token, with the following structure:
+        r"""
+        Create a CP Word token.
+
+        It follow the structure:
             (index. Token type)
-            0. Family
-            1. Bar/Position
-            2. Pitch
-            3. Velocity
-            4. Duration
-            (5. Program) optional, with notes (pitch/velocity/duration) or chords
-            (6. Chord) optional, chords occurring with position tokens
-            (7. Rest) optional, rest acting as a TimeShift token
-            (8. Tempo) optional, occurring with position tokens
-            (9. TimeSig) optional, occurring with bar tokens
-        NOTE: the first Family token (first in list) will be given as an Event object
-        to keep track of time easily so that other method can sort CP tokens
+            0. *Family*
+            1. *Bar*/*Position*
+            2. *Pitch*
+            3. *Velocity*
+            4. *Duration*
+            (5. *Program*) optional, with notes (pitch/velocity/duration) or chords
+            (6. *Chord*) optional, chords occurring with position tokens
+            (7. *Rest*) optional, rest acting as a TimeShift token
+            (8. *Tempo*) optional, occurring with position tokens
+            (9. *TimeSig*) optional, occurring with bar tokens
+        **Note**: the first Family token (first in list) will be given as an ``Event``
+        object to keep track of time easily so that other method can sort CP tokens
         afterward.
 
         :param time: the current tick
@@ -374,13 +385,17 @@ class CPWord(MIDITokenizer):
         tokens: TokSequence | list[TokSequence],
         programs: list[tuple[int, bool]] | None = None,
     ) -> Score:
-        r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
+        r"""
+        Convert tokens (:class:`miditok.TokSequence`) into a MIDI.
+
+        This is an internal method called by ``self.tokens_to_midi``, intended to be
+        implemented by classes inheriting :class:`miditok.MidiTokenizer`.
 
         :param tokens: tokens to convert. Can be either a list of
-            :class:`miditok.TokSequence`,
+            :class:`miditok.TokSequence` or a list of :class:`miditok.TokSequence`s.
         :param programs: programs of the tracks. If none is given, will default to
-            piano, program 0. (default: None)
-        :return: the midi object (:class:`miditoolkit.MidiFile`).
+            piano, program 0. (default: ``None``)
+        :return: the midi object (:class:`symusic.Score`).
         """
         # Unsqueeze tokens in case of one_token_stream
         if self.one_token_stream:  # ie single token seq
@@ -575,13 +590,15 @@ class CPWord(MIDITokenizer):
         return midi
 
     def _create_base_vocabulary(self) -> list[list[str]]:
-        r"""Creates the vocabulary, as a list of string tokens.
-        Each token as to be given as the form of "Type_Value", separated with an
-        underscore. Example: Pitch_58
+        r"""
+        Create the vocabulary, as a list of string tokens.
+
+        Each token is given as the form ``"Type_Value"``, with its type and value
+        separated with an underscore. Example: ``Pitch_58``.
         The :class:`miditok.MIDITokenizer` main class will then create the "real"
-        vocabulary as a dictionary.
-        Special tokens have to be given when creating the tokenizer, and
-        will be added to the vocabulary by :class:`miditok.MIDITokenizer`.
+        vocabulary as a dictionary. Special tokens have to be given when creating the
+        tokenizer, and will be added to the vocabulary by
+        :class:`miditok.MIDITokenizer`.
 
         :return: the vocabulary as a list of string.
         """
@@ -644,16 +661,10 @@ class CPWord(MIDITokenizer):
         return vocab
 
     def _create_token_types_graph(self) -> dict[str, list[str]]:
-        r"""Returns a graph (as a dictionary) of the possible token types successions.
-        As with CP the tokens types are "merged", each state here corresponds to
-        a "compound" token, which is characterized by the token types Program, Bar,
-        Position/Chord/Tempo and Pitch/Velocity/Duration
-        Here the combination of Pitch, Velocity and Duration tokens is represented by
-        "Pitch" in the graph.
-        NOTE: Program type is not referenced here, you can add it manually by
-        modifying the tokens_types_graph class attribute following your strategy.
+        r"""
+        Return a graph/dictionary of the possible token types successions.
 
-        :return: the token types transitions dictionary
+        :return: the token types transitions dictionary.
         """
         dic = {
             "Bar": ["Position", "Bar"],
@@ -683,15 +694,12 @@ class CPWord(MIDITokenizer):
         return dic
 
     def _tokens_errors(self, tokens: list[list[str]]) -> int:
-        r"""Checks if a sequence of tokens is made of good token types successions and
-        returns the error ratio (lower is better). This method receives a list of
-        tokens as a list of strings, and returns the absolute number of errors
-        predicted. The number of errors should not be higher than the number of tokens.
-        The Pitch and Position values are analyzed:
-            - a position token cannot have a value <= to the current position (it would
-                go back in time)
-            - a pitch token should not be present if the same pitch is already played
-                at the current position.
+        r"""
+        Return the number of errors in a sequence of tokens.
+
+        The method checks if a sequence of tokens is made of good token types
+        successions and values. The number of errors should not be higher than the
+        number of tokens.
 
         :param tokens: sequence of tokens string to check.
         :return: the number of errors predicted (no more than one per token).

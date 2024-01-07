@@ -1,3 +1,5 @@
+"""REMI (Revamped MIDI) tokenizer."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -22,9 +24,11 @@ from ..utils import compute_ticks_per_bar, compute_ticks_per_beat
 
 
 class REMI(MIDITokenizer):
-    r"""REMI, standing for Revamped MIDI and introduced with the
-    `Pop Music Transformer (Huang and Yang) <https://dl.acm.org/doi/10.1145/3394171.3413671>`_,
-    is a tokenization that represents notes as successions of *Pitch*, *Velocity* and
+    r"""
+    REMI (Revamped MIDI) tokenizer.
+
+    Introduced with the `Pop Music Transformer (Huang and Yang) <https://dl.acm.org/doi/10.1145/3394171.3413671>`_,
+    REMI represents notes as successions of *Pitch*, *Velocity* and
     *Duration* tokens, and time with *Bar* and *Position* tokens. A *Bar* token
     indicate that a new bar is beginning, and *Position* the current position within
     the current bar. The number of positions is determined by the ``beat_res``
@@ -78,11 +82,14 @@ class REMI(MIDITokenizer):
             self.config.additional_params["max_bar_embedding"] = None
 
     def _add_time_events(self, events: list[Event]) -> list[Event]:
-        r"""Internal method intended to be implemented by inheriting classes.
-        It creates the time events from the list of global and track events, and as
-        such the final token sequence.
+        r"""
+        Create the time events from a list of global and track events.
 
-        :param events: note events to complete.
+        Internal method intended to be implemented by child classes.
+        The returned sequence is the final token sequence ready to be converted to ids
+        to be fed to a model.
+
+        :param events: sequence of global and track events to create tokens time from.
         :return: the same events, with time events inserted.
         """
         # Add time events
@@ -250,13 +257,17 @@ class REMI(MIDITokenizer):
         tokens: TokSequence | list[TokSequence],
         programs: list[tuple[int, bool]] | None = None,
     ) -> Score:
-        r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
+        r"""
+        Convert tokens (:class:`miditok.TokSequence`) into a MIDI.
+
+        This is an internal method called by ``self.tokens_to_midi``, intended to be
+        implemented by classes inheriting :class:`miditok.MidiTokenizer`.
 
         :param tokens: tokens to convert. Can be either a list of
-            :class:`miditok.TokSequence`,
+            :class:`miditok.TokSequence` or a list of :class:`miditok.TokSequence`s.
         :param programs: programs of the tracks. If none is given, will default to
-            piano, program 0. (default: None)
-        :return: the midi object (:class:`miditoolkit.MidiFile`).
+            piano, program 0. (default: ``None``)
+        :return: the midi object (:class:`symusic.Score`).
         """
         # Unsqueeze tokens in case of one_token_stream
         if self.one_token_stream:  # ie single token seq
@@ -479,9 +490,11 @@ class REMI(MIDITokenizer):
         return midi
 
     def _create_base_vocabulary(self) -> list[str]:
-        r"""Creates the vocabulary, as a list of string tokens.
-        Each token as to be given as the form of "Type_Value", separated with an
-        underscore. Example: Pitch_58
+        r"""
+        Create the vocabulary, as a list of string tokens.
+
+        Each token is given as the form ``"Type_Value"``, with its type and value
+        separated with an underscore. Example: ``Pitch_58``.
         The :class:`miditok.MIDITokenizer` main class will then create the "real"
         vocabulary as a dictionary. Special tokens have to be given when creating the
         tokenizer, and will be added to the vocabulary by
@@ -523,10 +536,10 @@ class REMI(MIDITokenizer):
         return vocab
 
     def _create_token_types_graph(self) -> dict[str, list[str]]:
-        r"""Returns a graph (as a dictionary) of the possible token
-        types successions.
+        r"""
+        Return a graph/dictionary of the possible token types successions.
 
-        :return: the token types transitions dictionary
+        :return: the token types transitions dictionary.
         """
         dic: dict[str, list[str]] = {}
 

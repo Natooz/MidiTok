@@ -99,7 +99,7 @@ def are_tracks_equals(track1: Instrument, track2: Track) -> int:
     for pb1, pb2 in zip(track1.pitch_bends, track2.pitch_bends):
         if not are_pitch_bends_equals(pb1, pb2):
             err += 1
-    # get pedals from miditoolkit
+    # get pedals from the miditoolkit track
     if len(track1.control_changes) >= 2:
         # last_pedal_on_time is None when no Pedal control change is "on", and is equal
         # to the oldest Pedal control change time (tick) while no CC to end it has been

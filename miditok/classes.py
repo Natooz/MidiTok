@@ -57,7 +57,8 @@ IGNORED_CONFIG_KEY_DICT = [
 
 @dataclass
 class Event:
-    r"""Event class, representing a token and its characteristics.
+    r"""
+    Event class, representing a token and its characteristics.
 
     The type corresponds to the token type (e.g. *Pitch*, *Position*...) and its value.
     These two attributes are used to build its string representation (``__str__``),
@@ -73,14 +74,16 @@ class Event:
     desc: Any = None
 
     def __str__(self) -> str:
-        """Return the string value of the ``Event``.
+        """
+        Return the string value of the ``Event``.
 
         :return: string value of the ``Event`` as a combination of its type and value.
         """
         return f"{self.type_}_{self.value}"
 
     def __repr__(self) -> str:
-        """Return the representation of this ``Event``.
+        """
+        Return the representation of this ``Event``.
 
         :return: representation of the event.
         """
@@ -92,7 +95,8 @@ class Event:
 
 @dataclass
 class TokSequence:
-    r"""Sequence of token.
+    r"""
+    Sequence of token.
 
     A ``TokSequence`` can represent tokens by their several forms:
 
@@ -117,7 +121,8 @@ class TokSequence:
     _ids_no_bpe: list[int | list[int]] = None
 
     def __len__(self) -> int:
-        """Return the length of the sequence.
+        """
+        Return the length of the sequence.
 
         :return: number of elements in the sequence.
         """
@@ -138,7 +143,8 @@ class TokSequence:
             )
 
     def __getitem__(self, idx: int) -> int | str | Event:
-        """Return the ``idx``th element of the sequence.
+        """
+        Return the ``idx``th element of the sequence.
 
         It checks by order: ids, tokens, events, bytes.
 
@@ -162,7 +168,8 @@ class TokSequence:
             )
 
     def __eq__(self, other: TokSequence) -> bool:
-        r"""Check that too sequences are equal.
+        r"""
+        Check that too sequences are equal.
 
         This is performed by comparing their attributes (ids, tokens...).
         **Both sequences must have at least one common attribute initialized (not None)
@@ -184,7 +191,10 @@ class TokSequence:
 
 
 class TokenizerConfig:
-    r"""Tokenizer configuration, to be used with all tokenizers.
+    r"""
+    Tokenizer configuration, to be used with all tokenizers.
+
+    # TODO fix doc build issue.
 
     :param pitch_range: range of MIDI pitches to use. Pitches can take values between
         0 and 127 (included). The `General MIDI 2 (GM2) specifications
@@ -519,7 +529,8 @@ class TokenizerConfig:
 
     @classmethod
     def from_dict(cls, input_dict: dict[str, Any], **kwargs) -> TokenizerConfig:
-        r"""Instantiate an ``TokenizerConfig`` from a Python dictionary.
+        r"""
+        Instantiate an ``TokenizerConfig`` from a Python dictionary.
 
         :param input_dict: Dictionary that will be used to instantiate the
             configuration object.
@@ -535,7 +546,8 @@ class TokenizerConfig:
         return cls(**input_dict, **kwargs)
 
     def to_dict(self, serialize: bool = False) -> dict[str, Any]:
-        r"""Serialize this configuration to a Python dictionary.
+        r"""
+        Serialize this configuration to a Python dictionary.
 
         :param serialize: will serialize the dictionary before returning it, so it can
             be saved to a JSON file.
@@ -548,7 +560,8 @@ class TokenizerConfig:
         return dict_config
 
     def __serialize_dict(self, dict_: dict) -> None:
-        r"""Convert numpy arrays to lists recursively within a dictionary.
+        r"""
+        Convert numpy arrays to lists recursively within a dictionary.
 
         :param dict_: dictionary to serialize
         """
@@ -559,7 +572,8 @@ class TokenizerConfig:
                 dict_[key] = dict_[key].tolist()
 
     def save_to_json(self, out_path: str | Path) -> None:
-        r"""Save a tokenizer configuration object to the `out_path` path.
+        r"""
+        Save a tokenizer configuration object to the `out_path` path.
 
         :param out_path: path to the output configuration JSON file.
         """
@@ -581,7 +595,8 @@ class TokenizerConfig:
 
     @classmethod
     def load_from_json(cls, config_file_path: str | Path) -> TokenizerConfig:
-        r"""Load a tokenizer configuration from the `config_path` path.
+        r"""
+        Load a tokenizer configuration from the `config_path` path.
 
         :param config_file_path: path to the configuration JSON file to load.
         """
@@ -605,7 +620,8 @@ class TokenizerConfig:
         return cls.from_dict(dict_config)
 
     def __eq__(self, other: TokenizerConfig) -> bool:
-        """Check two configs are equal.
+        """
+        Check two configs are equal.
 
         :param other: other config object to compare.
         :return: `True` if all attributes are equal, `False` otherwise.

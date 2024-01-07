@@ -1,3 +1,5 @@
+"""MMM (Multitrack Music Machine) tokenizer."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -17,11 +19,14 @@ from ..utils import (
 
 
 class MMM(MIDITokenizer):
-    r"""MMM, standing for `Multi-Track Music Machine <https://arxiv.org/abs/2008.06048>`_,
-    is a multitrack tokenization primarily designed for music inpainting and infilling.
-    Tracks are tokenized independently and concatenated into a single token sequence.
-    ``Bar_Fill`` tokens are used to specify the bars to fill (or inpaint, or rewrite),
-    the new tokens are then autoregressively generated.
+    r"""
+    MMM tokenizer.
+
+    Standing for `Multi-Track Music Machine <https://arxiv.org/abs/2008.06048>`_,
+    MMM is a multitrack tokenization primarily designed for music inpainting and
+    infilling. Tracks are tokenized independently and concatenated into a single token
+    sequence. ``Bar_Fill`` tokens are used to specify the bars to fill (or inpaint, or
+    rewrite), the new tokens are then autoregressively generated.
     Note that *this implementation represents note durations with ``Duration`` tokens*
     instead of the ``NoteOff`` strategy of the `original paper <https://arxiv.org/abs/2008.06048>`_.
     The reason being that ``NoteOff`` tokens perform poorer for generation with causal
@@ -62,11 +67,14 @@ class MMM(MIDITokenizer):
             )
 
     def _add_time_events(self, events: list[Event]) -> list[Event]:
-        r"""Internal method intended to be implemented by inheriting classes.
-        It creates the time events from the list of global and track events, and as
-        such the final token sequence.
+        r"""
+        Create the time events from a list of global and track events.
 
-        :param events: note events to complete.
+        Internal method intended to be implemented by child classes.
+        The returned sequence is the final token sequence ready to be converted to ids
+        to be fed to a model.
+
+        :param events: sequence of global and track events to create tokens time from.
         :return: the same events, with time events inserted.
         """
         # Creates first events by pop the *Track*, *Program* and *NoteDensity* events
@@ -162,6 +170,24 @@ class MMM(MIDITokenizer):
     def _create_track_events(
         self, track: Track, ticks_per_beat: np.ndarray = None
     ) -> list[Event]:
+        """
+        Extract the tokens/events from a track (``symusic.Track``).
+
+        Concerned events are: *Pitch*, *Velocity*, *Duration*, *NoteOn*, *NoteOff* and
+        optionally *Chord*, *Pedal* and *PitchBend*.
+        **If the tokenizer is using pitch intervals, the notes must be sorted by time
+        then pitch values. This is done in** ``preprocess_midi``.
+
+        :param track: ``symusic.Track`` to extract events from.
+        :param ticks_per_beat: array indicating the number of ticks per beat per
+            section. The numbers of ticks per beat depend on the time signatures of
+            the MIDI being parsed. The array has a shape ``(N,2)``, for ``N`` changes
+            of ticks per beat, and the second dimension representing the end tick of
+            each portion and the number of ticks per beat respectively.
+            This argument is not required if the tokenizer is not using *Duration*,
+            *PitchInterval* or *Chord* tokens. (default: ``None``)
+        :return: sequence of corresponding ``Event``s.
+        """
         # Call parent method to create the track events
         events = super()._create_track_events(track, ticks_per_beat)
 
@@ -195,7 +221,8 @@ class MMM(MIDITokenizer):
 
     @staticmethod
     def _order(event: Event) -> int:
-        """Overriden in order to put *Track* and *NoteDensity* tokens first.
+        """
+        Overriden in order to put *Track* and *NoteDensity* tokens first.
 
         :param event: event to determine priority.
         :return: priority as an int
@@ -227,7 +254,8 @@ class MMM(MIDITokenizer):
             return 10
 
     def _midi_to_tokens(self, midi: Score) -> TokSequence:
-        r"""Converts a preprocessed MIDI object to a sequence of tokens.
+        r"""
+        Convert a **preprocessed** MIDI object to a sequence of tokens.
 
         We need to override the parent method, as the tokenizer is
         `one_token_stream` and it would order the `Event`s created by the
@@ -237,8 +265,9 @@ class MMM(MIDITokenizer):
         `_add_track_events` method do not add *Program* tokens as this is done
         in the overridden method.
 
-        :param midi: the MIDI object to convert.
-        :return: sequences of tokens.
+        :param midi: the MIDI :class:`symusic.Score` object to convert.
+        :return: a :class:`miditok.TokSequence` if ``tokenizer.one_token_stream`` is
+            ``True``, else a list of :class:`miditok.TokSequence` objects.
         """
         self.one_token_stream = False
         self.config.use_programs = False
@@ -263,12 +292,17 @@ class MMM(MIDITokenizer):
         tokens: TokSequence,
         _: None = None,
     ) -> Score:
-        r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
+        r"""
+        Convert tokens (:class:`miditok.TokSequence`) into a MIDI.
+
+        This is an internal method called by ``self.tokens_to_midi``, intended to be
+        implemented by classes inheriting :class:`miditok.MidiTokenizer`.
 
         :param tokens: tokens to convert. Can be either a list of
-            :class:`miditok.TokSequence`,
-        :param _: unused, to match parent method signature
-        :return: the midi object (:class:`miditoolkit.MidiFile`).
+            :class:`miditok.TokSequence` or a list of :class:`miditok.TokSequence`s.
+        :param _: in place of programs of the parent method, unused here.
+            (default: ``None``)
+        :return: the midi object (:class:`symusic.Score`).
         """
         midi = Score(self.time_division)
         tokens = tokens.tokens
@@ -364,9 +398,11 @@ class MMM(MIDITokenizer):
         return midi
 
     def _create_base_vocabulary(self) -> list[str]:
-        r"""Creates the vocabulary, as a list of string tokens.
-        Each token as to be given as the form of "Type_Value", separated with an
-        underscore. Example: Pitch_58
+        r"""
+        Create the vocabulary, as a list of string tokens.
+
+        Each token is given as the form ``"Type_Value"``, with its type and value
+        separated with an underscore. Example: ``Pitch_58``.
         The :class:`miditok.MIDITokenizer` main class will then create the "real"
         vocabulary as a dictionary. Special tokens have to be given when creating the
         tokenizer, and will be added to the vocabulary by
@@ -409,10 +445,10 @@ class MMM(MIDITokenizer):
         return vocab
 
     def _create_token_types_graph(self) -> dict[str, list[str]]:
-        r"""Returns a graph (as a dictionary) of the possible token
-        types successions.
+        r"""
+        Return a graph/dictionary of the possible token types successions.
 
-        :return: the token types transitions dictionary
+        :return: the token types transitions dictionary.
         """
         dic: dict[str, list[str]] = {
             "Bar": ["Bar", "TimeShift", "Pitch", "Track"],
@@ -461,10 +497,12 @@ class MMM(MIDITokenizer):
         return dic
 
     def _tokens_errors(self, tokens: list[str]) -> int:
-        """Checks if a sequence of tokens is made of good token types successions and
-        returns the error ratio (lower is better). This method receives a list of
-        tokens as a list of strings, and returns the absolute number of errors
-        predicted. The number of errors should not be higher than the number of tokens.
+        """
+        Return the number of errors in a sequence of tokens.
+
+        The method checks if a sequence of tokens is made of good token types
+        successions and values. The number of errors should not be higher than the
+        number of tokens.
 
         :param tokens: sequence of tokens string to check.
         :return: the number of errors predicted (no more than one per token).

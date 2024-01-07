@@ -1,3 +1,5 @@
+"""Octuple tokenizer."""
+
 from __future__ import annotations
 
 from symusic import Note, Score, Tempo, TimeSignature, Track
@@ -12,7 +14,10 @@ from ..utils import compute_ticks_per_bar, compute_ticks_per_beat, get_bars_tick
 
 
 class Octuple(MIDITokenizer):
-    r"""Introduced with `MusicBert (Zeng et al.) <https://arxiv.org/abs/2106.05630>`_,
+    r"""
+    Octuple tokenizer.
+
+    Introduced with `MusicBert (Zeng et al.) <https://arxiv.org/abs/2106.05630>`_,
     the idea of Octuple is to use embedding pooling so that each pooled embedding
     represents a single note. Tokens (*Pitch*, *Velocity*...) are first independently
     converted to embeddings which are then merged (pooled) into a single one.
@@ -74,21 +79,14 @@ class Octuple(MIDITokenizer):
         }  # used for data augmentation
 
     def _add_time_events(self, events: list[Event]) -> list[list[Event]]:
-        r"""Internal method intended to be implemented by inheriting classes.
-        It creates the time events from the list of global and track events, and as
-        such the final token sequence.
-        A time step is a list of tokens where:
-            (list index: token type)
-            0: Pitch;
-            1: Velocity;
-            2: Duration;
-            3: Position;
-            4: Bar;
-            (5: Program);
-            (6: Tempo);
-            (7: TimeSignature).
+        r"""
+        Create the time events from a list of global and track events.
 
-        :param events: note events to complete.
+        Internal method intended to be implemented by child classes.
+        The returned sequence is the final token sequence ready to be converted to ids
+        to be fed to a model.
+
+        :param events: sequence of global and track events to create tokens time from.
         :return: the same events, with time events inserted.
         """
         # Add time events
@@ -149,25 +147,19 @@ class Octuple(MIDITokenizer):
         return all_events
 
     def _midi_to_tokens(self, midi: Score) -> TokSequence | list[TokSequence]:
-        r"""Converts a preprocessed MIDI object to a sequence of tokens.
-        The workflow of this method is as follows: the events (Pitch, Velocity, Tempo,
-        TimeSignature...) are gathered into a list, then the time events are added. If
-        ``one_token_stream`` is true, all events of all tracks are treated all at once,
-        otherwise the events of each track are treated independently.
+        r"""
+        Convert a **preprocessed** MIDI object to a sequence of tokens.
 
-        A time step is a list of tokens where:
-            (list index: token type)
-            0: Pitch
-            1: Velocity
-            2: Duration
-            3: Position
-            4: Bar
-            (5: Program)
-            (6: Tempo)
-            (7: TimeSignature)
+        We override the parent method in order to check the number of bars in the MIDI.
+        The workflow of this method is as follows: the global events (*Tempo*,
+        *TimeSignature*...) and track events (*Pitch*, *Velocity*, *Pedal*...) are
+        gathered into a list, then the time events are added. If `one_token_stream` is
+        ``True``, all events of all tracks are treated all at once, otherwise the
+        events of each track are treated independently.
 
-        :param midi: the MIDI object to convert
-        :return: sequences of tokens
+        :param midi: the MIDI :class:`symusic.Score` object to convert.
+        :return: a :class:`miditok.TokSequence` if ``tokenizer.one_token_stream`` is
+            ``True``, else a list of :class:`miditok.TokSequence` objects.
         """
         # Check bar embedding limit, update if needed
         num_bars = len(get_bars_ticks(midi))
@@ -185,13 +177,17 @@ class Octuple(MIDITokenizer):
         tokens: TokSequence | list[TokSequence],
         programs: list[tuple[int, bool]] | None = None,
     ) -> Score:
-        r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
+        r"""
+        Convert tokens (:class:`miditok.TokSequence`) into a MIDI.
+
+        This is an internal method called by ``self.tokens_to_midi``, intended to be
+        implemented by classes inheriting :class:`miditok.MidiTokenizer`.
 
         :param tokens: tokens to convert. Can be either a list of
-            :class:`miditok.TokSequence`,
+            :class:`miditok.TokSequence` or a list of :class:`miditok.TokSequence`s.
         :param programs: programs of the tracks. If none is given, will default to
-            piano, program 0. (default: None)
-        :return: the midi object (:class:`miditoolkit.MidiFile`).
+            piano, program 0. (default: ``None``)
+        :return: the midi object (:class:`symusic.Score`).
         """
         # Unsqueeze tokens in case of one_token_stream
         if self.one_token_stream:  # ie single token seq
@@ -345,9 +341,11 @@ class Octuple(MIDITokenizer):
         return midi
 
     def _create_base_vocabulary(self) -> list[list[str]]:
-        r"""Creates the vocabulary, as a list of string tokens.
-        Each token as to be given as the form of "Type_Value", separated with an
-        underscore. Example: Pitch_58
+        r"""
+        Create the vocabulary, as a list of string tokens.
+
+        Each token is given as the form ``"Type_Value"``, with its type and value
+        separated with an underscore. Example: ``Pitch_58``.
         The :class:`miditok.MIDITokenizer` main class will then create the "real"
         vocabulary as a dictionary. Special tokens have to be given when creating the
         tokenizer, and will be added to the vocabulary by
@@ -395,19 +393,23 @@ class Octuple(MIDITokenizer):
         return vocab
 
     def _create_token_types_graph(self) -> dict[str, list[str]]:
-        r"""Returns a graph (as a dictionary) of the possible token
-        types successions.
+        r"""
+        Return a graph/dictionary of the possible token types successions.
+
         Not relevant for Octuple as it is not subject to token type errors.
 
-        :return: the token types transitions dictionary
+        :return: the token types transitions dictionary.
         """
         return {}
 
     def _tokens_errors(self, tokens: list[list[str]]) -> int:
-        r"""Checks if a sequence of tokens is made of good token types successions and
-        returns the error ratio (lower is better). This method receives a list of
-        tokens as a list of strings, and returns the absolute number of errors
-        predicted. The number of errors should not be higher than the number of tokens.
+        r"""
+        Return the number of errors in a sequence of tokens.
+
+        The method checks if a sequence of tokens is made of good token types
+        successions and values. The number of errors should not be higher than the
+        number of tokens.
+
         The token types are always the same in Octuple so this method only checks
         if their values are correct:
             - a bar token value cannot be < to the current bar (it would go back in

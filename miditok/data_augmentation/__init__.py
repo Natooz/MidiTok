@@ -1,4 +1,5 @@
-"""Data augmentation module.
+"""
+Data augmentation module.
 
 The module implements three public methods:
     * augment_midi: augment a unique midi on a unique set of offsets;

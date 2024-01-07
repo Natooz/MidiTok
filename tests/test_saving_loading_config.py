@@ -38,7 +38,8 @@ def test_saving_loading_tokenizer_config(tokenization: str, tmp_path: Path):
 
 @pytest.mark.parametrize("tokenization", ALL_TOKENIZATIONS)
 def test_saving_loading_tokenizer(tokenization: str, tmp_path: Path):
-    r"""Make sure saving and loading end with the identical tokenizer.
+    r"""
+    Make sure saving and loading end with the identical tokenizer.
 
     Create a tokenizer, save its config, and load it back.
     If all went well the reloaded tokenizer should be identical.

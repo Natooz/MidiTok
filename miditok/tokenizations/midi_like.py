@@ -1,3 +1,5 @@
+"""MIDI-Like tokenizer."""
+
 from __future__ import annotations
 
 from symusic import Note, Pedal, PitchBend, Score, Tempo, TimeSignature, Track
@@ -9,11 +11,14 @@ from ..utils import compute_ticks_per_beat
 
 
 class MIDILike(MIDITokenizer):
-    r"""Introduced in `This time with feeling (Oore et al.) <https://arxiv.org/abs/1808.03715>`_
+    r"""
+    MIDI-Like tokenizer.
+
+    Introduced in `This time with feeling (Oore et al.) <https://arxiv.org/abs/1808.03715>`_
     and later used with `Music Transformer (Huang et al.) <https://openreview.net/forum?id=rJe4ShAcF7>`_
     and `MT3 (Gardner et al.) <https://openreview.net/forum?id=iMSjopcOn0p>`_,
     this tokenization simply converts MIDI messages (*NoteOn*, *NoteOff*,
-    *TimeShift*...) as tokens, hence the name "MIDI-Like".
+    *TimeShift*...) to tokens, hence the name "MIDI-Like".
     ``MIDILike`` decode tokens following a FIFO (First In First Out) logic. When
     decoding tokens, you can limit the duration of the created notes by setting a
     ``max_duration`` entry in the tokenizer's config
@@ -42,11 +47,14 @@ class MIDILike(MIDITokenizer):
         self._note_on_off = True
 
     def _add_time_events(self, events: list[Event]) -> list[Event]:
-        r"""Internal method intended to be implemented by inheriting classes.
-        It creates the time events from the list of global and track events, and as
-        such the final token sequence.
+        r"""
+        Create the time events from a list of global and track events.
 
-        :param events: note events to complete.
+        Internal method intended to be implemented by child classes.
+        The returned sequence is the final token sequence ready to be converted to ids
+        to be fed to a model.
+
+        :param events: sequence of global and track events to create tokens time from.
         :return: the same events, with time events inserted.
         """
         # Add time events
@@ -123,13 +131,17 @@ class MIDILike(MIDITokenizer):
         tokens: TokSequence | list[TokSequence],
         programs: list[tuple[int, bool]] | None = None,
     ) -> Score:
-        r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
+        r"""
+        Convert tokens (:class:`miditok.TokSequence`) into a MIDI.
+
+        This is an internal method called by ``self.tokens_to_midi``, intended to be
+        implemented by classes inheriting :class:`miditok.MidiTokenizer`.
 
         :param tokens: tokens to convert. Can be either a list of
-            :class:`miditok.TokSequence`,
+            :class:`miditok.TokSequence` or a list of :class:`miditok.TokSequence`s.
         :param programs: programs of the tracks. If none is given, will default to
-            piano, program 0. (default: None)
-        :return: the midi object (:class:`miditoolkit.MidiFile`).
+            piano, program 0. (default: ``None``)
+        :return: the midi object (:class:`symusic.Score`).
         """
         # Unsqueeze tokens in case of one_token_stream
         if self.one_token_stream:  # ie single token seq
@@ -349,9 +361,11 @@ class MIDILike(MIDITokenizer):
         return midi
 
     def _create_base_vocabulary(self) -> list[str]:
-        r"""Creates the vocabulary, as a list of string tokens.
-        Each token as to be given as the form of "Type_Value", separated with an
-        underscore. Example: Pitch_58
+        r"""
+        Create the vocabulary, as a list of string tokens.
+
+        Each token is given as the form ``"Type_Value"``, with its type and value
+        separated with an underscore. Example: ``Pitch_58``.
         The :class:`miditok.MIDITokenizer` main class will then create the "real"
         vocabulary as a dictionary. Special tokens have to be given when creating the
         tokenizer, and will be added to the vocabulary by
@@ -388,12 +402,10 @@ class MIDILike(MIDITokenizer):
         return vocab
 
     def _create_token_types_graph(self) -> dict[str, list[str]]:
-        r"""Returns a graph (as a dictionary) of the possible token
-        types successions.
-        NOTE: Program type is not referenced here, you can add it manually by
-        modifying the tokens_types_graph class attribute following your strategy.
+        r"""
+        Return a graph/dictionary of the possible token types successions.
 
-        :return: the token types transitions dictionary
+        :return: the token types transitions dictionary.
         """
         dic = {"NoteOn": ["Velocity"]}
 
@@ -566,10 +578,15 @@ class MIDILike(MIDITokenizer):
         return dic
 
     def _tokens_errors(self, tokens: list[str]) -> int:
-        r"""Checks if a sequence of tokens is made of good token types successions and
-        returns the error ratio (lower is better). This method receives a list of
-        tokens as a list of strings, and returns the absolute number of errors
-        predicted. The number of errors should not be higher than the number of tokens.
+        r"""
+        Return the number of errors in a sequence of tokens.
+
+        The method checks if a sequence of tokens is made of good token types
+        successions and values. The number of errors should not be higher than the
+        number of tokens.
+
+        In ``MIDILike``, we also check the presence of *NoteOff* tokens with a
+        corresponding *NoteOn* token, and vice-versa.
 
         :param tokens: sequence of tokens string to check.
         :return: the number of errors predicted (no more than one per token).

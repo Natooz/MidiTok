@@ -41,7 +41,8 @@ def test_bpe_conversion(
     midi_paths: Sequence[str | Path] | None = None,
     seed: int = SEED,
 ):
-    r"""Trains with BPE, check BPE encoding-decoding keeps the data integrity.
+    r"""
+    Trains with BPE, check BPE encoding-decoding keeps the data integrity.
 
     It also tests tokenizer saving-loading with BPE.
 

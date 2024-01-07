@@ -1,3 +1,5 @@
+"""TSD (TimeShift Duration) tokenizer."""
+
 from __future__ import annotations
 
 from symusic import (
@@ -17,12 +19,15 @@ from ..utils import compute_ticks_per_beat
 
 
 class TSD(MIDITokenizer):
-    r"""TSD, for Time Shift Duration, is similar to MIDI-Like :ref:`MIDI-Like`
-    but uses explicit *Duration* tokens to represent note durations, which have
-    showed `better results than with *NoteOff* tokens <https://arxiv.org/abs/2002.00212>`_.
-    If you specify ``use_programs`` as ``True`` in the config file, the tokenizer will
-    add *Program* tokens before each *Pitch* tokens to specify its instrument, and will
-    treat all tracks as a single stream of tokens.
+    r"""
+    TSD (Time Shift Duration) tokenizer.
+
+    It is similar to MIDI-Like :ref:`MIDI-Like` but uses explicit *Duration* tokens to
+    represent note durations, which have showed `better results than with *NoteOff*
+    tokens <https://arxiv.org/abs/2002.00212>`_. If you specify ``use_programs`` as
+    ``True`` in the config file, the tokenizer will add *Program* tokens before each
+    *Pitch* tokens to specify its instrument, and will treat all tracks as a single
+    stream of tokens.
 
     **Note:** as ``TSD`` uses *TimeShifts* events to move the time from note to note,
     it can be unsuited for tracks with pauses longer than the maximum *TimeShift*
@@ -37,11 +42,14 @@ class TSD(MIDITokenizer):
             self.one_token_stream = True
 
     def _add_time_events(self, events: list[Event]) -> list[Event]:
-        r"""Internal method intended to be implemented by inheriting classes.
-        It creates the time events from the list of global and track events, and as
-        such the final token sequence.
+        r"""
+        Create the time events from a list of global and track events.
 
-        :param events: note events to complete.
+        Internal method intended to be implemented by child classes.
+        The returned sequence is the final token sequence ready to be converted to ids
+        to be fed to a model.
+
+        :param events: sequence of global and track events to create tokens time from.
         :return: the same events, with time events inserted.
         """
         # Add time events
@@ -119,13 +127,17 @@ class TSD(MIDITokenizer):
         tokens: TokSequence | list[TokSequence],
         programs: list[tuple[int, bool]] | None = None,
     ) -> Score:
-        r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
+        r"""
+        Convert tokens (:class:`miditok.TokSequence`) into a MIDI.
+
+        This is an internal method called by ``self.tokens_to_midi``, intended to be
+        implemented by classes inheriting :class:`miditok.MidiTokenizer`.
 
         :param tokens: tokens to convert. Can be either a list of
-            :class:`miditok.TokSequence`,
+            :class:`miditok.TokSequence` or a list of :class:`miditok.TokSequence`s.
         :param programs: programs of the tracks. If none is given, will default to
-            piano, program 0. (default: None)
-        :return: the midi object (:class:`miditoolkit.MidiFile`).
+            piano, program 0. (default: ``None``)
+        :return: the midi object (:class:`symusic.Score`).
         """
         # Unsqueeze tokens in case of one_token_stream
         if self.one_token_stream:  # ie single token seq
@@ -296,9 +308,11 @@ class TSD(MIDITokenizer):
         return midi
 
     def _create_base_vocabulary(self) -> list[str]:
-        r"""Creates the vocabulary, as a list of string tokens.
-        Each token as to be given as the form of "Type_Value", separated with an
-        underscore. Example: Pitch_58
+        r"""
+        Create the vocabulary, as a list of string tokens.
+
+        Each token is given as the form ``"Type_Value"``, with its type and value
+        separated with an underscore. Example: ``Pitch_58``.
         The :class:`miditok.MIDITokenizer` main class will then create the "real"
         vocabulary as a dictionary. Special tokens have to be given when creating the
         tokenizer, and will be added to the vocabulary by
@@ -331,12 +345,10 @@ class TSD(MIDITokenizer):
         return vocab
 
     def _create_token_types_graph(self) -> dict[str, list[str]]:
-        r"""Returns a graph (as a dictionary) of the possible token
-        types successions.
-        NOTE: Program type is not referenced here, you can add it manually by
-        modifying the tokens_types_graph class attribute following your strategy.
+        r"""
+        Return a graph/dictionary of the possible token types successions.
 
-        :return: the token types transitions dictionary
+        :return: the token types transitions dictionary.
         """
         dic = {}
 

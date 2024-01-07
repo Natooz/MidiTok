@@ -1,3 +1,5 @@
+"""MuMIDI tokenizer."""
+
 from __future__ import annotations
 
 from math import ceil
@@ -15,7 +17,10 @@ from ..utils import detect_chords, get_midi_ticks_per_beat
 
 
 class MuMIDI(MIDITokenizer):
-    r"""Introduced with `PopMAG (Ren et al.) <https://arxiv.org/abs/2008.07703>`_,
+    r"""
+    MuMIDI tokenizer.
+
+    Introduced with `PopMAG (Ren et al.) <https://arxiv.org/abs/2008.07703>`_,
     this tokenization made for multitrack tasks and uses embedding pooling. Time is
     represented with *Bar* and *Position* tokens. The key idea of MuMIDI is to represent
     all tracks in a single token sequence. At each time step, *Track* tokens preceding
@@ -79,20 +84,24 @@ class MuMIDI(MIDITokenizer):
             self.vocab_types_idx["Tempo"] = -3
 
     def _add_time_events(self, events: list[Event]) -> list[Event]:
-        pass
+        """
+        Create the time events from a list of global and track events.
+
+        Unused here.
+
+        :param events: sequence of global and track events to create tokens time from.
+        :return: the same events, with time events inserted.
+        """
 
     def _midi_to_tokens(self, midi: Score) -> TokSequence:
-        r"""Tokenize a MIDI file.
-        Each pooled token will be a list of the form (index: Token type):
-        * 0: Pitch / DrumPitch / Position / Bar / Program / (Chord) / (Rest)
-        * 1: BarPosEnc;
-        * 2: PositionPosEnc;
-        * (-3 / 3: Tempo);
-        * -2: Velocity;
-        * -1: Duration.
+        r"""
+        Convert a **preprocessed** MIDI object to a sequence of tokens.
 
-        :param midi: the MIDI object to convert
-        :return: sequences of tokens
+        MuMIDI has its own implementation and doesn't use `_add_time_events`.
+
+        :param midi: the MIDI :class:`symusic.Score` object to convert.
+        :return: a :class:`miditok.TokSequence` if ``tokenizer.one_token_stream`` is
+            ``True``, else a list of :class:`miditok.TokSequence` objects.
         """
         # Check bar embedding limit, update if needed
         num_bars = ceil(midi.end() / (midi.ticks_per_quarter * 4))
@@ -195,9 +204,11 @@ class MuMIDI(MIDITokenizer):
 
     def _track_to_tokens(
         self, track: Track, ticks_per_beat: np.ndarray = None
-    ) -> list[list[Event | str]]:
-        r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
-        (:class:`miditok.TokSequence`). For each note, it creates a time step as a
+    ) -> list[list[Event]]:
+        r"""
+        Convert a track (``symusic.Track``) into a sequence of tokens.
+
+        For each note, it creates a time step as a
         list of tokens where (list index: token type):
         * 0: Pitch (as an Event object for sorting purpose afterward);
         * 1: Velocity;
@@ -272,25 +283,17 @@ class MuMIDI(MIDITokenizer):
         tokens: TokSequence,
         _: None = None,
     ) -> Score:
-        r"""Override the parent class method
-        Convert multiple sequences of tokens into a multitrack MIDI and save it.
-        The tokens will be converted to event objects and then to a
-        miditoolkit.MidiFile object.
-        A time step is a list of tokens where (list index: token type):
-        * 0: Pitch / DrumPitch / Position / Bar / Program / (Chord) / (Rest);
-        * 1: BarPosEnc;
-        * 2: PositionPosEnc;
-        * (-3 / 3: Tempo);
-        * -2: Velocity;
-        * -1: Duration.
+        r"""
+        Convert tokens (:class:`miditok.TokSequence`) into a MIDI.
 
-        :param tokens: tokens to convert. Can be either a Tensor (PyTorch and
-            Tensorflow are supported), a numpy array, a Python list or a TokSequence.
-        :param tokens: list of lists of tokens to convert, each list inside the
-            first list corresponds to a track
-        :param _: unused, to match parent method signature
-            leave None to not save the file
-        :return: the midi object (miditoolkit.MidiFile)
+        This is an internal method called by ``self.tokens_to_midi``, intended to be
+        implemented by classes inheriting :class:`miditok.MidiTokenizer`.
+
+        :param tokens: tokens to convert. Can be either a list of
+            :class:`miditok.TokSequence` or a list of :class:`miditok.TokSequence`s.
+        :param _: in place of programs of the parent method, unused here.
+            (default: ``None``)
+        :return: the midi object (:class:`symusic.Score`).
         """
         midi = Score(self.time_division)
 
@@ -355,9 +358,11 @@ class MuMIDI(MIDITokenizer):
         return midi
 
     def _create_base_vocabulary(self) -> list[list[str]]:
-        r"""Creates the vocabulary, as a list of string tokens.
-        Each token as to be given as the form of "Type_Value", separated with an
-        underscore. Example: Pitch_58
+        r"""
+        Create the vocabulary, as a list of string tokens.
+
+        Each token is given as the form ``"Type_Value"``, with its type and value
+        separated with an underscore. Example: ``Pitch_58``.
         The :class:`miditok.MIDITokenizer` main class will then create the "real"
         vocabulary as a dictionary. Special tokens have to be given when creating the
         tokenizer, and will be added to the vocabulary by
@@ -423,12 +428,10 @@ class MuMIDI(MIDITokenizer):
         return vocab
 
     def _create_token_types_graph(self) -> dict[str, list[str]]:
-        r"""Returns a graph (as a dictionary) of the possible token
-        types successions.
-        Here the combination of Pitch, Velocity and Duration tokens is represented by
-        "Pitch" in the graph.
+        r"""
+        Return a graph/dictionary of the possible token types successions.
 
-        :return: the token types transitions dictionary
+        :return: the token types transitions dictionary.
         """
         dic = {
             "Bar": ["Bar", "Position"],
@@ -445,16 +448,17 @@ class MuMIDI(MIDITokenizer):
         return dic
 
     def _tokens_errors(self, tokens: list[list[str]]) -> int:
-        r"""Checks if a sequence of tokens is made of good token types successions and
-        returns the error ratio (lower is better). This method receives a list of
-        tokens as a list of strings, and returns the absolute number of errors
-        predicted. The number of errors should not be higher than the number of tokens.
-        The Pitch and Position values are analyzed:
-            - a bar token value cannot be < to the current bar (it would go back in
-                time)
-            - same for positions
-            - a pitch token should not be present if the same pitch is already played
-                at the current position.
+        r"""
+        Return the number of errors in a sequence of tokens.
+
+        The method checks if a sequence of tokens is made of good token types
+        successions and values. The number of errors should not be higher than the
+        number of tokens.
+
+        This method is intended to be overridden by tokenizer classes. The
+        implementation in the ``MIDITokenizer`` class will check token types,
+        duplicated notes and time errors. It works for ``REMI``, ``TSD`` and
+        ``Structured``.
 
         :param tokens: sequence of tokens string to check.
         :return: the number of errors predicted (no more than one per token).

@@ -33,7 +33,8 @@ from miditok.constants import (
 
 
 def convert_ids_tensors_to_list(ids) -> list[int] | list[list[int]]:  # noqa: ANN001
-    """Convert a PyTorch, Tensorflow Tensor or numpy array to a list of integers.
+    """
+    Convert a PyTorch, Tensorflow Tensor or numpy array to a list of integers.
 
     This method works with Jax too. It is recursive and will convert nested
     Tensors/arrays.
@@ -69,7 +70,8 @@ def convert_ids_tensors_to_list(ids) -> list[int] | list[list[int]]:  # noqa: AN
 
 
 def get_midi_programs(midi: Score) -> list[tuple[int, bool]]:
-    r"""Return the list of programs of the tracks of a MIDI.
+    r"""
+    Return the list of programs of the tracks of a MIDI.
 
     :param midi: the MIDI object to extract tracks programs
     :return: the list of track programs, as a list of tuples (program, is_drum)
@@ -80,7 +82,8 @@ def get_midi_programs(midi: Score) -> list[tuple[int, bool]]:
 def remove_duplicated_notes(
     notes: NoteTickList | list[Note], consider_duration: bool = False
 ) -> None:
-    r"""Remove (inplace) duplicated notes, i.e. with the same pitch and onset time.
+    r"""
+    Remove (inplace) duplicated notes, i.e. with the same pitch and onset time.
 
     The velocities are ignored in this method.
     **The notes need to be sorted by time, then pitch, and duration if
@@ -104,7 +107,8 @@ def remove_duplicated_notes(
 
 
 def fix_offsets_overlapping_notes(notes: NoteTickList) -> None:
-    r"""Reduce the durations of overlapping notes.
+    r"""
+    Reduce the durations of overlapping notes.
 
     By applying this method, when a note starts although it is already being played,
     the previous note will end. Before running this method make sure the notes are
@@ -134,7 +138,8 @@ def detect_chords(
     unknown_chords_num_notes_range: tuple[int, int] | None = None,
     simul_notes_limit: int = 10,
 ) -> list[Event]:
-    r"""Detect chords in a list of notes.
+    r"""
+    Detect chords in a list of notes.
 
     Make sure to sort notes by start time then pitch
     before: ``notes.sort(key=lambda x: (x.start, x.pitch))``.
@@ -259,7 +264,8 @@ def merge_tracks_per_class(
     valid_programs: list[int] | None = None,
     filter_pitches: bool = True,
 ) -> None:
-    r"""Merge ``symusic.Track``s per MIDI program class.
+    r"""
+    Merge ``symusic.Track``s per MIDI program class.
 
     Example, a list of tracks / programs `[0, 3, 8, 10, 11, 24, 25, 44, 47]`` will
     become ``[0, 8, 24, 25, 40]`` if ``classes_to_merge`` is ``[0, 1, 5]``.
@@ -357,7 +363,8 @@ def merge_tracks_per_class(
 def merge_tracks(
     tracks: list[Track] | TrackTickList | Score, effects: bool = True
 ) -> Track:
-    r"""Merge several ``symusic.Track``s.
+    r"""
+    Merge several ``symusic.Track``s.
 
     The notes (and optionally effects) will be concatenated and sorted by time.
     All the tracks will be merged into the first ``Track`` of the list
@@ -408,7 +415,8 @@ def merge_tracks(
 def merge_same_program_tracks(
     tracks: list[Track] | TrackTickList, effects: bool = True
 ) -> None:
-    r"""Merge tracks having the same program number.
+    r"""
+    Merge tracks having the same program number.
 
     :param tracks: list of tracks.
     :param effects: will also merge effects, i.e. control changes, sustain pedals and
@@ -442,7 +450,8 @@ def merge_same_program_tracks(
 def num_bar_pos(
     seq: Sequence[int], bar_token_id: int, position_tokens_ids: Sequence[int]
 ) -> tuple[int, int]:
-    r"""Return the number of bars and the last position of a sequence of tokens.
+    r"""
+    Return the number of bars and the last position of a sequence of tokens.
 
     This method is compatible with tokenizations representing time with *Bar* and
     *Position* tokens, such as :py:class:`miditok.REMI`.
@@ -468,7 +477,8 @@ def num_bar_pos(
 
 
 def np_get_closest(array: np.ndarray, values: np.ndarray) -> np.ndarray:
-    """Find the closest values to those of another reference array.
+    """
+    Find the closest values to those of another reference array.
 
     Taken from: https://stackoverflow.com/a/46184652.
 
@@ -490,7 +500,8 @@ def np_get_closest(array: np.ndarray, values: np.ndarray) -> np.ndarray:
 
 
 def miditoolkit_to_symusic(midi: MidiFile) -> Score:
-    """Convert a ``miditoolkit.MidiFile`` object into a ``symusic.Score``.
+    """
+    Convert a ``miditoolkit.MidiFile`` object into a ``symusic.Score``.
 
     :param midi: ``miditoolkit.MidiFile`` object to convert.
     :return: the `symusic.Score`` equivalent.
@@ -542,7 +553,8 @@ def miditoolkit_to_symusic(midi: MidiFile) -> Score:
 
 
 def compute_ticks_per_beat(time_sig_denominator: int, time_division: int) -> int:
-    r"""Compute the number of ticks in a beat at a given time signature.
+    r"""
+    Compute the number of ticks in a beat at a given time signature.
 
     :param time_sig_denominator: time signature denominator.
     :param time_division: MIDI time division in ticks/quarter.
@@ -558,7 +570,8 @@ def compute_ticks_per_beat(time_sig_denominator: int, time_division: int) -> int
 
 
 def compute_ticks_per_bar(time_sig: TimeSignature, time_division: int) -> int:
-    r"""Compute the number of ticks in a bar.
+    r"""
+    Compute the number of ticks in a bar.
 
     The number of ticks per bar depends on the time signature.
 
@@ -572,7 +585,8 @@ def compute_ticks_per_bar(time_sig: TimeSignature, time_division: int) -> int:
 
 
 def get_bars_ticks(midi: Score) -> list[int]:
-    """Compute the ticks of the bars of a MIDI.
+    """
+    Compute the ticks of the bars of a MIDI.
 
     **Note:** When encountering multiple time signature messages at a same tick, we
     this method will automatically consider the last one (coming in the list). Other
@@ -610,7 +624,8 @@ def get_bars_ticks(midi: Score) -> list[int]:
 
 
 def get_midi_ticks_per_beat(midi: Score) -> np.ndarray:
-    """Compute the portions of numbers of ticks in a beat in a MIDI.
+    """
+    Compute the portions of numbers of ticks in a beat in a MIDI.
 
     The method returns a numpy array of shape ``(N,2)``, for N ticks-per-beat changes,
     and the second dimension corresponding to the ending tick and the number of ticks

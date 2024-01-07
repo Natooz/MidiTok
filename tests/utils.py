@@ -66,7 +66,8 @@ TOKENIZER_CONFIG_KWARGS = {
 
 
 def adjust_tok_params_for_tests(tokenization: str, params: dict[str, Any]) -> None:
-    """Adjust tokenizer config parameters for tests.
+    """
+    Adjust tokenizer config parameters for tests.
 
     Depending on the tokenization, some adjustments are necessary to ensure that the
     MIDI decoded from tokens is identical to the original one.
@@ -95,7 +96,8 @@ def adjust_tok_params_for_tests(tokenization: str, params: dict[str, Any]) -> No
 
 
 def sort_midi(midi: Score, sort_tracks: bool = True) -> None:
-    """Sorts a MIDI: its notes and other track events, and the tracks themselves.
+    """
+    Sorts a MIDI: its notes and other track events, and the tracks themselves.
 
     :param midi: midi to sort.
     :param sort_tracks: will sort the tracks by program if given True.
@@ -118,7 +120,8 @@ def sort_midi(midi: Score, sort_tracks: bool = True) -> None:
 def adapt_ref_midi_before_tokenize(
     midi: Score, tokenizer: miditok.MIDITokenizer
 ) -> None:
-    """Adapt (inplace) the contents of a MIDI before it is tokenized.
+    """
+    Adapt (inplace) the contents of a MIDI before it is tokenized.
 
     :param midi: MIDI object to adapt.
     :param tokenizer: tokenizer being used.
@@ -170,7 +173,8 @@ def adapt_ref_midi_before_tokenize(
 def adapt_ref_midi_for_tests_assertion(
     midi: Score, tokenizer: miditok.MIDITokenizer
 ) -> Score:
-    """Adapt a reference raw/unprocessed MIDI for test assertions.
+    """
+    Adapt a reference raw/unprocessed MIDI for test assertions.
 
     This method is meant to be used with a reference MIDI, and preprocess it so that
     its contents match exactly those of the MIDI decoded from the tokens of this
@@ -212,7 +216,8 @@ def adapt_ref_midi_for_tests_assertion(
 def midis_notes_equals(
     midi1: Score, midi2: Score
 ) -> list[tuple[int, str, list[tuple[str, Note | int, int]]]]:
-    """Check that the notes from two MIDIs are all equal.
+    """
+    Check that the notes from two MIDIs are all equal.
 
     If they are not all equal, the method returns the list of errors.
 
@@ -376,7 +381,8 @@ def tokenize_and_check_equals(
 def del_invalid_time_sig(
     time_sigs: list[TimeSignature], time_sigs_tokenizer: list[TimeSignature]
 ) -> None:
-    r"""Delete time signatures of a MIDI outside those supported by a tokenizer.
+    r"""
+    Delete time signatures of a MIDI outside those supported by a tokenizer.
 
     This is actually unused in our tokenization test pipeline, as removing the
     invalid time signature is already done in ``preprocess_midi``.
@@ -400,7 +406,8 @@ def adapt_tempo_changes_times(
     tempo_changes: list[Tempo],
     default_tempo: int,
 ) -> None:
-    r"""Align the times of tempo changes on those of reference notes.
+    r"""
+    Align the times of tempo changes on those of reference notes.
 
     This is needed to pass the tempo tests for Octuple as the tempos
     will be decoded only from the notes.
@@ -452,7 +459,8 @@ def clip_durations(
     notes_pedals: list[Note] | list[Pedal],
     max_durations: np.ndarray,
 ) -> None:
-    """Clip the duration of notes or pedals to a specific limit.
+    """
+    Clip the duration of notes or pedals to a specific limit.
 
     This method is applied in the tokenization tests to a preprocessed reference MIDI
     to make sure that the there are no note/pedal durations that exceed the limit, as

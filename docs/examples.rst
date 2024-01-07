@@ -37,10 +37,10 @@ Here we convert a MIDI to tokens, and the other way around.
 
 ..  code-block:: python
 
-    from miditoolkit import MidiFile
+    from symusic import Score
 
     # Tokenize a MIDI file
-    midi = MidiFile("path/to/your_midi.mid")
+    midi = Score("path/to/your_midi.mid")
     tokens = tokenizer(midi_path)  # automatically detects MidiFile, paths
 
     # Convert to MIDI and save it
