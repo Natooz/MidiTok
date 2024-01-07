@@ -1,7 +1,5 @@
 """Tests on the preprocessing steps of MIDI files, before tokenization."""
 
-"""Tests on the preprocessing steps of MIDI files, before tokenization."""
-
 from pathlib import Path
 
 import pytest
