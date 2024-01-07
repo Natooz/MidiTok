@@ -74,7 +74,7 @@ extend-select = [
     "BLE",
     "C4",
     "COM",
-    # "D",
+    "D",
     "E",
     "EM",
     "EXE",

@@ -73,10 +73,10 @@ class BPEIterator:
         """
         return self.load_file(self.files_paths[idx])
 
-    def __iter__(self) -> BPEIterator:
+    def __iter__(self) -> BPEIterator:  # noqa:D105
         return self
 
-    def __next__(self) -> list[str]:
+    def __next__(self) -> list[str]:  # noqa:D105
         if self.__iter_count >= len(self):
             self.__iter_count = 0
             raise StopIteration

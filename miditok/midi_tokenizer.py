@@ -240,10 +240,9 @@ class MIDITokenizer(ABC, HFHubMixin):
         self,
     ) -> dict[str, int] | list[dict[str, int]]:  # token (str) to its id (int)
         """
-        Get the base vocabulary, as a dictionary linking tokens (str) to their ids
-        (int). The different (hidden / protected) vocabulary attributes of the class
-        are:
+        Get the base vocabulary, as a dictionary mapping tokens (str) to their ids.
 
+        The different (hidden / protected) vocabulary attributes of the class are:
         * ``._vocab_base`` : Dict[str: int] token -> id - Registers all known base
             tokens.
         * ``.__vocab_base_inv`` : Dict[int: str] id -> token - Inverse of
@@ -272,7 +271,8 @@ class MIDITokenizer(ABC, HFHubMixin):
     @property
     def vocab_bpe(self) -> None | dict[str, int]:  # byte (str) to its id (int)
         r"""
-        Returns the vocabulary learnt with BPE.
+        Return the vocabulary learnt with BPE.
+
         In case the tokenizer has not been trained with BPE, it returns None.
 
         :return: the BPE model's vocabulary.
@@ -284,8 +284,7 @@ class MIDITokenizer(ABC, HFHubMixin):
     @property
     def special_tokens(self) -> list[str]:
         r"""
-        Returns the vocabulary learnt with BPE.
-        In case the tokenizer has not been trained with BPE, it returns None.
+        Return the special tokens in the vocabulary.
 
         :return: special tokens of the tokenizer
         """
@@ -294,16 +293,15 @@ class MIDITokenizer(ABC, HFHubMixin):
     @property
     def special_tokens_ids(self) -> Sequence[int]:
         r"""
-        Returns the vocabulary learnt with BPE.
-        In case the tokenizer has not been trained with BPE, it returns None.
+        Return the ids of the special tokens in the vocabulary.
 
-        :return: special tokens of the tokenizer
+        :return: ids of the special tokens of the tokenizer
         """
         return [self[token] for token in self.special_tokens]
 
     def _min_rest(self, ticks_per_beat: int) -> int:
         """
-        Returns the minimum rest value in ticks, for a given ``ticks_per_beat``.
+        Return the minimum rest value in ticks, for a given ``ticks_per_beat``.
 
         :param ticks_per_beat: number of ticks in a beat. This depends on the current
             time signature, and is equal to the MIDI's time division if the denominator
@@ -316,10 +314,12 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     def preprocess_midi(self, midi: Score) -> Score:
         r"""
-        Pre-process a MIDI file to resample its time and events values
-        before tokenizing it. Its notes attributes (times, pitches, velocities) will be
-        downsampled and sorted, duplicated notes removed, as well as tempos. Empty
-        tracks (with no note) will be removed from the MIDI object. Notes with pitches
+        Pre-process a MIDI file to resample its time and events values.
+
+        This method is called before parsing a MIDI's contents for tokenization.
+        Its notes attributes (times, pitches, velocities) will be downsampled and
+        sorted, duplicated notes removed, as well as tempos. Empty tracks (with no
+        note) will be removed from the MIDI object. Notes with pitches
         outside ``self.config.pitch_range`` will be deleted.
 
         :param midi: MIDI object to preprocess.
@@ -388,7 +388,8 @@ class MIDITokenizer(ABC, HFHubMixin):
         self, notes: NoteTickList, ticks_per_beat: np.ndarray = None
     ) -> None:
         r"""
-        Resamples the note velocities, remove notes outside of pitch range.
+        Resample the note velocities, remove notes outside of pitch range.
+
         Note durations will be clipped to the maximum duration that can be handled by
         the tokenizer. This is done to prevent having incorrect offset values when
         computing rests. Notes with pitches outside of self.pitch_range will be
@@ -443,7 +444,8 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     def _preprocess_tempos(self, tempos: TempoTickList) -> None:
         r"""
-        Resamples the tempo values of tempo change events.
+        Resample the tempo values of tempo change events.
+
         For tempo changes occurring at the same tick/time, we only keep the last one.
         Consecutive identical tempo changes will be removed if
         ``self.config.delete_equal_successive_tempo_changes`` is True.
@@ -577,9 +579,10 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     def _preprocess_pitch_bends(self, pitch_bends: PitchBendTickList) -> None:
         r"""
-        Resamples the pitch bend events from a track.
-        Overlapping pitch bends will be deduplicated by keeping the one
-        having the highest absolute value at a given tick.
+        Resample the pitch bend events from a track.
+
+        Overlapping pitch bends will be deduplicated by keeping the one having the
+        highest absolute value at a given tick.
 
         :param pitch_bends: pitch bend events.
         """
@@ -658,9 +661,11 @@ class MIDITokenizer(ABC, HFHubMixin):
         self, notes_pedals: NoteTickList | PedalTickList, ticks_per_beat: np.ndarray
     ) -> None:
         """
-        Adjust the durations of notes or pedals, to the closest ones of those in the
-        tokenizer's vocabulary. The new durations are calculated depending on the time
-        signature, i.e. number of ticks in a beat.
+        Adjust the durations of notes or pedals.
+
+        The durations of notes or pedals will be set to the closest ones of those in
+        the tokenizer's vocabulary. The new durations are calculated depending on the
+        time signature, i.e. number of ticks in a beat.
 
         :param notes_pedals: list of notes or pedals to process.
         :param ticks_per_beat: array indicating the number of ticks per beat per
@@ -777,6 +782,8 @@ class MIDITokenizer(ABC, HFHubMixin):
     @staticmethod
     def _order(event: Event) -> int:
         """
+        Return the order number of an ``Event``.
+
         Internal method used to sort events (tokens) depending on their type or
         context of appearance. This is required, especially for multitrack
         one-token-stream situations where there can be several tokens appearing at
@@ -1039,7 +1046,7 @@ class MIDITokenizer(ABC, HFHubMixin):
     @staticmethod
     def _insert_program_change_events(events: list[Event]) -> None:
         """
-        Adds inplace Program tokens acting as Program Changes to a list of Events.
+        Add inplace *Program* tokens acting as Program Changes to a list of ``Event``s.
 
         :param events: Events to add Programs
         """
@@ -1113,19 +1120,20 @@ class MIDITokenizer(ABC, HFHubMixin):
     def midi_to_tokens(
         self,
         midi: Score,
-        apply_bpe_if_possible: bool = True,
+        apply_bpe: bool = True,
     ) -> TokSequence | list[TokSequence]:
         r"""
-        Tokenizes a MIDI file.
-        This method returns a list of :class:`miditok.TokSequence`.
+        Tokenize a MIDI file.
+
+        This method returns a (list of) :class:`miditok.TokSequence`.
 
         If you are implementing your own tokenization by subclassing this class,
         **override the ``_midi_to_tokens`` method**. This method implement necessary
         MIDI preprocessing.
 
         :param midi: the MIDI object to convert.
-        :param apply_bpe_if_possible: will apply BPE if the tokenizer's vocabulary was
-            learned with.
+        :param apply_bpe: will apply BPE if the tokenizer's vocabulary was trained
+            with. (default: ``True``)
         :return: a :class:`miditok.TokSequence` if ``tokenizer.one_token_stream`` is
             ``True``, else a list of :class:`miditok.TokSequence` objects.
         """
@@ -1134,19 +1142,20 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         # Tokenize it
         tokens = self._midi_to_tokens(midi)
-        if apply_bpe_if_possible and self.has_bpe:
+        if apply_bpe and self.has_bpe:
             self.apply_bpe(tokens)
 
         return tokens
 
     def complete_sequence(self, seq: TokSequence) -> None:
         r"""
-        Completes (inplace) a :class:`miditok.TokSequence` object by converting its
-        attributes. The input sequence can miss some of its attributes (ids, tokens),
-        but needs at least one for reference. This method will create the missing ones
-        from the present ones. The ``bytes`` attribute will be created if the tokenizer
-        has been trained with BPE. The ``events`` attribute will not be filled as it is
-        only intended for debug purpose.
+        Complete (inplace) a :class:`miditok.TokSequence`.
+
+        The input sequence can have some of its attributes (``ids``, ``tokens``) not
+        initialized (i.e. ``None``). This method will initialize them from the present
+        ones. The ``bytes`` attribute will be created if the tokenizer has been trained
+        with BPE. The ``events`` attribute will not be filled as it is only intended
+        for debug purpose.
 
         :param seq: input :class:`miditok.TokSequence`, must have at least one
             attribute defined.
@@ -1168,7 +1177,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         self, tokens: Sequence[str | list[str]]
     ) -> list[int | list[int]]:
         r"""
-        Converts a list of tokens (str) into their associated ids (int).
+        Convert a list of tokens (str) into their ids format (int).
 
         :param tokens: list of tokens (str) to convert.
         :return: list of corresponding ids (int).
@@ -1187,7 +1196,8 @@ class MIDITokenizer(ABC, HFHubMixin):
         self, ids: list[int | list[int]], as_str: bool = True
     ) -> list[str | Event | list[str | Event]]:
         r"""
-        Converts a sequence of ids (int) to their associated tokens (str or Event).
+        Convert a sequence of ids (int) to their tokens format (str or Event).
+
         **This method will not work with ids encoded with BPE. You will need to decode
         them first (:py:meth:`miditok.MIDITokenizer.decode_bpe`)**.
 
@@ -1222,7 +1232,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         events: list[Event | list[Event]],
     ) -> list[str | list[str]]:
         r"""
-        Converts a sequence of Events to their associated tokens (str).
+        Convert a sequence of ``Events`` to their tokens format (str).
 
         :param events: sequence of Events to convert.
         :return: the sequence of corresponding tokens (str).
@@ -1240,14 +1250,15 @@ class MIDITokenizer(ABC, HFHubMixin):
         self, ids: list[int | list[int]], as_one_str: bool = False
     ) -> str | list[str]:
         r"""
-        Converts a list of ids into their associated bytes.
+        Convert a list of ids into their bytes format.
+
         It can be returned either as a list of bytes or as a unique string of bytes.
         **This method will not work with ids encoded with BPE. You will need to decode
         them first (:py:meth:`miditok.MIDITokenizer.decode_bpe`)**.
 
         :param ids: token ids (int) to convert.
         :param as_one_str: will return the bytes all concatenated into one string.
-            (default: False)
+            (default: ``False``)
         :return: the tokens converted into strings of unique bytes.
         """
         if len(ids) == 0:
@@ -1261,11 +1272,11 @@ class MIDITokenizer(ABC, HFHubMixin):
         self, bytes_: str | list[str], as_str: bool = True
     ) -> list[str | Event | list[str | Event]]:
         r"""
-        Converts a sequence of bytes into their associated tokens (str or Event).
+        Convert a sequence of bytes into their associated tokens (str or ``Event``).
 
         :param bytes_: sequence of bytes to convert.
-        :param as_str: return the events as string objects, otherwise Event objects
-            (default: True)
+        :param as_str: return the events as string objects, otherwise ``Event`` objects
+            (default: ``True``)
         :return: the sequence of corresponding tokens (str).
         """
         if len(bytes_) == 0:
@@ -1286,9 +1297,10 @@ class MIDITokenizer(ABC, HFHubMixin):
         decode_bpe: bool = False,
     ) -> TokSequence | list[TokSequence]:
         r"""
-        Converts a sequence into a :class:`miditok.TokSequence` or list of
-        :class:`miditok.TokSequence` objects with the appropriate format of the
-        tokenizer being used.
+        Convert a sequence of tokens/ids into a (list of) :class:`miditok.TokSequence`.
+
+        The method automatically format the sequence following the tokenizer's i/o
+        format.
 
         :param input_seq: sequence to convert. It can be a list of ids (integers),
             tokens (string) or events (Event). It can also be a Pytorch or TensorFlow
@@ -1366,12 +1378,13 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     def _are_ids_bpe_encoded(self, ids: list[int] | np.ndarray) -> bool:
         r"""
-        A small check telling if a sequence of ids are encoded with BPE.
+        Tells if a sequence of token ids are encoded with BPE.
+
         This is performed by checking if any id has a value superior or equal to the
         length of the base vocabulary.
 
         :param ids: ids to check.
-        :return: boolean, True if ids are encoded with BPE, False otherwise.
+        :return: boolean, ``True`` if ids are encoded with BPE, ``False`` otherwise.
         """
         return np.any(np.array(ids) >= len(self))
 
@@ -1383,8 +1396,9 @@ class MIDITokenizer(ABC, HFHubMixin):
     ) -> Score:
         r"""
         Detokenize one or multiple sequences of tokens into a MIDI file.
+
         You can give the tokens sequences either as :class:`miditok.TokSequence`
-        objects, lists of integers, numpy arrays or PyTorch / Tensorflow tensors.
+        objects, lists of integers, numpy arrays or PyTorch/Jax/Tensorflow tensors.
         The MIDI's time division will be the same as the tokenizer's:
         ``tokenizer.time_division``.
 
@@ -1394,7 +1408,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             represents tracks, unless the tokenizer handle tracks altogether as a
             single token sequence (``tokenizer.one_token_stream == True``).
         :param programs: programs of the tracks. If none is given, will default to
-            piano, program 0. (default: None)
+            piano, program 0. (default: ``None``)
         :param output_path: path to save the file. (default: ``None``)
         :return: the midi object (``symusic.Score``).
         """
@@ -1458,9 +1472,10 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     def __create_vocabulary(self) -> None:
         r"""
-        Method actually creating the vocabulary object, as Dictionary, from the
-        ``_create_vocabulary`` method implemented by tokenization classes.
-        This method is called at ``__init__``\.
+        Create the vocabulary of the tokenizer as a dictionary.
+
+        This method is called during the tokenizer's initialization, and requires
+        ``_create_vocabulary`` to be implemented by a child class.
         """
         vocab = self._create_base_vocabulary()
 
@@ -1524,7 +1539,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             vocab += [f"PitchBend_{pitch_bend}" for pitch_bend in self.pitch_bends]
 
     def _update_token_types_indexes(self) -> None:
-        r"""Updates the _token_types_indexes attribute according to _event_to_token."""
+        r"""Update the _token_types_indexes attribute according to _event_to_token."""
 
         def create_for_dict(voc: dict[str, int]) -> dict[str, list[int]]:
             types_ = {}
@@ -1547,11 +1562,11 @@ class MIDITokenizer(ABC, HFHubMixin):
         self, token_type: str, vocab_id: int | None = None
     ) -> list[int]:
         r"""
-        Returns the list of token ids of the given type.
+        Return the list of token ids of the given type.
 
         :param token_type: token type to get the associated token ids.
         :param vocab_id: index of the vocabulary associated to the token, if applicable.
-            (default: None)
+            (default: ``None``)
         :return: list of token ids.
         """
         try:
@@ -1571,18 +1586,17 @@ class MIDITokenizer(ABC, HFHubMixin):
         add_to_bpe_model: bool = False,
     ) -> None:
         r"""
-        Adds an event to the vocabulary. Its index (int) will be the length of the
-        vocab.
+        Add an event to the vocabulary. Its id will be the length of the vocab.
 
         :param token: token to add, as a formatted string of the form "Type_Value",
             e.g. Pitch_80, or an Event.
         :param vocab_idx: idx of the vocabulary (in case of embedding pooling).
-            (default: None)
+            (default: ``None``)
         :param byte_: unique byte associated to the token. This is used when building
             the vocabulary with fast BPE. If None is given, it will default to
-            ``chr(id_ + CHR_ID_START)`` . (default: None)
+            ``chr(id_ + CHR_ID_START)`` . (default: ``None``)
         :param add_to_bpe_model: the token will be added to the bpe_model vocabulary
-            too. (default: None)
+            too. (default: ``None``)
         """
         token_str = token if isinstance(token, str) else str(token)
 
@@ -1608,9 +1622,9 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     def _create_chords_tokens(self) -> list[str]:
         """
-        Just create the *Chord* tokens that will populate the base vocabulary. This
-        protected method is intended to be used by subclasses when creating their
-        vocabularies.
+        Create the *Chord* tokens that will populate the base vocabulary.
+
+        This protected method is intended to be used when creating the vocabulary.
 
         :return: chord tokens, created from the tokenizer's params
         """
@@ -1641,11 +1655,11 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     def token_id_type(self, id_: int, vocab_id: int | None = None) -> str:
         r"""
-        Returns the type of the given token id.
+        Return the type of the given token id.
 
         :param id_: token id to get the type.
         :param vocab_id: index of the vocabulary associated to the token, if
-            applicable. (default: None)
+            applicable. (default: ``None``)
         :return: the type of the token, as a string
         """
         token = self.__get_from_voc(id_, vocab_id)
@@ -1688,11 +1702,13 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     def __create_durations_tuples(self) -> list[tuple[int, int, int]]:
         r"""
-        Creates the possible durations in beat / position units, as tuple of the
-        form: (beat, pos, res) where beat is the number of beats, pos the number of
-        "samples" and res the beat resolution considered (samples per beat).
-        Example: (2, 5, 8) means the duration is 2 beat long + position 5 / 8 of the
-        ongoing beat. This would give in ticks:
+        Create the possible durations in beat / position units as tuples of intergers.
+
+        The tuples follow the form: ``(beat, pos, res)`` where ``beat`` is the number
+        of beats, ``pos`` the number of "positions" and ``res`` the beat resolution
+        considered (positions per beat).
+        Example: ``(2, 5, 8)`` means the duration is 2 beat long + position 5 / 8 of
+        the ongoing beat. This would give in ticks:
         ``duration = (beat * res + pos) * ticks_per_beat // res``
         Note that ``ticks_per_beat`` is different from the time division, as the number
         of ticks per beat depends on the current time signature denominator.
@@ -1721,8 +1737,10 @@ class MIDITokenizer(ABC, HFHubMixin):
     @property
     def __tpb_set(self) -> set[int]:
         """
-        Return the set of the possible ticks per beat resolution covered by the
-        time signatures of the tokenizer.
+        Return the set of the possible ticks per beat values.
+
+        The set of possible values depends on the tokenizer's time division and
+        the time signatures it supports.
 
         :return: set of ticks per beat.
         """
@@ -1733,8 +1751,11 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     def __create_tpb_to_ticks_array(self, rest: bool = False) -> dict[int, np.ndarray]:
         r"""
-        Create arrays of the time values in ticks of the time tokens of the
-        tokenizer, depending on the ticks per beat (time signature).
+        Create arrays of the times in ticks of the time tokens of the vocabulary.
+
+        These time values following the ticks/beat value, which depends on the time
+        signature.
+
         The arrays are used during tokenization to efficiently find the closest values.
 
         :param rest: will use rest values if given ``True``, otherwise durations.
@@ -1755,9 +1776,10 @@ class MIDITokenizer(ABC, HFHubMixin):
         self, rest: bool = False
     ) -> dict[int, dict[int, str]]:
         r"""
-        Create the correspondences between duration in tick and token value (str
-        in beats and samples) for the "ticks per beat" resolutions covered by the
-        tokenizer.
+        Create the correspondences between times in tick and token value (str).
+
+        These correspondences vary following the ticks/beat value, which depends on the
+        time signature.
 
         The returned dictionary is used when decoding *Duration*/*TimeShift*/*Rest*
         tokens while taking the time signature into account.
@@ -1779,9 +1801,10 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     def __create_tpb_ticks_to_tokens(self) -> dict[int, dict[int, str]]:
         r"""
-        Create the correspondences between duration in tick and token value (str
-        in beats and samples) for the "ticks per beat" resolutions covered by the
-        tokenizer.
+        Create the correspondences between times in tick and token value (str).
+
+        These correspondences vary following the ticks/beat value, which depends on the
+        time signature.
 
         The returned dictionary is used during tokenization to get the values of
         *Duration*/*TimeShift*/*Rest* tokens while taking the time signature into
@@ -1799,9 +1822,10 @@ class MIDITokenizer(ABC, HFHubMixin):
         token_duration: str | tuple[int, int, int], ticks_per_beat: int
     ) -> int:
         r"""
-        Convert a time token value of the form x.x.x, for
-        beat.position.resolution, in ticks. This method is used to decode time tokens
-        such as *Duration*, *TimeShift* or *Rest*.
+        Convert a time token value of the form beat.position.resolution, in ticks.
+
+        This method is used to decode time tokens such as *Duration*, *TimeShift* or
+        *Rest*.
 
         :param token_duration: Duration / TimeShift token value.
         :param ticks_per_beat: number of ticks in a beat. This depends on the current
@@ -1824,8 +1848,10 @@ class MIDITokenizer(ABC, HFHubMixin):
     ) -> tuple[list[tuple[int, int, int]], list[int]]:
         r"""
         Convert a duration in ticks into a sequence of *TimeShift*/*Rest* values.
+
         This method is not used for *Duration* tokens, as their values are rounded to
-        the closest values in.
+        the closest values in. It is however used to create successions of time values
+        for *TimeShift* and *Rest* tokens.
 
         :param duration: duration in tick to convert.
         :param ticks_per_beat: number of ticks in a beat. This depends on the current
@@ -1856,10 +1882,12 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     def __create_rests(self) -> list[tuple[int, int, int]]:
         r"""
-        Create the possible rests in beat / position units, as tuple of the form:
-        (beat, pos, res) where beat is the number of beats, pos the number of "samples"
-        and res the beat resolution considered (samples per beat).
-        It follows the same data representation than duration and time shifts.
+        Create the rests of the vocabulary as tuples of integers.
+
+        The tuples have the form ``(beat, pos, res)`` where ``beat`` is the number
+        of beats, ``pos`` the number of "positions" and ``res`` the beat resolution
+        considered (positions per beat).
+        It follows the same data representation than for duration and time shifts.
 
         :return: the rests.
         """
@@ -1882,7 +1910,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     def __create_tempos(self) -> np.ndarray:
         r"""
-        Create the possible tempos, as a float number array.
+        Create the tempos of the vocabulary as a float number array.
 
         The ``self.config.num_tempos`` tempos are distributed in the
         ``self.config.tempo_range`` using either log or linear scaled values based
@@ -1895,9 +1923,12 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     def __create_time_signatures(self) -> list[tuple]:
         r"""
-        Creates the possible time signatures, as tuples of the form:
-        ``(num_beats, beat_res)`` where ``num_beats`` is the number of beats per bar.
-        Example: (3, 4) means one bar is 3 beat long and each beat is a quarter note.
+        Create time signatures of the vocabulary, as tuples of integers.
+
+        The tuples have the form ``(num_beats, beat_res)`` where ``num_beats`` is the
+        number of beats per bar.
+        Example: ``(3, 4)`` means one bar is 3 beat long and each beat is a quarter
+        note.
 
         :return: the time signatures.
         """
@@ -1918,8 +1949,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     def __create_pitch_bends(self) -> np.ndarray:
         r"""
-        Creates the pitch bend values, as numpy array, using
-        ``self.config.pitch_bend_range``.
+        Create the pitch bend values of the vocabulary as numpy array.
 
         :return: the pitch bend values.
         """
@@ -1928,9 +1958,7 @@ class MIDITokenizer(ABC, HFHubMixin):
     @staticmethod
     def _parse_token_time_signature(token_time_sig: str) -> tuple[int, int]:
         r"""
-        Converts a time signature token value of the form x/x into a tuple of
-        integers, time signature's numerator (bar length in beats) and denominator
-        (beat resolution).
+        Convert a time signature token value of the form x/x into a tuple of integers.
 
         :param token_time_sig: TimeSig token value.
         :return: the numerator and denominator of a time signature.
@@ -1940,7 +1968,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     def has_midi_time_signatures_not_in_vocab(self, midi: Score) -> bool:
         r"""
-        Checks if a MIDI contains only time signatures supported by the tokenizer.
+        Check if a MIDI contains time signatures not supported by the tokenizer.
 
         :param midi: MIDI file
         :return: boolean indicating whether the MIDI can be processed by the tokenizer.
@@ -1951,8 +1979,8 @@ class MIDITokenizer(ABC, HFHubMixin):
                     time_sig.numerator,
                     time_sig.denominator,
                 ) not in self.time_signatures:
-                    return False
-        return True
+                    return True
+        return False
 
     def learn_bpe(
         self,
@@ -1963,10 +1991,11 @@ class MIDITokenizer(ABC, HFHubMixin):
         **kwargs,
     ) -> None:
         r"""
-        Method to construct the vocabulary from BPE, backed by the 🤗tokenizers
-        library. The data used for training can either be given through the
-        ``iterator`` argument as an iterable object yielding strings, or by
-        ``tokens_paths`` as a list of paths to token json files that will be loaded.
+        Construct the vocabulary from BPE backed by the 🤗tokenizers library.
+
+        The data used for training can either be given through the ``iterator``
+        argument as an iterable object yielding strings, or by ``files_paths`` as a
+        list of paths to MIDI files that will be tokenized.
         You can read the Hugging Face `🤗tokenizers documentation
         <https://huggingface.co/docs/tokenizers/training_from_memory>`_,
         `🤗tokenizers API documentation <https://huggingface.co/docs/tokenizers/python/v0.9.4/api/reference.html#>`_
@@ -2096,7 +2125,8 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     def apply_bpe(self, seq: TokSequence | list[TokSequence]) -> None:
         """
-        Applies Byte Pair Encoding (BPE) to a TokSequence, or list of TokSequences.
+        Apply Byte Pair Encoding (BPE) to a TokSequence, or list of TokSequences.
+
         If a list is given, BPE will be applied by batch on all sequences at the time.
 
         :param seq: Sequence(s) to apply BPE.
@@ -2119,11 +2149,11 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     def decode_bpe(self, seq: TokSequence | list[TokSequence]) -> None:
         r"""
-        Decodes (inplace) a sequence of tokens (:class:`miditok.TokSequence`) with
-        ids encoded with BPE. This method only modifies the ``.ids`` attribute of the
-        input sequence(s) only and does not complete it. This method can also receive a
-        list of sequences, in which case it will decompose BPE on each of them
-        recursively.
+        Decode (inplace) the BPE of the ids of a :class:`miditok.TokSequence`.
+
+        This method only modifies the ``.ids`` attribute of the input sequence(s) only
+        and does not complete it. This method can be used recursively on lists of
+        :class:`miditok.TokSequence`.
 
         :param seq: token sequence to decompose.
         """
@@ -2152,14 +2182,15 @@ class MIDITokenizer(ABC, HFHubMixin):
         verbose: bool = True,
     ) -> None:
         r"""
-        Converts a dataset / list of MIDI files, into their token version and save
-        them as json files. The resulting json files will have an ``ids`` entry
-        containing the token ids. The format of the ids will correspond to the format
-        of the tokenizer (``tokenizer.io_format``). Note that the file tree of the
-        source files, up to the deepest common root directory if `midi_paths` is given
-        as a list of paths, will be reproducing in ``out_dir``. The config of the
-        tokenizer will be saved as a file named ``tokenizer_config_file_name``
-        (default: ``tokenizer.json``) in the ``out_dir`` directory.
+        Tokenize a dataset or list of MIDI files and save them in Json files.
+
+        The resulting json files will have an ``ids`` entry containing the token ids.
+        The format of the ids will correspond to the format of the tokenizer
+        (``tokenizer.io_format``). Note that the file tree of the source files, up to
+        the deepest common root directory if `midi_paths` is given as a list of paths,
+        will be reproducing in ``out_dir``. The config of the tokenizer will be saved
+        as a file named ``tokenizer_config_file_name`` (default: ``tokenizer.json``)
+        in the ``out_dir`` directory.
 
         :param midi_paths: paths of the MIDI files. It can also be a path to a
             directory, in which case this method will recursively find the MIDI files
@@ -2258,7 +2289,9 @@ class MIDITokenizer(ABC, HFHubMixin):
         tokens: TokSequence | list[TokSequence] | list[int | list[int]] | np.ndarray,
     ) -> float | list[float]:
         r"""
-        Checks if a sequence of tokens is made of good token types successions and
+        Return the ratio of errors of prediction in a sequence of tokens.
+
+        Check if a sequence of tokens is made of good token types successions and
         returns the error ratio (lower is better).
 
         :param tokens: sequence of tokens to check.
@@ -2385,9 +2418,10 @@ class MIDITokenizer(ABC, HFHubMixin):
         **kwargs,
     ) -> None:
         r"""
-        Saves tokens as a JSON file.
-        In order to reduce disk space usage, **only the ids are saved**. Use kwargs to
-        save any additional information within the JSON file.
+        Save tokens as a JSON file.
+
+        In order to reduce disk space usage, **only the ids are saved**. Use ``kwargs``
+        to save any additional information within the JSON file.
 
         :param tokens: tokens, as list, numpy array, torch or tensorflow Tensor.
         :param path: path of the file to save.
@@ -2425,7 +2459,7 @@ class MIDITokenizer(ABC, HFHubMixin):
     @staticmethod
     def load_tokens(path: str | Path) -> dict[str, list[int]]:
         r"""
-        Loads tokens saved as JSON files.
+        Load tokens saved as JSON files.
 
         :param path: path of the file to load.
         :return: the tokens, with the associated information saved with.
@@ -2444,18 +2478,17 @@ class MIDITokenizer(ABC, HFHubMixin):
         filename: str | None = DEFAULT_TOKENIZER_FILE_NAME,
     ) -> None:
         r"""
-        Saves the config / parameters of the tokenizer in a json encoded file. This
-        can be useful to keep track of how a dataset has been tokenized.
-        **Note:** if you override this method, you should probably call it (super()) at
-        the end and use the additional_attributes argument.
+        Save tokenizer in a Json file.
+
+        This can be useful to keep track of how a dataset has been tokenized.
 
         :param out_path: output path to save the file. This can be either a path to a
             file (with a name and extension), or a path to a directory in which case
             the ``filename`` argument will be used.
         :param additional_attributes: any additional information to store in the config
             file. It can be used to override the default attributes saved in the parent
-            method. (default: None)
-        :param filename: name of the file to save, to be used in case `out_path` leads
+            method. (default: ``None``)
+        :param filename: name of the file to save, to be used in case ``out_path`` leads
             to a directory. (default: ``"tokenizer.json"``)
         """
         if additional_attributes is None:
@@ -2531,8 +2564,10 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     def _load_params(self, config_file_path: str | Path) -> None:
         r"""
-        Loads the parameters of the tokenizer from a config file. This method is
-        not intended to be called outside __init__, when creating a tokenizer.
+        Load the parameters of the tokenizer from a config file.
+
+        This method is not intended to be called outside __init__, when creating a
+        tokenizer.
 
         :param config_file_path: path to the tokenizer config file (encoded as json).
         """
@@ -2614,15 +2649,22 @@ class MIDITokenizer(ABC, HFHubMixin):
     @property
     def is_multi_voc(self) -> bool:
         """
-        Returns a bool indicating if the tokenizer uses embedding
-        pooling, and so have multiple vocabularies.
+        Indicate if the tokenizer uses embedding pooling / have multiple vocabularies.
 
-        :return: True is the tokenizer uses embedding pooling else False.
+        :return: ``True`` is the tokenizer uses embedding pooling else ``False``.
         """
         return isinstance(self._vocab_base, list)
 
     @property
     def io_format(self) -> tuple[str]:
+        """
+        Return the i/o format of the tokenizer.
+
+        :return: i/o format of the tokenizer, as a tuple of strings which represent:
+            * I: track or instrument;
+            * T: token, or time step;
+            * C: class of token, when using embedding pooling.
+        """
         format_ = []
         if not self.one_token_stream:
             format_.append("I")
@@ -2639,11 +2681,13 @@ class MIDITokenizer(ABC, HFHubMixin):
         **kwargs,
     ) -> TokSequence | list[TokSequence] | Score:
         r"""
-        Calling a tokenizer allows to directly convert a MIDI to tokens or the
-        other way around. The method automatically detects MIDI and token objects, as
-        well as paths and can directly load MIDI or token json files before converting
-        them. This will call the :py:func:`miditok.MIDITokenizer.midi_to_tokens` if you
-        provide a MIDI object or path to a MIDI file, or the
+        Tokenize a MIDI file, or decode tokens into a MIDI.
+
+        Calling a tokenizer allows to directly convert a MIDI to tokens or vice-versa.
+        The method automatically detects MIDI and token objects, as well as paths and
+        can directly load MIDI or token json files before converting them. This will
+        call the :py:func:`miditok.MIDITokenizer.midi_to_tokens` if you provide a MIDI
+        object or path to a MIDI file, or the
         :py:func:`miditok.MIDITokenizer.tokens_to_midi` method otherwise.
 
         :param obj: a `symusic.Score` object, a sequence of tokens, or a path to
@@ -2679,13 +2723,14 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     def __len__(self) -> int:
         r"""
-        Returns the length of the vocabulary. If the tokenizer uses embedding
-        pooling/have multiple vocabularies, it will return the **sum** of their
-        lengths. If the vocabulary was learned with fast BPE, it will return the
-        length of the BPE vocabulary, i.e. the proper number of possible token ids.
-        Otherwise, it will return the length of the base vocabulary. Use the
-        :py:func:`miditok.MIDITokenizer.len` property (``tokenizer.len``) to have the
-        list of lengths.
+        Return the length of the vocabulary.
+
+        If the tokenizer uses embedding pooling/have multiple vocabularies, it will
+        return the **sum** of their lengths. If the vocabulary was learned with fast
+        BPE, it will return the length of the BPE vocabulary, i.e. the proper number of
+        possible token ids. Otherwise, it will return the length of the base
+        vocabulary. Use the :py:func:`miditok.MIDITokenizer.len` property
+        (``tokenizer.len``) to get the list of lengths.
 
         :return: length of the vocabulary.
         """
@@ -2698,9 +2743,11 @@ class MIDITokenizer(ABC, HFHubMixin):
     @property
     def len(self) -> int | list[int]:  # noqa: A003
         r"""
-        Returns the length of the vocabulary. If the tokenizer uses embedding
-        pooling/have multiple vocabularies, it will return the **list** of their
-        lengths. Use the :py:func:`miditok.MIDITokenizer.__len__` magic method
+        Return the length of the vocabulary.
+
+        If the tokenizer uses embedding pooling/have multiple vocabularies, it will
+        return the **list** of their lengths. Use the
+        :py:func:`miditok.MIDITokenizer.__len__` magic method
         (``len(tokenizer)``) to get the sum of the lengths.
 
         :return: length of the vocabulary.
@@ -2708,6 +2755,11 @@ class MIDITokenizer(ABC, HFHubMixin):
         return [len(v) for v in self.vocab] if self.is_multi_voc else len(self)
 
     def __repr__(self) -> str:
+        """
+        Return the representation of the tokenizer, indicating its vocab size and i/o.
+
+        :return: representation of the tokenizer.
+        """
         out_str = f"{self.len} tokens with {self.io_format} io format"
 
         # one_token_stream / multi-voc
@@ -2758,8 +2810,9 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     def __get_from_voc(self, item: int | str, vocab_id: int | None = None) -> int | str:
         r"""
-        Get element from the vocabulary.
-        The method handles both token (int) <--> event (str) ways.
+        Get an element from the vocabulary.
+
+        The method handles both id (int) <--> token (str) ways.
 
         :param item: item to get / index.
         :param vocab_id: index of the vocabulary associated to the token, if
@@ -2778,8 +2831,9 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     def __eq__(self, other: MIDITokenizer) -> bool:
         r"""
-        Checks if two tokenizers are identical. This is done by comparing their
-        vocabularies, and configuration.
+        Check that two tokenizers are identical.
+
+        This is done by comparing their vocabularies, and configuration.
 
         :param other: tokenizer to compare.
         :return: True if the vocabulary(ies) are identical, False otherwise.
