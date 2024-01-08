@@ -80,7 +80,7 @@ def test_bpe_conversion(
     for file_path in tqdm(
         midi_paths, desc=f"Checking BPE tok / detok ({tokenization})"
     ):
-        tokens = tokenizer(file_path, apply_bpe_if_possible=False)
+        tokens = tokenizer(file_path, apply_bpe=False)
         if not tokenizer.one_token_stream:
             tokens = tokens[0]
         to_tok = tokenizer._bytes_to_tokens(tokens.bytes)
@@ -110,7 +110,7 @@ def test_bpe_conversion(
     tok_time = 0
     for i, file_path in enumerate(tqdm(midi_paths, desc="Testing BPE unbatched")):
         midi = Score(file_path)
-        tokens_no_bpe = tokenizer(copy(midi), apply_bpe_if_possible=False)
+        tokens_no_bpe = tokenizer(copy(midi), apply_bpe=False)
         if not tokenizer.one_token_stream:
             tokens_no_bpe = tokens_no_bpe[0]
         tokens_bpe = deepcopy(tokens_no_bpe)  # with BPE
@@ -145,7 +145,7 @@ def test_bpe_conversion(
     for file_path in tqdm(midi_paths, desc="Testing BPE batched"):
         # Reads the midi
         midi = Score(file_path)
-        tokens_no_bpe = tokenizer(midi, apply_bpe_if_possible=False)
+        tokens_no_bpe = tokenizer(midi, apply_bpe=False)
         if not tokenizer.one_token_stream:
             samples_no_bpe.append(tokens_no_bpe[0])
         else:
