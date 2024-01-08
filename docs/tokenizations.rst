@@ -16,7 +16,6 @@ REMI
   :alt: REMI sequence, time is tracked with Bar and position tokens
 
 .. autoclass:: miditok.REMI
-    :noindex:
     :show-inheritance:
 
 REMIPlus
@@ -34,7 +33,6 @@ MIDI-Like
   :alt: MIDI-Like token sequence, with TimeShift and NoteOff tokens
 
 .. autoclass:: miditok.MIDILike
-    :noindex:
     :show-inheritance:
 
 TSD
@@ -45,7 +43,6 @@ TSD
   :alt: TSD sequence, like MIDI-Like with Duration tokens
 
 .. autoclass:: miditok.TSD
-    :noindex:
     :show-inheritance:
 
 Structured
@@ -56,7 +53,6 @@ Structured
   :alt: Structured tokenization, the token types always follow the same succession pattern
 
 .. autoclass:: miditok.Structured
-    :noindex:
     :show-inheritance:
 
 CPWord
@@ -67,7 +63,6 @@ CPWord
   :alt: CP Word sequence, tokens of the same family are grouped together
 
 .. autoclass:: miditok.CPWord
-    :noindex:
     :show-inheritance:
 
 Octuple
@@ -78,7 +73,6 @@ Octuple
   :alt: Octuple sequence, with a bar and position embeddings
 
 .. autoclass:: miditok.Octuple
-    :noindex:
     :show-inheritance:
 
 MuMIDI
@@ -89,14 +83,12 @@ MuMIDI
   :alt: MuMIDI sequence, with a bar and position embeddings
 
 .. autoclass:: miditok.MuMIDI
-    :noindex:
     :show-inheritance:
 
 MMM
 ------------------------
 
 .. autoclass:: miditok.MMM
-    :noindex:
     :show-inheritance:
 
 

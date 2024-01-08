@@ -172,11 +172,11 @@ class DatasetTok(_DatasetABC):
     comprise between ``min_seq_len`` and ``max_seq_len``.
     For example, with ``min_seq_len = 50`` and ``max_seq_len = 100``:
     * a sequence of 650 tokens will be split into 6 subsequences of 100 tokens plus one
-        subsequence of 50 tokens;
+    subsequence of 50 tokens;
     * a sequence of 620 tokens will be split into 6 subsequences of 100 tokens, the
-        last 20 tokens will be discarded;
+    last 20 tokens will be discarded;
     * a sequence of 670 tokens will be split into 6 subsequences of 100 tokens plus one
-        subsequence of 50 tokens, and the last 20 tokens will be discarded.
+    subsequence of 50 tokens, and the last 20 tokens will be discarded.
 
     This `Dataset` class is well suited if you have enough RAM to store all the data,
     as it does not require you to prior split the dataset into subsequences of the

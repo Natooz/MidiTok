@@ -99,13 +99,12 @@ class TokSequence:
     Sequence of token.
 
     A ``TokSequence`` can represent tokens by their several forms:
-
-    * tokens (list of str): tokens as sequence of strings.
-    * ids (list of int), these are the one to be fed to models.
+    * tokens (list of str): tokens as sequence of strings;
+    * ids (list of int), these are the one to be fed to models;
     * events (list of Event): Event objects that can carry time or other information
-        useful for debugging.
+    useful for debugging;
     * bytes (str): ids are converted into unique bytes, all joined together in a single
-        string.
+    string. This is used by MidiTok internally for BPE.
 
     Bytes are used internally by MidiTok for Byte Pair Encoding.
     The ``ids_are_bpe_encoded`` attribute tells if ``ids`` is encoded with BPE.
@@ -353,10 +352,10 @@ class TokenizerConfig:
         ``one_token_stream`` mode, a ``Program`` token at the beginning of each track
         token sequence. (default: ``False``)
     :param max_pitch_interval: sets the maximum pitch interval that can be represented.
-        (default: 16)
+        (default: ``16``)
     :param pitch_intervals_max_time_dist: sets the default maximum time interval in
         beats between two consecutive notes to be represented with pitch intervals.
-        (default: 1)
+        (default: ``1``)
     :param kwargs: additional parameters that will be saved in
         ``config.additional_params``.
     """

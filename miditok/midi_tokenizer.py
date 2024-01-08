@@ -244,17 +244,17 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         The different (hidden / protected) vocabulary attributes of the class are:
         * ``._vocab_base`` : Dict[str: int] token -> id - Registers all known base
-            tokens.
+        tokens;
         * ``.__vocab_base_inv`` : Dict[int: str] id -> token - Inverse of
-            ``._base_vocab`` , to go the other way.
+        ``._base_vocab`` , to go the other way;
         * ``._vocab_base_id_to_byte`` : Dict[int: str] id -> byte - Link ids to their
-            associated unique bytes.
+        associated unique bytes;
         * ``._vocab_base_byte_to_token`` : Dict[str: str] - similar as above but for
-            tokens.
+        tokens;
         * ``._vocab_bpe_bytes_to_tokens`` : Dict[str: List[str]] byte(s) -> token(s)
-            used to decode BPE.
+        used to decode BPE;
         * ``._bpe_model.get_vocab()`` : Dict[str: int] byte -> id - bpe model
-            vocabulary, based on unique bytes
+        vocabulary, based on unique bytes.
 
         Before training the tokenizer with BPE, bytes are obtained by running
         ``chr(id)`` . After training, if we did start from an empty vocabulary, some
@@ -1128,8 +1128,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         This method returns a (list of) :class:`miditok.TokSequence`.
 
         If you are implementing your own tokenization by subclassing this class,
-        **override the ``_midi_to_tokens`` method**. This method implement necessary
-        MIDI preprocessing.
+        **override the** protected ``_midi_to_tokens`` **method**.
 
         :param midi: the MIDI object to convert.
         :param apply_bpe: will apply BPE if the tokenizer's vocabulary was trained
@@ -2660,10 +2659,12 @@ class MIDITokenizer(ABC, HFHubMixin):
         """
         Return the i/o format of the tokenizer.
 
+        The characters for each dimension returned are:
+        * ``I``: track or instrument;
+        * ``T``: token, or time step;
+        * ``C``: class of token, when using embedding pooling.
+
         :return: i/o format of the tokenizer, as a tuple of strings which represent:
-            * I: track or instrument;
-            * T: token, or time step;
-            * C: class of token, when using embedding pooling.
         """
         format_ = []
         if not self.one_token_stream:

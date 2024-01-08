@@ -269,9 +269,9 @@ def merge_tracks_per_class(
     filter_pitches: bool = True,
 ) -> None:
     r"""
-    Merge ``symusic.Track``s per MIDI program class.
+    Merge ``symusic.Track``\s per MIDI program class.
 
-    Example, a list of tracks / programs `[0, 3, 8, 10, 11, 24, 25, 44, 47]`` will
+    Example, a list of tracks / programs ``[0, 3, 8, 10, 11, 24, 25, 44, 47]`` will
     become ``[0, 8, 24, 25, 40]`` if ``classes_to_merge`` is ``[0, 1, 5]``.
     The classes are in ``miditok.constants.INSTRUMENT_CLASSES``.
 
@@ -369,10 +369,10 @@ def merge_tracks(
     tracks: list[Track] | TrackTickList | Score, effects: bool = True
 ) -> Track:
     r"""
-    Merge several ``symusic.Track``s.
+    Merge several ``symusic.Track``\s.
 
     The notes (and optionally effects) will be concatenated and sorted by time.
-    All the tracks will be merged into the first ``Track`` of the list
+    All the tracks will be merged into the first ``Track`` of the list.
 
     :param tracks: list of tracks to merge, or ``symusic.Score`` object.
     :param effects: will also merge effects, i.e. control changes, sustain pedals and
