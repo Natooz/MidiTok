@@ -32,7 +32,7 @@ TokSequence
 
 The methods of MidiTok use :class:`miditok.TokSequence` objects as input and outputs. A :class:`miditok.TokSequence` holds tokens as the three forms described in :ref:`Byte Pair Encoding (BPE)`. TokSequences are subscriptable and implement ``__len__`` (you can run ``tok_seq[id]`` and ``len(tok_seq)``).
 
-You can use the :py:func:`miditok.MIDITokenizer.complete_sequence` method to automatically fill the non-initialized attributes of a ``TokSequence``.
+You can use the :py:func:`miditok.MIDITokenizer.complete_sequence` method to automatically fill the non-initialized attributes of a :class:`miditok.TokSequence`.
 
 .. autoclass:: miditok.TokSequence
     :members:
