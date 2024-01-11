@@ -41,7 +41,7 @@ class TSD(MIDITokenizer):
         if self.config.use_programs:
             self.one_token_stream = True
 
-    def _add_time_events(self, events: list[Event]) -> list[Event]:
+    def _add_time_events(self, events: list[Event], time_division: int) -> list[Event]:
         r"""
         Create the time events from a list of global and track events.
 
@@ -50,13 +50,15 @@ class TSD(MIDITokenizer):
         to be fed to a model.
 
         :param events: sequence of global and track events to create tokens time from.
+        :param time_division: time division in ticks per quarter of the MIDI being
+            tokenized.
         :return: the same events, with time events inserted.
         """
         # Add time events
         all_events = []
         previous_tick = 0
         previous_note_end = 0
-        ticks_per_beat = compute_ticks_per_beat(TIME_SIGNATURE[1], self.time_division)
+        ticks_per_beat = compute_ticks_per_beat(TIME_SIGNATURE[1], time_division)
         for event in events:
             # No time shift
             if event.time != previous_tick:
@@ -101,7 +103,7 @@ class TSD(MIDITokenizer):
             # Time Signature: Update ticks per beat
             if event.type_ == "TimeSig":
                 ticks_per_beat = compute_ticks_per_beat(
-                    int(event.value.split("/")[1]), self.time_division
+                    int(event.value.split("/")[1]), time_division
                 )
 
             all_events.append(event)

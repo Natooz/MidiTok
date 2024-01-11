@@ -83,13 +83,15 @@ class MuMIDI(MIDITokenizer):
         if self.config.use_tempos:
             self.vocab_types_idx["Tempo"] = -3
 
-    def _add_time_events(self, events: list[Event]) -> list[Event]:
+    def _add_time_events(self, events: list[Event], time_division: int) -> list[Event]:
         """
         Create the time events from a list of global and track events.
 
         Unused here.
 
         :param events: sequence of global and track events to create tokens time from.
+        :param time_division: time division in ticks per quarter of the MIDI being
+            tokenized.
         :return: the same events, with time events inserted.
         """
 

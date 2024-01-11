@@ -75,7 +75,9 @@ class Octuple(MIDITokenizer):
             type_: idx for idx, type_ in enumerate(token_types)
         }  # used for data augmentation
 
-    def _add_time_events(self, events: list[Event]) -> list[list[Event]]:
+    def _add_time_events(
+        self, events: list[Event], time_division: int
+    ) -> list[list[Event]]:
         r"""
         Create the time events from a list of global and track events.
 
@@ -84,6 +86,8 @@ class Octuple(MIDITokenizer):
         to be fed to a model.
 
         :param events: sequence of global and track events to create tokens time from.
+        :param time_division: time division in ticks per quarter of the MIDI being
+            tokenized.
         :return: the same events, with time events inserted.
         """
         # Add time events
@@ -97,7 +101,7 @@ class Octuple(MIDITokenizer):
         current_tempo = self.default_tempo
         current_program = None
         ticks_per_bar = compute_ticks_per_bar(
-            TimeSignature(0, *current_time_sig), self.time_division
+            TimeSignature(0, *current_time_sig), time_division
         )
         for e, event in enumerate(events):
             # Set current bar and position
@@ -114,7 +118,7 @@ class Octuple(MIDITokenizer):
                 current_bar_from_ts_time = current_bar
                 current_tick_from_ts_time = previous_tick
                 ticks_per_bar = compute_ticks_per_bar(
-                    TimeSignature(event.time, *current_time_sig), self.time_division
+                    TimeSignature(event.time, *current_time_sig), time_division
                 )
             elif event.type_ == "Tempo":
                 current_tempo = event.value

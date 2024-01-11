@@ -195,8 +195,6 @@ class TokenizerConfig:
     r"""
     Tokenizer configuration, to be used with all tokenizers.
 
-    # TODO fix doc build issue.
-
     :param pitch_range: range of MIDI pitches to use. Pitches can take values between
         0 and 127 (included). The `General MIDI 2 (GM2) specifications
         <https://www.midi.org/specifications-old/item/general-midi-2>`_ indicate the

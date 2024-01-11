@@ -50,6 +50,7 @@ for tokenization_ in ALL_TOKENIZATIONS:
             "use_sustain_pedals": True,
             "use_pitch_bends": True,
             "use_pitch_intervals": True,
+            # "remove_duplicated_notes": True, TODO err token type succession
         }
     )
     adjust_tok_params_for_tests(tokenization_, params_)

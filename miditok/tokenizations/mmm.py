@@ -59,7 +59,7 @@ class MMM(MIDITokenizer):
                 dtype=np.intc,
             )
 
-    def _add_time_events(self, events: list[Event]) -> list[Event]:
+    def _add_time_events(self, events: list[Event], time_division: int) -> list[Event]:
         r"""
         Create the time events from a list of global and track events.
 
@@ -68,6 +68,8 @@ class MMM(MIDITokenizer):
         to be fed to a model.
 
         :param events: sequence of global and track events to create tokens time from.
+        :param time_division: time division in ticks per quarter of the MIDI being
+            tokenized.
         :return: the same events, with time events inserted.
         """
         # Creates first events by pop the *Track*, *Program* and *NoteDensity* events
@@ -82,9 +84,9 @@ class MMM(MIDITokenizer):
 
         # Time events
         time_sig_change = TimeSignature(0, *TIME_SIGNATURE)
-        ticks_per_bar = compute_ticks_per_bar(time_sig_change, self.time_division)
+        ticks_per_bar = compute_ticks_per_bar(time_sig_change, time_division)
         ticks_per_beat = compute_ticks_per_beat(
-            time_sig_change.denominator, self.time_division
+            time_sig_change.denominator, time_division
         )
         bar_at_last_ts_change = 0
         previous_tick = 0
@@ -99,9 +101,9 @@ class MMM(MIDITokenizer):
                 num, denom = list(map(int, events[ei].value.split("/")))
                 ticks_per_bar = compute_ticks_per_bar(
                     TimeSignature(events[ei].time, num, denom),
-                    self.time_division,
+                    time_division,
                 )
-                ticks_per_beat = compute_ticks_per_beat(denom, self.time_division)
+                ticks_per_beat = compute_ticks_per_beat(denom, time_division)
             if events[ei].time != previous_tick:
                 # Bar
                 num_new_bars = (

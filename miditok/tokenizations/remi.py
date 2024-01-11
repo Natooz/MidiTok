@@ -81,7 +81,7 @@ class REMI(MIDITokenizer):
             # tokenizer encounter longer MIDIs
             self.config.additional_params["max_bar_embedding"] = None
 
-    def _add_time_events(self, events: list[Event]) -> list[Event]:
+    def _add_time_events(self, events: list[Event], time_division: int) -> list[Event]:
         r"""
         Create the time events from a list of global and track events.
 
@@ -90,6 +90,8 @@ class REMI(MIDITokenizer):
         to be fed to a model.
 
         :param events: sequence of global and track events to create tokens time from.
+        :param time_division: time division in ticks per quarter of the MIDI being
+            tokenized.
         :return: the same events, with time events inserted.
         """
         # Add time events
@@ -101,9 +103,9 @@ class REMI(MIDITokenizer):
         tick_at_last_ts_change = tick_at_current_bar = 0
         current_time_sig = TIME_SIGNATURE
         ticks_per_bar = compute_ticks_per_bar(
-            TimeSignature(0, *current_time_sig), self.time_division
+            TimeSignature(0, *current_time_sig), time_division
         )
-        ticks_per_beat = compute_ticks_per_beat(current_time_sig[1], self.time_division)
+        ticks_per_beat = compute_ticks_per_beat(current_time_sig[1], time_division)
         # First look for a TimeSig token, if any is given at tick 0, to update
         # current_time_sig
         if self.config.use_time_signatures:
@@ -112,10 +114,10 @@ class REMI(MIDITokenizer):
                     current_time_sig = list(map(int, event.value.split("/")))
                     ticks_per_bar = compute_ticks_per_bar(
                         TimeSignature(event.time, *current_time_sig),
-                        self.time_division,
+                        time_division,
                     )
                     ticks_per_beat = compute_ticks_per_beat(
-                        current_time_sig[1], self.time_division
+                        current_time_sig[1], time_division
                     )
                     break
                 if event.type_ in [
@@ -225,10 +227,10 @@ class REMI(MIDITokenizer):
                 ) // ticks_per_bar
                 tick_at_last_ts_change = event.time
                 ticks_per_bar = compute_ticks_per_bar(
-                    TimeSignature(event.time, *current_time_sig), self.time_division
+                    TimeSignature(event.time, *current_time_sig), time_division
                 )
                 ticks_per_beat = compute_ticks_per_beat(
-                    current_time_sig[1], self.time_division
+                    current_time_sig[1], time_division
                 )
                 # We decrease the previous tick so that a Position token is enforced
                 # for the next event
@@ -315,6 +317,7 @@ class REMI(MIDITokenizer):
             ticks_per_beat = compute_ticks_per_beat(
                 current_time_sig.denominator, self.time_division
             )
+            ticks_per_pos = ticks_per_beat // max(self.config.beat_res.values())
 
             # Set tracking variables
             current_tick = tick_at_last_ts_change = tick_at_current_bar = 0
@@ -367,7 +370,7 @@ class REMI(MIDITokenizer):
                     if current_bar == -1:
                         # as this Position token occurs before any Bar token
                         current_bar = 0
-                    current_tick = tick_at_current_bar + int(tok_val)
+                    current_tick = tick_at_current_bar + int(tok_val) * ticks_per_pos
                 elif tok_type in ["Pitch", "PitchIntervalTime", "PitchIntervalChord"]:
                     if tok_type == "Pitch":
                         pitch = int(tok_val)
@@ -428,6 +431,9 @@ class REMI(MIDITokenizer):
                         )
                         ticks_per_beat = compute_ticks_per_beat(
                             current_time_sig.denominator, self.time_division
+                        )
+                        ticks_per_pos = ticks_per_beat // max(
+                            self.config.beat_res.values()
                         )
                 elif tok_type == "Pedal":
                     pedal_prog = (

@@ -90,7 +90,9 @@ class CPWord(MIDITokenizer):
         }  # used for data augmentation
         self.vocab_types_idx["Bar"] = 1  # same as position
 
-    def _add_time_events(self, events: list[Event]) -> list[list[Event]]:
+    def _add_time_events(
+        self, events: list[Event], time_division: int
+    ) -> list[list[Event]]:
         r"""
         Create the time events from a list of global and track events.
 
@@ -99,6 +101,8 @@ class CPWord(MIDITokenizer):
         to be fed to a model.
 
         :param events: sequence of global and track events to create tokens time from.
+        :param time_division: time division in ticks per quarter of the MIDI being
+            tokenized.
         :return: the same events, with time events inserted.
         """
         # Add time events
@@ -118,9 +122,9 @@ class CPWord(MIDITokenizer):
             current_tempo = self.default_tempo
         current_program = None
         ticks_per_bar = compute_ticks_per_bar(
-            TimeSignature(0, *current_time_sig), self.time_division
+            TimeSignature(0, *current_time_sig), time_division
         )
-        ticks_per_beat = compute_ticks_per_beat(current_time_sig[1], self.time_division)
+        ticks_per_beat = compute_ticks_per_beat(current_time_sig[1], time_division)
         # First look for a TimeSig token, if any is given at tick 0, to update
         # current_time_sig
         if self.config.use_time_signatures:
@@ -128,11 +132,10 @@ class CPWord(MIDITokenizer):
                 if event.type_ == "TimeSig":
                     current_time_sig = list(map(int, event.value.split("/")))
                     ticks_per_bar = compute_ticks_per_bar(
-                        TimeSignature(event.time, *current_time_sig),
-                        self.time_division,
+                        TimeSignature(event.time, *current_time_sig), time_division
                     )
                     ticks_per_beat = compute_ticks_per_beat(
-                        current_time_sig[1], self.time_division
+                        current_time_sig[1], time_division
                     )
                     break
                 if event.type_ in [
@@ -254,10 +257,10 @@ class CPWord(MIDITokenizer):
                 ) // ticks_per_bar
                 tick_at_last_ts_change = event.time
                 ticks_per_bar = compute_ticks_per_bar(
-                    TimeSignature(event.time, *current_time_sig), self.time_division
+                    TimeSignature(event.time, *current_time_sig), time_division
                 )
                 ticks_per_beat = compute_ticks_per_beat(
-                    current_time_sig[1], self.time_division
+                    current_time_sig[1], time_division
                 )
                 # We decrease the previous tick so that a Position token is enforced
                 # for the next event
@@ -451,6 +454,7 @@ class CPWord(MIDITokenizer):
             ticks_per_beat = compute_ticks_per_beat(
                 current_time_sig.denominator, self.time_division
             )
+            ticks_per_pos = ticks_per_beat // max(self.config.beat_res.values())
             # Set track / sequence program if needed
             if not self.one_token_stream:
                 current_tick = tick_at_last_ts_change = tick_at_current_bar = 0
@@ -522,12 +526,16 @@ class CPWord(MIDITokenizer):
                                 ticks_per_beat = compute_ticks_per_beat(
                                     current_time_sig.denominator, self.time_division
                                 )
+                                ticks_per_pos = ticks_per_beat // max(
+                                    self.config.beat_res.values()
+                                )
                     elif bar_pos == "Position":  # i.e. its a position
                         if current_bar == -1:
                             # in case this Position token comes before any Bar token
                             current_bar = 0
-                        current_tick = tick_at_current_bar + int(
-                            compound_token[1].split("_")[1]
+                        current_tick = (
+                            tick_at_current_bar
+                            + int(compound_token[1].split("_")[1]) * ticks_per_pos
                         )
                         # Add new tempo change only if different from the last one
                         if self.config.use_tempos and si == 0:

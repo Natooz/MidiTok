@@ -18,6 +18,7 @@ from symusic import (
     TimeSignature,
     Track,
 )
+from symusic.core import NoteTickList
 
 from miditok.classes import Event
 from miditok.constants import (
@@ -31,7 +32,7 @@ from miditok.constants import (
 
 if TYPE_CHECKING:
     from miditoolkit import MidiFile
-    from symusic.core import NoteTickList, TrackTickList
+    from symusic.core import TrackTickList
 
 
 def convert_ids_tensors_to_list(ids) -> list[int] | list[list[int]]:  # noqa: ANN001
@@ -83,30 +84,40 @@ def get_midi_programs(midi: Score) -> list[tuple[int, bool]]:
 
 
 def remove_duplicated_notes(
-    notes: NoteTickList | list[Note], consider_duration: bool = False
+    notes: NoteTickList | dict[str, np.ndarray], consider_duration: bool = False
 ) -> None:
     r"""
     Remove (inplace) duplicated notes, i.e. with the same pitch and onset time.
 
+    This can be done either from a ``symusic.NoteTickList``, or a note structure of
+    arrays (``symusic.NoteTickList.numpy()``).
     The velocities are ignored in this method.
     **The notes need to be sorted by time, then pitch, and duration if
     consider_duration is True:**
     ``notes.sort(key=lambda x: (x.start, x.pitch, x.duration))``.
 
-    :param notes: notes to analyse
+    :param notes: notes to analyse.
     :param consider_duration: if given ``True``, the method will also consider the
-        durations of the notes when detecting identical ones. (default: False)
+        durations of the notes when detecting identical ones. (default: ``False``)
     """
+    is_list_of_notes = isinstance(notes, NoteTickList)
+    note_soa = notes.numpy() if is_list_of_notes else notes
+
+    keys_to_stack = ["time", "pitch"]
     if consider_duration:
-        onset_pitches = [[note.start, note.pitch, note.duration] for note in notes]
-    else:
-        onset_pitches = [[note.start, note.pitch] for note in notes]
-    onset_pitches = np.array(onset_pitches, dtype=np.intc)
+        keys_to_stack.append("duration")
+    onset_pitches = np.stack([note_soa[key] for key in keys_to_stack], axis=1)
 
     successive_val_eq = np.all(onset_pitches[:-1] == onset_pitches[1:], axis=1)
     idx_to_del = np.where(successive_val_eq)[0] + 1
-    for idx in reversed(idx_to_del):
-        del notes[idx]
+
+    if is_list_of_notes:
+        for idx in reversed(idx_to_del):
+            del notes[idx]
+    else:
+        (mask := np.ones(len(notes["time"]), dtype=bool))[idx_to_del] = False
+        for key in notes:
+            notes[key] = notes[key][mask]
 
 
 def fix_offsets_overlapping_notes(notes: NoteTickList) -> None:
@@ -502,6 +513,20 @@ def np_get_closest(array: np.ndarray, values: np.ndarray) -> np.ndarray:
     idxs[prev_idx_is_less] -= 1
 
     return array[idxs]
+
+
+def tempo_qpm_to_mspq(tempo_qpm: int | float | np.ndarray) -> int | float | np.ndarray:
+    """
+    Convert tempo value(s) in qpm (quarter/minute) to mspq (μs/quarter).
+
+    This method works with either a single qpm value (``int`` or ``float``), or with
+    several as a ``numpy.ndarray``.
+
+    :param tempo_qpm: tempo value(s) in qpm to convert.
+    :return: array of equivalent values in mspq.
+    """
+    # quarter / 60sec --> 1μs / quarter
+    return 60000000 / tempo_qpm
 
 
 def miditoolkit_to_symusic(midi: MidiFile) -> Score:

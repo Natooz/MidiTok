@@ -354,7 +354,12 @@ def tokenize_and_check_equals(
     )
 
     # Post-process the reference and decoded MIDIs
+    # We might need to resample the original preprocessed MIDI, as it has been
+    # resampled with its highest ticks/beat whereas the tokens has been decoded with
+    # the tokenizer's time division, which can be different if using time signatures.
     midi = adapt_ref_midi_for_tests_assertion(midi, tokenizer)
+    if midi.ticks_per_quarter != midi_decoded.ticks_per_quarter:
+        midi = midi.resample(tpq=midi_decoded.ticks_per_quarter)
     sort_midi(midi)
     sort_midi(midi_decoded)
 

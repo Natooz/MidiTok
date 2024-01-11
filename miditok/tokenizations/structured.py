@@ -110,7 +110,7 @@ class Structured(MIDITokenizer):
 
         return events
 
-    def _add_time_events(self, events: list[Event]) -> list[Event]:
+    def _add_time_events(self, events: list[Event], time_division: int) -> list[Event]:
         r"""
         Create the time events from a list of global and track events.
 
@@ -119,6 +119,8 @@ class Structured(MIDITokenizer):
         to be fed to a model.
 
         :param events: sequence of global and track events to create tokens time from.
+        :param time_division: time division in ticks per quarter of the MIDI being
+            tokenized.
         :return: the same events, with time events inserted.
         """
         all_events = []
@@ -131,7 +133,7 @@ class Structured(MIDITokenizer):
                 # Time shift
                 time_shift_ticks = event.time - previous_tick
                 if time_shift_ticks != 0:
-                    time_shift = self._tpb_ticks_to_tokens[self.time_division][
+                    time_shift = self._tpb_ticks_to_tokens[time_division][
                         time_shift_ticks
                     ]
                 else:
