@@ -204,8 +204,8 @@ def are_midis_equals(midi_mtk: MidiFile, midi_sms: Score) -> bool:
                 err += 1
 
     # Check tracks: notes, control changes, pitch bends
-    midi_mtk.instruments.sort(key=lambda t: (t.program, t.is_drum))
-    midi_sms.tracks.sort(key=lambda t: (t.program, t.is_drum))
+    midi_mtk.instruments.sort(key=lambda t: (t.program, t.is_drum, len(t.notes)))
+    midi_sms.tracks.sort(key=lambda t: (t.program, t.is_drum, len(t.notes)))
     for track1, track2 in zip(midi_mtk.instruments, midi_sms.tracks):
         err += are_tracks_equals(track1, track2)
 

@@ -125,6 +125,7 @@ class CPWord(MIDITokenizer):
             TimeSignature(0, *current_time_sig), time_division
         )
         ticks_per_beat = compute_ticks_per_beat(current_time_sig[1], time_division)
+        ticks_per_pos = ticks_per_beat // max(self.config.beat_res.values())
         # First look for a TimeSig token, if any is given at tick 0, to update
         # current_time_sig
         if self.config.use_time_signatures:
@@ -236,7 +237,7 @@ class CPWord(MIDITokenizer):
 
                 # Position
                 if event.type_ != "TimeSig":
-                    pos_index = event.time - tick_at_current_bar
+                    pos_index = (event.time - tick_at_current_bar) // ticks_per_pos
                     all_events.append(
                         self.__create_cp_token(
                             event.time,
@@ -262,6 +263,7 @@ class CPWord(MIDITokenizer):
                 ticks_per_beat = compute_ticks_per_beat(
                     current_time_sig[1], time_division
                 )
+                ticks_per_pos = ticks_per_beat // max(self.config.beat_res.values())
                 # We decrease the previous tick so that a Position token is enforced
                 # for the next event
                 previous_tick -= 1

@@ -481,18 +481,21 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         # Adjust times if needed
         if resampling_factors is not None:
+            # First get the idx of the notes covered per section
+            resampling_factors = self.__convert_resampling_ratios_ticks_to_idx(
+                resampling_factors, note_soa["time"]
+            )
             note_soa["time"] = self._adjust_time_to_tpb(
                 note_soa["time"], resampling_factors
             )
 
         # Resample duration values if NoteOff, otherwise adjust to the vocab
-        if ticks_per_beat is not None:
+        if not self._note_on_off and ticks_per_beat is not None:
             self._adjust_durations(note_soa, ticks_per_beat)
         elif resampling_factors is not None:
             note_soa["duration"] = self._adjust_time_to_tpb(
-                note_soa["duration"], resampling_factors, durations=True
+                note_soa["duration"], resampling_factors, min_duration
             )
-            note_soa["duration"][note_soa["duration"] == 0] += min_duration
 
         # Symusic automatically sorts the notes by (time, pitch, duration) keys when
         # reading a MIDI file. We hence don't need to sort the notes.
@@ -702,22 +705,35 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         # Adjust times if needed
         if resampling_factors is not None:
+            # First get the idx of the notes covered per section
+            resampling_factors = self.__convert_resampling_ratios_ticks_to_idx(
+                resampling_factors, pedals_soa["time"]
+            )
             pedals_soa["time"] = self._adjust_time_to_tpb(
                 pedals_soa["time"], resampling_factors
             )
 
         # Format durations (if needed) and merge successive pedals
+        need_resample = True
         while np.any(
             overlapping_mask := (
                 end_arr := pedals_soa["time"] + pedals_soa["duration"]
             )[:-1]
             >= pedals_soa["time"][1:]
         ):
+            # Get the first idx of each group of successive values == True
+            idx_overlap = np.where(overlapping_mask)[0]
+            idx_diff = np.diff(idx_overlap, prepend=-2)  # prep to keep the first idx
+            first_idx_groups = idx_overlap[idx_diff > 1]
+
             # Merge PedalOn periods depending on their durations
             idx_to_delete = []
-            for idx in np.where(overlapping_mask)[0]:
+            for idx in first_idx_groups:
                 ip = 1
-                while end_arr[idx] >= pedals_soa["time"][idx + ip]:
+                while (
+                    idx + ip < len(pedals_soa["time"])
+                    and end_arr[idx] >= pedals_soa["time"][idx + ip]
+                ):
                     pedals_soa["duration"][idx] = max(
                         pedals_soa["duration"][idx],
                         end_arr[idx + ip] - pedals_soa["time"][idx],
@@ -732,62 +748,46 @@ class MIDITokenizer(ABC, HFHubMixin):
                 pedals_soa[key] = pedals_soa[key][mask]
 
             # Resample duration values if NoteOff, otherwise adjust to the vocab
-            if self.config.sustain_pedal_duration:
+            if self.config.sustain_pedal_duration and ticks_per_beat is not None:
                 self._adjust_durations(pedals_soa, ticks_per_beat)
             elif resampling_factors is not None:
                 pedals_soa["duration"] = self._adjust_time_to_tpb(
-                    pedals_soa["duration"], resampling_factors, durations=True
+                    pedals_soa["duration"], resampling_factors, min_duration
                 )
-                pedals_soa["duration"][pedals_soa["duration"] == 0] += min_duration
+            need_resample = False
+
+        # Will be run at least once if no overlapping durations (while loop)
+        if need_resample:
+            if self.config.sustain_pedal_duration and ticks_per_beat is not None:
+                self._adjust_durations(pedals_soa, ticks_per_beat)
+            elif resampling_factors is not None:
+                pedals_soa["duration"] = self._adjust_time_to_tpb(
+                    pedals_soa["duration"], resampling_factors, min_duration
+                )
 
         return Pedal.from_numpy(**pedals_soa)
 
+    @staticmethod
     def _adjust_time_to_tpb(
-        self,
         times_arr: np.ndarray,
         tpq_resampling_factor: np.ndarray,
-        durations: bool = False,
+        min_duration: int | None = None,
     ) -> np.ndarray:
-        # Batch by time signature section
+        # Batch by factor (i.e. time signature denominator) section
         idx_first = 0
-        for rf_idx, (last_tick_section, factor) in enumerate(tpq_resampling_factor):
-            # We don't need to adjust, it means that the tpb is equal to the tpq
-            if factor == 1:
-                continue
-
-            # Get the last concerned idx.
-            # There shouldn't be equal successive tpb values in ticks_per_beat.
-            # If last tpb --> set last note to max_tick to avoid iterating notes.
-            if rf_idx + 1 == len(tpq_resampling_factor):
-                idx_last = len(times_arr) - 1
-            else:
-                idx_last = np.argmax(times_arr[idx_first:] >= last_tick_section)
-
-            # Adjust time to the closest tick following tpb
-            if durations:
-                durations = self._tpb_to_time_array[
-                    self._tpb_per_ts[TIME_SIGNATURE[1] // factor]
-                ]
-                ref_ticks = np.linspace(
-                    durations[0],
-                    durations[-1],
-                    durations[-1] // 2,
-                    dtype=np.intc,
+        for rf_idx, (idx_last, factor) in enumerate(tpq_resampling_factor):
+            idx_last_ = None if rf_idx == len(tpq_resampling_factor) - 1 else idx_last
+            # Round time values to the factor
+            # Except if the factor is 1, it means that the tpb is equal to the tpq
+            if factor != 1:
+                times_arr[idx_first:idx_last_] = (
+                    np.round(times_arr[idx_first:idx_last_] / factor) * factor
                 )
-            else:
-                tick_first = times_arr[idx_first] - times_arr[idx_first] % factor
-                tick_last = times_arr[idx_last] - times_arr[idx_last] % factor
-                ref_ticks = np.linspace(
-                    tick_first,
-                    tick_last,
-                    ((tick_last - tick_first) // factor) + 1,
-                    dtype=np.intc,
-                )
-            # TODO quantize method ? +- % factor
-            times_arr[idx_first:idx_last] = np_get_closest(
-                ref_ticks, times_arr[idx_first:idx_last]
-            )
-            idx_first = idx_last
+                if min_duration is not None:
+                    times_arr[idx_first:idx_last_][
+                        times_arr[idx_first:idx_last_] == 0
+                    ] = min_duration * factor
+            idx_first = idx_last_
 
         return times_arr
 
@@ -969,11 +969,10 @@ class MIDITokenizer(ABC, HFHubMixin):
         events = []
         note_token_name = "NoteOn" if self._note_on_off else "Pitch"
         # max_time_interval is adjusted depending on the time signature denom / tpb
-        tpb_idx = 0
         max_time_interval = 0
         if self.config.use_pitch_intervals:
             max_time_interval = (
-                ticks_per_beat[tpb_idx, 1] * self.config.pitch_intervals_max_time_dist
+                ticks_per_beat[0, 1] * self.config.pitch_intervals_max_time_dist
             )
         previous_note_onset = -max_time_interval - 1
         previous_pitch_onset = -128  # lowest at a given time
@@ -1049,6 +1048,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         # Control changes (in the future, and handle pedals redundancy)
 
         # Creates the Note On, Note Off and Velocity events
+        tpb_idx = 0
         for note in track.notes:
             # Program
             if self.config.use_programs and not self.config.program_changes:
@@ -1922,6 +1922,23 @@ class MIDITokenizer(ABC, HFHubMixin):
                 del ticks_per_beat[i]
 
         return np.array(ticks_per_beat)
+
+    @staticmethod
+    def __convert_resampling_ratios_ticks_to_idx(
+        resampling_factors: np.ndarray, time_arr: np.array
+    ) -> np.ndarray:
+        idx_first = 0
+        factors_idx = resampling_factors.copy()
+        for rf_idx, last_tick_factor in enumerate(resampling_factors):
+            # Get the last concerned idx for this section.
+            if rf_idx + 1 == len(resampling_factors):
+                idx_last = len(time_arr) - 1
+            else:
+                idx_last = np.argmax(time_arr[idx_first:] >= last_tick_factor[0])
+            factors_idx[rf_idx, 0] = idx_last
+            idx_first = idx_last
+
+        return factors_idx
 
     def __create_tpb_to_ticks_array(self, rest: bool = False) -> dict[int, np.ndarray]:
         r"""

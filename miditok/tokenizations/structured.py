@@ -185,7 +185,7 @@ class Structured(MIDITokenizer):
         if self.one_token_stream:
             if len(midi.tracks) > 1:
                 all_events.sort(key=lambda x: x.time)
-            all_events = self._add_time_events(all_events)
+            all_events = self._add_time_events(all_events, midi.ticks_per_quarter)
             tok_sequence = TokSequence(events=all_events)
             self.complete_sequence(tok_sequence)
         else:

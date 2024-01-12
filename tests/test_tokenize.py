@@ -228,7 +228,7 @@ def test_one_track_midi_to_tokens_to_midi(
 def test_one_track_midi_to_tokens_to_midi_hard(
     midi_path: str | Path,
     tok_params_set: tuple[str, dict[str, Any]],
-    saving_erroneous_midis: bool = True,
+    saving_erroneous_midis: bool = True,  # TODO err MIDILike when time_sig + pedals
 ):
     _test_tokenize(midi_path, tok_params_set, saving_erroneous_midis)
 
