@@ -6,6 +6,7 @@ import json
 import warnings
 from copy import deepcopy
 from dataclasses import dataclass
+from math import log2
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -56,9 +57,11 @@ IGNORED_CONFIG_KEY_DICT = [
 
 @dataclass
 class Event:
-    r"""Event class, representing a token and its characteristics
-    The type corresponds to the token type (e.g. Pitch, Position ...) and its value.
-    These two attributes are used to build its string representation (__str__),
+    r"""
+    Event class, representing a token and its characteristics.
+
+    The type corresponds to the token type (e.g. *Pitch*, *Position*...) and its value.
+    These two attributes are used to build its string representation (``__str__``),
     used in the Vocabulary class to map an event to its corresponding token.
     This class is mainly used during tokenization when the tokens / events have
     to be sorted by time.
@@ -71,9 +74,19 @@ class Event:
     desc: Any = None
 
     def __str__(self) -> str:
+        """
+        Return the string value of the ``Event``.
+
+        :return: string value of the ``Event`` as a combination of its type and value.
+        """
         return f"{self.type_}_{self.value}"
 
     def __repr__(self) -> str:
+        """
+        Return the representation of this ``Event``.
+
+        :return: representation of the event.
+        """
         return (
             f"Event(type={self.type_}, value={self.value}, time={self.time},"
             f" desc={self.desc})"
@@ -82,15 +95,16 @@ class Event:
 
 @dataclass
 class TokSequence:
-    r"""Represents a sequence of token.
-    A ``TokSequence`` can represent tokens by their several forms:
+    r"""
+    Sequence of token.
 
-    * tokens (list of str): tokens as sequence of strings.
-    * ids (list of int), these are the one to be fed to models.
+    A ``TokSequence`` can represent tokens by their several forms:
+    * tokens (list of str): tokens as sequence of strings;
+    * ids (list of int), these are the one to be fed to models;
     * events (list of Event): Event objects that can carry time or other information
-        useful for debugging.
+    useful for debugging;
     * bytes (str): ids are converted into unique bytes, all joined together in a single
-        string.
+    string. This is used by MidiTok internally for BPE.
 
     Bytes are used internally by MidiTok for Byte Pair Encoding.
     The ``ids_are_bpe_encoded`` attribute tells if ``ids`` is encoded with BPE.
@@ -106,47 +120,64 @@ class TokSequence:
     _ids_no_bpe: list[int | list[int]] = None
 
     def __len__(self) -> int:
+        """
+        Return the length of the sequence.
+
+        :return: number of elements in the sequence.
+        """
         if self.ids is not None:
             return len(self.ids)
-        elif self.tokens is not None:
+        if self.tokens is not None:
             return len(self.tokens)
-        elif self.events is not None:
+        if self.events is not None:
             return len(self.events)
-        elif self.bytes is not None:
+        if self.bytes is not None:
             return len(self.bytes)
-        elif self._ids_no_bpe is not None:
+        if self._ids_no_bpe is not None:
             return len(self._ids_no_bpe)
-        else:
-            raise ValueError(
-                "This TokSequence seems to not be initialized, all its attributes are"
-                " None."
-            )
+
+        msg = (
+            "This TokSequence seems to not be initialized, all its attributes "
+            "are None."
+        )
+        raise ValueError(msg)
 
     def __getitem__(self, idx: int) -> int | str | Event:
+        """
+        Return the ``idx``th element of the sequence.
+
+        It checks by order: ids, tokens, events, bytes.
+
+        :param idx: index of the element to retrieve.
+        :return: ``idx``th element.
+        """
         if self.ids is not None:
             return self.ids[idx]
-        elif self.tokens is not None:
+        if self.tokens is not None:
             return self.tokens[idx]
-        elif self.events is not None:
+        if self.events is not None:
             return self.events[idx]
-        elif self.bytes is not None:
+        if self.bytes is not None:
             return self.bytes[idx]
-        elif self._ids_no_bpe is not None:
+        if self._ids_no_bpe is not None:
             return self._ids_no_bpe[idx]
-        else:
-            raise ValueError(
-                "This TokSequence seems to not be initialized, all its attributes are"
-                " None."
-            )
+
+        msg = (
+            "This TokSequence seems to not be initialized, all its attributes "
+            "are None."
+        )
+        raise ValueError(msg)
 
     def __eq__(self, other: TokSequence) -> bool:
-        r"""Checks if too sequences are equal.
+        r"""
+        Check that too sequences are equal.
+
         This is performed by comparing their attributes (ids, tokens...).
         **Both sequences must have at least one common attribute initialized (not None)
         for this method to work, otherwise it will return False.**.
 
         :param other: other sequence to compare.
-        :return: True if the sequences have equal attributes.
+        :return: ``True`` if the sequences have equal attributes.
         """
         # Start from True assumption as some attributes might be unfilled (None)
         attributes = ["tokens", "ids", "bytes", "events"]
@@ -161,8 +192,8 @@ class TokSequence:
 
 
 class TokenizerConfig:
-    r"""MIDI tokenizer base class, containing common methods and attributes for all
-    tokenizers.
+    r"""
+    Tokenizer configuration, to be used with all tokenizers.
 
     :param pitch_range: range of MIDI pitches to use. Pitches can take values between
         0 and 127 (included). The `General MIDI 2 (GM2) specifications
@@ -264,7 +295,9 @@ class TokenizerConfig:
         (default: ``False``)
     :param remove_duplicated_notes: will remove duplicated notes before tokenizing
         MIDIs. Notes with the same onset time and pitch value will be deduplicated.
-        This option will slightly increase the tokenization time. (default: ``False``)
+        This option will slightly increase the tokenization time. This option will add
+        an extra note sorting step in the MIDI preprocessing, which can increase the
+        overall tokenization time. (default: ``False``)
     :param delete_equal_successive_tempo_changes: setting this option True will delete
         identical successive tempo changes when preprocessing a MIDI file after loading
         it. For examples, if a MIDI has two tempo changes for tempo 120 at tick 1000
@@ -319,10 +352,10 @@ class TokenizerConfig:
         ``one_token_stream`` mode, a ``Program`` token at the beginning of each track
         token sequence. (default: ``False``)
     :param max_pitch_interval: sets the maximum pitch interval that can be represented.
-        (default: 16)
+        (default: ``16``)
     :param pitch_intervals_max_time_dist: sets the default maximum time interval in
         beats between two consecutive notes to be represented with pitch intervals.
-        (default: 1)
+        (default: ``1``)
     :param kwargs: additional parameters that will be saved in
         ``config.additional_params``.
     """
@@ -368,22 +401,33 @@ class TokenizerConfig:
         **kwargs,
     ) -> None:
         # Checks
-        if max_pitch_interval:
-            if not 0 <= pitch_range[0] < pitch_range[1] <= 127:
-                raise ValueError(
-                    "`pitch_range` must be within 0 and 127, and an first value"
-                    f" greater than the second (received {pitch_range})"
-                )
-            if not 1 <= num_velocities <= 127:
-                raise ValueError(
-                    "`num_velocities` must be within 1 and 127 (received"
-                    f" {num_velocities})"
-                )
-            if not 0 <= max_pitch_interval <= 127:
-                raise ValueError(
-                    "`max_pitch_interval` must be within 0 and 127 (received"
-                    f" {max_pitch_interval})."
-                )
+        if not 0 <= pitch_range[0] < pitch_range[1] <= 127:
+            msg = (
+                "`pitch_range` must be within 0 and 127, and an first value "
+                f"greater than the second (received {pitch_range})"
+            )
+            raise ValueError(msg)
+        if not 1 <= num_velocities <= 127:
+            msg = (
+                "`num_velocities` must be within 1 and 127 (received "
+                f"{num_velocities})"
+            )
+            raise ValueError(msg)
+        if max_pitch_interval and not 0 <= max_pitch_interval <= 127:
+            msg = (
+                "`max_pitch_interval` must be within 0 and 127 (received "
+                f"{max_pitch_interval})."
+            )
+            raise ValueError(msg)
+        if use_time_signatures:
+            for denominator in time_signature_range:
+                if not log2(denominator).is_integer():
+                    msg = (
+                        "`time_signature_range` contains an invalid time signature "
+                        "denominator. The MIDI norm only supports powers of 2"
+                        f"denominators. Received {denominator}"
+                    )
+                    raise ValueError(msg)
 
         # Global parameters
         self.pitch_range: tuple[int, int] = pitch_range
@@ -421,12 +465,13 @@ class TokenizerConfig:
             max_rest_res = max(self.beat_res_rest.values())
             max_global_res = max(self.beat_res.values())
             if max_rest_res > max_global_res:
-                raise ValueError(
+                msg = (
                     "The maximum resolution of the rests must be inferior or equal to"
                     "the maximum resolution of the global beat resolution"
                     f"(``config.beat_res``). Expected <= {max_global_res},"
                     f"{max_rest_res} was given."
                 )
+                raise ValueError(msg)
 
         # Chord params
         self.chord_maps: dict[str, tuple] = chord_maps
@@ -444,13 +489,13 @@ class TokenizerConfig:
         )
 
         # Time signature params
-        self.time_signature_range: dict[int, list[int]] = {
-            beat_res: (
-                list(range(beats[0], beats[1] + 1))
-                if isinstance(beats, tuple)
-                else beats
+        self.time_signature_range = {
+            denominator: (
+                list(range(numerators[0], numerators[1] + 1))
+                if isinstance(numerators, tuple)
+                else numerators
             )
-            for beat_res, beats in time_signature_range.items()
+            for denominator, numerators in time_signature_range.items()
         }
         self.delete_equal_successive_time_sig_changes = (
             delete_equal_successive_time_sig_changes
@@ -490,15 +535,14 @@ class TokenizerConfig:
 
     @classmethod
     def from_dict(cls, input_dict: dict[str, Any], **kwargs) -> TokenizerConfig:
-        r"""Instantiates an ``AdditionalTokensConfig`` from a Python dictionary of
-        parameters.
+        r"""
+        Instantiate an ``TokenizerConfig`` from a Python dictionary.
 
         :param input_dict: Dictionary that will be used to instantiate the
             configuration object.
         :param kwargs: Additional parameters from which to initialize the
             configuration object.
-        :returns: ``AdditionalTokensConfig``: The configuration object instantiated
-            from those parameters.
+        :returns: The ``TokenizerConfig`` object instantiated from those parameters.
         """
         input_dict.update(**input_dict["additional_params"])
         input_dict.pop("additional_params")
@@ -508,7 +552,8 @@ class TokenizerConfig:
         return cls(**input_dict, **kwargs)
 
     def to_dict(self, serialize: bool = False) -> dict[str, Any]:
-        r"""Serializes this instance to a Python dictionary.
+        r"""
+        Serialize this configuration to a Python dictionary.
 
         :param serialize: will serialize the dictionary before returning it, so it can
             be saved to a JSON file.
@@ -521,7 +566,8 @@ class TokenizerConfig:
         return dict_config
 
     def __serialize_dict(self, dict_: dict) -> None:
-        r"""Converts numpy arrays to lists recursively within a dictionary.
+        r"""
+        Convert numpy arrays to lists recursively within a dictionary.
 
         :param dict_: dictionary to serialize
         """
@@ -532,8 +578,8 @@ class TokenizerConfig:
                 dict_[key] = dict_[key].tolist()
 
     def save_to_json(self, out_path: str | Path) -> None:
-        r"""Saves a tokenizer configuration object to the `out_path` path, so that it
-        can be re-loaded later.
+        r"""
+        Save a tokenizer configuration object to the `out_path` path.
 
         :param out_path: path to the output configuration JSON file.
         """
@@ -555,7 +601,8 @@ class TokenizerConfig:
 
     @classmethod
     def load_from_json(cls, config_file_path: str | Path) -> TokenizerConfig:
-        r"""Loads a tokenizer configuration from the `config_path` path.
+        r"""
+        Load a tokenizer configuration from the `config_path` path.
 
         :param config_file_path: path to the configuration JSON file to load.
         """
@@ -579,6 +626,12 @@ class TokenizerConfig:
         return cls.from_dict(dict_config)
 
     def __eq__(self, other: TokenizerConfig) -> bool:
+        """
+        Check two configs are equal.
+
+        :param other: other config object to compare.
+        :return: `True` if all attributes are equal, `False` otherwise.
+        """
         # We don't use the == operator as it yields False when comparing lists and
         # tuples containing the same elements. This method is not recursive and only
         # checks the first level of iterable values / attributes

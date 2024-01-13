@@ -5,22 +5,24 @@ import json
 from abc import ABC
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Callable, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 
 from symusic import Score
 from torch import LongTensor, randint
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
-from miditok import MIDITokenizer
+from miditok.constants import MIDI_FILES_EXTENSIONS
 
-from ..constants import MIDI_FILES_EXTENSIONS
+if TYPE_CHECKING:
+    from miditok import MIDITokenizer
 
 
 def split_seq_in_subsequences(
     seq: Sequence[any], min_seq_len: int, max_seq_len: int
 ) -> list[Sequence[Any]]:
-    r"""Split a sequence of tokens into subsequences.
+    r"""
+    Split a sequence of tokens into subsequences.
 
     The subsequences will have lengths comprised between ``min_seq_len`` and
     ``max_seq_len``: ``min_seq_len <= len(sub_seq) <= max_seq_len``.
@@ -48,7 +50,8 @@ def split_dataset_to_subsequences(
     max_seq_len: int,
     one_token_stream: bool = True,
 ) -> None:
-    """Split a dataset of tokens files into subsequences.
+    """
+    Split a dataset of tokens files into subsequences.
 
     This method is particularly useful if you plan to use a
     :class:`miditok.pytorch_data.DatasetJsonIO`, as it would split token sequences
@@ -89,7 +92,8 @@ def split_dataset_to_subsequences(
 
 
 class _DatasetABC(Dataset, ABC):
-    r"""Abstract ``Dataset`` class.
+    r"""
+    Abstract ``Dataset`` class.
 
     It holds samples (and optionally labels) and implements the basic magic methods.
 
@@ -110,9 +114,8 @@ class _DatasetABC(Dataset, ABC):
         labels_key_name: str = "labels",
     ) -> None:
         if samples is not None and labels is not None and len(samples) != len(labels):
-            raise ValueError(
-                "The number of samples must be the same as the number of labels"
-            )
+            msg = "The number of samples must be the same as the number of labels"
+            raise ValueError(msg)
         self.samples = samples if samples is not None else []
         self.labels = labels
         self.sample_key_name = sample_key_name
@@ -120,7 +123,8 @@ class _DatasetABC(Dataset, ABC):
         self.__iter_count = 0
 
     def reduce_num_samples(self, num_samples: int) -> None:
-        r"""Reduce the size of the dataset, by keeping `num_samples` samples.
+        r"""
+        Reduce the size of the dataset, by keeping `num_samples` samples.
 
         :param num_samples: number of samples to keep. They will be randomly picked.
         """
@@ -146,9 +150,9 @@ class _DatasetABC(Dataset, ABC):
         if self.__iter_count >= len(self):
             self.__iter_count = 0
             raise StopIteration
-        else:
-            self.__iter_count += 1
-            return self[self.__iter_count - 1]
+
+        self.__iter_count += 1
+        return self[self.__iter_count - 1]
 
     def __repr__(self) -> str:
         return self.__str__()
@@ -158,7 +162,8 @@ class _DatasetABC(Dataset, ABC):
 
 
 class DatasetTok(_DatasetABC):
-    r"""Basic ``Dataset`` loading and tokenizing MIDIs or JSON token files.
+    r"""
+    Basic ``Dataset`` loading and tokenizing MIDIs or JSON token files.
 
     The token ids will be stored in RAM. It outputs token sequences that can be used to
     train models.
@@ -167,11 +172,11 @@ class DatasetTok(_DatasetABC):
     comprise between ``min_seq_len`` and ``max_seq_len``.
     For example, with ``min_seq_len = 50`` and ``max_seq_len = 100``:
     * a sequence of 650 tokens will be split into 6 subsequences of 100 tokens plus one
-        subsequence of 50 tokens;
+    subsequence of 50 tokens;
     * a sequence of 620 tokens will be split into 6 subsequences of 100 tokens, the
-        last 20 tokens will be discarded;
+    last 20 tokens will be discarded;
     * a sequence of 670 tokens will be split into 6 subsequences of 100 tokens plus one
-        subsequence of 50 tokens, and the last 20 tokens will be discarded.
+    subsequence of 50 tokens, and the last 20 tokens will be discarded.
 
     This `Dataset` class is well suited if you have enough RAM to store all the data,
     as it does not require you to prior split the dataset into subsequences of the
@@ -263,7 +268,8 @@ class DatasetTok(_DatasetABC):
 
 
 class DatasetJsonIO(_DatasetABC):
-    r"""Basic ``Dataset`` loading Json files of tokenized MIDIs on the fly.
+    r"""
+    Basic ``Dataset`` loading Json files of tokenized MIDIs on the fly.
 
     When indexing it (``dataset[idx]``), this class will load the ``files_paths[idx]``
     json file and return the token ids, that can be used to train generative models.
@@ -294,7 +300,8 @@ class DatasetJsonIO(_DatasetABC):
         super().__init__(files_paths)
 
     def __getitem__(self, idx: int) -> Mapping[str, LongTensor]:
-        """Load the tokens from the ``idx`` json file.
+        """
+        Load the tokens from the ``idx`` json file.
 
         :param idx: index of the file to load.
         :return: the tokens as a dictionary mapping to the token ids as a tensor.

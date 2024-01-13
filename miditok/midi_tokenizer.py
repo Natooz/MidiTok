@@ -1,7 +1,4 @@
-"""Base tokenizer class, acting as a "framework" for all tokenizers.
-# TODO switch from ticks/beat to ticks/quarter logic for time division
-# TODO build docs action, make sure no error / warning https://github.com/readthedocs/actions.
-"""
+"""Base tokenizer class, acting as a "framework" for all tokenizers."""
 from __future__ import annotations
 
 import json
@@ -16,6 +13,9 @@ import numpy as np
 from huggingface_hub import ModelHubMixin as HFHubMixin
 from huggingface_hub import hf_hub_download
 from symusic import (
+    Note,
+    Pedal,
+    PitchBend,
     Score,
     Tempo,
     TimeSignature,
@@ -57,21 +57,29 @@ from .constants import (
     UNKNOWN_CHORD_PREFIX,
 )
 from .utils import (
+    compute_ticks_per_bar,
+    compute_ticks_per_beat,
     convert_ids_tensors_to_list,
     detect_chords,
     get_midi_programs,
+    get_midi_ticks_per_beat,
     merge_same_program_tracks,
     remove_duplicated_notes,
 )
-from .utils.utils import miditoolkit_to_symusic, np_get_closest
+from .utils.utils import miditoolkit_to_symusic, np_get_closest, tempo_qpm_to_mspq
 
 
 class MIDITokenizer(ABC, HFHubMixin):
-    r"""MIDI tokenizer base class, containing common methods and attributes for all
-    tokenizers.
+    r"""
+    MIDI tokenizer base class, acting as a common framework.
+
+    This is the base class of all tokenizers, containing the common methods and
+    attributes. It serves as a framework, and implement most of the tokenization
+    global workflow. Child classes should only implement specific methods, for their
+    specific behaviors, leaving most of the logic here.
 
     :param tokenizer_config: the tokenizer's configuration, as a
-        :class:`miditok.classes.TokenizerConfig` object.
+        :class:`miditok.TokenizerConfig` object.
     :param params: path to a tokenizer config file. This will override other arguments
         and load the tokenizer based on the config file. This is particularly useful if
         the tokenizer learned Byte Pair Encoding. (default: None)
@@ -108,36 +116,78 @@ class MIDITokenizer(ABC, HFHubMixin):
         if params is not None:
             # Will overwrite self.config
             self._load_params(params)
-        else:
-            # If no TokenizerConfig is given, we falls back to the default parameters
-            if self.config is None:
-                self.config = TokenizerConfig()
+        # If no TokenizerConfig is given, we falls back to the default parameters
+        elif self.config is None:
+            self.config = TokenizerConfig()
 
         # Tweak the tokenizer's configuration and / or attributes before creating the
         # vocabulary. This method is intended to be overridden by inheriting tokenizer
         # classes
         self._tweak_config_before_creating_voc()
 
-        # New time division to apply when preprocessing MIDIs
-        # This is left as a class attribute and not a property as the config is not
-        # intended to be modified after its creation. Ultimately, this could be
-        # ensured by converting TokenizerConfig to a frozen dataclass.
-        self.time_division = max(res for res in self.config.beat_res.values())
-
         # Set one_token_stream mode according to the config params
         if self.config.use_programs:
             self.one_token_stream = self.config.one_token_stream_for_programs
 
+        # Time Signatures
+        # Need to be set before creating duration values/tokens.
+        self.time_signatures = [TIME_SIGNATURE]
+        if self.config.use_time_signatures:
+            self.time_signatures = self.__create_time_signatures()
+
+        # New time division to apply when preprocessing MIDIs
+        # This is left as a class attribute and not a property as the config is not
+        # intended to be modified after its creation. Ultimately, this could be
+        # ensured by converting TokenizerConfig to a frozen dataclass.
+        # The tokenizer's time division is chosen in order to make sure that is equal
+        # to the lowest possible ticks per beat value, which depends on the supported
+        # time signatures.
+        # It shouldn't be used in place of the real ticks/beat value, which depends on
+        # the current time signature denominator. The only exception is for tokenizers
+        # which does not support time signature, i.e. which only consider 4/4.
+        # TODO this doesn't work as is yet for non-beat-based tokenizers, as the
+        #   `midi.resample` operation will keep too much accuracy for sections where
+        #   the time signature is < 8, i.e. ticks per beat < to tokenizer.time_division
+        #   We would need to resample per ticks/beat.
+        #   Setting
+        #   `self.time_division = max(res for res in self.config.beat_res.values())`
+        #   makes the tests pass as no MIDI in the tests has a time signature of */8.
+        #   https://github.com/Yikai-Liao/symusic/issues/10
+        # TODO document this somewhere.
+        #   Ideally the tokenizer's time division is set to the highest possible
+        #   ticks per beat value, which depends on the highest `config.beat_res` given
+        #   by the user and the maximum time signature denominator supported.
+        #   This would allow to keep the maximum time information when tokenizing.
+        #   In practice, if we do this, we would need to resample the time (onsets)
+        #   of all the MIDI messages differently for every every portions having
+        #   different ticks/beat values (can vary depending on the time signatures).
+        #   This would add a significant additional preprocessing time if we do it in
+        #   Python, so we do not do it. Instead we select the time division as the
+        #   highest ticks/beat in `config.beat_res`, and round the duration values of
+        #   the concerned tokens (note and time durations), even for
+        #   *NoteOff*/*PedalOff* tokens (which is necessary).
+        #   Ultimately, a resampling by ticks/beat could be implemented in a C++
+        #   preprocessing step with pybind. We could then remove the `ceil` from the
+        #   `MIDITokenizer_time_token_to_ticks` method.
+        self._tpb_per_ts = self.__create_tpb_per_ts()
+        self.time_division = max(self._tpb_per_ts.values())
+
         # Durations
+        # Usages:
+        # Duration: tpb --> np.array (ticks) to get the closest;
+        # Duration/TimeShift/Rest: ticks + tpb --> token (str);
+        # Duration/TimeShift/Rest: token + tpb --> ticks (int);
         self.durations = self.__create_durations_tuples()
-        # For internal use, Duration/TimeShift/Rest values of the tokenizer
-        self._durations_ticks_to_tuple = {
-            (beat * res + pos) * self.time_division // res: (beat, pos, res)
-            for (beat, pos, res) in self.durations
-        }
-        self._durations_ticks = np.array(
-            list(self._durations_ticks_to_tuple.keys()), dtype=np.intc
-        )
+        self._tpb_to_time_array = self.__create_tpb_to_ticks_array()
+        self._tpb_tokens_to_ticks = self.__create_tpb_tokens_to_ticks()
+        self._tpb_ticks_to_tokens = self.__create_tpb_ticks_to_tokens()
+
+        # Rests
+        self.rests = []
+        if self.config.use_rests:
+            self.rests = self.__create_rests()
+        self._tpb_to_rest_array = self.__create_tpb_to_ticks_array(rest=True)
+        self._tpb_rests_to_ticks = self.__create_tpb_tokens_to_ticks(rest=True)
 
         # Velocities
         # [1:] so that there is no velocity_0
@@ -153,26 +203,14 @@ class MIDITokenizer(ABC, HFHubMixin):
         # Tempos
         # _DEFAULT_TEMPO is the closest one to 120 that the tokenizer supports
         self.tempos = np.zeros(1)
+        self._tempos_mspq = np.zeros(1)
         self.default_tempo = TEMPO
         if self.config.use_tempos:
             self.tempos = self.__create_tempos()
+            # _tempos_mspq is only used in preprocess_tempos to adjust to the closest
+            self._tempos_mspq: np.ndarray = tempo_qpm_to_mspq(self.tempos)
+            self._tempos_mspq.sort()
             self.default_tempo = self.tempos[np.argmin(np.abs(self.tempos - TEMPO))]
-
-        # Rests
-        self.rests = []
-        if self.config.use_rests:
-            self.rests = self.__create_rests()
-        self._rests_ticks = np.array(
-            [
-                (beat * res + pos) * self.time_division // res
-                for beat, pos, res in self.rests
-            ]
-        )
-
-        # Time Signatures
-        self.time_signatures = [TIME_SIGNATURE]
-        if self.config.use_time_signatures:
-            self.time_signatures = self.__create_time_signatures()
 
         # Pitch bends
         self.pitch_bends = np.zeros(1)
@@ -201,22 +239,22 @@ class MIDITokenizer(ABC, HFHubMixin):
     def vocab(
         self,
     ) -> dict[str, int] | list[dict[str, int]]:  # token (str) to its id (int)
-        """Get the base vocabulary, as a dictionary linking tokens (str) to their ids
-        (int). The different (hidden / protected) vocabulary attributes of the class
-        are:
+        """
+        Get the base vocabulary, as a dictionary mapping tokens (str) to their ids.
 
+        The different (hidden / protected) vocabulary attributes of the class are:
         * ``._vocab_base`` : Dict[str: int] token -> id - Registers all known base
-            tokens.
+        tokens;
         * ``.__vocab_base_inv`` : Dict[int: str] id -> token - Inverse of
-            ``._base_vocab`` , to go the other way.
+        ``._base_vocab`` , to go the other way;
         * ``._vocab_base_id_to_byte`` : Dict[int: str] id -> byte - Link ids to their
-            associated unique bytes.
+        associated unique bytes;
         * ``._vocab_base_byte_to_token`` : Dict[str: str] - similar as above but for
-            tokens.
+        tokens;
         * ``._vocab_bpe_bytes_to_tokens`` : Dict[str: List[str]] byte(s) -> token(s)
-            used to decode BPE.
+        used to decode BPE;
         * ``._bpe_model.get_vocab()`` : Dict[str: int] byte -> id - bpe model
-            vocabulary, based on unique bytes
+        vocabulary, based on unique bytes.
 
         Before training the tokenizer with BPE, bytes are obtained by running
         ``chr(id)`` . After training, if we did start from an empty vocabulary, some
@@ -232,20 +270,21 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     @property
     def vocab_bpe(self) -> None | dict[str, int]:  # byte (str) to its id (int)
-        r"""Returns the vocabulary learnt with BPE.
+        r"""
+        Return the vocabulary learnt with BPE.
+
         In case the tokenizer has not been trained with BPE, it returns None.
 
         :return: the BPE model's vocabulary.
         """
         if not self.has_bpe:
             return None
-        else:
-            return self._bpe_model.get_vocab()
+        return self._bpe_model.get_vocab()
 
     @property
     def special_tokens(self) -> list[str]:
-        r"""Returns the vocabulary learnt with BPE.
-        In case the tokenizer has not been trained with BPE, it returns None.
+        r"""
+        Return the special tokens in the vocabulary.
 
         :return: special tokens of the tokenizer
         """
@@ -253,44 +292,91 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     @property
     def special_tokens_ids(self) -> Sequence[int]:
-        r"""Returns the vocabulary learnt with BPE.
-        In case the tokenizer has not been trained with BPE, it returns None.
+        r"""
+        Return the ids of the special tokens in the vocabulary.
 
-        :return: special tokens of the tokenizer
+        :return: ids of the special tokens of the tokenizer
         """
         return [self[token] for token in self.special_tokens]
 
-    @property
-    def _min_rest(self) -> int:
+    def _min_rest(self, ticks_per_beat: int) -> int:
+        """
+        Return the minimum rest value in ticks, for a given ``ticks_per_beat``.
+
+        :param ticks_per_beat: number of ticks in a beat. This depends on the current
+            time signature, and is equal to the MIDI's time division if the denominator
+            is 4 (quarter).
+        :return: minimum rest in ticks.
+        """
         if not self.config.use_rests:
             return 0
-        else:
-            return int(self._rests_ticks[0])
+        return int(self._tpb_to_rest_array[ticks_per_beat][0])
 
     def preprocess_midi(self, midi: Score) -> Score:
-        r"""Pre-process a MIDI file to resample its time and events values
-        before tokenizing it. Its notes attributes (times, pitches, velocities) will be
-        downsampled and sorted, duplicated notes removed, as well as tempos. Empty
-        tracks (with no note) will be removed from the MIDI object. Notes with pitches
+        r"""
+        Pre-process a MIDI file to resample its time and events values.
+
+        This method is called before parsing a MIDI's contents for tokenization.
+        Its notes attributes (times, pitches, velocities) will be downsampled and
+        sorted, duplicated notes removed, as well as tempos. Empty tracks (with no
+        note) will be removed from the MIDI object. Notes with pitches
         outside ``self.config.pitch_range`` will be deleted.
 
         :param midi: MIDI object to preprocess.
         """
-        # Resample time, not inplace
-        if self.time_division != midi.ticks_per_quarter:
-            midi = midi.resample(self.time_division, min_dur=1)
+        # Filter time signatures.
+        # We need to do this first to determine the MIDI's new time division.
+        self._filter_time_signatures(midi.time_signatures)
+        if len(midi.time_signatures) == 0:
+            # Use the default one (4/4)
+            midi.time_signatures.append(TimeSignature(0, *TIME_SIGNATURE))
 
-        # Merge instruments of the same program / inst before preprocessing them
+        # Resample time, not inplace
+        # The new time division is chosen depending on its highest time signature
+        # denominator, and is equivalent to the highest possible tick/beat ratio.
+        new_tpq = self._tpb_per_ts[max(ts.denominator for ts in midi.time_signatures)]
+        if midi.ticks_per_quarter != new_tpq:
+            midi = midi.resample(new_tpq, min_dur=1)
+
+        # Merge instruments of the same program / inst before preprocessing them.
         # This allows to avoid potential duplicated notes in some multitrack settings
+        # This can however mess up chord detections.
         if self.config.use_programs and self.one_token_stream:
             merge_same_program_tracks(midi.tracks)
+
+        # Process time signature changes
+        # We need to do it before computing the ticks_per_beat sections
+        if self.config.use_time_signatures and len(midi.time_signatures) > 0:
+            self._preprocess_time_signatures(midi.time_signatures)
+
+        # Compute resampling ratios to update times of events when several time sig,
+        # and ticks per beat ratios.
+        # Resampling factors are used to resample times of events when the MIDI has
+        # several different time signature denominators.
+        # ticks_per_beat ratios are used to adjust durations values according to the
+        # the tokenizer's vocabulary, i.e. *Duration* tokens.
+        if not self._note_on_off or (
+            self.config.use_sustain_pedals and self.config.sustain_pedal_duration
+        ):
+            ticks_per_beat = get_midi_ticks_per_beat(midi)
+        else:
+            ticks_per_beat = None
+        if (
+            self.config.use_time_signatures
+            and len({ts.denominator for ts in midi.time_signatures}) > 1
+        ):
+            tpq_resampling_factors = self._get_midi_resampling_factor(midi)
+        else:
+            tpq_resampling_factors = None
 
         for t in range(len(midi.tracks) - 1, -1, -1):
             if len(midi.tracks[t].notes) == 0:
                 del midi.tracks[t]
                 continue
             # Preprocesses notes
-            self._preprocess_notes(midi.tracks[t].notes)
+            midi.tracks[t].notes = self._preprocess_notes(
+                midi.tracks[t].notes, tpq_resampling_factors, ticks_per_beat
+            )
 
             if len(midi.tracks[t].notes) == 0:
                 del midi.tracks[t]
@@ -298,67 +384,121 @@ class MIDITokenizer(ABC, HFHubMixin):
 
             # Resample pitch bend values
             if self.config.use_pitch_bends and len(midi.tracks[t].pitch_bends) > 0:
-                self._preprocess_pitch_bends(midi.tracks[t].pitch_bends)
+                midi.tracks[t].pitch_bends = self._preprocess_pitch_bends(
+                    midi.tracks[t].pitch_bends, tpq_resampling_factors
+                )
 
             # Resample pedals durations
             if self.config.use_sustain_pedals and len(midi.tracks[t].pedals) > 0:
-                self._preprocess_pedals(midi.tracks[t].pedals)
+                midi.tracks[t].pedals = self._preprocess_pedals(
+                    midi.tracks[t].pedals, tpq_resampling_factors, ticks_per_beat
+                )
 
         # Process tempo changes
         if self.config.use_tempos and len(midi.tempos) > 0:
-            self._preprocess_tempos(midi.tempos)
-
-        # Process time signature changes
-        if self.config.use_time_signatures and len(midi.time_signatures) > 0:
-            self._preprocess_time_signatures(midi.time_signatures)
-        if len(midi.time_signatures) == 0:  # can sometimes happen
-            midi.time_signatures.append(TimeSignature(0, *TIME_SIGNATURE))
+            midi.tempos = self._preprocess_tempos(midi.tempos, tpq_resampling_factors)
 
         # We do not change key signature changes, markers and lyrics here as they are
         # not used by MidiTok (yet)
 
         return midi
 
-    def _preprocess_notes(self, notes: NoteTickList) -> None:
-        r"""Resamples the note velocities, remove notes outside of pitch range.
+    def _filter_time_signatures(self, time_signatures: TimeSignatureTickList) -> None:
+        """
+        Remove time signatures from a list that are unsupported by the tokenizer.
+
+        :param time_signatures: list of time signatures to filter.
+        """
+        for i in range(len(time_signatures) - 1, -1, -1):
+            if (
+                time_signatures[i].numerator,
+                time_signatures[i].denominator,
+            ) not in self.time_signatures:
+                if self._verbose:
+                    warnings.warn(
+                        f"The MIDI contains a time signature ({time_signatures[i]}) "
+                        f"outside of those supported by the tokenizer ("
+                        f"{self.time_signatures}). You should either discard this MIDI"
+                        f" or support this time signature, or alternatively deleting "
+                        f"it however if you are using a beat-based tokenizer (REMI) "
+                        f"the bars will be incorrectly detected.",
+                        stacklevel=2,
+                    )
+                del time_signatures[i]
+
+    def _preprocess_notes(
+        self,
+        notes: NoteTickList,
+        resampling_factors: np.ndarray = None,
+        ticks_per_beat: np.ndarray = None,
+        min_duration: int = 1,
+    ) -> NoteTickList:
+        r"""
+        Resample the note velocities, remove notes outside of pitch range.
+
         Note durations will be clipped to the maximum duration that can be handled by
         the tokenizer. This is done to prevent having incorrect offset values when
         computing rests. Notes with pitches outside of self.pitch_range will be
         deleted.
 
         :param notes: notes to preprocess.
+        :param resampling_factors: sections of resampling factors, when we need to
+            adjust the times of events to a specific ticks/beat value. This is required
+            when the MIDI has time signatures with different denominators. The factors
+            are given as a numpy array of shape ``(N,2)``, for ``N`` changes of ticks
+            per beat, and the second dimension representing the end tick of each
+            section and the number of ticks per beat respectively. (default: ``None``)
+        :param ticks_per_beat: array indicating the number of ticks per beat per time
+            signature denominator section. The numbers of ticks per beat depend on the
+            time signatures of the MIDI being parsed. The array has a shape ``(N,2)``,
+            for ``N`` changes of ticks per beat, and the second dimension representing
+            the end tick of each section and the number of ticks per beat respectively.
+            This argument is not required if
+            ``tokenizer.config.sustain_pedal_duration`` is disabled.
+            (default: ``None``)
+        :param min_duration: minimum duration (in tick) to set to notes that have
+            durations of 0 ticks after resampling. (default: ``1``)
         """
-        # Gather times and velocity values in lists
-        durations, velocities = [], []
-        i = 0
-        while i < len(notes):
-            if (
-                not self.config.pitch_range[0]
-                <= notes[i].pitch
-                < self.config.pitch_range[1]
-            ):
-                del notes[i]
-                continue
-            durations.append(notes[i].duration)
-            velocities.append(notes[i].velocity)
-            i += 1
+        note_soa = notes.numpy()
+
+        # Delete notes outside of pitch range
+        idx_out_of_pitch_range = np.where(
+            np.logical_or(
+                note_soa["pitch"] < self.config.pitch_range[0],
+                note_soa["pitch"] >= self.config.pitch_range[1],
+            )
+        )[0]
+        if len(idx_out_of_pitch_range) > 0:
+            mask = np.ones(len(note_soa["time"]), dtype=bool)
+            mask[idx_out_of_pitch_range] = False
+            for key in note_soa:
+                note_soa[key] = note_soa[key][mask]
 
         # Compute new velocities
-        velocities = np_get_closest(self.velocities, np.array(velocities))
+        note_soa["velocity"] = np_get_closest(
+            self.velocities, np.array(note_soa["velocity"])
+        )
 
-        # Compute new durations + apply new values
-        if not self._note_on_off:
-            durations = np.array(durations, dtype=np.intc)
-            durations = np_get_closest(self._durations_ticks, durations)
-            for i, (vel, dur) in enumerate(zip(velocities, durations)):
-                notes[i].velocity = vel
-                notes[i].duration = dur
-        # Apply only new velocities
-        else:
-            for i, vel in enumerate(velocities):
-                notes[i].velocity = vel
+        # Adjust times if needed
+        if resampling_factors is not None:
+            # First get the idx of the notes covered per section
+            resampling_factors = self.__convert_resampling_ratios_ticks_to_idx(
+                resampling_factors, note_soa["time"]
+            )
+            note_soa["time"] = self._adjust_time_to_tpb(
+                note_soa["time"], resampling_factors
+            )
 
-        # Symusic automatically sorts the notes by (time, pitch, duration) keys when
+        # Resample duration values if NoteOff, otherwise adjust to the vocab
+        if not self._note_on_off and ticks_per_beat is not None:
+            self._adjust_durations(note_soa, ticks_per_beat)
+        elif resampling_factors is not None:
+            note_soa["duration"] = self._adjust_time_to_tpb(
+                note_soa["duration"], resampling_factors, min_duration
+            )
+            self._adjust_offset_spanning_across_time_sig(note_soa, resampling_factors)
+
+        # Symusic automatically sorts the notes by (time, duration, pitch) keys when
         # reading a MIDI file. We hence don't need to sort the notes.
         # However, when using `NoteOn`/`NoteOff`, we can encounter note order
         # alterations with the velocity values as they are not sorted on velocities and
@@ -369,61 +509,84 @@ class MIDITokenizer(ABC, HFHubMixin):
         # the tokenization tests of MidiTok for concerned tokenizers in order to keep
         # 100% of the data integrity, so that the tests pass.
 
-        if self.config.remove_duplicated_notes:
-            remove_duplicated_notes(notes)
+        notes_new = Note.from_numpy(**note_soa)
 
-    def _preprocess_tempos(self, tempos: TempoTickList) -> None:
-        r"""Resamples the tempo values of tempo change events.
+        if self.config.remove_duplicated_notes:
+            # we need to resort here, as symusic does it by (time, duration, pitch).
+            notes_new.sort(key=lambda n: (n.time, n.pitch, n.duration, n.velocity))
+            remove_duplicated_notes(notes_new)
+
+        return notes_new
+
+    def _preprocess_tempos(
+        self,
+        tempos: TempoTickList,
+        resampling_factors: np.ndarray = None,
+    ) -> TempoTickList:
+        r"""
+        Resample the tempo values of tempo change events.
+
         For tempo changes occurring at the same tick/time, we only keep the last one.
         Consecutive identical tempo changes will be removed if
         ``self.config.delete_equal_successive_tempo_changes`` is True.
 
         :param tempos: tempo changes to resample.
+        :param resampling_factors: sections of resampling factors, when we need to
+            adjust the times of events to a specific ticks/beat value. This is required
+            when the MIDI has time signatures with different denominators. The factors
+            are given as a numpy array of shape ``(N,2)``, for ``N`` changes of ticks
+            per beat, and the second dimension representing the end tick of each
+            section and the number of ticks per beat respectively. (default: ``None``)
         """
         # If we delete the successive equal tempo changes, we need to sort them by time
         # Fortunately, sorting is already performed by symusic when loading the MIDI.
 
-        # Gather times and velocity values in lists
-        times, values = [], []
-        for tempo in tempos:
-            times.append(tempo.time)
-            values.append(tempo.tempo)
+        tempos_soa = tempos.numpy()
 
         # Find the closest tempos
-        times = np.array(times, dtype=np.intc)
-        values = np_get_closest(self.tempos, np.array(values))
+        tempos_soa["mspq"] = np_get_closest(self._tempos_mspq, tempos_soa["mspq"])
+
+        # Adjust times if needed
+        if resampling_factors is not None:
+            tempos_soa["time"] = self._adjust_time_to_tpb(
+                tempos_soa["time"], resampling_factors
+            )
 
         # Find groups of tempos at the same onset ticks, equal consecutive ones
         if len(tempos) > 1:
             # Keep only last tempo change for groups with same tick
             idx_groups = np.split(
-                np.arange(len(times)), np.where(np.diff(times) != 0)[0] + 1
+                np.arange(len(tempos_soa["time"])),
+                np.where(np.diff(tempos_soa["time"]) != 0)[0] + 1,
             )
             for idx_group in reversed(idx_groups):
                 if len(idx_group) > 1:
-                    for idx_to_del in reversed(idx_group[:-1]):
-                        values = np.delete(values, idx_to_del)
-                        del tempos[idx_to_del]
+                    for key in tempos_soa:
+                        # We don't use a mask here as the number of idx to delete is
+                        # likely to be small.
+                        for idx_to_del in reversed(idx_group[:-1]):
+                            tempos_soa[key] = np.delete(tempos_soa[key], idx_to_del)
             # Deduplicate successive tempo changes with same tempo value
             if self.config.delete_equal_successive_tempo_changes:
                 idx_groups = np.split(
-                    np.arange(len(values)), np.where(np.diff(values) != 0)[0] + 1
+                    np.arange(len(tempos_soa["time"])),
+                    np.where(np.diff(tempos_soa["mspq"]) != 0)[0] + 1,
                 )
                 for idx_group in reversed(idx_groups):
                     if len(idx_group) > 1:
-                        for idx_to_del in reversed(idx_group[1:]):
-                            values = np.delete(values, idx_to_del)
-                            del tempos[idx_to_del]
+                        for key in tempos_soa:
+                            for idx_to_del in reversed(idx_group[1:]):
+                                tempos_soa[key] = np.delete(tempos_soa[key], idx_to_del)
 
-        # Apply new values
-        for val, tempo in zip(values, tempos):
-            tempo.tempo = val
+        return Tempo.from_numpy(**tempos_soa)
 
     def _preprocess_time_signatures(self, time_sigs: TimeSignatureTickList) -> None:
-        r"""Resamples the time signature changes.
-        There are not delayed to the next bar (anymore since v3.0.0).
-        See MIDI 1.0 Detailed specifications, pages 54 - 56, for more information on
-        delayed time signature messages.
+        r"""
+        Resamples the time signature changes.
+
+        Time signature will be delayed to the next bar. See MIDI 1.0 Detailed
+        specifications, pages 54 - 56, for more information on delayed time signature
+        messages.
         If the ``delete_equal_successive_time_sig_changes`` parameter is set ``True``
         in the tokenizer's configuration, the time signatures must be sorted by time
         before calling this method. This is done by symusic when loading a MIDI. If
@@ -432,50 +595,13 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         :param time_sigs: time signature changes to quantize.
         """
-        # Filter the first time signature
-        while (
-            len(time_sigs) > 0
-            and (time_sigs[0].numerator, time_sigs[0].denominator)
-            not in self.time_signatures
-        ):
-            if self._verbose:
-                warnings.warn(
-                    f"The MIDI contains a time signature ({time_sigs[0]}) outside of "
-                    f"those supported by the tokenizer ({self.time_signatures}). You "
-                    f"should either discard this MIDI or support this time signature, "
-                    f"or alternatively deleting it however if you are using a "
-                    f"beat-based tokenizer (REMI) the bars will be incorrectly "
-                    f"detected.",
-                    stacklevel=2,
-                )
-            del time_sigs[0]
-            continue
-        if len(time_sigs) == 0:
-            return  # the default one will be added in `_preprocess_midi()`
-
-        ticks_per_bar = self._compute_ticks_per_bar(time_sigs[0], self.time_division)
+        ticks_per_bar = compute_ticks_per_bar(time_sigs[0], self.time_division)
         previous_tick = 0  # first time signature change is always at tick 0
         prev_ts = (time_sigs[0].numerator, time_sigs[0].denominator)
         i = 1
         while i < len(time_sigs):
             time_sig = time_sigs[i]
-            del_time_sig = False
-            if (time_sig.numerator, time_sig.denominator) not in self.time_signatures:
-                # Alternatively, we could offer a solution to "mock" unrecognized time
-                # signatures. If one (not both) of the numerator or denominator value
-                # is in the vocabulary, we could mock the other value with 4 (default).
-                if self._verbose:
-                    warnings.warn(
-                        f"The MIDI contains a time signature ({time_sigs[i]}) outside "
-                        f"of those supported by the tokenizer ({self.time_signatures})"
-                        f". You should either discard this MIDI or support this time "
-                        f"signature, or alternatively deleting it however if you are "
-                        f"using a beat-based tokenizer (REMI) the bars will be "
-                        f"incorrectly detected.",
-                        stacklevel=2,
-                    )
-                del_time_sig = True
-            if del_time_sig or (
+            if (
                 self.config.delete_equal_successive_time_sig_changes
                 and (time_sig.numerator, time_sig.denominator) == prev_ts
             ):
@@ -484,14 +610,13 @@ class MIDITokenizer(ABC, HFHubMixin):
 
             # determine the current bar of time sig
             bar_offset, rest = divmod(time_sig.time - previous_tick, ticks_per_bar)
-            if (
-                rest > 0
-            ):  # time sig doesn't happen on a new bar, we update it to the next bar
+            # time sig doesn't happen on a new bar, we update it to the next bar
+            if rest > 0:
                 bar_offset += 1
                 time_sig.time = previous_tick + bar_offset * ticks_per_bar
 
             # Update values
-            ticks_per_bar = self._compute_ticks_per_bar(time_sig, self.time_division)
+            ticks_per_bar = compute_ticks_per_bar(time_sig, self.time_division)
 
             # If the current time signature is now at the same time as the previous
             # one, we delete the previous
@@ -503,93 +628,253 @@ class MIDITokenizer(ABC, HFHubMixin):
             prev_ts = time_sig
             i += 1
 
-    def _preprocess_pitch_bends(self, pitch_bends: PitchBendTickList) -> None:
-        r"""Resamples the pitch bend events from a track.
-        Overlapping pitch bends will be deduplicated by keeping the one
-        having the highest absolute value at a given tick.
+    def _preprocess_pitch_bends(
+        self,
+        pitch_bends: PitchBendTickList,
+        resampling_factors: np.ndarray = None,
+    ) -> PitchBendTickList:
+        r"""
+        Resample the pitch bend events from a track.
+
+        Overlapping pitch bends will be deduplicated by keeping the one having the
+        highest absolute value at a given tick.
 
         :param pitch_bends: pitch bend events.
+        :param resampling_factors: sections of resampling factors, when we need to
+            adjust the times of events to a specific ticks/beat value. This is required
+            when the MIDI has time signatures with different denominators. The factors
+            are given as a numpy array of shape ``(N,2)``, for ``N`` changes of ticks
+            per beat, and the second dimension representing the end tick of each
+            section and the number of ticks per beat respectively. (default: ``None``)
         """
-        # Gather times and velocity values in lists
-        times, values = [], []
-        for pitch_bend in pitch_bends:
-            times.append(pitch_bend.time)
-            values.append(pitch_bend.value)
+        pitch_bends_soa = pitch_bends.numpy()
 
-        # Resample time, remove 0 durations
-        times = np.array(times, dtype=np.intc)
-        values = np_get_closest(self.pitch_bends, np.array(values))
+        # Find closest value
+        pitch_bends_soa["value"] = np_get_closest(
+            self.pitch_bends, pitch_bends_soa["value"]
+        )
+
+        # Adjust times if needed
+        if resampling_factors is not None:
+            pitch_bends_soa["time"] = self._adjust_time_to_tpb(
+                pitch_bends_soa["time"], resampling_factors
+            )
 
         # Find groups of pitch bends at the same onset ticks, and keep the > abs values
         if len(pitch_bends) > 1:
             idx_groups = np.split(
-                np.arange(len(times)), np.where(np.diff(times) != 0)[0] + 1
+                np.arange(len(pitch_bends_soa["value"])),
+                np.where(np.diff(pitch_bends_soa["time"]) != 0)[0] + 1,
             )
             for idx_group in reversed(idx_groups):
                 if len(idx_group) > 1:
-                    values_group = values[idx_group]
+                    values_group = pitch_bends_soa["value"][idx_group]
                     max_abs_idx = np.argmax(np.abs(values_group))
-                    values[idx_group[0]] = values_group[max_abs_idx]
-                    for idx_to_del in reversed(idx_group[1:]):
-                        values = np.delete(values, idx_to_del)
-                        del pitch_bends[idx_to_del]
+                    pitch_bends_soa["value"][idx_group[0]] = values_group[max_abs_idx]
+                    for key in pitch_bends_soa:
+                        for idx_to_del in reversed(idx_group[1:]):
+                            pitch_bends_soa[key] = np.delete(
+                                pitch_bends_soa[key], idx_to_del
+                            )
 
-        # Apply new values
-        for i, value in enumerate(values):
-            pitch_bends[i].value = value
+        return PitchBend.from_numpy(**pitch_bends_soa)
 
-    def _preprocess_pedals(self, pedals: PedalTickList) -> None:
-        r"""Resamples the pedals durations.
+    def _preprocess_pedals(
+        self,
+        pedals: PedalTickList,
+        resampling_factors: np.ndarray = None,
+        ticks_per_beat: np.ndarray = None,
+        min_duration: int = 1,
+    ) -> PedalTickList:
+        r"""
+        Resamples the pedals durations.
 
         :param pedals: pedals to preprocess.
+        :param resampling_factors: sections of resampling factors, when we need to
+            adjust the times of events to a specific ticks/beat value. This is required
+            when the MIDI has time signatures with different denominators. The factors
+            are given as a numpy array of shape ``(N,2)``, for ``N`` changes of ticks
+            per beat, and the second dimension representing the end tick of each
+            section and the number of ticks per beat respectively. (default: ``None``)
+        :param ticks_per_beat: array indicating the number of ticks per beat per
+            portions. The numbers of ticks per beat depend on the time signatures of
+            the MIDI being parsed. The array has a shape ``(N,2)``, for ``N`` changes
+            of ticks per beat, and the second dimension representing the end tick of
+            each portion and the number of ticks per beat respectively. This argument
+            is not required if ``tokenizer.config.sustain_pedal_duration`` is disabled.
+            (default: ``None``)
+        :param min_duration: minimum duration (in tick) to set to notes that have
+            durations of 0 ticks after resampling. (default: ``1``)
         """
-        # Get times and durations
-        times_durations_ends = [[pd.time, pd.duration, pd.end] for pd in pedals]
-        times_durations_ends = np.array(times_durations_ends, dtype=np.intc)
+        pedals_soa = pedals.numpy()
 
-        def _adjust_pedals_durations() -> None:
-            # Reformat durations according to the tokenizer's vocabulary
-            durations = np_get_closest(
-                self._durations_ticks, times_durations_ends[:, 1]
+        # Adjust times if needed
+        if resampling_factors is not None:
+            # First get the idx of the notes covered per section
+            resampling_factors = self.__convert_resampling_ratios_ticks_to_idx(
+                resampling_factors, pedals_soa["time"]
             )
-            for pi, duration in enumerate(durations):
-                pedals[pi].duration = duration
-                times_durations_ends[pi, 1] = duration
-                times_durations_ends[pi, 2] = times_durations_ends[pi, 0] + duration
-
-        # Reformat durations according to the tokenizer's vocabulary
-        if self.config.sustain_pedal_duration:
-            _adjust_pedals_durations()
+            pedals_soa["time"] = self._adjust_time_to_tpb(
+                pedals_soa["time"], resampling_factors
+            )
 
         # Format durations (if needed) and merge successive pedals
-        while np.any(times_durations_ends[:-1, 2] >= times_durations_ends[1:, 0]):
-            # Merge PedalOn periods depending on their durations
-            i = 1
-            while i < len(pedals):
-                if pedals[i - 1].end >= pedals[i].time:
-                    pedals[i - 1].duration = max(
-                        pedals[i - 1].duration, pedals[i - 1].time - pedals[i].end
-                    )
-                    del pedals[i]
-                    times_durations_ends[i - 1, 1] = pedals[i - 1].duration
-                    times_durations_ends[i - 1, 2] = pedals[i - 1].end
-                    times_durations_ends = np.delete(times_durations_ends, i, axis=0)
-                else:
-                    i += 1
+        need_resample = True
+        while np.any(
+            overlapping_mask := (
+                end_arr := pedals_soa["time"] + pedals_soa["duration"]
+            )[:-1]
+            >= pedals_soa["time"][1:]
+        ):
+            # Get the first idx of each group of successive values == True
+            idx_overlap = np.where(overlapping_mask)[0]
+            idx_diff = np.diff(idx_overlap, prepend=-2)  # prep to keep the first idx
+            first_idx_groups = idx_overlap[idx_diff > 1]
 
-            # We need to readjust durations again as they may have changed after merge
-            if self.config.sustain_pedal_duration:
-                _adjust_pedals_durations()
+            # Merge PedalOn periods depending on their durations
+            idx_to_delete = []
+            for idx in first_idx_groups:
+                ip = 1
+                while (
+                    idx + ip < len(pedals_soa["time"])
+                    and end_arr[idx] >= pedals_soa["time"][idx + ip]
+                ):
+                    pedals_soa["duration"][idx] = max(
+                        pedals_soa["duration"][idx],
+                        end_arr[idx + ip] - pedals_soa["time"][idx],
+                    )
+                    idx_to_delete.append(idx + ip)
+                    ip += 1
+
+            # Deduplicate pedals
+            mask = np.ones(len(pedals_soa["time"]), dtype=bool)
+            mask[idx_to_delete] = False
+            for key in pedals_soa:
+                pedals_soa[key] = pedals_soa[key][mask]
+
+            # Resample duration values if NoteOff, otherwise adjust to the vocab
+            if self.config.sustain_pedal_duration and ticks_per_beat is not None:
+                self._adjust_durations(pedals_soa, ticks_per_beat)
+            elif resampling_factors is not None:
+                pedals_soa["duration"] = self._adjust_time_to_tpb(
+                    pedals_soa["duration"], resampling_factors, min_duration
+                )
+                self._adjust_offset_spanning_across_time_sig(
+                    pedals_soa, resampling_factors
+                )
+            need_resample = False
+
+        # Will be run at least once if no overlapping durations (while loop)
+        if need_resample:
+            if self.config.sustain_pedal_duration and ticks_per_beat is not None:
+                self._adjust_durations(pedals_soa, ticks_per_beat)
+            elif resampling_factors is not None:
+                pedals_soa["duration"] = self._adjust_time_to_tpb(
+                    pedals_soa["duration"], resampling_factors, min_duration
+                )
+                self._adjust_offset_spanning_across_time_sig(
+                    pedals_soa, resampling_factors
+                )
+
+        return Pedal.from_numpy(**pedals_soa)
+
+    @staticmethod
+    def _adjust_time_to_tpb(
+        times_arr: np.ndarray,
+        tpq_resampling_factor: np.ndarray,
+        min_duration: int | None = None,
+    ) -> np.ndarray:
+        # Batch by factor (i.e. time signature denominator) section
+        idx_first = 0
+        for rf_idx, (idx_last, factor) in enumerate(tpq_resampling_factor):
+            idx_last_ = None if rf_idx == len(tpq_resampling_factor) - 1 else idx_last
+            # Round time values to the factor
+            # Except if the factor is 1, it means that the tpb is equal to the tpq
+            if factor != 1:
+                times_arr[idx_first:idx_last_] = (
+                    np.round(times_arr[idx_first:idx_last_] / factor) * factor
+                )
+                if min_duration is not None:
+                    times_arr[idx_first:idx_last_][
+                        times_arr[idx_first:idx_last_] == 0
+                    ] = min_duration * factor
+            idx_first = idx_last_
+
+        return times_arr
+
+    @staticmethod
+    def _adjust_offset_spanning_across_time_sig(
+        notes_pedals_soa: dict[str, np.ndarray],
+        resampling_factors: np.ndarray,
+    ) -> None:
+        end_arr = notes_pedals_soa["time"] + notes_pedals_soa["duration"]
+        idx_first = 0
+        for idx_last, _ in resampling_factors[:-1]:
+            # NoteOff/PedalOff idx with durations spanning across time sigs adjust end
+            spanning_durations_idx = np.where(
+                end_arr[idx_first:idx_last] >= notes_pedals_soa["time"][idx_last]
+            )[0]
+            for idx in spanning_durations_idx:
+                # Get the factor for the idx as it can be different from the next one
+                factor_for_idx = resampling_factors[
+                    np.argmax(
+                        resampling_factors[idx_first:, 0]
+                        >= notes_pedals_soa["time"][idx]
+                    ),
+                    1,
+                ]
+                new_end = np.round(end_arr[idx] / factor_for_idx) * factor_for_idx
+                notes_pedals_soa["duration"][idx] = (
+                    new_end - notes_pedals_soa["time"][idx]
+                )
+            idx_first = idx_last
+
+    def _adjust_durations(
+        self, notes_pedals_soa: dict[str, np.ndarray], ticks_per_beat: np.ndarray
+    ) -> None:
+        """
+        Adjust the durations of notes or pedals.
+
+        The durations of notes or pedals will be set to the closest ones of those in
+        the tokenizer's vocabulary. The new durations are calculated depending on the
+        time signature, i.e. number of ticks in a beat.
+
+        :param notes_pedals_soa: structure of arrays (soa) of notes or pedals.
+        :param ticks_per_beat: array indicating the number of ticks per beat per
+            portions. The numbers of ticks per beat depend on the time signatures of
+            the MIDI being parsed. The array has a shape ``(N,2)``, for ``N`` changes
+            of ticks per beat, and the second dimension representing the end tick of
+            each portion and the number of ticks per beat respectively.
+        """
+        # Batch by tpb section
+        dur_idx_first = 0
+        for tpb_idx, (last_tick_tpb, tpb) in enumerate(ticks_per_beat):
+            # Get idx of the concerned notes.
+            # There shouldn't be equal successive tpb values in ticks_per_beat.
+            # If last tpb --> set last note to max_tick to avoid iterating notes
+            if tpb_idx + 1 == len(ticks_per_beat):
+                dur_idx_last = len(notes_pedals_soa["duration"])
+            else:
+                dur_idx_last = np.argmax(
+                    notes_pedals_soa["time"][dur_idx_first:] >= last_tick_tpb
+                )
+            notes_pedals_soa["duration"][dur_idx_first:dur_idx_last] = np_get_closest(
+                self._tpb_to_time_array[tpb],
+                notes_pedals_soa["duration"][dur_idx_first:dur_idx_last],
+            )
+            dur_idx_first = dur_idx_last
 
     def _midi_to_tokens(self, midi: Score) -> TokSequence | list[TokSequence]:
-        r"""Converts a preprocessed MIDI object to a sequence of tokens.
-        The workflow of this method is as follows: the events (*Pitch*, *Velocity*,
-        *Tempo*, *TimeSignature*...) are gathered into a list, then the time events
-        are added. If `one_token_stream` is true, all events of all tracks are
-        treated all at once, otherwise the events of each track are treated
-        independently.
+        r"""
+        Convert a **preprocessed** MIDI object to a sequence of tokens.
 
-        :param midi: the MIDI object to convert.
+        The workflow of this method is as follows: the global events (*Tempo*,
+        *TimeSignature*...) and track events (*Pitch*, *Velocity*, *Pedal*...) are
+        gathered into a list, then the time events are added. If `one_token_stream` is
+        ``True``, all events of all tracks are treated all at once, otherwise the
+        events of each track are treated independently.
+
+        :param midi: the MIDI :class:`symusic.Score` object to convert.
         :return: a :class:`miditok.TokSequence` if ``tokenizer.one_token_stream`` is
             ``True``, else a list of :class:`miditok.TokSequence` objects.
         """
@@ -609,9 +894,24 @@ class MIDITokenizer(ABC, HFHubMixin):
             for i in range(len(all_events)):
                 all_events[i] += global_events
 
+        # Compute ticks_per_beat sections depending on the time signatures
+        # This has to be computed several times, in preprocess after resampling & here.
+        if (
+            not self._note_on_off
+            or (self.config.use_sustain_pedals and self.config.sustain_pedal_duration)
+            or self.config.use_chords
+            or self.config.use_pitch_intervals
+        ):
+            if self.config.use_time_signatures:
+                ticks_per_beat = get_midi_ticks_per_beat(midi)
+            else:
+                ticks_per_beat = np.array([[midi.end(), self.time_division]])
+        else:
+            ticks_per_beat = None
+
         # Adds track tokens
         for ti, track in enumerate(midi.tracks):
-            track_events = self._create_track_events(track)
+            track_events = self._create_track_events(track, ticks_per_beat)
             if self.one_token_stream:
                 all_events += track_events
             else:
@@ -622,30 +922,37 @@ class MIDITokenizer(ABC, HFHubMixin):
                         0, Event("Program", track.program, 0, desc="ProgramNoteOff")
                     )
                 all_events[ti] += track_events
-                all_events[ti].sort(key=lambda x: (x.time, self.__order(x)))
+                # TODO remove order if possible
+                all_events[ti].sort(key=lambda x: (x.time, self._order(x)))
         if self.one_token_stream:
-            all_events.sort(key=lambda x: (x.time, self.__order(x)))
+            # TODO sort magic method removing lambda?
+            all_events.sort(key=lambda x: (x.time, self._order(x)))
             # Add ProgramChange (named Program) tokens if requested.
             if self.config.program_changes:
                 self._insert_program_change_events(all_events)
 
         # Add time events
         if self.one_token_stream:
-            all_events = self._add_time_events(all_events)
+            all_events = self._add_time_events(all_events, midi.ticks_per_quarter)
             tok_sequence = TokSequence(events=all_events)
             self.complete_sequence(tok_sequence)
         else:
             tok_sequence = []
             for i in range(len(all_events)):
-                all_events[i] = self._add_time_events(all_events[i])
+                all_events[i] = self._add_time_events(
+                    all_events[i], midi.ticks_per_quarter
+                )
                 tok_sequence.append(TokSequence(events=all_events[i]))
                 self.complete_sequence(tok_sequence[-1])
 
         return tok_sequence
 
     @staticmethod
-    def __order(event: Event) -> int:
-        """Internal method used to sort events (tokens) depending on their type or
+    def _order(event: Event) -> int:
+        """
+        Return the order number of an ``Event``.
+
+        Internal method used to sort events (tokens) depending on their type or
         context of appearance. This is required, especially for multitrack
         one-token-stream situations where there can be several tokens appearing at
         the same moment (tick) from different tracks, that need to be sorted.
@@ -657,42 +964,53 @@ class MIDITokenizer(ABC, HFHubMixin):
         if event.type_ in ["Tempo", "TimeSig"]:
             return 0
         # Then NoteOff
-        elif event.type_ == "NoteOff" or (
+        if event.type_ == "NoteOff" or (
             event.type_ == "Program" and event.desc == "ProgramNoteOff"
         ):
             return 1
         # Then track effects
-        elif event.type_ in ["Pedal", "PedalOff"] or (
+        if event.type_ in ["Pedal", "PedalOff"] or (
             event.type_ == "Duration" and event.desc == "PedalDuration"
         ):
             return 2
-        elif event.type_ == "PitchBend" or (
+        if event.type_ == "PitchBend" or (
             event.type_ == "Program" and event.desc == "ProgramPitchBend"
         ):
             return 3
-        elif event.type_ == "ControlChange":
+        if event.type_ == "ControlChange":
             return 4
         # Track notes then
-        else:
-            return 10
+        return 10
 
-    def _create_track_events(self, track: Track) -> list[Event]:
-        r"""Extract the tokens / events of individual tracks: *Pitch*, *Velocity*,
-        *Duration*, *NoteOn*, *NoteOff* and optionally *Chord*, from a track
-        (``symusic.Track``).
+    def _create_track_events(
+        self, track: Track, ticks_per_beat: np.ndarray = None
+    ) -> list[Event]:
+        r"""
+        Extract the tokens/events from a track (``symusic.Track``).
+
+        Concerned events are: *Pitch*, *Velocity*, *Duration*, *NoteOn*, *NoteOff* and
+        optionally *Chord*, *Pedal* and *PitchBend*.
         **If the tokenizer is using pitch intervals, the notes must be sorted by time
         then pitch values. This is done in** ``preprocess_midi``.
 
-        :param track: MIDI track to convert.
-        :return: sequence of corresponding Events
+        :param track: ``symusic.Track`` to extract events from.
+        :param ticks_per_beat: array indicating the number of ticks per beat per
+            section. The numbers of ticks per beat depend on the time signatures of
+            the MIDI being parsed. The array has a shape ``(N,2)``, for ``N`` changes
+            of ticks per beat, and the second dimension representing the end tick of
+            each portion and the number of ticks per beat respectively.
+            This argument is not required if the tokenizer is not using *Duration*,
+            *PitchInterval* or *Chord* tokens. (default: ``None``)
+        :return: sequence of corresponding ``Event``s.
         """
         program = track.program if not track.is_drum else -1
         events = []
         note_token_name = "NoteOn" if self._note_on_off else "Pitch"
+        # max_time_interval is adjusted depending on the time signature denom / tpb
         max_time_interval = 0
         if self.config.use_pitch_intervals:
             max_time_interval = (
-                self.time_division * self.config.pitch_intervals_max_time_dist
+                ticks_per_beat[0, 1] * self.config.pitch_intervals_max_time_dist
             )
         previous_note_onset = -max_time_interval - 1
         previous_pitch_onset = -128  # lowest at a given time
@@ -702,7 +1020,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         if self.config.use_chords and not track.is_drum:
             chords = detect_chords(
                 track.notes,
-                self.time_division,
+                ticks_per_beat,
                 chord_maps=self.config.chord_maps,
                 program=program,
                 specify_root_note=self.config.chord_tokens_with_root_note,
@@ -718,6 +1036,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         # Add sustain pedal
         if self.config.use_sustain_pedals:
+            tpb_idx = 0
             for pedal in track.pedals:
                 # If not using programs, the default value is 0
                 events.append(
@@ -730,9 +1049,11 @@ class MIDITokenizer(ABC, HFHubMixin):
                 )
                 # PedalOff or Duration
                 if self.config.sustain_pedal_duration:
-                    dur = ".".join(
-                        map(str, self._durations_ticks_to_tuple[pedal.duration])
-                    )
+                    if pedal.time >= ticks_per_beat[tpb_idx, 0]:
+                        tpb_idx += 1
+                    dur = self._tpb_ticks_to_tokens[ticks_per_beat[tpb_idx, 1]][
+                        pedal.duration
+                    ]
                     events.append(
                         Event(
                             "Duration",
@@ -765,6 +1086,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         # Control changes (in the future, and handle pedals redundancy)
 
         # Creates the Note On, Note Off and Velocity events
+        tpb_idx = 0
         for note in track.notes:
             # Program
             if self.config.use_programs and not self.config.program_changes:
@@ -778,9 +1100,16 @@ class MIDITokenizer(ABC, HFHubMixin):
                     )
                 )
 
-            # Pitch / interval
+            # Pitch interval
             add_absolute_pitch_token = True
             if self.config.use_pitch_intervals and not track.is_drum:
+                # Adjust max_time_interval if needed
+                if note.time >= ticks_per_beat[tpb_idx, 0]:
+                    tpb_idx += 1
+                    max_time_interval = (
+                        ticks_per_beat[tpb_idx, 1]
+                        * self.config.pitch_intervals_max_time_dist
+                    )
                 if note.start != previous_note_onset:
                     if (
                         note.start - previous_note_onset <= max_time_interval
@@ -819,6 +1148,8 @@ class MIDITokenizer(ABC, HFHubMixin):
                         previous_pitch_onset = note.pitch
                     previous_pitch_chord = note.pitch
                 previous_note_onset = note.start
+
+            # Pitch / NoteOn
             if add_absolute_pitch_token:
                 events.append(
                     Event(
@@ -863,7 +1194,11 @@ class MIDITokenizer(ABC, HFHubMixin):
                     )
                 )
             else:
-                dur = ".".join(map(str, self._durations_ticks_to_tuple[note.duration]))
+                if note.time >= ticks_per_beat[tpb_idx, 0]:
+                    tpb_idx += 1
+                dur = self._tpb_ticks_to_tokens[ticks_per_beat[tpb_idx, 1]][
+                    note.duration
+                ]
                 events.append(
                     Event(
                         type_="Duration",
@@ -878,7 +1213,8 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     @staticmethod
     def _insert_program_change_events(events: list[Event]) -> None:
-        """Adds inplace Program tokens acting as Program Changes to a list of Events.
+        """
+        Add inplace *Program* tokens acting as Program Changes to a list of ``Event``s.
 
         :param events: Events to add Programs
         """
@@ -902,7 +1238,8 @@ class MIDITokenizer(ABC, HFHubMixin):
             events.insert(idx, event)
 
     def _create_midi_events(self, midi: Score) -> list[Event]:
-        r"""Create the *global* MIDI additional tokens: `Tempo` and `TimeSignature`.
+        r"""
+        Create the *global* MIDI additional tokens: `Tempo` and `TimeSignature`.
 
         :param midi: midi to extract the events from.
         :return: list of Events.
@@ -914,7 +1251,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             events += [
                 Event(
                     type_="TimeSig",
-                    value=f"{time_sig.numerator}/" f"{time_sig.denominator}",
+                    value=f"{time_sig.numerator}/{time_sig.denominator}",
                     time=time_sig.time,
                 )
                 for time_sig in midi.time_signatures
@@ -934,12 +1271,18 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         return events
 
-    def _add_time_events(self, events: list[Event]) -> list[Event]:
-        r"""Internal method intended to be implemented by inheriting classes.
-        It creates the time events from the list of global and track events, and as
-        such the final token sequence.
+    @abstractmethod
+    def _add_time_events(self, events: list[Event], time_division: int) -> list[Event]:
+        r"""
+        Create the time events from a list of global and track events.
 
-        :param events: note events to complete.
+        Internal method intended to be implemented by child classes.
+        The returned sequence is the final token sequence ready to be converted to ids
+        to be fed to a model.
+
+        :param events: sequence of global and track events to create tokens time from.
+        :param time_division: time division in ticks per quarter of the MIDI being
+            tokenized.
         :return: the same events, with time events inserted.
         """
         raise NotImplementedError
@@ -947,18 +1290,19 @@ class MIDITokenizer(ABC, HFHubMixin):
     def midi_to_tokens(
         self,
         midi: Score,
-        apply_bpe_if_possible: bool = True,
+        apply_bpe: bool = True,
     ) -> TokSequence | list[TokSequence]:
-        r"""Tokenizes a MIDI file.
-        This method returns a list of :class:`miditok.TokSequence`.
+        r"""
+        Tokenize a MIDI file.
+
+        This method returns a (list of) :class:`miditok.TokSequence`.
 
         If you are implementing your own tokenization by subclassing this class,
-        **override the ``_midi_to_tokens`` method**. This method implement necessary
-        MIDI preprocessing.
+        **override the** protected ``_midi_to_tokens`` **method**.
 
         :param midi: the MIDI object to convert.
-        :param apply_bpe_if_possible: will apply BPE if the tokenizer's vocabulary was
-            learned with.
+        :param apply_bpe: will apply BPE if the tokenizer's vocabulary was trained
+            with. (default: ``True``)
         :return: a :class:`miditok.TokSequence` if ``tokenizer.one_token_stream`` is
             ``True``, else a list of :class:`miditok.TokSequence` objects.
         """
@@ -967,18 +1311,20 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         # Tokenize it
         tokens = self._midi_to_tokens(midi)
-        if apply_bpe_if_possible and self.has_bpe:
+        if apply_bpe and self.has_bpe:
             self.apply_bpe(tokens)
 
         return tokens
 
     def complete_sequence(self, seq: TokSequence) -> None:
-        r"""Completes (inplace) a :class:`miditok.TokSequence` object by converting its
-        attributes. The input sequence can miss some of its attributes (ids, tokens),
-        but needs at least one for reference. This method will create the missing ones
-        from the present ones. The ``bytes`` attribute will be created if the tokenizer
-        has been trained with BPE. The ``events`` attribute will not be filled as it is
-        only intended for debug purpose.
+        r"""
+        Complete (inplace) a :class:`miditok.TokSequence`.
+
+        The input sequence can have some of its attributes (``ids``, ``tokens``) not
+        initialized (i.e. ``None``). This method will initialize them from the present
+        ones. The ``bytes`` attribute will be created if the tokenizer has been trained
+        with BPE. The ``events`` attribute will not be filled as it is only intended
+        for debug purpose.
 
         :param seq: input :class:`miditok.TokSequence`, must have at least one
             attribute defined.
@@ -999,7 +1345,8 @@ class MIDITokenizer(ABC, HFHubMixin):
     def _tokens_to_ids(
         self, tokens: Sequence[str | list[str]]
     ) -> list[int | list[int]]:
-        r"""Converts a list of tokens (str) into their associated ids (int).
+        r"""
+        Convert a list of tokens (str) into their ids format (int).
 
         :param tokens: list of tokens (str) to convert.
         :return: list of corresponding ids (int).
@@ -1017,7 +1364,9 @@ class MIDITokenizer(ABC, HFHubMixin):
     def _ids_to_tokens(
         self, ids: list[int | list[int]], as_str: bool = True
     ) -> list[str | Event | list[str | Event]]:
-        r"""Converts a sequence of ids (int) to their associated tokens (str or Event).
+        r"""
+        Convert a sequence of ids (int) to their tokens format (str or Event).
+
         **This method will not work with ids encoded with BPE. You will need to decode
         them first (:py:meth:`miditok.MIDITokenizer.decode_bpe`)**.
 
@@ -1051,7 +1400,8 @@ class MIDITokenizer(ABC, HFHubMixin):
     def _events_to_tokens(
         events: list[Event | list[Event]],
     ) -> list[str | list[str]]:
-        r"""Converts a sequence of Events to their associated tokens (str).
+        r"""
+        Convert a sequence of ``Events`` to their tokens format (str).
 
         :param events: sequence of Events to convert.
         :return: the sequence of corresponding tokens (str).
@@ -1068,14 +1418,16 @@ class MIDITokenizer(ABC, HFHubMixin):
     def _ids_to_bytes(
         self, ids: list[int | list[int]], as_one_str: bool = False
     ) -> str | list[str]:
-        r"""Converts a list of ids into their associated bytes.
+        r"""
+        Convert a list of ids into their bytes format.
+
         It can be returned either as a list of bytes or as a unique string of bytes.
         **This method will not work with ids encoded with BPE. You will need to decode
         them first (:py:meth:`miditok.MIDITokenizer.decode_bpe`)**.
 
         :param ids: token ids (int) to convert.
         :param as_one_str: will return the bytes all concatenated into one string.
-            (default: False)
+            (default: ``False``)
         :return: the tokens converted into strings of unique bytes.
         """
         if len(ids) == 0:
@@ -1088,11 +1440,12 @@ class MIDITokenizer(ABC, HFHubMixin):
     def _bytes_to_tokens(
         self, bytes_: str | list[str], as_str: bool = True
     ) -> list[str | Event | list[str | Event]]:
-        r"""Converts a sequence of bytes into their associated tokens (str or Event).
+        r"""
+        Convert a sequence of bytes into their associated tokens (str or ``Event``).
 
         :param bytes_: sequence of bytes to convert.
-        :param as_str: return the events as string objects, otherwise Event objects
-            (default: True)
+        :param as_str: return the events as string objects, otherwise ``Event`` objects
+            (default: ``True``)
         :return: the sequence of corresponding tokens (str).
         """
         if len(bytes_) == 0:
@@ -1112,9 +1465,11 @@ class MIDITokenizer(ABC, HFHubMixin):
         complete_seq: bool = False,
         decode_bpe: bool = False,
     ) -> TokSequence | list[TokSequence]:
-        r"""Converts a sequence into a :class:`miditok.TokSequence` or list of
-        :class:`miditok.TokSequence` objects with the appropriate format of the
-        tokenizer being used.
+        r"""
+        Convert a sequence of tokens/ids into a (list of) :class:`miditok.TokSequence`.
+
+        The method automatically format the sequence following the tokenizer's i/o
+        format.
 
         :param input_seq: sequence to convert. It can be a list of ids (integers),
             tokens (string) or events (Event). It can also be a Pytorch or TensorFlow
@@ -1158,10 +1513,11 @@ class MIDITokenizer(ABC, HFHubMixin):
             arg = (arg[0], [arg[1]])
 
         elif num_seq_dims != num_io_dims:
-            raise ValueError(
+            msg = (
                 f"The input sequence does not have the expected dimension "
                 f"({num_seq_dims} instead of {num_io_dims})."
             )
+            raise ValueError(msg)
 
         # Convert to TokSequence
         if not self.one_token_stream and num_io_dims == num_seq_dims:
@@ -1190,12 +1546,14 @@ class MIDITokenizer(ABC, HFHubMixin):
         return seq
 
     def _are_ids_bpe_encoded(self, ids: list[int] | np.ndarray) -> bool:
-        r"""A small check telling if a sequence of ids are encoded with BPE.
+        r"""
+        Tells if a sequence of token ids are encoded with BPE.
+
         This is performed by checking if any id has a value superior or equal to the
         length of the base vocabulary.
 
         :param ids: ids to check.
-        :return: boolean, True if ids are encoded with BPE, False otherwise.
+        :return: boolean, ``True`` if ids are encoded with BPE, ``False`` otherwise.
         """
         return np.any(np.array(ids) >= len(self))
 
@@ -1204,11 +1562,14 @@ class MIDITokenizer(ABC, HFHubMixin):
         tokens: TokSequence | list[TokSequence] | list[int | list[int]] | np.ndarray,
         programs: list[tuple[int, bool]] | None = None,
         output_path: str | None = None,
-        time_division: int | None = None,
     ) -> Score:
-        r"""Detokenize one or multiple sequences of tokens into a MIDI file.
+        r"""
+        Detokenize one or multiple sequences of tokens into a MIDI file.
+
         You can give the tokens sequences either as :class:`miditok.TokSequence`
-        objects, lists of integers, numpy arrays or PyTorch / Tensorflow tensors.
+        objects, lists of integers, numpy arrays or PyTorch/Jax/Tensorflow tensors.
+        The MIDI's time division will be the same as the tokenizer's:
+        ``tokenizer.time_division``.
 
         :param tokens: tokens to convert. Can be either a list of
             :class:`miditok.TokSequence`, a Tensor (PyTorch and Tensorflow are
@@ -1216,10 +1577,8 @@ class MIDITokenizer(ABC, HFHubMixin):
             represents tracks, unless the tokenizer handle tracks altogether as a
             single token sequence (``tokenizer.one_token_stream == True``).
         :param programs: programs of the tracks. If none is given, will default to
-            piano, program 0. (default: None)
+            piano, program 0. (default: ``None``)
         :param output_path: path to save the file. (default: ``None``)
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the
-            MIDI to create). (default: ``tokenizer.time_division``)
         :return: the midi object (``symusic.Score``).
         """
         if not isinstance(tokens, (TokSequence, list)) or (
@@ -1230,7 +1589,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 tokens, complete_seq=True, decode_bpe=True
             )
 
-        midi = self._tokens_to_midi(tokens, programs, time_division)
+        midi = self._tokens_to_midi(tokens, programs)
 
         # Set default tempo and time signatures at tick 0 if not present
         if len(midi.tempos) == 0 or midi.tempos[0].time != 0:
@@ -1244,37 +1603,36 @@ class MIDITokenizer(ABC, HFHubMixin):
             midi.dump_midi(output_path)
         return midi
 
+    @abstractmethod
     def _tokens_to_midi(
         self,
         tokens: TokSequence | list[TokSequence],
         programs: list[tuple[int, bool]] | None = None,
-        time_division: int | None = None,
     ) -> Score:
-        r"""Internal method called by ``self.tokens_to_midi``, intended to be
-        implemented by inheriting classes.
+        r"""
+        Convert tokens (:class:`miditok.TokSequence`) into a MIDI.
+
+        This is an internal method called by ``self.tokens_to_midi``, intended to be
+        implemented by classes inheriting :class:`miditok.MidiTokenizer`.
 
         :param tokens: tokens to convert. Can be either a list of
-            :class:`miditok.TokSequence`, a Tensor (PyTorch and Tensorflow are
-            supported), a numpy array or a Python list of ints. The first dimension
-            represents tracks, unless the tokenizer handle tracks altogether as a
-            single token sequence (``tokenizer.one_token_stream == True``).
+            :class:`miditok.TokSequence` or a list of :class:`miditok.TokSequence`s.
         :param programs: programs of the tracks. If none is given, will default to
-            piano, program 0. (default: None)
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the
-            MIDI to create).
-        :return: the midi object (symusic.Score).
+            piano, program 0. (default: ``None``)
+        :return: the midi object (:class:`symusic.Score`).
         """
         raise NotImplementedError
 
     @abstractmethod
     def _create_base_vocabulary(self) -> list[str | list[str]]:
-        r"""Creates the vocabulary, as a list of string tokens.
-        This method is unimplemented and need to be overridden by inheriting classes.
-        Each token as to be given as the form of "Type_Value", separated with an
-        underscore. Example: Pitch_58
+        r"""
+        Create the vocabulary, as a list of string tokens.
+
+        Each token is given as the form ``"Type_Value"``, with its type and value
+        separated with an underscore. Example: ``Pitch_58``.
         The :class:`miditok.MIDITokenizer` main class will then create the "real"
-        vocabulary as a dictionary. Do not include special tokens. These have to be
-        given when creating the tokenizer, and will be added to the vocabulary by
+        vocabulary as a dictionary. Special tokens have to be given when creating the
+        tokenizer, and will be added to the vocabulary by
         :class:`miditok.MIDITokenizer`.
 
         :return: the vocabulary as a list of string.
@@ -1282,9 +1640,11 @@ class MIDITokenizer(ABC, HFHubMixin):
         raise NotImplementedError
 
     def __create_vocabulary(self) -> None:
-        r"""Method actually creating the vocabulary object, as Dictionary, from the
-        ``_create_vocabulary`` method implemented by tokenization classes.
-        This method is called at ``__init__``\.
+        r"""
+        Create the vocabulary of the tokenizer as a dictionary.
+
+        This method is called during the tokenizer's initialization, and requires
+        ``_create_vocabulary`` to be implemented by a child class.
         """
         vocab = self._create_base_vocabulary()
 
@@ -1348,7 +1708,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             vocab += [f"PitchBend_{pitch_bend}" for pitch_bend in self.pitch_bends]
 
     def _update_token_types_indexes(self) -> None:
-        r"""Updates the _token_types_indexes attribute according to _event_to_token."""
+        r"""Update the _token_types_indexes attribute according to _event_to_token."""
 
         def create_for_dict(voc: dict[str, int]) -> dict[str, list[int]]:
             types_ = {}
@@ -1370,11 +1730,12 @@ class MIDITokenizer(ABC, HFHubMixin):
     def token_ids_of_type(
         self, token_type: str, vocab_id: int | None = None
     ) -> list[int]:
-        r"""Returns the list of token ids of the given type.
+        r"""
+        Return the list of token ids of the given type.
 
         :param token_type: token type to get the associated token ids.
         :param vocab_id: index of the vocabulary associated to the token, if applicable.
-            (default: None)
+            (default: ``None``)
         :return: list of token ids.
         """
         try:
@@ -1393,18 +1754,18 @@ class MIDITokenizer(ABC, HFHubMixin):
         byte_: str | None = None,
         add_to_bpe_model: bool = False,
     ) -> None:
-        r"""Adds an event to the vocabulary. Its index (int) will be the length of the
-        vocab.
+        r"""
+        Add an event to the vocabulary. Its id will be the length of the vocab.
 
         :param token: token to add, as a formatted string of the form "Type_Value",
             e.g. Pitch_80, or an Event.
         :param vocab_idx: idx of the vocabulary (in case of embedding pooling).
-            (default: None)
+            (default: ``None``)
         :param byte_: unique byte associated to the token. This is used when building
             the vocabulary with fast BPE. If None is given, it will default to
-            ``chr(id_ + CHR_ID_START)`` . (default: None)
+            ``chr(id_ + CHR_ID_START)`` . (default: ``None``)
         :param add_to_bpe_model: the token will be added to the bpe_model vocabulary
-            too. (default: None)
+            too. (default: ``None``)
         """
         token_str = token if isinstance(token, str) else str(token)
 
@@ -1429,9 +1790,10 @@ class MIDITokenizer(ABC, HFHubMixin):
                 self._bpe_model.add_tokens([byte_])
 
     def _create_chords_tokens(self) -> list[str]:
-        """Just create the *Chord* tokens that will populate the base vocabulary. This
-        protected method is intended to be used by subclasses when creating their
-        vocabularies.
+        """
+        Create the *Chord* tokens that will populate the base vocabulary.
+
+        This protected method is intended to be used when creating the vocabulary.
 
         :return: chord tokens, created from the tokenizer's params
         """
@@ -1461,11 +1823,12 @@ class MIDITokenizer(ABC, HFHubMixin):
         return tokens
 
     def token_id_type(self, id_: int, vocab_id: int | None = None) -> str:
-        r"""Returns the type of the given token id.
+        r"""
+        Return the type of the given token id.
 
         :param id_: token id to get the type.
         :param vocab_id: index of the vocabulary associated to the token, if
-            applicable. (default: None)
+            applicable. (default: ``None``)
         :return: the type of the token, as a string
         """
         token = self.__get_from_voc(id_, vocab_id)
@@ -1473,15 +1836,21 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     @abstractmethod
     def _create_token_types_graph(self) -> dict[str, list[str]]:
-        r"""Creates a dictionary describing the possible token type successions.
+        r"""
+        Create a dictionary describing the possible token type successions.
+
         This method is unimplemented and need to be overridden by inheriting classes.
         See other classes (:class:`miditok.REMI._create_token_types_graph`, ...)
         for examples of how to implement it.
+
+        :return: the token types transitions dictionary.
         """
         raise NotImplementedError
 
     def _add_special_tokens_to_types_graph(self) -> None:
-        r"""Adds (inplace) special tokens types to the token types graph dictionary.
+        r"""
+        Add (inplace) special tokens types to the token types graph dictionary.
+
         Two exceptions are made for the special BOS (Beginning of Sequence) and EOS
         (End of Sequence) tokens: No token type can precede a BOS token, and EOS token
         cannot precede any other token.
@@ -1501,15 +1870,19 @@ class MIDITokenizer(ABC, HFHubMixin):
                     self.tokens_types_graph[token_type].append(special_token_type)
 
     def __create_durations_tuples(self) -> list[tuple[int, int, int]]:
-        r"""Creates the possible durations in beat / position units, as tuple of the
-        form: (beat, pos, res) where beat is the number of beats, pos the number of
-        "samples" and res the beat resolution considered (samples per beat).
-        Example: (2, 5, 8) means the duration is 2 beat long + position 5 / 8 of the
-        ongoing beat In pure ticks we have:
-        duration = (beat * res + pos) * time_division // res
-        It is equivalent to: duration = num_samples * ticks_per_sample
-        So in the last example, if time_division is 384:
-        duration = (2 * 8 + 5) * 384 // 8 = 1008 ticks.
+        r"""
+        Create the possible durations in beat / position units as tuples of intergers.
+
+        The tuples follow the form: ``(beat, pos, res)`` where ``beat`` is the number
+        of beats, ``pos`` the number of "positions" and ``res`` the beat resolution
+        considered (positions per beat).
+        Example: ``(2, 5, 8)`` means the duration is 2 beat long + position 5 / 8 of
+        the ongoing beat. This would give in ticks:
+        ``duration = (beat * res + pos) * ticks_per_beat // res``
+        Note that ``ticks_per_beat`` is different from the time division, as the number
+        of ticks per beat depends on the current time signature denominator.
+        If ticks_per_beat is 384:
+        ``duration = (2 * 8 + 5) * 384 // 8 = 1008`` ticks.
 
         :return: the duration bins.
         """
@@ -1530,60 +1903,241 @@ class MIDITokenizer(ABC, HFHubMixin):
         del durations[0]  # removes duration of 0
         return durations
 
+    def __create_tpb_per_ts(self) -> dict[int, int]:
+        """
+        Return the dictionary of the possible ticks per beat values per time signature.
+
+        The set of possible values depends on the tokenizer's time division and
+        the time signatures it supports.
+
+        :return: dictionary of the possible ticks per beat values per time signature,
+            keys are time signature denominators, values the ticks/beat values.
+        """
+        return {
+            denom: compute_ticks_per_beat(denom, max(self.config.beat_res.values()))
+            for denom in {ts[1] for ts in self.time_signatures}
+        }
+
+    def _get_midi_resampling_factor(self, midi: Score) -> np.ndarray:
+        """
+        Compute the portions of numbers of ticks in a beat in a MIDI.
+
+        The method returns a numpy array of shape ``(N,2)``, for N ticks-per-beat
+        changes, and the second dimension corresponding to the ending tick and the
+        number of ticks per beat of the portion.
+
+        :param midi: MIDI to analyze.
+        :return: ticks per beat values as a numpy array.
+        """
+        ticks_per_beat = [
+            [
+                midi.time_signatures[tsi + 1].time,
+                compute_ticks_per_beat(
+                    midi.time_signatures[tsi].denominator,
+                    self._tpb_per_ts[TIME_SIGNATURE[1]],
+                )
+                // midi.ticks_per_quarter,
+            ]
+            for tsi in range(len(midi.time_signatures) - 1)
+        ]
+
+        # Handles the last one up to the max tick of the MIDI
+        ticks_per_beat.append(
+            [
+                midi.end() + 1,
+                compute_ticks_per_beat(
+                    midi.time_signatures[-1].denominator,
+                    self._tpb_per_ts[TIME_SIGNATURE[1]],
+                )
+                // midi.ticks_per_quarter,
+            ]
+        )
+
+        # Remove equal successive ones
+        for i in range(len(ticks_per_beat) - 1, 0, -1):
+            if ticks_per_beat[i][1] == ticks_per_beat[i - 1][1]:
+                ticks_per_beat[i - 1][0] = ticks_per_beat[i][0]
+                del ticks_per_beat[i]
+
+        return np.array(ticks_per_beat)
+
     @staticmethod
-    def _token_duration_to_ticks(
-        token_duration: str | tuple[int, int, int], time_division: int
+    def __convert_resampling_ratios_ticks_to_idx(
+        resampling_factors: np.ndarray, time_arr: np.array
+    ) -> np.ndarray:
+        idx_first = 0
+        factors_idx = resampling_factors.copy()
+        for rf_idx, last_tick_factor in enumerate(resampling_factors):
+            # Get the last concerned idx for this section.
+            if rf_idx + 1 == len(resampling_factors):
+                idx_last = len(time_arr) - 1
+            else:
+                idx_last = np.argmax(time_arr[idx_first:] >= last_tick_factor[0])
+            factors_idx[rf_idx, 0] = idx_last
+            idx_first = idx_last
+
+        return factors_idx
+
+    def __create_tpb_to_ticks_array(self, rest: bool = False) -> dict[int, np.ndarray]:
+        r"""
+        Create arrays of the times in ticks of the time tokens of the vocabulary.
+
+        These time values following the ticks/beat value, which depends on the time
+        signature.
+
+        The arrays are used during tokenization to efficiently find the closest values.
+
+        :param rest: will use rest values if given ``True``, otherwise durations.
+            (default: ``False``)
+        :return: dictionary of the durations in tick depending on the ticks per beat
+            resolution.
+        """
+        values = self.rests if rest else self.durations
+        tpb_to_ticks_array = {
+            tpb: np.array(
+                [self._time_token_to_ticks(time_tuple, tpb) for time_tuple in values],
+                dtype=np.intc,
+            )
+            for tpb in self._tpb_per_ts.values()
+        }
+        # TODO explain why extend
+        for i in range(len(self._tpb_per_ts) - 1):
+            extended_tpb = max(self._tpb_per_ts.values()) * (i + 1) * 2
+            tpb_to_ticks_array[extended_tpb] = np.array(
+                [
+                    self._time_token_to_ticks(time_tuple, extended_tpb)
+                    for time_tuple in values
+                ],
+                dtype=np.intc,
+            )
+        return tpb_to_ticks_array
+
+    def __create_tpb_tokens_to_ticks(
+        self, rest: bool = False
+    ) -> dict[int, dict[str, int]]:
+        r"""
+        Create the correspondences between times in tick and token value (str).
+
+        These correspondences vary following the ticks/beat value, which depends on the
+        time signature.
+
+        The returned dictionary is used when decoding *Duration*/*TimeShift*/*Rest*
+        tokens while taking the time signature into account.
+
+        :param rest: will use rest values if given ``True``, otherwise durations.
+            (default: ``False``)
+        :return: ticks per beat + token value to duration in tick.
+        """
+        values = self.rests if rest else self.durations
+        tpb_tokens_to_ticks = {
+            tpb: {
+                ".".join(map(str, duration_tuple)): self._time_token_to_ticks(
+                    duration_tuple, tpb
+                )
+                for duration_tuple in values
+            }
+            for tpb in self._tpb_per_ts.values()
+        }
+        # TODO explain why we extend
+        for i in range(len(self._tpb_per_ts) - 1):
+            extended_tpb = max(self._tpb_per_ts.values()) * (i + 1) * 2
+            tpb_tokens_to_ticks[extended_tpb] = {
+                ".".join(map(str, duration_tuple)): self._time_token_to_ticks(
+                    duration_tuple, extended_tpb
+                )
+                for duration_tuple in values
+            }
+        return tpb_tokens_to_ticks
+
+    def __create_tpb_ticks_to_tokens(self) -> dict[int, dict[int, str]]:
+        r"""
+        Create the correspondences between times in tick and token value (str).
+
+        These correspondences vary following the ticks/beat value, which depends on the
+        time signature.
+
+        The returned dictionary is used during tokenization to get the values of
+        *Duration*/*TimeShift*/*Rest* tokens while taking the time signature into
+        account.
+
+        :return: ticks per beat + duration in ticks to token value.
+        """
+        return {
+            tpb: {v: k for k, v in tokens_to_ticks.items()}
+            for tpb, tokens_to_ticks in self._tpb_tokens_to_ticks.items()
+        }
+
+    @staticmethod
+    def _time_token_to_ticks(
+        token_duration: str | tuple[int, int, int], ticks_per_beat: int
     ) -> int:
-        r"""Converts a *Duration* token value of the form x.x.x, for
-        beat.position.resolution, in ticks. Can also be used for
-        *TimeShift* tokens.
+        r"""
+        Convert a time token value of the form beat.position.resolution, in ticks.
+
+        This method is used to decode time tokens such as *Duration*, *TimeShift* or
+        *Rest*.
 
         :param token_duration: Duration / TimeShift token value.
-        :param time_division: time division.
+        :param ticks_per_beat: number of ticks in a beat. This depends on the current
+            time signature, and is equal to the MIDI's time division if the denominator
+            is 4 (quarter).
         :return: the duration / time-shift in ticks.
         """
         if isinstance(token_duration, str):
             token_duration = tuple(map(int, token_duration.split(".")))
         beat, pos, res = token_duration
-        return (beat * res + pos) * time_division // res
+        # We don't need to round anything here, as `ticks_per_beat` is always divisible
+        # by `res`.
+        return (beat * res + pos) * ticks_per_beat // res
 
-    def _ticks_to_duration_tokens(
+    def _time_ticks_to_tokens(
         self,
         duration: int,
+        ticks_per_beat: int,
         rest: bool = False,
     ) -> tuple[list[tuple[int, int, int]], list[int]]:
-        r"""Converts a duration in ticks into a sequence of
-        `Duration`/`TimeShift` values.
+        r"""
+        Convert a duration in ticks into a sequence of *TimeShift*/*Rest* values.
+
+        This method is not used for *Duration* tokens, as their values are rounded to
+        the closest values in. It is however used to create successions of time values
+        for *TimeShift* and *Rest* tokens.
 
         :param duration: duration in tick to convert.
+        :param ticks_per_beat: number of ticks in a beat. This depends on the current
+            time signature, and is equal to the MIDI's time division if the denominator
+            is 4 (quarter).
         :param rest: the duration is a rest, hence the created tokens will be based on
-            the `self.rests` values.
+            the ``self.rests`` values.
         :return: list of associated token values, and the list of the elapsed offset in
             tick for each of these values.
         """
         if rest:
-            dur_bins = self._rests_ticks
-            dur_vals = self.rests
+            time_bins = self._tpb_to_rest_array[ticks_per_beat]
+            time_tokens = self.rests
         else:
-            dur_bins = self._durations_ticks
-            dur_vals = self.durations
-        min_dur = dur_bins[0]
+            time_bins = self._tpb_to_time_array[ticks_per_beat]
+            time_tokens = self.durations
+        min_time = time_bins[0]
 
         offset_times, values = [], []
-        while duration >= min_dur:
-            index = (dur_bins - duration <= 0).nonzero()[0][-1]
-            values.append(dur_vals[index])
-            val_ticks = dur_bins[index]
+        while duration >= min_time:
+            index = (time_bins - duration <= 0).nonzero()[0][-1]
+            values.append(time_tokens[index])
+            val_ticks = time_bins[index]
             duration -= val_ticks
             offset_times.append(int(val_ticks))
 
         return values, offset_times
 
     def __create_rests(self) -> list[tuple[int, int, int]]:
-        r"""Creates the possible rests in beat / position units, as tuple of the form:
-        (beat, pos, res) where beat is the number of beats, pos the number of "samples"
-        and res the beat resolution considered (samples per beat).
-        It follows the same data representation than duration and time shifts.
+        r"""
+        Create the rests of the vocabulary as tuples of integers.
+
+        The tuples have the form ``(beat, pos, res)`` where ``beat`` is the number
+        of beats, ``pos`` the number of "positions" and ``res`` the beat resolution
+        considered (positions per beat).
+        It follows the same data representation than for duration and time shifts.
 
         :return: the rests.
         """
@@ -1605,21 +2159,26 @@ class MIDITokenizer(ABC, HFHubMixin):
         return rests
 
     def __create_tempos(self) -> np.ndarray:
-        r"""Creates the possible tempos, as a float number array.
+        r"""
+        Create the tempos of the vocabulary as a float number array.
 
-        The self.config.num_tempos tempos are distributed in the self.config.tempo_range
-        using either log or linear scaled values based on the value of
-        ``self.config.log_tempos``.
+        The ``self.config.num_tempos`` tempos are distributed in the
+        ``self.config.tempo_range`` using either log or linear scaled values based
+        on the value of ``self.config.log_tempos``.
 
-        :return: the tempos.
+        :return: the tempos as a numpy array.
         """
         tempo_fn = np.geomspace if self.config.log_tempos else np.linspace
         return tempo_fn(*self.config.tempo_range, self.config.num_tempos).round(2)
 
     def __create_time_signatures(self) -> list[tuple]:
-        r"""Creates the possible time signatures, as tuples of the form:
-        ``(num_beats, beat_res)`` where ``num_beats`` is the number of beats per bar.
-        Example: (3, 4) means one bar is 3 beat long and each beat is a quarter note.
+        r"""
+        Create time signatures of the vocabulary, as tuples of integers.
+
+        The tuples have the form ``(num_beats, beat_res)`` where ``num_beats`` is the
+        number of beats per bar.
+        Example: ``(3, 4)`` means one bar is 3 beat long and each beat is a quarter
+        note.
 
         :return: the time signatures.
         """
@@ -1628,39 +2187,28 @@ class MIDITokenizer(ABC, HFHubMixin):
         time_signatures = []
         for beat_res, beats in time_signature_range.items():
             if beat_res <= 0 or not math.log2(beat_res).is_integer():
-                raise ValueError(
+                msg = (
                     f"The beat resolution ({beat_res}) in time signature must be a"
                     f"power of 2."
                 )
+                raise ValueError(msg)
 
             time_signatures.extend([(num_beats, beat_res) for num_beats in beats])
 
         return time_signatures
 
     def __create_pitch_bends(self) -> np.ndarray:
-        r"""Creates the pitch bend values, as numpy array, using
-        ``self.config.pitch_bend_range``.
+        r"""
+        Create the pitch bend values of the vocabulary as numpy array.
 
         :return: the pitch bend values.
         """
         return np.linspace(*self.config.pitch_bend_range, dtype=np.int32)
 
     @staticmethod
-    def _compute_ticks_per_bar(time_sig: TimeSignature, time_division: int) -> int:
-        r"""Computes time resolution of one bar in ticks.
-
-        :param time_sig: time signature object
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the
-            MIDI being parsed)
-        :return: MIDI bar resolution, in ticks/bar
-        """
-        return int(time_division * 4 * time_sig.numerator / time_sig.denominator)
-
-    @staticmethod
     def _parse_token_time_signature(token_time_sig: str) -> tuple[int, int]:
-        r"""Converts a time signature token value of the form x/x into a tuple of
-        integers, time signature's numerator (bar length in beats) and denominator
-        (beat resolution).
+        r"""
+        Convert a time signature token value of the form x/x into a tuple of integers.
 
         :param token_time_sig: TimeSig token value.
         :return: the numerator and denominator of a time signature.
@@ -1669,7 +2217,8 @@ class MIDITokenizer(ABC, HFHubMixin):
         return numerator, denominator
 
     def has_midi_time_signatures_not_in_vocab(self, midi: Score) -> bool:
-        r"""Checks if a MIDI contains only time signatures supported by the tokenizer.
+        r"""
+        Check if a MIDI contains time signatures not supported by the tokenizer.
 
         :param midi: MIDI file
         :return: boolean indicating whether the MIDI can be processed by the tokenizer.
@@ -1680,8 +2229,8 @@ class MIDITokenizer(ABC, HFHubMixin):
                     time_sig.numerator,
                     time_sig.denominator,
                 ) not in self.time_signatures:
-                    return False
-        return True
+                    return True
+        return False
 
     def learn_bpe(
         self,
@@ -1691,10 +2240,12 @@ class MIDITokenizer(ABC, HFHubMixin):
         start_from_empty_voc: bool = False,
         **kwargs,
     ) -> None:
-        r"""Method to construct the vocabulary from BPE, backed by the 🤗tokenizers
-        library. The data used for training can either be given through the
-        ``iterator`` argument as an iterable object yielding strings, or by
-        ``tokens_paths`` as a list of paths to token json files that will be loaded.
+        r"""
+        Construct the vocabulary from BPE backed by the 🤗tokenizers library.
+
+        The data used for training can either be given through the ``iterator``
+        argument as an iterable object yielding strings, or by ``files_paths`` as a
+        list of paths to MIDI files that will be tokenized.
         You can read the Hugging Face `🤗tokenizers documentation
         <https://huggingface.co/docs/tokenizers/training_from_memory>`_,
         `🤗tokenizers API documentation <https://huggingface.co/docs/tokenizers/python/v0.9.4/api/reference.html#>`_
@@ -1734,10 +2285,11 @@ class MIDITokenizer(ABC, HFHubMixin):
             )
             return
         if iterator is None and files_paths is None:
-            raise ValueError(
+            msg = (
                 "You must give an iterator or a list of paths to tokens to train the"
                 "tokenizer with BPE."
             )
+            raise ValueError(msg)
 
         if vocab_size <= len(self.vocab):
             warnings.warn(
@@ -1822,7 +2374,9 @@ class MIDITokenizer(ABC, HFHubMixin):
         self.has_bpe = True
 
     def apply_bpe(self, seq: TokSequence | list[TokSequence]) -> None:
-        """Applies Byte Pair Encoding (BPE) to a TokSequence, or list of TokSequences.
+        """
+        Apply Byte Pair Encoding (BPE) to a TokSequence, or list of TokSequences.
+
         If a list is given, BPE will be applied by batch on all sequences at the time.
 
         :param seq: Sequence(s) to apply BPE.
@@ -1844,11 +2398,12 @@ class MIDITokenizer(ABC, HFHubMixin):
             seq.ids_bpe_encoded = True
 
     def decode_bpe(self, seq: TokSequence | list[TokSequence]) -> None:
-        r"""Decodes (inplace) a sequence of tokens (:class:`miditok.TokSequence`) with
-        ids encoded with BPE. This method only modifies the ``.ids`` attribute of the
-        input sequence(s) only and does not complete it. This method can also receive a
-        list of sequences, in which case it will decompose BPE on each of them
-        recursively.
+        r"""
+        Decode (inplace) the BPE of the ids of a :class:`miditok.TokSequence`.
+
+        This method only modifies the ``.ids`` attribute of the input sequence(s) only
+        and does not complete it. This method can be used recursively on lists of
+        :class:`miditok.TokSequence`.
 
         :param seq: token sequence to decompose.
         """
@@ -1876,14 +2431,16 @@ class MIDITokenizer(ABC, HFHubMixin):
         save_programs: bool | None = None,
         verbose: bool = True,
     ) -> None:
-        r"""Converts a dataset / list of MIDI files, into their token version and save
-        them as json files. The resulting json files will have an ``ids`` entry
-        containing the token ids. The format of the ids will correspond to the format
-        of the tokenizer (``tokenizer.io_format``). Note that the file tree of the
-        source files, up to the deepest common root directory if `midi_paths` is given
-        as a list of paths, will be reproducing in ``out_dir``. The config of the
-        tokenizer will be saved as a file named ``tokenizer_config_file_name``
-        (default: ``tokenizer.json``) in the ``out_dir`` directory.
+        r"""
+        Tokenize a dataset or list of MIDI files and save them in Json files.
+
+        The resulting json files will have an ``ids`` entry containing the token ids.
+        The format of the ids will correspond to the format of the tokenizer
+        (``tokenizer.io_format``). Note that the file tree of the source files, up to
+        the deepest common root directory if `midi_paths` is given as a list of paths,
+        will be reproducing in ``out_dir``. The config of the tokenizer will be saved
+        as a file named ``tokenizer_config_file_name`` (default: ``tokenizer.json``)
+        in the ``out_dir`` directory.
 
         :param midi_paths: paths of the MIDI files. It can also be a path to a
             directory, in which case this method will recursively find the MIDI files
@@ -1981,7 +2538,10 @@ class MIDITokenizer(ABC, HFHubMixin):
         self,
         tokens: TokSequence | list[TokSequence] | list[int | list[int]] | np.ndarray,
     ) -> float | list[float]:
-        r"""Checks if a sequence of tokens is made of good token types successions and
+        r"""
+        Return the ratio of errors of prediction in a sequence of tokens.
+
+        Check if a sequence of tokens is made of good token types successions and
         returns the error ratio (lower is better).
 
         :param tokens: sequence of tokens to check.
@@ -1996,7 +2556,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         # If list of TokSequence -> recursive
         if isinstance(tokens, list):
             return [self.tokens_errors(tok_seq) for tok_seq in tokens]
-        elif len(tokens) == 0:
+        if len(tokens) == 0:
             return 0
 
         num_tok_predicted = len(tokens)  # used to norm the score
@@ -2008,13 +2568,17 @@ class MIDITokenizer(ABC, HFHubMixin):
         return self._tokens_errors(tokens.tokens) / num_tok_predicted
 
     def _tokens_errors(self, tokens: list[str | list[str]]) -> int:
-        r"""Checks if a sequence of tokens is made of good token types successions and
-        returns the error ratio (lower is better). This method receives a list of
-        tokens as a list of strings, and returns the absolute number of errors
-        predicted. The number of errors should not be higher than the number of tokens.
-        This method is intended to be subclasses by tokenizer classes. The
-        implementation in ``MIDITokenizer`` class will check token types, duplicated
-        notes and time errors. It works for ``REMI``, ``TSD`` and ``Structured``.
+        r"""
+        Return the number of errors in a sequence of tokens.
+
+        The method checks if a sequence of tokens is made of good token types
+        successions and values. The number of errors should not be higher than the
+        number of tokens.
+
+        This method is intended to be overridden by tokenizer classes. The
+        implementation in the ``MIDITokenizer`` class will check token types,
+        duplicated notes and time errors. It works for ``REMI``, ``TSD`` and
+        ``Structured``.
 
         :param tokens: sequence of tokens string to check.
         :return: the number of errors predicted (no more than one per token).
@@ -2103,9 +2667,11 @@ class MIDITokenizer(ABC, HFHubMixin):
         programs: list[tuple[int, bool]] | None = None,
         **kwargs,
     ) -> None:
-        r"""Saves tokens as a JSON file.
-        In order to reduce disk space usage, **only the ids are saved**. Use kwargs to
-        save any additional information within the JSON file.
+        r"""
+        Save tokens as a JSON file.
+
+        In order to reduce disk space usage, **only the ids are saved**. Use ``kwargs``
+        to save any additional information within the JSON file.
 
         :param tokens: tokens, as list, numpy array, torch or tensorflow Tensor.
         :param path: path of the file to save.
@@ -2142,7 +2708,8 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     @staticmethod
     def load_tokens(path: str | Path) -> dict[str, list[int]]:
-        r"""Loads tokens saved as JSON files.
+        r"""
+        Load tokens saved as JSON files.
 
         :param path: path of the file to load.
         :return: the tokens, with the associated information saved with.
@@ -2160,18 +2727,18 @@ class MIDITokenizer(ABC, HFHubMixin):
         additional_attributes: dict | None = None,
         filename: str | None = DEFAULT_TOKENIZER_FILE_NAME,
     ) -> None:
-        r"""Saves the config / parameters of the tokenizer in a json encoded file. This
-        can be useful to keep track of how a dataset has been tokenized.
-        **Note:** if you override this method, you should probably call it (super()) at
-        the end and use the additional_attributes argument.
+        r"""
+        Save tokenizer in a Json file.
+
+        This can be useful to keep track of how a dataset has been tokenized.
 
         :param out_path: output path to save the file. This can be either a path to a
             file (with a name and extension), or a path to a directory in which case
             the ``filename`` argument will be used.
         :param additional_attributes: any additional information to store in the config
             file. It can be used to override the default attributes saved in the parent
-            method. (default: None)
-        :param filename: name of the file to save, to be used in case `out_path` leads
+            method. (default: ``None``)
+        :param filename: name of the file to save, to be used in case ``out_path`` leads
             to a directory. (default: ``"tokenizer.json"``)
         """
         if additional_attributes is None:
@@ -2246,8 +2813,11 @@ class MIDITokenizer(ABC, HFHubMixin):
         return cls(params=params_path)
 
     def _load_params(self, config_file_path: str | Path) -> None:
-        r"""Loads the parameters of the tokenizer from a config file. This method is
-        not intended to be called outside __init__, when creating a tokenizer.
+        r"""
+        Load the parameters of the tokenizer from a config file.
+
+        This method is not intended to be called outside __init__, when creating a
+        tokenizer.
 
         :param config_file_path: path to the tokenizer config file (encoded as json).
         """
@@ -2270,15 +2840,15 @@ class MIDITokenizer(ABC, HFHubMixin):
         for key, value in params.items():
             if key in ["tokenization", "miditok_version"]:
                 continue
-            elif key == "_vocab_base":
+            if key == "_vocab_base":
                 self._vocab_base = value
                 self.__vocab_base_inv = {v: k for k, v in value.items()}
                 continue
-            elif key == "_bpe_model":
+            if key == "_bpe_model":
                 # using 🤗tokenizers builtin method
                 self._bpe_model = TokenizerFast.from_str(value)
                 continue
-            elif key == "_vocab_base_byte_to_token":
+            if key == "_vocab_base_byte_to_token":
                 self._vocab_base_byte_to_token = value
                 token_to_byte = {v: k for k, v in value.items()}
                 self._vocab_base_id_to_byte = {
@@ -2289,7 +2859,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                     for k in self._bpe_model.get_vocab()
                 }
                 continue
-            elif key == "config":
+            if key == "config":
                 for beat_res_key in ["beat_res", "beat_res_rest"]:
                     # check here for previous versions (< v2.1.5)
                     if beat_res_key in value:
@@ -2307,7 +2877,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                         (0, value["rest_range"][1]): value["rest_range"][0]
                     }
                 value = TokenizerConfig.from_dict(value)
-            elif key in config_attributes:
+            if key in config_attributes:
                 if key == "beat_res":
                     value = {
                         tuple(map(int, beat_range.split("_"))): res
@@ -2320,7 +2890,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                     key = old_add_tokens_attr[key]
                 setattr(self.config, key, value)
                 continue
-            elif key == "unique_track":
+            if key == "unique_track":
                 # For config files <= v2.1.1 before the attribute is renamed
                 self.one_token_stream = value
 
@@ -2328,15 +2898,25 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     @property
     def is_multi_voc(self) -> bool:
-        """Returns a bool indicating if the tokenizer uses embedding
-        pooling, and so have multiple vocabularies.
+        """
+        Indicate if the tokenizer uses embedding pooling / have multiple vocabularies.
 
-        :return: True is the tokenizer uses embedding pooling else False.
+        :return: ``True`` is the tokenizer uses embedding pooling else ``False``.
         """
         return isinstance(self._vocab_base, list)
 
     @property
-    def io_format(self) -> tuple[str]:
+    def io_format(self) -> tuple[str, ...]:
+        """
+        Return the i/o format of the tokenizer.
+
+        The characters for each dimension returned are:
+        * ``I``: track or instrument;
+        * ``T``: token, or time step;
+        * ``C``: class of token, when using embedding pooling.
+
+        :return: i/o format of the tokenizer, as a tuple of strings which represent:
+        """
         format_ = []
         if not self.one_token_stream:
             format_.append("I")
@@ -2352,11 +2932,14 @@ class MIDITokenizer(ABC, HFHubMixin):
         *args,  # noqa: ANN002
         **kwargs,
     ) -> TokSequence | list[TokSequence] | Score:
-        r"""Calling a tokenizer allows to directly convert a MIDI to tokens or the
-        other way around. The method automatically detects MIDI and token objects, as
-        well as paths and can directly load MIDI or token json files before converting
-        them. This will call the :py:func:`miditok.MIDITokenizer.midi_to_tokens` if you
-        provide a MIDI object or path to a MIDI file, or the
+        r"""
+        Tokenize a MIDI file, or decode tokens into a MIDI.
+
+        Calling a tokenizer allows to directly convert a MIDI to tokens or vice-versa.
+        The method automatically detects MIDI and token objects, as well as paths and
+        can directly load MIDI or token json files before converting them. This will
+        call the :py:func:`miditok.MIDITokenizer.midi_to_tokens` if you provide a MIDI
+        object or path to a MIDI file, or the
         :py:func:`miditok.MIDITokenizer.tokens_to_midi` method otherwise.
 
         :param obj: a `symusic.Score` object, a sequence of tokens, or a path to
@@ -2368,17 +2951,17 @@ class MIDITokenizer(ABC, HFHubMixin):
             return self.midi_to_tokens(obj, *args, **kwargs)
 
         # Loads a file (.mid or .json)
-        elif isinstance(obj, (str, Path)):
+        if isinstance(obj, (str, Path)):
             path = Path(obj)
             if path.suffix in MIDI_FILES_EXTENSIONS:
                 midi = Score(obj)
                 return self.midi_to_tokens(midi, *args, **kwargs)
-            else:
-                tokens = self.load_tokens(path)
-                return self.tokens_to_midi(tokens["ids"], *args, **kwargs)
+
+            tokens = self.load_tokens(path)
+            return self.tokens_to_midi(tokens["ids"], *args, **kwargs)
 
         # Depreciated miditoolkit object
-        elif MidiFile is not None and isinstance(obj, MidiFile):
+        if MidiFile is not None and isinstance(obj, MidiFile):
             warnings.warn(
                 "You are using a depreciated `miditoolkit.MidiFile` object. MidiTok"
                 "is now (>v3.0.0) using symusic.Score as MIDI backend. Your MIDI will"
@@ -2388,31 +2971,35 @@ class MIDITokenizer(ABC, HFHubMixin):
             return self.midi_to_tokens(miditoolkit_to_symusic(obj), *args, **kwargs)
 
         # Consider it tokens --> converts to MIDI
-        else:
-            return self.tokens_to_midi(obj, *args, **kwargs)
+        return self.tokens_to_midi(obj, *args, **kwargs)
 
     def __len__(self) -> int:
-        r"""Returns the length of the vocabulary. If the tokenizer uses embedding
-        pooling/have multiple vocabularies, it will return the **sum** of their
-        lengths. If the vocabulary was learned with fast BPE, it will return the
-        length of the BPE vocabulary, i.e. the proper number of possible token ids.
-        Otherwise, it will return the length of the base vocabulary. Use the
-        :py:func:`miditok.MIDITokenizer.len` property (``tokenizer.len``) to have the
-        list of lengths.
+        r"""
+        Return the length of the vocabulary.
+
+        If the tokenizer uses embedding pooling/have multiple vocabularies, it will
+        return the **sum** of their lengths. If the vocabulary was learned with fast
+        BPE, it will return the length of the BPE vocabulary, i.e. the proper number of
+        possible token ids. Otherwise, it will return the length of the base
+        vocabulary. Use the :py:func:`miditok.MIDITokenizer.len` property
+        (``tokenizer.len``) to get the list of lengths.
 
         :return: length of the vocabulary.
         """
         if self.is_multi_voc:
             return sum([len(v) for v in self.vocab])
-        elif self.has_bpe:
+        if self.has_bpe:
             return len(self._bpe_model.get_vocab())
         return len(self.vocab)
 
     @property
     def len(self) -> int | list[int]:  # noqa: A003
-        r"""Returns the length of the vocabulary. If the tokenizer uses embedding
-        pooling/have multiple vocabularies, it will return the **list** of their
-        lengths. Use the :py:func:`miditok.MIDITokenizer.__len__` magic method
+        r"""
+        Return the length of the vocabulary.
+
+        If the tokenizer uses embedding pooling/have multiple vocabularies, it will
+        return the **list** of their lengths. Use the
+        :py:func:`miditok.MIDITokenizer.__len__` magic method
         (``len(tokenizer)``) to get the sum of the lengths.
 
         :return: length of the vocabulary.
@@ -2420,6 +3007,11 @@ class MIDITokenizer(ABC, HFHubMixin):
         return [len(v) for v in self.vocab] if self.is_multi_voc else len(self)
 
     def __repr__(self) -> str:
+        """
+        Return the representation of the tokenizer, indicating its vocab size and i/o.
+
+        :return: representation of the tokenizer.
+        """
         out_str = f"{self.len} tokens with {self.io_format} io format"
 
         # one_token_stream / multi-voc
@@ -2441,7 +3033,8 @@ class MIDITokenizer(ABC, HFHubMixin):
     def __getitem__(
         self, item: int | str | tuple[int, int | str]
     ) -> str | int | list[int]:
-        r"""Convert a token (int) to an event (str), or vice-versa.
+        r"""
+        Convert a token (int) to an event (str), or vice-versa.
 
         :param item: a token (int) or an event (str). For tokenizers with
             embedding pooling/multiple vocabularies ( `tokenizer.is_multi_voc` ), you
@@ -2452,23 +3045,26 @@ class MIDITokenizer(ABC, HFHubMixin):
         """
         if isinstance(item, tuple) and self.is_multi_voc:
             return self.__get_from_voc(item[1], item[0])
-        elif self.is_multi_voc and isinstance(item, str):
+        if self.is_multi_voc and isinstance(item, str):
             if all(item in voc for voc in self.vocab):
                 return [voc[item] for voc in self.vocab]
-            else:
-                raise ValueError(
-                    "This tokenizer uses multiple vocabularies / embedding pooling. To"
-                    "index it you must either provide a token (string) that is within"
-                    "all vocabularies (e.g. special tokens), or a tuple where the"
-                    "first element in the index of the vocabulary and the second the"
-                    "element to index."
-                )
-        else:
-            return self.__get_from_voc(item)
+
+            msg = (
+                "This tokenizer uses multiple vocabularies / embedding pooling. To"
+                "index it you must either provide a token (string) that is within"
+                "all vocabularies (e.g. special tokens), or a tuple where the"
+                "first element in the index of the vocabulary and the second the"
+                "element to index."
+            )
+            raise ValueError(msg)
+
+        return self.__get_from_voc(item)
 
     def __get_from_voc(self, item: int | str, vocab_id: int | None = None) -> int | str:
-        r"""Get element from the vocabulary.
-        The method handles both token (int) <--> event (str) ways.
+        r"""
+        Get an element from the vocabulary.
+
+        The method handles both id (int) <--> token (str) ways.
 
         :param item: item to get / index.
         :param vocab_id: index of the vocabulary associated to the token, if
@@ -2486,8 +3082,10 @@ class MIDITokenizer(ABC, HFHubMixin):
         return voc[item]
 
     def __eq__(self, other: MIDITokenizer) -> bool:
-        r"""Checks if two tokenizers are identical. This is done by comparing their
-        vocabularies, and configuration.
+        r"""
+        Check that two tokenizers are identical.
+
+        This is done by comparing their vocabularies, and configuration.
 
         :param other: tokenizer to compare.
         :return: True if the vocabulary(ies) are identical, False otherwise.

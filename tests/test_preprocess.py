@@ -1,4 +1,4 @@
-#!/usr/bin/python3 python
+"""Tests on the preprocessing steps of MIDI files, before tokenization."""
 
 """Tests on the preprocessing steps of MIDI files, before tokenization."""
 
@@ -27,7 +27,8 @@ TOKENIZATIONS = ["MIDILike", "TSD"]
 @pytest.mark.parametrize("tokenization", TOKENIZATIONS)
 @pytest.mark.parametrize("midi_path", MIDI_PATHS_ALL)
 def test_preprocess(tokenization: str, midi_path: Path):
-    r"""Check that a second preprocessing doesn't alter the MIDI anymore.
+    r"""
+    Check that a second preprocessing doesn't alter the MIDI anymore.
 
     :param tokenization: name of the tokenizer class.
     :param midi_path: paths to MIDI file to test.

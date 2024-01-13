@@ -2,11 +2,11 @@
 from __future__ import annotations
 
 import warnings
-from collections import Counter
-from typing import Sequence
+from copy import copy
+from math import ceil
+from typing import TYPE_CHECKING, Sequence
 
 import numpy as np
-from miditoolkit import MidiFile
 from symusic import (
     ControlChange,
     Note,
@@ -18,7 +18,7 @@ from symusic import (
     TimeSignature,
     Track,
 )
-from symusic.core import NoteTickList, TrackTickList
+from symusic.core import NoteTickList
 
 from miditok.classes import Event
 from miditok.constants import (
@@ -26,14 +26,21 @@ from miditok.constants import (
     INSTRUMENT_CLASSES,
     MIDI_INSTRUMENTS,
     PITCH_CLASSES,
+    TIME_SIGNATURE,
     UNKNOWN_CHORD_PREFIX,
 )
 
+if TYPE_CHECKING:
+    from miditoolkit import MidiFile
+    from symusic.core import TrackTickList
+
 
 def convert_ids_tensors_to_list(ids) -> list[int] | list[list[int]]:  # noqa: ANN001
-    """Convert a PyTorch, Tensorflow Tensor or numpy array to a list of integers.
-    This method works with Jax too.
-    It is recursive and will convert nested Tensors / arrays within lists.
+    """
+    Convert a PyTorch, Tensorflow Tensor or numpy array to a list of integers.
+
+    This method works with Jax too. It is recursive and will convert nested
+    Tensors/arrays.
 
     :param ids: ids sequence to convert.
     :return: the input, as a list of integers
@@ -43,10 +50,11 @@ def convert_ids_tensors_to_list(ids) -> list[int] | list[list[int]]:  # noqa: AN
         if type(ids).__name__ in ["Tensor", "EagerTensor"]:
             ids = ids.numpy()
         if not isinstance(ids, np.ndarray):
-            raise TypeError(
+            msg = (
                 "The tokens must be given as a list of integers, np.ndarray, or"
                 "PyTorch/Tensorflow tensor"
             )
+            raise TypeError(msg)
         ids = ids.astype(int).tolist()
     else:
         # Recursively checks the content are ints (only check first item)
@@ -66,8 +74,8 @@ def convert_ids_tensors_to_list(ids) -> list[int] | list[list[int]]:  # noqa: AN
 
 
 def get_midi_programs(midi: Score) -> list[tuple[int, bool]]:
-    r"""Returns the list of programs of the tracks of a MIDI, deeping the
-    same order. It returns it as a list of tuples (program, is_drum).
+    r"""
+    Return the list of programs of the tracks of a MIDI.
 
     :param midi: the MIDI object to extract tracks programs
     :return: the list of track programs, as a list of tuples (program, is_drum)
@@ -76,36 +84,50 @@ def get_midi_programs(midi: Score) -> list[tuple[int, bool]]:
 
 
 def remove_duplicated_notes(
-    notes: NoteTickList | list[Note], consider_duration: bool = False
+    notes: NoteTickList | dict[str, np.ndarray], consider_duration: bool = False
 ) -> None:
-    r"""Removes (inplace) duplicated notes, i.e. with the same pitch and starting
-    (onset) time. `consider_duration` can be used to also consider their duration
-    (i.e. offset time) too. The velocities are ignored in this method.
+    r"""
+    Remove (inplace) duplicated notes, i.e. with the same pitch and onset time.
+
+    This can be done either from a ``symusic.NoteTickList``, or a note structure of
+    arrays (``symusic.NoteTickList.numpy()``).
+    The velocities are ignored in this method.
     **The notes need to be sorted by time, then pitch, and duration if
     consider_duration is True:**
     ``notes.sort(key=lambda x: (x.start, x.pitch, x.duration))``.
 
-    :param notes: notes to analyse
+    :param notes: notes to analyse.
     :param consider_duration: if given ``True``, the method will also consider the
-        durations of the notes when detecting identical ones. (default: False)
+        durations of the notes when detecting identical ones. (default: ``False``)
     """
+    is_list_of_notes = isinstance(notes, NoteTickList)
+    note_soa = notes.numpy() if is_list_of_notes else notes
+
+    keys_to_stack = ["time", "pitch"]
     if consider_duration:
-        onset_pitches = [[note.start, note.pitch, note.duration] for note in notes]
-    else:
-        onset_pitches = [[note.start, note.pitch] for note in notes]
-    onset_pitches = np.array(onset_pitches, dtype=np.intc)
+        keys_to_stack.append("duration")
+    onset_pitches = np.stack([note_soa[key] for key in keys_to_stack], axis=1)
 
     successive_val_eq = np.all(onset_pitches[:-1] == onset_pitches[1:], axis=1)
     idx_to_del = np.where(successive_val_eq)[0] + 1
-    for idx in reversed(idx_to_del):
-        del notes[idx]
+
+    if is_list_of_notes:
+        for idx in reversed(idx_to_del):
+            del notes[idx]
+    else:
+        (mask := np.ones(len(notes["time"]), dtype=bool))[idx_to_del] = False
+        for key in notes:
+            notes[key] = notes[key][mask]
 
 
 def fix_offsets_overlapping_notes(notes: NoteTickList) -> None:
-    r"""Reduces the durations of overlapping notes, so that when a note starts, if it
-    was previously being played, the previous note will end. Before running this
-    method make sure the notes has been sorted by start then pitch then end values:
-    `notes.sort(key=lambda x: (x.start, x.pitch, x.end))`.
+    r"""
+    Reduce the durations of overlapping notes.
+
+    By applying this method, when a note starts while it is already being played,
+    the previous note will end. Before running this method make sure the notes are
+    sorted by start then pitch then end values:
+    ``notes.sort(key=lambda x: (x.start, x.pitch, x.end))``.
 
     :param notes: notes to fix.
     """
@@ -121,7 +143,7 @@ def fix_offsets_overlapping_notes(notes: NoteTickList) -> None:
 
 def detect_chords(
     notes: NoteTickList,
-    time_division: int,
+    ticks_per_beat: np.array,
     chord_maps: dict[str, Sequence[int]],
     program: int | None = None,
     specify_root_note: bool = True,
@@ -130,7 +152,10 @@ def detect_chords(
     unknown_chords_num_notes_range: tuple[int, int] | None = None,
     simul_notes_limit: int = 10,
 ) -> list[Event]:
-    r"""Chord detection method. Make sure to sort notes by start time then pitch
+    r"""
+    Detect chords in a list of notes.
+
+    Make sure to sort notes by start time then pitch
     before: ``notes.sort(key=lambda x: (x.start, x.pitch))``.
     **On very large tracks with high note density this method can be slow.**
     If you plan to use it with the Maestro or GiantMIDI datasets, it can take up to
@@ -140,8 +165,11 @@ def detect_chords(
     inversion.**.
 
     :param notes: notes to analyse (sorted by starting time, them pitch).
-    :param time_division: MIDI time division / resolution, in ticks/beat (of the MIDI
-        being parsed).
+    :param ticks_per_beat: array indicating the number of ticks per beat per
+        time signature denominator section. The numbers of ticks per beat depend on the
+        time signatures of the MIDI being parsed. The array has a shape ``(N,2)``, for
+        ``N`` changes of ticks per beat, and the second dimension representing the end
+        tick of each section and the number of ticks per beat respectively.
     :param chord_maps: list of chord maps, to be given as a dictionary where keys are
         chord qualities (e.g. "maj") and values pitch maps as tuples of integers
         (e.g. (0, 4, 7)). You can use ``miditok.constants.CHORD_MAPS`` as an example.
@@ -172,8 +200,9 @@ def detect_chords(
         [(note.pitch, int(note.start), int(note.end)) for note in notes]
     )  # (N,3)
 
-    time_div_half = time_division // 2
-    onset_offset = time_division * onset_offset / beat_res
+    tpb_idx = 0
+    tpb_half = ticks_per_beat[tpb_idx, 1] // 2
+    onset_offset_tick = ticks_per_beat[tpb_idx, 1] * onset_offset / beat_res
 
     count = 0
     previous_tick = -1
@@ -184,23 +213,27 @@ def detect_chords(
             count += 1
             continue
 
+        # Update the time offset the time signature denom/ticks per beat changed
+        if notes[count, 1] > ticks_per_beat[tpb_idx, 0]:
+            tpb_idx += 1
+            tpb_half = ticks_per_beat[tpb_idx, 1] // 2
+            onset_offset_tick = ticks_per_beat[tpb_idx, 1] * onset_offset / beat_res
+
         # Gathers the notes around the same time step
         onset_notes = notes[count : count + simul_notes_limit]  # reduces the scope
         onset_notes = onset_notes[
-            np.where(onset_notes[:, 1] <= onset_notes[0, 1] + onset_offset)
+            np.where(onset_notes[:, 1] <= onset_notes[0, 1] + onset_offset_tick)
         ]
 
         # If it is ambiguous, e.g. the notes lengths are too different
-        if np.any(np.abs(onset_notes[:, 2] - onset_notes[0, 2]) > time_div_half):
+        if np.any(np.abs(onset_notes[:, 2] - onset_notes[0, 2]) > tpb_half):
             count += len(onset_notes)
             continue
 
         # Selects the possible chords notes
-        if notes[count, 2] - notes[count, 1] <= time_div_half:
+        if notes[count, 2] - notes[count, 1] <= tpb_half:
             onset_notes = onset_notes[np.where(onset_notes[:, 1] == onset_notes[0, 1])]
-        chord = onset_notes[
-            np.where(onset_notes[:, 2] - onset_notes[0, 2] <= time_div_half)
-        ]
+        chord = onset_notes[np.where(onset_notes[:, 2] - onset_notes[0, 2] <= tpb_half)]
 
         # Creates the "chord map" and see if it has a "known" quality, append a chord
         # event if it is valid
@@ -246,9 +279,10 @@ def merge_tracks_per_class(
     valid_programs: list[int] | None = None,
     filter_pitches: bool = True,
 ) -> None:
-    r"""Merges per instrument class the tracks which are in the class in
-    ``classes_to_merge``.
-    Example, a list of tracks / programs `[0, 3, 8, 10, 11, 24, 25, 44, 47]`` will
+    r"""
+    Merge ``symusic.Track``\s per MIDI program class.
+
+    Example, a list of tracks / programs ``[0, 3, 8, 10, 11, 24, 25, 44, 47]`` will
     become ``[0, 8, 24, 25, 40]`` if ``classes_to_merge`` is ``[0, 1, 5]``.
     The classes are in ``miditok.constants.INSTRUMENT_CLASSES``.
 
@@ -257,17 +291,17 @@ def merge_tracks_per_class(
     :param midi: MIDI object to merge tracks
     :param classes_to_merge: instrument classes to merge, to give as list of indexes
         (see miditok.constants.INSTRUMENT_CLASSES). Give None to merge nothing, the
-        function will still remove non-valid programs/tracks if given. (default: None)
+        function will still remove non-valid programs/tracks if given. (default:
+        ``None``)
     :param new_program_per_class: new program of the final merged tracks, to be given
-        per instrument class as a dict ``{class_id: program}``.
+        per instrument class as a dict ``{class_id: program}``. (default: ``None``)
     :param max_num_of_tracks_per_inst_class: max number of tracks per instrument class,
         if the limit is exceeded for one class only the tracks with the maximum notes
-        will be kept, give None for no limit. (default: None)
+        will be kept, give None for no limit. (default: ``None``)
     :param valid_programs: valid program ids to keep, others will be deleted, give None
-        for keep all programs. (default None)
+        for keep all programs. (default ``None``)
     :param filter_pitches: after merging, will remove notes whose pitches are out the
-        recommended range defined by the GM2 specs. (default: True)
-    :return: True if the MIDI is valid, else False.
+        recommended range defined by the GM2 specs. (default: ``True``)
     """
     # remove non-valid tracks (instruments)
     if valid_programs is not None:
@@ -278,7 +312,7 @@ def merge_tracks_per_class(
             if midi.tracks[i].program not in valid_programs:
                 del midi.tracks[i]
                 if len(midi.tracks) == 0:
-                    return False
+                    return
             else:
                 i += 1
 
@@ -297,11 +331,12 @@ def merge_tracks_per_class(
         else:
             for cla, program in new_program_per_class.items():
                 if program not in INSTRUMENT_CLASSES[cla]["program_range"]:
-                    raise ValueError(
+                    msg = (
                         f"Error in program value, got {program} for instrument class"
                         f"{cla} ({INSTRUMENT_CLASSES[cla]['name']}), required value in"
                         f"{INSTRUMENT_CLASSES[cla]['program_range']}"
                     )
+                    raise ValueError(msg)
 
         for ci in classes_to_merge:
             idx_to_merge = [
@@ -342,17 +377,18 @@ def merge_tracks_per_class(
 
 
 def merge_tracks(
-    tracks: list[Track] | TrackTickList | Score, effects: bool = False
+    tracks: list[Track] | TrackTickList | Score, effects: bool = True
 ) -> Track:
-    r"""Merge several miditoolkit Instrument objects, from a list of Instruments or a
-    ``MidiFile`` object. All the tracks will be merged into the first Instrument object
-    (notes concatenated and sorted), beware of giving tracks with the same program (no
-    assessment is performed). The other tracks will be deleted.
+    r"""
+    Merge several ``symusic.Track``\s.
 
-    :param tracks: list of tracks to merge, or MidiFile object
+    The notes (and optionally effects) will be concatenated and sorted by time.
+    All the tracks will be merged into the first ``Track`` of the list.
+
+    :param tracks: list of tracks to merge, or ``symusic.Score`` object.
     :param effects: will also merge effects, i.e. control changes, sustain pedals and
-        pitch bends
-    :return: the merged track
+        pitch bends. (default: ``True``)
+    :return: the merged track.
     """
     tracks_ = tracks.tracks if isinstance(tracks, Score) else tracks
 
@@ -364,7 +400,7 @@ def merge_tracks(
     for track in tracks_:
         notes_sum += track.notes
     tracks_[0].notes = notes_sum
-    tracks_[0].notes.sort(key=lambda note: note.start)
+    tracks_[0].notes.sort()
     if effects:
         # Pedals
         pedals_sum, cc_sum, pb_sum = [], [], []
@@ -373,14 +409,14 @@ def merge_tracks(
             cc_sum += track.controls
             pb_sum += track.pitch_bends
         tracks_[0].pedals = pedals_sum
-        tracks_[0].pedals.sort(key=lambda pedal: pedal.time)
+        tracks_[0].pedals.sort()
         # Control changes
         tracks_[0].controls = cc_sum
         # tracks_[0].controls = sum((t.controls for t in tracks_), [])
-        tracks_[0].controls.sort(key=lambda control_change: control_change.time)
+        tracks_[0].controls.sort()
         # Pitch bends
         tracks_[0].pitch_bends = pb_sum
-        tracks_[0].pitch_bends.sort(key=lambda pitch_bend: pitch_bend.time)
+        tracks_[0].pitch_bends.sort()
 
     # Keeps only one track
     if isinstance(tracks, Score):
@@ -392,101 +428,62 @@ def merge_tracks(
     return tracks_[0]
 
 
-def merge_same_program_tracks(tracks: list[Track] | TrackTickList) -> None:
-    r"""Takes a list of tracks and merge the ones with the same programs.
-    NOTE: Control change messages are not considered.
+def merge_same_program_tracks(
+    tracks: list[Track] | TrackTickList, effects: bool = True
+) -> None:
+    r"""
+    Merge tracks having the same program number.
 
-    :param tracks: list of tracks
+    :param tracks: list of tracks.
+    :param effects: will also merge effects, i.e. control changes, sustain pedals and
+        pitch bends. (default: ``True``)
     """
     # Gathers tracks programs and indexes
-    tracks_programs = [
-        int(track.program) if not track.is_drum else -1 for track in tracks
-    ]
+    tracks_programs = np.array(
+        [int(track.program) if not track.is_drum else -1 for track in tracks]
+    )
 
     # Detects duplicated programs
-    duplicated_programs = [k for k, v in Counter(tracks_programs).items() if v > 1]
+    unique_programs = np.unique(tracks_programs)
+    idx_groups = [np.where(tracks_programs == prog)[0] for prog in unique_programs]
+    idx_groups = [group for group in idx_groups if len(group) >= 2]
+    if len(idx_groups) == 0:
+        return
 
-    # Merges duplicated tracks
-    for program in duplicated_programs:
-        idx = [
-            i
-            for i in range(len(tracks))
-            if (
-                tracks[i].is_drum
-                if program == -1
-                else tracks[i].program == program and not tracks[i].is_drum
-            )
-        ]
-        tracks[idx[0]].name += "".join([" / " + tracks[i].name for i in idx[1:]])
-        # tracks[idx[0]].notes = sum((tracks[i].notes for i in idx), [])
-        new_notes = []
-        for i in idx:
-            new_notes += tracks[i].notes
-        tracks[idx[0]].notes = new_notes
-        tracks[idx[0]].notes.sort(key=lambda note: (note.start, note.pitch))
-        for i in list(reversed(idx[1:])):
-            del tracks[i]
+    # Merge tracks and replace the first idx of each group
+    idx_to_delete = []
+    for idx_group in reversed(idx_groups):
+        new_track = merge_tracks([tracks[idx] for idx in idx_group], effects=effects)
+        tracks[idx_group[0]] = new_track
+        idx_to_delete.extend(idx_group[1:])
 
-
-def get_midi_max_tick(midi: Score) -> int:
-    max_tick = 0
-
-    # Parse track events
-    if len(midi.tracks) > 0:
-        event_type_attr = (
-            ("notes", "end"),
-            ("pedals", "end"),
-            ("controls", "time"),
-            ("pitch_bends", "time"),
-        )
-        for track in midi.tracks:
-            for event_type, time_attr in event_type_attr:
-                if len(getattr(track, event_type)) > 0:
-                    max_tick = max(
-                        max_tick,
-                        max(
-                            [
-                                getattr(event, time_attr)
-                                for event in getattr(track, event_type)
-                            ]
-                        ),
-                    )
-
-    # Parse global MIDI events
-    for event_type in (
-        "tempos",
-        "time_signatures",
-        "key_signatures",
-        "lyrics",
-    ):
-        if len(getattr(midi, event_type)) > 0:
-            max_tick = max(
-                max_tick,
-                max(event.time for event in getattr(midi, event_type)),
-            )
-
-    return max_tick
+    # Delete tracks merged in first idx of each group
+    idx_to_delete.sort(reverse=True)
+    for idx in idx_to_delete:
+        del tracks[idx]
 
 
 def num_bar_pos(
-    seq: Sequence[int], bar_token: int, position_tokens: Sequence[int]
+    seq: Sequence[int], bar_token_id: int, position_tokens_ids: Sequence[int]
 ) -> tuple[int, int]:
-    r"""Returns the number of bars and the last position of a sequence of tokens. This
-    method is compatible with tokenizations representing time with *Bar* and *Position*
-    tokens, such as :py:class:`miditok.REMI`.
+    r"""
+    Return the number of bars and the last position of a sequence of tokens.
+
+    This method is compatible with tokenizations representing time with *Bar* and
+    *Position* tokens, such as :py:class:`miditok.REMI`.
 
     :param seq: sequence of tokens
-    :param bar_token: the bar token value
-    :param position_tokens: position tokens values
+    :param bar_token_id: the bar token value
+    :param position_tokens_ids: position tokens values
     :return: the current bar, current position within the bar, current pitches played
         at this position, and if a chord token has been predicted at this position.
     """
     # Current bar
-    bar_idx = [i for i, token in enumerate(seq) if token == bar_token]
+    bar_idx = [i for i, token in enumerate(seq) if token == bar_token_id]
     current_bar = len(bar_idx)
     # Current position value within the bar
     pos_idx = [
-        i for i, token in enumerate(seq[bar_idx[-1] :]) if token in position_tokens
+        i for i, token in enumerate(seq[bar_idx[-1] :]) if token in position_tokens_ids
     ]
     current_pos = (
         len(pos_idx) - 1
@@ -496,8 +493,9 @@ def num_bar_pos(
 
 
 def np_get_closest(array: np.ndarray, values: np.ndarray) -> np.ndarray:
-    """Simple method to find the closest values in an array of the values of another
-    reference array.
+    """
+    Find the closest values to those of another reference array.
+
     Taken from: https://stackoverflow.com/a/46184652.
 
     :param array: reference values array.
@@ -517,7 +515,27 @@ def np_get_closest(array: np.ndarray, values: np.ndarray) -> np.ndarray:
     return array[idxs]
 
 
+def tempo_qpm_to_mspq(tempo_qpm: int | float | np.ndarray) -> int | float | np.ndarray:
+    """
+    Convert tempo value(s) in qpm (quarter/minute) to mspq (μs/quarter).
+
+    This method works with either a single qpm value (``int`` or ``float``), or with
+    several as a ``numpy.ndarray``.
+
+    :param tempo_qpm: tempo value(s) in qpm to convert.
+    :return: array of equivalent values in mspq.
+    """
+    # quarter / 60sec --> 1μs / quarter
+    return 60000000 / tempo_qpm
+
+
 def miditoolkit_to_symusic(midi: MidiFile) -> Score:
+    """
+    Convert a ``miditoolkit.MidiFile`` object into a ``symusic.Score``.
+
+    :param midi: ``miditoolkit.MidiFile`` object to convert.
+    :return: the `symusic.Score`` equivalent.
+    """
     score = Score(midi.ticks_per_beat)
 
     # MIDI events (except key signature)
@@ -562,3 +580,114 @@ def miditoolkit_to_symusic(midi: MidiFile) -> Score:
         score.tracks.append(track)
 
     return score
+
+
+def compute_ticks_per_beat(time_sig_denominator: int, time_division: int) -> int:
+    r"""
+    Compute the number of ticks in a beat at a given time signature.
+
+    :param time_sig_denominator: time signature denominator.
+    :param time_division: MIDI time division in ticks/quarter.
+    :return: number of ticks per beat at the given time signature.
+    """
+    if time_sig_denominator == 4:
+        return time_division
+    # factor to multiply the time_division depending on the denominator
+    # if we have a */8 time sig, one beat is an eighth note so one beat is
+    # `time_division * 0.5` ticks.
+    time_div_factor = 4 / time_sig_denominator
+    return int(time_division * time_div_factor)
+
+
+def compute_ticks_per_bar(time_sig: TimeSignature, time_division: int) -> int:
+    r"""
+    Compute the number of ticks in a bar.
+
+    The number of ticks per bar depends on the time signature.
+
+    :param time_sig: time signature object.
+    :param time_division: MIDI time division in ticks/quarter.
+    :return: MIDI bar resolution, in ticks/bar
+    """
+    return int(
+        compute_ticks_per_beat(time_sig.denominator, time_division) * time_sig.numerator
+    )
+
+
+def get_bars_ticks(midi: Score) -> list[int]:
+    """
+    Compute the ticks of the bars of a MIDI.
+
+    **Note:** When encountering multiple time signature messages at a same tick, we
+    this method will automatically consider the last one (coming in the list). Other
+    software can proceed differently. Logic Pro, for example, uses the first one.
+    I haven't found documentation or recommendations for this specific situation. It
+    might be better to use the first one and discard the others.
+
+    :param midi: MIDI to analyze.
+    :return: list of ticks for each bar.
+    """
+    max_tick = midi.end()
+    bars_ticks = []
+    time_sigs = copy(midi.time_signatures)
+    # Mock the last one to cover the last section in the loop below
+    if time_sigs[-1].time != max_tick:
+        time_sigs.append(TimeSignature(max_tick, *TIME_SIGNATURE))
+
+    # Section from tick 0 to first time sig is 4/4 if first time sig time is not 0
+    if time_sigs[0].time == 0:
+        current_time_sig = time_sigs[0]
+    else:
+        current_time_sig = TimeSignature(0, *TIME_SIGNATURE)
+
+    # Compute bars, one time signature portion at a time
+    for time_signature in time_sigs:
+        ticks_per_bar = compute_ticks_per_bar(current_time_sig, midi.ticks_per_quarter)
+        ticks_diff = time_signature.time - current_time_sig.time
+        num_bars = ceil(ticks_diff / ticks_per_bar)
+        bars_ticks += [
+            current_time_sig.time + ticks_per_bar * i for i in range(num_bars)
+        ]
+        current_time_sig = time_signature
+
+    return bars_ticks
+
+
+def get_midi_ticks_per_beat(midi: Score) -> np.ndarray:
+    """
+    Compute the portions of numbers of ticks in a beat in a MIDI.
+
+    The method returns a numpy array of shape ``(N,2)``, for N ticks-per-beat changes,
+    and the second dimension corresponding to the ending tick and the number of ticks
+    per beat of the portion.
+
+    :param midi: MIDI to analyze.
+    :return: ticks per beat values as a numpy array.
+    """
+    ticks_per_beat = [
+        [
+            midi.time_signatures[tsi + 1].time,
+            compute_ticks_per_beat(
+                midi.time_signatures[tsi].denominator, midi.ticks_per_quarter
+            ),
+        ]
+        for tsi in range(len(midi.time_signatures) - 1)
+    ]
+
+    # Handles the last one up to the max tick of the MIDI
+    ticks_per_beat.append(
+        [
+            midi.end() + 1,
+            compute_ticks_per_beat(
+                midi.time_signatures[-1].denominator, midi.ticks_per_quarter
+            ),
+        ]
+    )
+
+    # Remove equal successive ones
+    for i in range(len(ticks_per_beat) - 1, 0, -1):
+        if ticks_per_beat[i][1] == ticks_per_beat[i - 1][1]:
+            ticks_per_beat[i - 1][0] = ticks_per_beat[i][0]
+            del ticks_per_beat[i]
+
+    return np.array(ticks_per_beat)

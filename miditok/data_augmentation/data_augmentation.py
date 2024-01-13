@@ -10,7 +10,7 @@ import numpy as np
 from symusic import Score
 from tqdm import tqdm
 
-from ..constants import MIDI_INSTRUMENTS, MIDI_LOADING_EXCEPTION
+from miditok.constants import MIDI_INSTRUMENTS, MIDI_LOADING_EXCEPTION
 
 
 def augment_midi_dataset(
@@ -27,7 +27,8 @@ def augment_midi_dataset(
     copy_original_in_new_location: bool = True,
     save_data_aug_report: bool = True,
 ) -> None:
-    r"""Perform data augmentation on a dataset of MIDI files.
+    r"""
+    Perform data augmentation on a dataset of MIDI files.
 
     The new created files have names in two parts, separated with a "#" character. Make
     sure your files do not have '§' in their names if you intend to reuse the
@@ -132,7 +133,8 @@ def _filter_offset_tuples_to_midi(
     midi: Score,
     restrict_on_program_tessitura: bool,
 ) -> list[int]:
-    r"""Remove pitch offset values that would cause errors or are out of tessitura.
+    r"""
+    Remove pitch offset values that would cause errors or are out of tessitura.
 
     :param pitch_offsets: list of pitch offsets for augmentation.
     :param midi: midi object to augment (default: None)
@@ -182,7 +184,8 @@ def _create_offsets_tuples(
     all_offset_combinations: bool = False,
     restrict_on_program_tessitura: bool = True,
 ) -> list[tuple[int, int, int]]:
-    """Create the data augmentation tuples combinations from lists of offsets.
+    """
+    Create the data augmentation tuples combinations from lists of offsets.
 
     :param midi: midi object to augment.
     :param pitch_offsets: list of pitch offsets for augmentation.
@@ -237,7 +240,8 @@ def augment_midi(
     duration_in_ticks: bool = False,
     min_duration: int | float = 0.03125,
 ) -> Score:
-    r"""Augment a MIDI object by shifting its pitch, velocity and/or duration values.
+    r"""
+    Augment a MIDI object by shifting its pitch, velocity and/or duration values.
 
     Velocity and duration values will be clipped according to the ``velocity_range``
     and ``min_duration`` arguments. Drum tracks are only augmented on the velocity.
@@ -314,7 +318,8 @@ def augment_midi_multiple_offsets(
     duration_in_ticks: bool = False,
     min_duration: int | float = 0.03125,
 ) -> list[tuple[tuple[int, int, int], Score]]:
-    r"""Perform data augmentations on a MIDI object with multiple offset values.
+    r"""
+    Perform data augmentations on a MIDI object with multiple offset values.
 
     Velocity and duration values will be clipped according to the ``velocity_range`` and
     ``min_duration`` arguments. Drum tracks are only augmented on the velocity.

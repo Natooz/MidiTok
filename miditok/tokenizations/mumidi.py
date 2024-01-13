@@ -1,21 +1,26 @@
+"""MuMIDI tokenizer."""
+
 from __future__ import annotations
 
 from math import ceil
+from typing import TYPE_CHECKING
 
-import numpy as np
 from symusic import Note, Score, Tempo, Track
 
-from ..classes import Event, TokSequence
-from ..constants import (
-    DRUM_PITCH_RANGE,
-    MIDI_INSTRUMENTS,
-)
-from ..midi_tokenizer import MIDITokenizer
-from ..utils import detect_chords, get_midi_max_tick
+from miditok.classes import Event, TokSequence
+from miditok.constants import DRUM_PITCH_RANGE, MIDI_INSTRUMENTS
+from miditok.midi_tokenizer import MIDITokenizer
+from miditok.utils import detect_chords, get_midi_ticks_per_beat
+
+if TYPE_CHECKING:
+    import numpy as np
 
 
 class MuMIDI(MIDITokenizer):
-    r"""Introduced with `PopMAG (Ren et al.) <https://arxiv.org/abs/2008.07703>`_,
+    r"""
+    MuMIDI tokenizer.
+
+    Introduced with `PopMAG (Ren et al.) <https://arxiv.org/abs/2008.07703>`_,
     this tokenization made for multitrack tasks and uses embedding pooling. Time is
     represented with *Bar* and *Position* tokens. The key idea of MuMIDI is to represent
     all tracks in a single token sequence. At each time step, *Track* tokens preceding
@@ -78,21 +83,30 @@ class MuMIDI(MIDITokenizer):
         if self.config.use_tempos:
             self.vocab_types_idx["Tempo"] = -3
 
-    def _midi_to_tokens(self, midi: Score) -> TokSequence:
-        r"""Tokenize a MIDI file.
-        Each pooled token will be a list of the form (index: Token type):
-        * 0: Pitch / DrumPitch / Position / Bar / Program / (Chord) / (Rest)
-        * 1: BarPosEnc;
-        * 2: PositionPosEnc;
-        * (-3 / 3: Tempo);
-        * -2: Velocity;
-        * -1: Duration.
+    def _add_time_events(self, events: list[Event], time_division: int) -> list[Event]:
+        """
+        Create the time events from a list of global and track events.
 
-        :param midi: the MIDI object to convert
-        :return: sequences of tokens
+        Unused here.
+
+        :param events: sequence of global and track events to create tokens time from.
+        :param time_division: time division in ticks per quarter of the MIDI being
+            tokenized.
+        :return: the same events, with time events inserted.
+        """
+
+    def _midi_to_tokens(self, midi: Score) -> TokSequence:
+        r"""
+        Convert a **preprocessed** MIDI object to a sequence of tokens.
+
+        MuMIDI has its own implementation and doesn't use `_add_time_events`.
+
+        :param midi: the MIDI :class:`symusic.Score` object to convert.
+        :return: a :class:`miditok.TokSequence` if ``tokenizer.one_token_stream`` is
+            ``True``, else a list of :class:`miditok.TokSequence` objects.
         """
         # Check bar embedding limit, update if needed
-        num_bars = ceil(get_midi_max_tick(midi) / (midi.ticks_per_quarter * 4))
+        num_bars = ceil(midi.end() / (midi.ticks_per_quarter * 4))
         if self.config.additional_params["max_bar_embedding"] < num_bars:
             for i in range(
                 self.config.additional_params["max_bar_embedding"], num_bars
@@ -101,10 +115,14 @@ class MuMIDI(MIDITokenizer):
             self.config.additional_params["max_bar_embedding"] = num_bars
 
         # Convert each track to tokens (except first pos to track time)
+        if self.config.use_chords:
+            ticks_per_beat = get_midi_ticks_per_beat(midi)
+        else:
+            ticks_per_beat = None
         note_tokens = []
         for track in midi.tracks:
             if track.program in self.config.programs:
-                note_tokens += self._track_to_tokens(track, midi.ticks_per_quarter)
+                note_tokens += self._track_to_tokens(track, ticks_per_beat)
 
         note_tokens.sort(
             key=lambda x: (x[0].time, x[0].desc)
@@ -187,16 +205,24 @@ class MuMIDI(MIDITokenizer):
         return tokens
 
     def _track_to_tokens(
-        self, track: Track, time_division: int
-    ) -> list[list[Event | str]]:
-        r"""Converts a track (miditoolkit.Instrument object) into a sequence of tokens
-        (:class:`miditok.TokSequence`). For each note, it creates a time step as a
+        self, track: Track, ticks_per_beat: np.ndarray = None
+    ) -> list[list[Event]]:
+        r"""
+        Convert a track (``symusic.Track``) into a sequence of tokens.
+
+        For each note, it creates a time step as a
         list of tokens where (list index: token type):
         * 0: Pitch (as an Event object for sorting purpose afterward);
         * 1: Velocity;
         * 2: Duration.
 
         :param track: track object to convert.
+        :param ticks_per_beat: array indicating the number of ticks per beat per
+            time signature denominator section. The numbers of ticks per beat depend on
+            the time signatures of the MIDI being parsed. The array has a shape
+            ``(N,2)``, for ``N`` changes of ticks per beat, and the second dimension
+            representing the end tick of each section and the number of ticks per beat
+            respectively. Only used when using chords. (default: ``None``)
         :return: sequence of corresponding tokens.
         """
         # Make sure the notes are sorted first by their onset (start) times, second by
@@ -206,7 +232,7 @@ class MuMIDI(MIDITokenizer):
         for note in track.notes:
             # Note
             duration = note.end - note.start
-            dur_idx = np.argmin(np.abs(self._durations_ticks - duration))
+            dur_token = self._tpb_ticks_to_tokens[self.time_division][duration]
             if not track.is_drum:
                 tokens.append(
                     [
@@ -217,7 +243,7 @@ class MuMIDI(MIDITokenizer):
                             desc=track.program,
                         ),
                         f"Velocity_{note.velocity}",
-                        f'Duration_{".".join(map(str, self.durations[dur_idx]))}',
+                        f"Duration_{dur_token}",
                     ]
                 )
             else:
@@ -230,7 +256,7 @@ class MuMIDI(MIDITokenizer):
                             desc=-1,
                         ),
                         f"Velocity_{note.velocity}",
-                        f'Duration_{".".join(map(str, self.durations[dur_idx]))}',
+                        f"Duration_{dur_token}",
                     ]
                 )
 
@@ -238,7 +264,7 @@ class MuMIDI(MIDITokenizer):
         if self.config.use_chords and not track.is_drum:
             chords = detect_chords(
                 track.notes,
-                time_division,
+                ticks_per_beat,
                 chord_maps=self.config.chord_maps,
                 specify_root_note=self.config.chord_tokens_with_root_note,
                 beat_res=self._first_beat_res,
@@ -258,38 +284,20 @@ class MuMIDI(MIDITokenizer):
         self,
         tokens: TokSequence,
         _: None = None,
-        time_division: int | None = None,
     ) -> Score:
-        r"""Override the parent class method
-        Convert multiple sequences of tokens into a multitrack MIDI and save it.
-        The tokens will be converted to event objects and then to a
-        miditoolkit.MidiFile object.
-        A time step is a list of tokens where (list index: token type):
-        * 0: Pitch / DrumPitch / Position / Bar / Program / (Chord) / (Rest);
-        * 1: BarPosEnc;
-        * 2: PositionPosEnc;
-        * (-3 / 3: Tempo);
-        * -2: Velocity;
-        * -1: Duration.
+        r"""
+        Convert tokens (:class:`miditok.TokSequence`) into a MIDI.
 
-        :param tokens: tokens to convert. Can be either a Tensor (PyTorch and
-            Tensorflow are supported), a numpy array, a Python list or a TokSequence.
-        :param tokens: list of lists of tokens to convert, each list inside the
-            first list corresponds to a track
-        :param _: unused, to match parent method signature
-            leave None to not save the file
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the
-            MIDI to create)
-        :return: the midi object (miditoolkit.MidiFile)
+        This is an internal method called by ``self.tokens_to_midi``, intended to be
+        implemented by classes inheriting :class:`miditok.MidiTokenizer`.
+
+        :param tokens: tokens to convert. Can be either a list of
+            :class:`miditok.TokSequence` or a list of :class:`miditok.TokSequence`s.
+        :param _: in place of programs of the parent method, unused here.
+            (default: ``None``)
+        :return: the midi object (:class:`symusic.Score`).
         """
-        if time_division is None:
-            time_division = self.time_division
-        if time_division % max(self.config.beat_res.values()) != 0:
-            raise ValueError(
-                f"Invalid time division, please give one divisible by"
-                f"{max(self.config.beat_res.values())}"
-            )
-        midi = Score(time_division)
+        midi = Score(self.time_division)
 
         # Tempos
         if self.config.use_tempos and len(tokens) > 0:
@@ -298,7 +306,6 @@ class MuMIDI(MIDITokenizer):
             first_tempo = self.default_tempo
         midi.tempos.append(Tempo(0, first_tempo))
 
-        ticks_per_sample = time_division // max(self.config.beat_res.values())
         tracks = {}
         current_tick = 0
         current_bar = -1
@@ -307,28 +314,26 @@ class MuMIDI(MIDITokenizer):
             tok_type, tok_val = time_step[0].split("_")
             if tok_type == "Bar":
                 current_bar += 1
-                current_tick = current_bar * time_division * 4
+                current_tick = current_bar * self.time_division * 4
             elif tok_type == "Position":
                 if current_bar == -1:
                     current_bar = (
                         0  # as this Position token occurs before any Bar token
                     )
-                current_tick = (
-                    current_bar * time_division * 4 + int(tok_val) * ticks_per_sample
-                )
+                current_tick = current_bar * self.time_division * 4 + int(tok_val)
             elif tok_type == "Program":
                 current_track = tok_val
                 try:
                     _ = tracks[current_track]
                 except KeyError:
                     tracks[current_track] = []
-            elif tok_type == "Pitch" or tok_type == "DrumPitch":
+            elif tok_type in ("Pitch", "DrumPitch"):
                 vel, duration = (time_step[i].split("_")[1] for i in (-2, -1))
                 if any(val == "None" for val in (vel, duration)):
                     continue
                 pitch = int(tok_val)
                 vel = int(vel)
-                duration = self._token_duration_to_ticks(duration, time_division)
+                duration = self._tpb_tokens_to_ticks[self.time_division][duration]
 
                 tracks[current_track].append(Note(current_tick, duration, pitch, vel))
 
@@ -355,9 +360,11 @@ class MuMIDI(MIDITokenizer):
         return midi
 
     def _create_base_vocabulary(self) -> list[list[str]]:
-        r"""Creates the vocabulary, as a list of string tokens.
-        Each token as to be given as the form of "Type_Value", separated with an
-        underscore. Example: Pitch_58
+        r"""
+        Create the vocabulary, as a list of string tokens.
+
+        Each token is given as the form ``"Type_Value"``, with its type and value
+        separated with an underscore. Example: ``Pitch_58``.
         The :class:`miditok.MIDITokenizer` main class will then create the "real"
         vocabulary as a dictionary. Special tokens have to be given when creating the
         tokenizer, and will be added to the vocabulary by
@@ -383,7 +390,7 @@ class MuMIDI(MIDITokenizer):
         ]
         vocab[0] += ["Bar_None"]  # new bar token
         max_num_beats = max(ts[0] for ts in self.time_signatures)
-        num_positions = max(self.config.beat_res.values()) * max_num_beats
+        num_positions = self.time_division * max_num_beats
         vocab[0] += [f"Position_{i}" for i in range(num_positions)]
         vocab[0] += [f"Program_{program}" for program in self.config.programs]
 
@@ -423,12 +430,10 @@ class MuMIDI(MIDITokenizer):
         return vocab
 
     def _create_token_types_graph(self) -> dict[str, list[str]]:
-        r"""Returns a graph (as a dictionary) of the possible token
-        types successions.
-        Here the combination of Pitch, Velocity and Duration tokens is represented by
-        "Pitch" in the graph.
+        r"""
+        Return a graph/dictionary of the possible token types successions.
 
-        :return: the token types transitions dictionary
+        :return: the token types transitions dictionary.
         """
         dic = {
             "Bar": ["Bar", "Position"],
@@ -445,16 +450,17 @@ class MuMIDI(MIDITokenizer):
         return dic
 
     def _tokens_errors(self, tokens: list[list[str]]) -> int:
-        r"""Checks if a sequence of tokens is made of good token types successions and
-        returns the error ratio (lower is better). This method receives a list of
-        tokens as a list of strings, and returns the absolute number of errors
-        predicted. The number of errors should not be higher than the number of tokens.
-        The Pitch and Position values are analyzed:
-            - a bar token value cannot be < to the current bar (it would go back in
-                time)
-            - same for positions
-            - a pitch token should not be present if the same pitch is already played
-                at the current position.
+        r"""
+        Return the number of errors in a sequence of tokens.
+
+        The method checks if a sequence of tokens is made of good token types
+        successions and values. The number of errors should not be higher than the
+        number of tokens.
+
+        This method is intended to be overridden by tokenizer classes. The
+        implementation in the ``MIDITokenizer`` class will check token types,
+        duplicated notes and time errors. It works for ``REMI``, ``TSD`` and
+        ``Structured``.
 
         :param tokens: sequence of tokens string to check.
         :return: the number of errors predicted (no more than one per token).

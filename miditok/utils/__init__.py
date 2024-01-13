@@ -1,11 +1,14 @@
 """Module containing utils methods than can be used outside of tokenization."""
 
 from .utils import (
+    compute_ticks_per_bar,
+    compute_ticks_per_beat,
     convert_ids_tensors_to_list,
     detect_chords,
     fix_offsets_overlapping_notes,
-    get_midi_max_tick,
+    get_bars_ticks,
     get_midi_programs,
+    get_midi_ticks_per_beat,
     merge_same_program_tracks,
     merge_tracks,
     merge_tracks_per_class,
@@ -14,14 +17,17 @@ from .utils import (
 )
 
 __all__ = [
+    "compute_ticks_per_bar",
+    "compute_ticks_per_beat",
     "convert_ids_tensors_to_list",
-    "get_midi_programs",
-    "remove_duplicated_notes",
-    "fix_offsets_overlapping_notes",
     "detect_chords",
-    "merge_tracks_per_class",
-    "merge_tracks",
+    "fix_offsets_overlapping_notes",
+    "get_bars_ticks",
+    "get_midi_programs",
+    "get_midi_ticks_per_beat",
     "merge_same_program_tracks",
+    "merge_tracks",
+    "merge_tracks_per_class",
     "num_bar_pos",
-    "get_midi_max_tick",
+    "remove_duplicated_notes",
 ]

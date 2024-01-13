@@ -1,5 +1,3 @@
-#!/usr/bin/python3 python
-
 """Test the integration of the Hugging Face Hub."""
 import warnings
 from pathlib import Path

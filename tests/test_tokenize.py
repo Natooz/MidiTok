@@ -1,5 +1,3 @@
-#!/usr/bin/python3 python
-
 """Testing tokenization, making sure the data integrity is not altered."""
 
 from __future__ import annotations
@@ -38,7 +36,7 @@ default_params.update(
         "chord_unknown": False,
         "delete_equal_successive_time_sig_changes": True,
         "delete_equal_successive_tempo_changes": True,
-        "additional_params": {"max_duration": (20, 0, 4)},
+        "max_duration": (20, 0, 4),
     }
 )
 TOK_PARAMS_ONE_TRACK = []
@@ -52,6 +50,7 @@ for tokenization_ in ALL_TOKENIZATIONS:
             "use_sustain_pedals": True,
             "use_pitch_bends": True,
             "use_pitch_intervals": True,
+            "remove_duplicated_notes": True,
         }
     )
     adjust_tok_params_for_tests(tokenization_, params_)
@@ -163,7 +162,8 @@ def _test_tokenize(
     saving_erroneous_midis: bool = False,
     save_failed_midi_as_one_midi: bool = True,
 ) -> None:
-    r"""Tokenize a MIDI file, decode it back and make sure it is identical to the ogi.
+    r"""
+    Tokenize a MIDI file, decode it back and make sure it is identical to the ogi.
 
     The decoded MIDI should be identical to the original one after downsampling, and
     potentially notes deduplication.
@@ -228,7 +228,7 @@ def test_one_track_midi_to_tokens_to_midi(
 def test_one_track_midi_to_tokens_to_midi_hard(
     midi_path: str | Path,
     tok_params_set: tuple[str, dict[str, Any]],
-    saving_erroneous_midis: bool = True,
+    saving_erroneous_midis: bool = True,  # TODO err 3 / 12 note sorting?
 ):
     _test_tokenize(midi_path, tok_params_set, saving_erroneous_midis)
 

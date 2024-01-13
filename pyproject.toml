@@ -37,7 +37,7 @@ classifiers = [
 ]
 dependencies = [
     "numpy>=1.19",
-    "symusic>=0.2.3",
+    "symusic>=0.3.1",
     "tqdm",
     "tokenizers>=0.13.0",
     "huggingface_hub>=0.16.4",
@@ -50,6 +50,10 @@ tests = [
     "torch",
     "tensorflow",
     "miditoolkit",
+]
+docs = [
+    "sphinx-rtd-theme",
+    "torch",  # for pytorch_data module
 ]
 
 [project.urls]
@@ -74,31 +78,45 @@ extend-select = [
     "BLE",
     "C4",
     "COM",
-    # "D",
+    "D",
     "E",
+    "EM",
+    "EXE",
     "F",
-    "FBT",
     "FA",
+    "FBT",
     "G",
     "I",
+    "ICN",
+    "INP",
     "INT",
+    "ISC",
     "N",
     "NPY",
     "PERF",
     "PTH",
     "PIE",
+    # "PL",
+    "PT",
     "Q",
+    "RET",
+    "RSE",
     "RUF",
     "S",
+    # "SLF",
     "SIM",
     "T",
+    "TCH",
+    "TID",
     "UP",
     "W",
 ]
 
-# Each specific rule exclusion should be justified here.
+# Each rule exclusion should be explained here.
 # By default, we think it is better to select groups of rules (above), and exclude
-# specific problematic rules, instead of selecting specific rules.
+# specific problematic rules, instead of selecting specific rules. By doing so, in case
+# the ruff rules groups change, this requires us to check and handle the new rules or
+# changes, making sure we stay up to date and keep the best practices.
 
 # ANN003:
 # Would mostly apply to args/kwargs that are passed to methods from dependencies, for
@@ -114,7 +132,17 @@ extend-select = [
 # We document classes at the class level (D101). This documentation should cover the
 # way classes are initialized. So we do not document `__init__` methods.
 
-# FBT001 and FB002
+# D203
+# "one-blank-line-before-class", incompatible with D211 (blank-line-before-class).
+# We follow PEP 257 and other conventions by preferring D211 over D203.
+
+# D212
+# "multi-line-summary-first-line", incompatible with D213
+# (multi-line-summary-second-line).
+# We follow PEP 257, which recommend to set put the summary line on the second line
+# after the blank line of the opening quotes.
+
+# FBT001 and FBT002
 # Refactoring all the methods to make boolean arguments keyword only would add
 # complexity and could break code of users. It's ok to have booleans as positional
 # arguments with default values. For code redability though, we enable FB003.
@@ -124,12 +152,27 @@ extend-select = [
 # set with ruff format anyway. This exclusion could be removed when this behavior is
 # fixed in ruff.
 
-ignore = ["ANN003", "ANN101", "ANN102", "D107", "FBT001", "FBT002", "COM812"]
+# (ISC001)
+# May cause conflicts when used with the ruff formatter. They recommend to disable it.
+# We leave it enabled but keep this in mind.
+
+ignore = [
+    "ANN003",
+    "ANN101",
+    "ANN102",
+    "D107",
+    "D203",
+    "D212",
+    "FBT001",
+    "FBT002",
+    "COM812",
+]
 
 [tool.ruff.per-file-ignores]
-# S105: we don't use password in MidiTok, only HF token for the interactions with the
-# hub. However we have a lot of variables with "token"(s) in their name, which would
-# yield a lot of lint errors or require a lot of noqa exceptions.
+# S105:
+# we don't use passwords in MidiTok, only HF token for the interactions with the hub.
+# However we have a lot of variables with "token"(s) in their name, which would yield a
+# lot of lint errors or require a lot of noqa exceptions.
 "miditok/**" = [
     "S105",
 ]
@@ -139,3 +182,4 @@ ignore = ["ANN003", "ANN101", "ANN102", "D107", "FBT001", "FBT002", "COM812"]
     "S101",  # allow assertions in tests
     "T201",  # print allowed
 ]
+"docs/conf.py" = ["INP001"]  # not a package

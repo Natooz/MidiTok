@@ -31,7 +31,8 @@ ADDITIONAL_TOKENS_TEST = {
 
 
 def bpe_benchmark(data_path: str | Path | PurePath = "./tests/Maestro") -> None:
-    r"""Benchmark BPE encoding, batched and un-batched.
+    r"""
+    Benchmark BPE encoding, batched and un-batched.
 
     :param data_path: root path to the data to test
     """

@@ -1,4 +1,5 @@
-"""Tokenizer module.
+"""
+Tokenizer module.
 
 This module implement tokenizer classes, which inherit from `MIDITokenizer` and
 override specific methods such as `_add_time_events` or `_tokens_to_midi` with

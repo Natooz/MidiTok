@@ -30,12 +30,11 @@ After training a tokenizer with :ref:`Byte Pair Encoding (BPE)`, a new vocabular
 TokSequence
 ------------------------
 
-The methods of MidiTok use :class:`miditok.TokSequence` objects as input and outputs. A ``TokSequence`` holds tokens as the three forms described in :ref:`Byte Pair Encoding (BPE)`. TokSequences are subscriptable and implement ``__len__`` (you can run ``tok_seq[id]`` and ``len(tok_seq)``).
+The methods of MidiTok use :class:`miditok.TokSequence` objects as input and outputs. A :class:`miditok.TokSequence` holds tokens as the three forms described in :ref:`Byte Pair Encoding (BPE)`. TokSequences are subscriptable and implement ``__len__`` (you can run ``tok_seq[id]`` and ``len(tok_seq)``).
 
-You can use the :py:func:`miditok.MIDITokenizer.complete_sequence` method to automatically fill the non-initialized attributes of a ``TokSequence``.
+You can use the :py:func:`miditok.MIDITokenizer.complete_sequence` method to automatically fill the non-initialized attributes of a :class:`miditok.TokSequence`.
 
 .. autoclass:: miditok.TokSequence
-    :noindex:
     :members:
 
 MIDI Tokenizer
@@ -50,7 +49,7 @@ You can customize your tokenizer by creating it with a custom :ref:`Tokenizer co
 Tokenizer config
 ------------------------
 
-All tokenizers are initialized with common parameters, that are hold in a ``TokenizerConfig`` object, documented below. You can access a tokenizer's configuration with `tokenizer.config`.
+All tokenizers are initialized with common parameters, that are hold in a :class:`miditok.TokenizerConfig` object, documented below. You can access a tokenizer's configuration with `tokenizer.config`.
 Some tokenizers might take additional specific arguments / parameters when creating them.
 
 .. autoclass:: miditok.TokenizerConfig
@@ -65,8 +64,8 @@ MidiTok offers to include additional tokens on music information. You can specif
    :file: additional_tokens_table.csv
    :header-rows: 1
 
-¹: using both time signatures and rests with `CPWord` might result in time alterations, as the time signature changes are carried with the Bar tokens which can be skipped during period of rests.
-²: using time signatures with `Octuple` might result in time alterations, as the time signature changes are carried with the note onsets. An example is shown below.
+¹: using both time signatures and rests with :class:`miditok.CPWord` might result in time alterations, as the time signature changes are carried with the Bar tokens which can be skipped during period of rests.
+²: using time signatures with :class:`miditok.Octuple` might result in time alterations, as the time signature changes are carried with the note onsets. An example is shown below.
 
 .. image:: /assets/Octuple_TS_Rest/original.png
   :width: 800
@@ -100,31 +99,25 @@ To use special tokens, you must specify them with the ``special_tokens`` argumen
 Tokens & TokSequence input / output format
 --------------------------------------------
 
-Depending on the tokenizer at use, the **format** of the tokens returned by the ``midi_to_tokens`` method may vary, as well as the expected format for the ``tokens_to_midi`` method. The format is given by the ``tokenizer.io_format`` property. For any tokenizer, the format is the same for both methods.
+Depending on the tokenizer at use, the **format** of the tokens returned by the `:py:func:`miditok.MIDITokenizer.midi_to_tokens` method may vary, as well as the expected format for the :py:func:`miditok.MIDITokenizer.tokens_to_midi` method. The format is given by the :py:func:`miditok.MIDITokenizer.io_format` property. For any tokenizer, the format is the same for both methods.
 
-The format is deduced from the ``is_multi_voc`` and ``one_token_stream`` tokenizer properties. **one_token_stream** being True means that the tokenizer will convert a MIDI file into a single stream of tokens for all instrument tracks, otherwise it will convert each track to a distinct token sequence. **is_mult_voc** being True means that each token stream is a list of lists of tokens, of shape ``(T,C)`` for T time steps and C subtokens per time step.
+The format is deduced from the :py:func:`miditok.MIDITokenizer.is_multi_voc` and ``one_token_stream`` tokenizer attributes. ``one_token_stream`` being ``True`` means that the tokenizer will convert a MIDI file into a single stream of tokens for all instrument tracks, otherwise it will convert each track to a distinct token sequence. :py:func:`miditok.MIDITokenizer.is_multi_voc` being True means that each token stream is a list of lists of tokens, of shape ``(T,C)`` for T time steps and C subtokens per time step.
 
 This results in four situations, where I is the number of tracks, T is the number of tokens (or time steps) and C the number of subtokens per time step:
 
-* **is_multi_voc** and **one_token_stream** are both **False**: ``[I,(T)]``
-* **is_multi_voc** is **False** and **one_token_stream** is **True**: ``(T)``
-* **is_multi_voc** is **True** and **one_token_stream** is **False**: ``[I,(T,C)]``
-* **is_multi_voc** and **one_token_stream** are both **True**: ``(T,C)``
+* ``is_multi_voc`` and ``one_token_stream`` are both ``False``: ``[I,(T)]``;
+* ``is_multi_voc`` is ``False`` and ``one_token_stream`` is ``True``: ``(T)``;
+* ``is_multi_voc`` is ``True`` and ``one_token_stream`` is ``False``: ``[I,(T,C)]``;
+* ``is_multi_voc`` and ``one_token_stream`` are both ``True``: ``(T,C)``.
 
 **Note that if there is no I dimension in the format, the output of** ``midi_to_tokens`` **is a** :class:`miditok.TokSequence` **object, otherwise it is a list of** :class:`miditok.TokSequence` **objects (one per token stream / track).**
 
 Some tokenizer examples to illustrate:
 
-* **TSD** without ``config.use_programs`` will not have multiple vocabularies and will treat each MIDI track as a unique stream of tokens, hence it will convert MIDI files to a list of ``TokSequence`` objects, ``(I,T)`` format.
-* **TSD** with ``config.use_programs`` being True will convert all MIDI tracks to a single stream of tokens, hence one ``TokSequence`` object, ``(T)`` format.
-* **CPWord** is a multi-voc tokenizer, without ``config.use_programs`` it will treat each MIDI track as a distinct stream of tokens, hence it will convert MIDI files to a list of ``TokSequence`` objects with the ``(I,T,C)`` format.
-* **Octuple** is a multi-voc tokenizer and converts all MIDI track to a single stream of tokens, hence it will convert MIDI files to a ``TokSequence`` object, ``(T,C)`` format.
-
-
-**You can use the** ``convert_sequence_to_tokseq`` **method to automatically convert a input sequence, of ids (integers) or tokens (string), into a** :class:`miditok.TokSequence` **or list of** :class:`miditok.TokSequence` **objects with the appropriate format of the tokenizer being used.**
-
-.. autofunction:: miditok.convert_sequence_to_tokseq
-    :noindex:
+* **TSD** without ``config.use_programs`` will not have multiple vocabularies and will treat each MIDI track as a unique stream of tokens, hence it will convert MIDI files to a list of :class:`miditok.TokSequence` objects, ``(I,T)`` format.
+* **TSD** with ``config.use_programs`` being True will convert all MIDI tracks to a single stream of tokens, hence one :class:`miditok.TokSequence` object, ``(T)`` format.
+* **CPWord** is a multi-voc tokenizer, without ``config.use_programs`` it will treat each MIDI track as a distinct stream of tokens, hence it will convert MIDI files to a list of :class:`miditok.TokSequence` objects with the ``(I,T,C)`` format.
+* **Octuple** is a multi-voc tokenizer and converts all MIDI track to a single stream of tokens, hence it will convert MIDI files to a :class:`miditok.TokSequence` object, ``(T,C)`` format.
 
 
 Magic methods
@@ -171,4 +164,4 @@ To load a tokenizer from saved parameters, just use the ``params`` argument when
 
 ..  code-block:: python
 
-    tokenizer = REMI(params=Path("to", "params.json"))
+    tokenizer = REMI(params=Path("to", "tokenizer.json"))

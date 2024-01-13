@@ -1,3 +1,5 @@
+"""Compound Word tokenizer."""
+
 from __future__ import annotations
 
 import warnings
@@ -5,9 +7,10 @@ import warnings
 import numpy as np
 from symusic import Note, Score, Tempo, TimeSignature, Track
 
-from ..classes import Event, TokSequence
-from ..constants import MIDI_INSTRUMENTS, TIME_SIGNATURE
-from ..midi_tokenizer import MIDITokenizer
+from miditok.classes import Event, TokSequence
+from miditok.constants import MIDI_INSTRUMENTS, TIME_SIGNATURE
+from miditok.midi_tokenizer import MIDITokenizer
+from miditok.utils import compute_ticks_per_bar, compute_ticks_per_beat
 
 _ADD_TOK_ATTRIBUTES = [
     "use_programs",
@@ -19,7 +22,10 @@ _ADD_TOK_ATTRIBUTES = [
 
 
 class CPWord(MIDITokenizer):
-    r"""Introduced with the
+    r"""
+    Compound Word tokenizer.
+
+    Introduced with the
     `Compound Word Transformer (Hsiao et al.) <https://ojs.aaai.org/index.php/AAAI/article/view/16091>`_,
     this tokenization is similar to :ref:`REMI` but uses embedding pooling operations
     to reduce the overall sequence length: note tokens (*Pitch*, *Velocity* and
@@ -84,12 +90,19 @@ class CPWord(MIDITokenizer):
         }  # used for data augmentation
         self.vocab_types_idx["Bar"] = 1  # same as position
 
-    def _add_time_events(self, events: list[Event]) -> list[list[Event]]:
-        r"""Internal method intended to be implemented by inheriting classes.
-        It creates the time events from the list of global and track events, and as
-        such the final token sequence.
+    def _add_time_events(
+        self, events: list[Event], time_division: int
+    ) -> list[list[Event]]:
+        r"""
+        Create the time events from a list of global and track events.
 
-        :param events: note events to complete.
+        Internal method intended to be implemented by child classes.
+        The returned sequence is the final token sequence ready to be converted to ids
+        to be fed to a model.
+
+        :param events: sequence of global and track events to create tokens time from.
+        :param time_division: time division in ticks per quarter of the MIDI being
+            tokenized.
         :return: the same events, with time events inserted.
         """
         # Add time events
@@ -108,21 +121,25 @@ class CPWord(MIDITokenizer):
         else:
             current_tempo = self.default_tempo
         current_program = None
-        ticks_per_bar = self._compute_ticks_per_bar(
-            TimeSignature(0, *current_time_sig), self.time_division
+        ticks_per_bar = compute_ticks_per_bar(
+            TimeSignature(0, *current_time_sig), time_division
         )
+        ticks_per_beat = compute_ticks_per_beat(current_time_sig[1], time_division)
+        ticks_per_pos = ticks_per_beat // max(self.config.beat_res.values())
         # First look for a TimeSig token, if any is given at tick 0, to update
         # current_time_sig
         if self.config.use_time_signatures:
             for event in events:
                 if event.type_ == "TimeSig":
                     current_time_sig = list(map(int, event.value.split("/")))
-                    ticks_per_bar = self._compute_ticks_per_bar(
-                        TimeSignature(event.time, *current_time_sig),
-                        self.time_division,
+                    ticks_per_bar = compute_ticks_per_bar(
+                        TimeSignature(event.time, *current_time_sig), time_division
+                    )
+                    ticks_per_beat = compute_ticks_per_beat(
+                        current_time_sig[1], time_division
                     )
                     break
-                elif event.type_ in [
+                if event.type_ in [
                     "Pitch",
                     "Velocity",
                     "Duration",
@@ -137,7 +154,7 @@ class CPWord(MIDITokenizer):
                 if event.type_ == "Tempo":
                     current_tempo = event.value
                     break
-                elif event.type_ in [
+                if event.type_ in [
                     "Pitch",
                     "Velocity",
                     "Duration",
@@ -156,11 +173,11 @@ class CPWord(MIDITokenizer):
                 # (Rest)
                 if (
                     self.config.use_rests
-                    and event.time - previous_note_end >= self._min_rest
+                    and event.time - previous_note_end >= self._min_rest(ticks_per_beat)
                 ):
                     previous_tick = previous_note_end
-                    rest_values = self._ticks_to_duration_tokens(
-                        event.time - previous_tick, rest=True
+                    rest_values = self._time_ticks_to_tokens(
+                        event.time - previous_tick, ticks_per_beat, rest=True
                     )
                     # Add Rest events and increment previous_tick
                     for dur_value, dur_ticks in zip(*rest_values):
@@ -220,7 +237,7 @@ class CPWord(MIDITokenizer):
 
                 # Position
                 if event.type_ != "TimeSig":
-                    pos_index = event.time - tick_at_current_bar
+                    pos_index = (event.time - tick_at_current_bar) // ticks_per_pos
                     all_events.append(
                         self.__create_cp_token(
                             event.time,
@@ -240,9 +257,13 @@ class CPWord(MIDITokenizer):
                     event.time - tick_at_last_ts_change
                 ) // ticks_per_bar
                 tick_at_last_ts_change = event.time
-                ticks_per_bar = self._compute_ticks_per_bar(
-                    TimeSignature(event.time, *current_time_sig), self.time_division
+                ticks_per_bar = compute_ticks_per_bar(
+                    TimeSignature(event.time, *current_time_sig), time_division
                 )
+                ticks_per_beat = compute_ticks_per_beat(
+                    current_time_sig[1], time_division
+                )
+                ticks_per_pos = ticks_per_beat // max(self.config.beat_res.values())
                 # We decrease the previous tick so that a Position token is enforced
                 # for the next event
                 previous_tick -= 1
@@ -285,20 +306,23 @@ class CPWord(MIDITokenizer):
         program: int | None = None,
         desc: str = "",
     ) -> list[Event]:
-        r"""Create a CP Word token, with the following structure:
+        r"""
+        Create a CP Word token.
+
+        It follow the structure:
             (index. Token type)
-            0. Family
-            1. Bar/Position
-            2. Pitch
-            3. Velocity
-            4. Duration
-            (5. Program) optional, with notes (pitch/velocity/duration) or chords
-            (6. Chord) optional, chords occurring with position tokens
-            (7. Rest) optional, rest acting as a TimeShift token
-            (8. Tempo) optional, occurring with position tokens
-            (9. TimeSig) optional, occurring with bar tokens
-        NOTE: the first Family token (first in list) will be given as an Event object
-        to keep track of time easily so that other method can sort CP tokens
+            0. *Family*
+            1. *Bar*/*Position*
+            2. *Pitch*
+            3. *Velocity*
+            4. *Duration*
+            (5. *Program*) optional, with notes (pitch/velocity/duration) or chords
+            (6. *Chord*) optional, chords occurring with position tokens
+            (7. *Rest*) optional, rest acting as a TimeShift token
+            (8. *Tempo*) optional, occurring with position tokens
+            (9. *TimeSig*) optional, occurring with bar tokens
+        **Note**: the first Family token (first in list) will be given as an ``Event``
+        object to keep track of time easily so that other method can sort CP tokens
         afterward.
 
         :param time: the current tick
@@ -365,32 +389,25 @@ class CPWord(MIDITokenizer):
         self,
         tokens: TokSequence | list[TokSequence],
         programs: list[tuple[int, bool]] | None = None,
-        time_division: int | None = None,
     ) -> Score:
-        r"""Converts tokens (:class:`miditok.TokSequence`) into a MIDI and saves it.
+        r"""
+        Convert tokens (:class:`miditok.TokSequence`) into a MIDI.
+
+        This is an internal method called by ``self.tokens_to_midi``, intended to be
+        implemented by classes inheriting :class:`miditok.MidiTokenizer`.
 
         :param tokens: tokens to convert. Can be either a list of
-            :class:`miditok.TokSequence`,
+            :class:`miditok.TokSequence` or a list of :class:`miditok.TokSequence`s.
         :param programs: programs of the tracks. If none is given, will default to
-            piano, program 0. (default: None)
-        :param time_division: MIDI time division / resolution, in ticks/beat (of the
-            MIDI to create).
-        :return: the midi object (:class:`miditoolkit.MidiFile`).
+            piano, program 0. (default: ``None``)
+        :return: the midi object (:class:`symusic.Score`).
         """
-        if time_division is None:
-            time_division = self.time_division
         # Unsqueeze tokens in case of one_token_stream
         if self.one_token_stream:  # ie single token seq
             tokens = [tokens]
         for i in range(len(tokens)):
             tokens[i] = tokens[i].tokens
-        midi = Score(time_division)
-        if time_division % max(self.config.beat_res.values()) != 0:
-            raise ValueError(
-                f"Invalid time division, please give one divisible by"
-                f"{max(self.config.beat_res.values())}"
-            )
-        ticks_per_sample = time_division // max(self.config.beat_res.values())
+        midi = Score(self.time_division)
 
         # RESULTS
         tracks: dict[int, Track] = {}
@@ -435,7 +452,11 @@ class CPWord(MIDITokenizer):
                 if len(time_signature_changes) == 0:
                     time_signature_changes.append(TimeSignature(0, *TIME_SIGNATURE))
             current_time_sig = time_signature_changes[0]
-            ticks_per_bar = self._compute_ticks_per_bar(current_time_sig, time_division)
+            ticks_per_bar = compute_ticks_per_bar(current_time_sig, self.time_division)
+            ticks_per_beat = compute_ticks_per_beat(
+                current_time_sig.denominator, self.time_division
+            )
+            ticks_per_pos = ticks_per_beat // max(self.config.beat_res.values())
             # Set track / sequence program if needed
             if not self.one_token_stream:
                 current_tick = tick_at_last_ts_change = tick_at_current_bar = 0
@@ -465,9 +486,9 @@ class CPWord(MIDITokenizer):
                         continue
                     pitch = int(compound_token[2].split("_")[1])
                     vel = int(compound_token[3].split("_")[1])
-                    duration = self._token_duration_to_ticks(
-                        compound_token[4].split("_")[1], time_division
-                    )
+                    duration = self._tpb_tokens_to_ticks[ticks_per_beat][
+                        compound_token[4].split("_")[1]
+                    ]
                     if self.config.use_programs:
                         current_program = int(compound_token[5].split("_")[1])
                     new_note = Note(current_tick, duration, pitch, vel)
@@ -501,8 +522,14 @@ class CPWord(MIDITokenizer):
                                     time_signature_changes.append(current_time_sig)
                                 tick_at_last_ts_change = tick_at_current_bar
                                 bar_at_last_ts_change = current_bar
-                                ticks_per_bar = self._compute_ticks_per_bar(
-                                    current_time_sig, time_division
+                                ticks_per_bar = compute_ticks_per_bar(
+                                    current_time_sig, self.time_division
+                                )
+                                ticks_per_beat = compute_ticks_per_beat(
+                                    current_time_sig.denominator, self.time_division
+                                )
+                                ticks_per_pos = ticks_per_beat // max(
+                                    self.config.beat_res.values()
                                 )
                     elif bar_pos == "Position":  # i.e. its a position
                         if current_bar == -1:
@@ -510,7 +537,7 @@ class CPWord(MIDITokenizer):
                             current_bar = 0
                         current_tick = (
                             tick_at_current_bar
-                            + int(compound_token[1].split("_")[1]) * ticks_per_sample
+                            + int(compound_token[1].split("_")[1]) * ticks_per_pos
                         )
                         # Add new tempo change only if different from the last one
                         if self.config.use_tempos and si == 0:
@@ -530,10 +557,9 @@ class CPWord(MIDITokenizer):
                         != "None"
                     ):
                         current_tick = max(previous_note_end, current_tick)
-                        current_tick += self._token_duration_to_ticks(
-                            compound_token[self.vocab_types_idx["Rest"]].split("_")[1],
-                            time_division,
-                        )
+                        current_tick += self._tpb_rests_to_ticks[ticks_per_beat][
+                            compound_token[self.vocab_types_idx["Rest"]].split("_")[1]
+                        ]
                         real_current_bar = (
                             bar_at_last_ts_change
                             + (current_tick - tick_at_last_ts_change) // ticks_per_bar
@@ -574,13 +600,15 @@ class CPWord(MIDITokenizer):
         return midi
 
     def _create_base_vocabulary(self) -> list[list[str]]:
-        r"""Creates the vocabulary, as a list of string tokens.
-        Each token as to be given as the form of "Type_Value", separated with an
-        underscore. Example: Pitch_58
+        r"""
+        Create the vocabulary, as a list of string tokens.
+
+        Each token is given as the form ``"Type_Value"``, with its type and value
+        separated with an underscore. Example: ``Pitch_58``.
         The :class:`miditok.MIDITokenizer` main class will then create the "real"
-        vocabulary as a dictionary.
-        Special tokens have to be given when creating the tokenizer, and
-        will be added to the vocabulary by :class:`miditok.MIDITokenizer`.
+        vocabulary as a dictionary. Special tokens have to be given when creating the
+        tokenizer, and will be added to the vocabulary by
+        :class:`miditok.MIDITokenizer`.
 
         :return: the vocabulary as a list of string.
         """
@@ -590,8 +618,9 @@ class CPWord(MIDITokenizer):
         vocab[0].append("Family_Note")
 
         # POSITION
+        # self.time_division is equal to the maximum possible ticks/beat value.
         max_num_beats = max(ts[0] for ts in self.time_signatures)
-        num_positions = max(self.config.beat_res.values()) * max_num_beats
+        num_positions = self.time_division * max_num_beats
         vocab[1].append("Ignore_None")
         vocab[1].append("Bar_None")
         vocab[1] += [f"Position_{i}" for i in range(num_positions)]
@@ -642,16 +671,10 @@ class CPWord(MIDITokenizer):
         return vocab
 
     def _create_token_types_graph(self) -> dict[str, list[str]]:
-        r"""Returns a graph (as a dictionary) of the possible token types successions.
-        As with CP the tokens types are "merged", each state here corresponds to
-        a "compound" token, which is characterized by the token types Program, Bar,
-        Position/Chord/Tempo and Pitch/Velocity/Duration
-        Here the combination of Pitch, Velocity and Duration tokens is represented by
-        "Pitch" in the graph.
-        NOTE: Program type is not referenced here, you can add it manually by
-        modifying the tokens_types_graph class attribute following your strategy.
+        r"""
+        Return a graph/dictionary of the possible token types successions.
 
-        :return: the token types transitions dictionary
+        :return: the token types transitions dictionary.
         """
         dic = {
             "Bar": ["Position", "Bar"],
@@ -681,15 +704,12 @@ class CPWord(MIDITokenizer):
         return dic
 
     def _tokens_errors(self, tokens: list[list[str]]) -> int:
-        r"""Checks if a sequence of tokens is made of good token types successions and
-        returns the error ratio (lower is better). This method receives a list of
-        tokens as a list of strings, and returns the absolute number of errors
-        predicted. The number of errors should not be higher than the number of tokens.
-        The Pitch and Position values are analyzed:
-            - a position token cannot have a value <= to the current position (it would
-                go back in time)
-            - a pitch token should not be present if the same pitch is already played
-                at the current position.
+        r"""
+        Return the number of errors in a sequence of tokens.
+
+        The method checks if a sequence of tokens is made of good token types
+        successions and values. The number of errors should not be higher than the
+        number of tokens.
 
         :param tokens: sequence of tokens string to check.
         :return: the number of errors predicted (no more than one per token).
@@ -697,22 +717,22 @@ class CPWord(MIDITokenizer):
 
         def cp_token_type(tok: list[str]) -> list[str]:
             family = tok[0].split("_")[1]
+            msg_err = "No token type found, unknown error"
             if family == "Note":
                 return tok[2].split("_")
-            elif family == "Metric":
+            if family == "Metric":
                 bar_pos = tok[1].split("_")
                 if bar_pos[0] in ["Bar", "Position"]:
                     return bar_pos
-                else:  # additional token
-                    for i in range(1, 5):
-                        decoded_token = tok[-i].split("_")
-                        if decoded_token[0] != "Ignore":
-                            return decoded_token
-                raise RuntimeError("No token type found, unknown error")
-            elif family == "None":
+                # additional token
+                for i in range(1, 5):
+                    decoded_token = tok[-i].split("_")
+                    if decoded_token[0] != "Ignore":
+                        return decoded_token
+                raise RuntimeError(msg_err)
+            if family == "None":
                 return ["PAD", "None"]
-            else:  # Program
-                raise RuntimeError("No token type found, unknown error")
+            raise RuntimeError(msg_err)
 
         err = 0
         previous_type = cp_token_type(tokens[0])[0]

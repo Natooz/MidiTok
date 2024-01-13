@@ -1,11 +1,9 @@
-#!/usr/bin/python3 python
-
 """Test methods."""
 
 from __future__ import annotations
 
 from copy import copy
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 from symusic import (
@@ -16,9 +14,12 @@ from symusic import (
     PitchBend,
     Score,
     Tempo,
+    TextMeta,
     TimeSignature,
 )
+from symusic.core import NoteTickList
 
+import miditok.utils.utils
 from miditok import REMI, TokenizerConfig
 from miditok.constants import CLASS_OF_INST
 from miditok.utils import (
@@ -32,10 +33,14 @@ from miditok.utils import (
 from .utils import (
     MIDI_PATHS_MULTITRACK,
     MIDI_PATHS_ONE_TRACK,
+    TEST_LOG_DIR,
     TOKENIZER_CONFIG_KWARGS,
     check_midis_equals,
     del_invalid_time_sig,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_containers_assertions():
@@ -196,56 +201,66 @@ def test_remove_duplicated_notes():
     sets = [
         # No duplicated
         (
-            [
-                Note(time=0, duration=10, pitch=50, velocity=50),
-                Note(time=0, duration=10, pitch=51, velocity=50),
-                Note(time=2, duration=10, pitch=50, velocity=50),
-                Note(time=4, duration=10, pitch=50, velocity=50),
-            ],
+            NoteTickList(
+                [
+                    Note(time=0, duration=10, pitch=50, velocity=50),
+                    Note(time=0, duration=10, pitch=51, velocity=50),
+                    Note(time=2, duration=10, pitch=50, velocity=50),
+                    Note(time=4, duration=10, pitch=50, velocity=50),
+                ]
+            ),
             0,
             0,
         ),
         # One duplicated with dur
         (
-            [
-                Note(time=0, duration=10, pitch=50, velocity=50),
-                Note(time=0, duration=10, pitch=50, velocity=50),
-                Note(time=2, duration=10, pitch=50, velocity=50),
-                Note(time=4, duration=10, pitch=50, velocity=50),
-            ],
+            NoteTickList(
+                [
+                    Note(time=0, duration=10, pitch=50, velocity=50),
+                    Note(time=0, duration=10, pitch=50, velocity=50),
+                    Note(time=2, duration=10, pitch=50, velocity=50),
+                    Note(time=4, duration=10, pitch=50, velocity=50),
+                ]
+            ),
             1,
             1,
         ),
         (
-            [
-                Note(time=0, duration=10, pitch=50, velocity=50),
-                Note(time=0, duration=11, pitch=50, velocity=50),
-                Note(time=2, duration=10, pitch=50, velocity=50),
-                Note(time=4, duration=10, pitch=50, velocity=50),
-            ],
+            NoteTickList(
+                [
+                    Note(time=0, duration=10, pitch=50, velocity=50),
+                    Note(time=0, duration=11, pitch=50, velocity=50),
+                    Note(time=2, duration=10, pitch=50, velocity=50),
+                    Note(time=4, duration=10, pitch=50, velocity=50),
+                ]
+            ),
             1,
             0,
         ),
         (
-            [
-                Note(time=0, duration=10, pitch=50, velocity=50),
-                Note(time=0, duration=10, pitch=50, velocity=50),
-                Note(time=0, duration=11, pitch=50, velocity=50),
-                Note(time=2, duration=10, pitch=50, velocity=50),
-                Note(time=4, duration=10, pitch=50, velocity=50),
-            ],
+            NoteTickList(
+                [
+                    Note(time=0, duration=10, pitch=50, velocity=50),
+                    Note(time=0, duration=10, pitch=50, velocity=50),
+                    Note(time=0, duration=11, pitch=50, velocity=50),
+                    Note(time=2, duration=10, pitch=50, velocity=50),
+                    Note(time=4, duration=10, pitch=50, velocity=50),
+                ]
+            ),
             2,
             1,
         ),
         (
-            [
-                Note(time=0, duration=10, pitch=50, velocity=50),
-                Note(time=0, duration=10, pitch=50, velocity=50),
-                Note(time=0, duration=11, pitch=50, velocity=50),
-                Note(time=2, duration=10, pitch=50, velocity=50),
-                Note(time=2, duration=11, pitch=50, velocity=50),
-                Note(time=4, duration=10, pitch=50, velocity=50),
-            ],
+            NoteTickList(
+                [
+                    Note(time=0, duration=10, pitch=50, velocity=50),
+                    Note(time=0, duration=10, pitch=50, velocity=50),
+                    Note(time=0, duration=11, pitch=50, velocity=50),
+                    Note(time=2, duration=10, pitch=50, velocity=50),
+                    Note(time=2, duration=11, pitch=50, velocity=50),
+                    Note(time=4, duration=10, pitch=50, velocity=50),
+                ]
+            ),
             3,
             1,
         ),
@@ -265,3 +280,14 @@ def test_remove_duplicated_notes():
             assert notes == notes_filtered_dur
         else:
             assert len(notes) - len(notes_filtered_dur) == diff_with_duration
+
+
+@pytest.mark.parametrize("midi_path", MIDI_PATHS_ONE_TRACK)
+def test_get_bars(midi_path: Path, save_bars_markers: bool = False):
+    # Used for debug, this method do not make assertions
+    midi = Score(midi_path)
+    bars_ticks = miditok.utils.get_bars_ticks(midi)
+    if save_bars_markers:
+        for bar_num, bar_tick in enumerate(bars_ticks):
+            midi.markers.append(TextMeta(bar_tick, f"Bar {bar_num + 1}"))
+        midi.dump_midi(TEST_LOG_DIR / f"{midi_path.stem}_bars.mid")

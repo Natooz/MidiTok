@@ -33,24 +33,71 @@ A basic example showing how to create a tokenizer, with a selection of custom pa
 MIDI - Tokens conversion
 -------------------------------
 
-Here we convert a MIDI to tokens, and the other way around.
+Here we convert a MIDI to tokens, decode them back to a MIDI.
 
 ..  code-block:: python
 
-    from miditoolkit import MidiFile
+    from pathlib import Path
 
     # Tokenize a MIDI file
-    midi = MidiFile("path/to/your_midi.mid")
-    tokens = tokenizer(midi_path)  # automatically detects MidiFile, paths
+    tokens = tokenizer(Path("to", "your_midi.mid"))  # automatically detects Score objects, paths, tokens
 
     # Convert to MIDI and save it
-    generated_midi = tokenizer(tokens)  # MidiTok can handle PyTorch / Tensorflow Tensors
-    generated_midi.dump_midi("path/to/save/file.mid")  # could have been done above by giving the path argument
+    generated_midi = tokenizer(tokens)  # MidiTok can handle PyTorch/Numpy/Tensorflow tensors
+    generated_midi.dump_midi(Path("to", "decoded_midi.mid"))
+
+
+Trains a tokenizer with BPE
+-----------------------------
+
+Here we train the tokenizer with :ref:`Byte Pair Encoding (BPE)`.
+BPE allows to reduce the lengths of the sequences of tokens, in turn model efficiency, while improving the results quality/model performance.
+
+..  code-block:: python
+
+    from miditok import REMI
+    from pathlib import Path
+
+    # Creates the tokenizer and list the file paths
+    tokenizer = REMI()  # using defaults parameters (constants.py)
+    midi_paths = list(Path("path", "to", "dataset").glob("**/*.mid"))
+
+    # Builds the vocabulary with BPE
+    tokenizer.learn_bpe(vocab_size=30000, files_paths=midi_paths)
+
+
+Creates a Dataset and collator for training
+-------------------------------------------
+
+Creates a Dataset and a collator to be used with a PyTorch DataLoader to train a model
+
+..  code-block:: python
+
+    from miditok import REMI
+    from miditok.pytorch_data import DatasetTok, DataCollator
+
+    midi_paths = list(Path("path", "to", "dataset").glob("**/*.mid"))
+    dataset = DatasetTok(
+        files_paths=midi_paths,
+        min_seq_len=100,
+        max_seq_len=1024,
+        tokenizer=tokenizer,
+    )
+    collator = DataCollator(
+        tokenizer["PAD_None"], tokenizer["BOS_None"], tokenizer["EOS_None"]
+    )
+    from torch.utils.data import DataLoader
+    data_loader = DataLoader(dataset=dataset, collate_fn=collator)
+
+    # Using the data loader in the training loop
+    for batch in data_loader:
+        print("Train your model on this batch...")
+
 
 Tokenize a dataset
 ------------------------
 
-Here we first train the tokenizer with :ref:`Byte Pair Encoding (BPE)`, then we tokenize a whole dataset.
+Here we tokenize a whole dataset into JSON files storing the tokens ids.
 We also perform data augmentation on the pitch, velocity and duration dimension.
 
 ..  code-block:: python
@@ -70,9 +117,6 @@ We also perform data augmentation on the pitch, velocity and duration dimension.
         if any(ts.numerator != 4 for ts in midi.time_signature_changes):
             return False  # time signature different from 4/*, 4 beats per bar
         return True
-
-    # Learns the vocabulary with BPE
-    tokenizer.learn_bpe(vocab_size=30000, files_paths=midi_paths)
 
     # Performs data augmentation on one pitch octave (up and down), velocities and
     # durations

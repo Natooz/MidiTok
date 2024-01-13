@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from copy import copy, deepcopy
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
+import numpy as np
 from symusic import (
     Note,
     Pedal,
@@ -15,10 +16,12 @@ from symusic import (
     TimeSignature,
     Track,
 )
-from symusic.core import TempoTickList
 
 import miditok
 from miditok.constants import CHORD_MAPS, TIME_SIGNATURE, TIME_SIGNATURE_RANGE
+
+if TYPE_CHECKING:
+    from symusic.core import TempoTickList
 
 SEED = 777
 
@@ -65,7 +68,8 @@ TOKENIZER_CONFIG_KWARGS = {
 
 
 def adjust_tok_params_for_tests(tokenization: str, params: dict[str, Any]) -> None:
-    """Adjust tokenizer config parameters for tests.
+    """
+    Adjust tokenizer config parameters for tests.
 
     Depending on the tokenization, some adjustments are necessary to ensure that the
     MIDI decoded from tokens is identical to the original one.
@@ -94,7 +98,8 @@ def adjust_tok_params_for_tests(tokenization: str, params: dict[str, Any]) -> No
 
 
 def sort_midi(midi: Score, sort_tracks: bool = True) -> None:
-    """Sorts a MIDI: its notes and other track events, and the tracks themselves.
+    """
+    Sorts a MIDI: its notes and other track events, and the tracks themselves.
 
     :param midi: midi to sort.
     :param sort_tracks: will sort the tracks by program if given True.
@@ -102,7 +107,11 @@ def sort_midi(midi: Score, sort_tracks: bool = True) -> None:
     for track in midi.tracks:
         if track.is_drum:
             track.program = 0  # need to be done before sorting tracks per program
-        track.notes.sort(key=lambda x: (x.time, x.pitch, x.duration, x.velocity))
+        # notes sorted by (start, duration, pitch) by symusic
+        # we keep this order here as if we need to sort them specifically, this will be
+        # done in tokenizer.preprocess_midi
+        track.notes.sort()
+        # track.notes.sort(key=lambda x: (x.time, x.pitch, x.duration, x.velocity))
         # track.pedals.sort()
         # track.pitch_bends.sort()
         # track.controls.sort()
@@ -117,7 +126,8 @@ def sort_midi(midi: Score, sort_tracks: bool = True) -> None:
 def adapt_ref_midi_before_tokenize(
     midi: Score, tokenizer: miditok.MIDITokenizer
 ) -> None:
-    """Adapt (inplace) the contents of a MIDI before it is tokenized.
+    """
+    Adapt (inplace) the contents of a MIDI before it is tokenized.
 
     :param midi: MIDI object to adapt.
     :param tokenizer: tokenizer being used.
@@ -136,12 +146,21 @@ def adapt_ref_midi_before_tokenize(
         # tokenizing, otherwise these notes will be tokenized with durations > to this
         # limit, which would yield errors when checking TSE.
         if "max_duration" in tokenizer.config.additional_params:
-            max_duration = tokenizer._token_duration_to_ticks(
-                tokenizer.config.additional_params["max_duration"],
-                midi.ticks_per_quarter,
+            max_durations = np.array(
+                [
+                    [
+                        end_tick,
+                        tokenizer._time_token_to_ticks(
+                            tokenizer.config.additional_params["max_duration"],
+                            tpb,
+                        ),
+                    ]
+                    for end_tick, tpb in miditok.utils.get_midi_ticks_per_beat(midi)
+                ],
+                dtype=np.intc,
             )
             for track in midi.tracks:
-                clip_durations(track.notes, max_duration)
+                clip_durations(track.notes, max_durations)
 
         # Now we can sort the notes
         sort_midi(midi, sort_tracks=False)
@@ -160,10 +179,14 @@ def adapt_ref_midi_before_tokenize(
 def adapt_ref_midi_for_tests_assertion(
     midi: Score, tokenizer: miditok.MIDITokenizer
 ) -> Score:
-    """Adapt the reference tokenized MIDI so that its contents fit what is expected to
-    be retrieved when decoding the tokens.
-    The new MIDI will be preprocessed (`tokenizer.preprocess_midi()`), and other
-    attributes such as tempos or time signature times may be altered.
+    """
+    Adapt a reference raw/unprocessed MIDI for test assertions.
+
+    This method is meant to be used with a reference MIDI, and preprocess it so that
+    its contents match exactly those of the MIDI decoded from the tokens of this
+    reference MIDI.
+    The transformed MIDI will be preprocessed (`tokenizer.preprocess_midi()`), and
+    other attributes such as tempos or time signature times may be altered.
 
     :param midi: midi reference.
     :param tokenizer: in order to downsample the MIDI before sorting its content.
@@ -172,16 +195,10 @@ def adapt_ref_midi_for_tests_assertion(
     tokenization = type(tokenizer).__name__ if tokenizer is not None else None
     new_midi = copy(midi)
 
-    # merging is performed in preprocess only in one_token_stream mode
+    # Merging is performed in preprocess only in one_token_stream mode
     # but in multi token stream, decoding will actually keep one track per program
     if tokenizer.config.use_programs and tokenizer.one_token_stream:
         miditok.utils.merge_same_program_tracks(new_midi.tracks)
-
-    # We delete time sigs outside of those covered by the tokenizer.
-    # This is not done in ``preprocess_midi`` as the time signature alters the beat
-    # structure of the music, bars will be incorrectly calculated. It is preferable
-    # that to throw an error in this case.
-    del_invalid_time_sig(new_midi.time_signatures, tokenizer.time_signatures)
 
     # Preprocess the MIDI: downsample it, remove notes outside of pitch range...
     new_midi = tokenizer.preprocess_midi(new_midi)
@@ -205,8 +222,10 @@ def adapt_ref_midi_for_tests_assertion(
 def midis_notes_equals(
     midi1: Score, midi2: Score
 ) -> list[tuple[int, str, list[tuple[str, Note | int, int]]]]:
-    """Checks if the notes from two MIDIs are all equal, and if not returns the list of
-    errors.
+    """
+    Check that the notes from two MIDIs are all equal.
+
+    If they are not all equal, the method returns the list of errors.
 
     :param midi1: first MIDI.
     :param midi2: second MIDI.
@@ -236,11 +255,11 @@ def tracks_notes_equals(
 def notes_equals(note1: Note, note2: Note) -> str:
     if note1.start != note2.start:
         return "start"
-    elif note1.end != note2.end:
+    if note1.end != note2.end:
         return "end"
-    elif note1.pitch != note2.pitch:
+    if note1.pitch != note2.pitch:
         return "pitch"
-    elif note1.velocity != note2.velocity:
+    if note1.velocity != note2.velocity:
         return "velocity"
     return ""
 
@@ -339,7 +358,12 @@ def tokenize_and_check_equals(
     )
 
     # Post-process the reference and decoded MIDIs
+    # We might need to resample the original preprocessed MIDI, as it has been
+    # resampled with its highest ticks/beat whereas the tokens has been decoded with
+    # the tokenizer's time division, which can be different if using time signatures.
     midi = adapt_ref_midi_for_tests_assertion(midi, tokenizer)
+    if midi.ticks_per_quarter != midi_decoded.ticks_per_quarter:
+        midi = midi.resample(tpq=midi_decoded.ticks_per_quarter)
     sort_midi(midi)
     sort_midi(midi_decoded)
 
@@ -368,10 +392,11 @@ def tokenize_and_check_equals(
 def del_invalid_time_sig(
     time_sigs: list[TimeSignature], time_sigs_tokenizer: list[TimeSignature]
 ) -> None:
-    r"""Will adapt the times of tempo changes depending on the
-    onset times of the notes of the MIDI.
-    This is needed to pass the tempo tests for Octuple as the tempos
-    will be decoded only from the notes.
+    r"""
+    Delete time signatures of a MIDI outside those supported by a tokenizer.
+
+    This is actually unused in our tokenization test pipeline, as removing the
+    invalid time signature is already done in ``preprocess_midi``.
 
     :param time_sigs: time signatures to filter
     :param time_sigs_tokenizer:
@@ -392,8 +417,9 @@ def adapt_tempo_changes_times(
     tempo_changes: list[Tempo],
     default_tempo: int,
 ) -> None:
-    r"""Will adapt the times of tempo changes depending on the
-    onset times of the notes of the MIDI.
+    r"""
+    Align the times of tempo changes on those of reference notes.
+
     This is needed to pass the tempo tests for Octuple as the tempos
     will be decoded only from the notes.
 
@@ -442,14 +468,27 @@ def adapt_tempo_changes_times(
 
 def clip_durations(
     notes_pedals: list[Note] | list[Pedal],
-    max_duration: int,
+    max_durations: np.ndarray,
 ) -> None:
-    """Adapt notes and pedals offset times so that they match the possible durations
-    covered by a tokenizer.
+    """
+    Clip the duration of notes or pedals to a specific limit.
+
+    This method is applied in the tokenization tests to a preprocessed reference MIDI
+    to make sure that the there are no note/pedal durations that exceed the limit, as
+    the MIDI decoded from tokens will have limited durations. This applies to
+    tokenizers using *NoteOff* and *PedalOff* tokens, as otherwise (i.e. using
+    *Duration* tokens) the durations are already clipped during the preprocessing step.
 
     :param notes_pedals: list of Note or Pedal objects to adapt.
-    :param max_duration: max_duration in ticks
+    :param max_durations: max duration values, per tick section, as a numpy array of
+        shape ``(N,2)`` for ``N`` sections, and the second dimension corresponding to
+        the end tick and the max duration in ticks of each section. Processing by
+        sections is required as the original maximum duration is given in beats, and
+        the length of the beats of a MIDI can very with time signature changes.
     """
+    tpb_idx = 0
     for note_pedal in notes_pedals:
-        if note_pedal.duration > max_duration:
-            note_pedal.duration = max_duration
+        if note_pedal.time > max_durations[tpb_idx, 0]:
+            tpb_idx += 1
+        if note_pedal.duration > max_durations[tpb_idx, 1]:
+            note_pedal.duration = max_durations[tpb_idx, 1]

@@ -1,4 +1,5 @@
-"""Dataset classes and data collators to be used with PyTorch when training a model.
+"""
+Dataset classes and data collators to be used with PyTorch when training a model.
 
 ``DatasetTok`` is a general i/o class that loads and tokenize MIDI files and saves them
 in memory during its initialization, that can chunk the whole token sequences into
