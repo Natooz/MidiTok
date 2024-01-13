@@ -295,7 +295,9 @@ class TokenizerConfig:
         (default: ``False``)
     :param remove_duplicated_notes: will remove duplicated notes before tokenizing
         MIDIs. Notes with the same onset time and pitch value will be deduplicated.
-        This option will slightly increase the tokenization time. (default: ``False``)
+        This option will slightly increase the tokenization time. This option will add
+        an extra note sorting step in the MIDI preprocessing, which can increase the
+        overall tokenization time. (default: ``False``)
     :param delete_equal_successive_tempo_changes: setting this option True will delete
         identical successive tempo changes when preprocessing a MIDI file after loading
         it. For examples, if a MIDI has two tempo changes for tempo 120 at tick 1000

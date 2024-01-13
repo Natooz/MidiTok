@@ -107,7 +107,11 @@ def sort_midi(midi: Score, sort_tracks: bool = True) -> None:
     for track in midi.tracks:
         if track.is_drum:
             track.program = 0  # need to be done before sorting tracks per program
-        track.notes.sort(key=lambda x: (x.time, x.pitch, x.duration, x.velocity))
+        # notes sorted by (start, duration, pitch) by symusic
+        # we keep this order here as if we need to sort them specifically, this will be
+        # done in tokenizer.preprocess_midi
+        track.notes.sort()
+        # track.notes.sort(key=lambda x: (x.time, x.pitch, x.duration, x.velocity))
         # track.pedals.sort()
         # track.pitch_bends.sort()
         # track.controls.sort()

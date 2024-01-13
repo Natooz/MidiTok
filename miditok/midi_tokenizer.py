@@ -496,8 +496,9 @@ class MIDITokenizer(ABC, HFHubMixin):
             note_soa["duration"] = self._adjust_time_to_tpb(
                 note_soa["duration"], resampling_factors, min_duration
             )
+            self._adjust_offset_spanning_across_time_sig(note_soa, resampling_factors)
 
-        # Symusic automatically sorts the notes by (time, pitch, duration) keys when
+        # Symusic automatically sorts the notes by (time, duration, pitch) keys when
         # reading a MIDI file. We hence don't need to sort the notes.
         # However, when using `NoteOn`/`NoteOff`, we can encounter note order
         # alterations with the velocity values as they are not sorted on velocities and
@@ -508,10 +509,14 @@ class MIDITokenizer(ABC, HFHubMixin):
         # the tokenization tests of MidiTok for concerned tokenizers in order to keep
         # 100% of the data integrity, so that the tests pass.
 
-        if self.config.remove_duplicated_notes:
-            remove_duplicated_notes(note_soa)
+        notes_new = Note.from_numpy(**note_soa)
 
-        return Note.from_numpy(**note_soa)
+        if self.config.remove_duplicated_notes:
+            # we need to resort here, as symusic does it by (time, duration, pitch).
+            notes_new.sort(key=lambda n: (n.time, n.pitch, n.duration, n.velocity))
+            remove_duplicated_notes(notes_new)
+
+        return notes_new
 
     def _preprocess_tempos(
         self,
@@ -754,6 +759,9 @@ class MIDITokenizer(ABC, HFHubMixin):
                 pedals_soa["duration"] = self._adjust_time_to_tpb(
                     pedals_soa["duration"], resampling_factors, min_duration
                 )
+                self._adjust_offset_spanning_across_time_sig(
+                    pedals_soa, resampling_factors
+                )
             need_resample = False
 
         # Will be run at least once if no overlapping durations (while loop)
@@ -763,6 +771,9 @@ class MIDITokenizer(ABC, HFHubMixin):
             elif resampling_factors is not None:
                 pedals_soa["duration"] = self._adjust_time_to_tpb(
                     pedals_soa["duration"], resampling_factors, min_duration
+                )
+                self._adjust_offset_spanning_across_time_sig(
+                    pedals_soa, resampling_factors
                 )
 
         return Pedal.from_numpy(**pedals_soa)
@@ -790,6 +801,33 @@ class MIDITokenizer(ABC, HFHubMixin):
             idx_first = idx_last_
 
         return times_arr
+
+    @staticmethod
+    def _adjust_offset_spanning_across_time_sig(
+        notes_pedals_soa: dict[str, np.ndarray],
+        resampling_factors: np.ndarray,
+    ) -> None:
+        end_arr = notes_pedals_soa["time"] + notes_pedals_soa["duration"]
+        idx_first = 0
+        for idx_last, _ in resampling_factors[:-1]:
+            # NoteOff/PedalOff idx with durations spanning across time sigs adjust end
+            spanning_durations_idx = np.where(
+                end_arr[idx_first:idx_last] >= notes_pedals_soa["time"][idx_last]
+            )[0]
+            for idx in spanning_durations_idx:
+                # Get the factor for the idx as it can be different from the next one
+                factor_for_idx = resampling_factors[
+                    np.argmax(
+                        resampling_factors[idx_first:, 0]
+                        >= notes_pedals_soa["time"][idx]
+                    ),
+                    1,
+                ]
+                new_end = np.round(end_arr[idx] / factor_for_idx) * factor_for_idx
+                notes_pedals_soa["duration"][idx] = (
+                    new_end - notes_pedals_soa["time"][idx]
+                )
+            idx_first = idx_last
 
     def _adjust_durations(
         self, notes_pedals_soa: dict[str, np.ndarray], ticks_per_beat: np.ndarray

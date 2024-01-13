@@ -124,7 +124,7 @@ def fix_offsets_overlapping_notes(notes: NoteTickList) -> None:
     r"""
     Reduce the durations of overlapping notes.
 
-    By applying this method, when a note starts although it is already being played,
+    By applying this method, when a note starts while it is already being played,
     the previous note will end. Before running this method make sure the notes are
     sorted by start then pitch then end values:
     ``notes.sort(key=lambda x: (x.start, x.pitch, x.end))``.

@@ -17,6 +17,7 @@ from symusic import (
     TextMeta,
     TimeSignature,
 )
+from symusic.core import NoteTickList
 
 import miditok.utils.utils
 from miditok import REMI, TokenizerConfig
@@ -200,56 +201,66 @@ def test_remove_duplicated_notes():
     sets = [
         # No duplicated
         (
-            [
-                Note(time=0, duration=10, pitch=50, velocity=50),
-                Note(time=0, duration=10, pitch=51, velocity=50),
-                Note(time=2, duration=10, pitch=50, velocity=50),
-                Note(time=4, duration=10, pitch=50, velocity=50),
-            ],
+            NoteTickList(
+                [
+                    Note(time=0, duration=10, pitch=50, velocity=50),
+                    Note(time=0, duration=10, pitch=51, velocity=50),
+                    Note(time=2, duration=10, pitch=50, velocity=50),
+                    Note(time=4, duration=10, pitch=50, velocity=50),
+                ]
+            ),
             0,
             0,
         ),
         # One duplicated with dur
         (
-            [
-                Note(time=0, duration=10, pitch=50, velocity=50),
-                Note(time=0, duration=10, pitch=50, velocity=50),
-                Note(time=2, duration=10, pitch=50, velocity=50),
-                Note(time=4, duration=10, pitch=50, velocity=50),
-            ],
+            NoteTickList(
+                [
+                    Note(time=0, duration=10, pitch=50, velocity=50),
+                    Note(time=0, duration=10, pitch=50, velocity=50),
+                    Note(time=2, duration=10, pitch=50, velocity=50),
+                    Note(time=4, duration=10, pitch=50, velocity=50),
+                ]
+            ),
             1,
             1,
         ),
         (
-            [
-                Note(time=0, duration=10, pitch=50, velocity=50),
-                Note(time=0, duration=11, pitch=50, velocity=50),
-                Note(time=2, duration=10, pitch=50, velocity=50),
-                Note(time=4, duration=10, pitch=50, velocity=50),
-            ],
+            NoteTickList(
+                [
+                    Note(time=0, duration=10, pitch=50, velocity=50),
+                    Note(time=0, duration=11, pitch=50, velocity=50),
+                    Note(time=2, duration=10, pitch=50, velocity=50),
+                    Note(time=4, duration=10, pitch=50, velocity=50),
+                ]
+            ),
             1,
             0,
         ),
         (
-            [
-                Note(time=0, duration=10, pitch=50, velocity=50),
-                Note(time=0, duration=10, pitch=50, velocity=50),
-                Note(time=0, duration=11, pitch=50, velocity=50),
-                Note(time=2, duration=10, pitch=50, velocity=50),
-                Note(time=4, duration=10, pitch=50, velocity=50),
-            ],
+            NoteTickList(
+                [
+                    Note(time=0, duration=10, pitch=50, velocity=50),
+                    Note(time=0, duration=10, pitch=50, velocity=50),
+                    Note(time=0, duration=11, pitch=50, velocity=50),
+                    Note(time=2, duration=10, pitch=50, velocity=50),
+                    Note(time=4, duration=10, pitch=50, velocity=50),
+                ]
+            ),
             2,
             1,
         ),
         (
-            [
-                Note(time=0, duration=10, pitch=50, velocity=50),
-                Note(time=0, duration=10, pitch=50, velocity=50),
-                Note(time=0, duration=11, pitch=50, velocity=50),
-                Note(time=2, duration=10, pitch=50, velocity=50),
-                Note(time=2, duration=11, pitch=50, velocity=50),
-                Note(time=4, duration=10, pitch=50, velocity=50),
-            ],
+            NoteTickList(
+                [
+                    Note(time=0, duration=10, pitch=50, velocity=50),
+                    Note(time=0, duration=10, pitch=50, velocity=50),
+                    Note(time=0, duration=11, pitch=50, velocity=50),
+                    Note(time=2, duration=10, pitch=50, velocity=50),
+                    Note(time=2, duration=11, pitch=50, velocity=50),
+                    Note(time=4, duration=10, pitch=50, velocity=50),
+                ]
+            ),
             3,
             1,
         ),
