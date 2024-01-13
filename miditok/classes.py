@@ -533,6 +533,10 @@ class TokenizerConfig:
         # Additional params
         self.additional_params = kwargs
 
+    @property
+    def max_num_pos_per_beat(self) -> int:
+        return max(self.beat_res.values())
+
     @classmethod
     def from_dict(cls, input_dict: dict[str, Any], **kwargs) -> TokenizerConfig:
         r"""

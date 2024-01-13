@@ -169,9 +169,7 @@ class TSD(MIDITokenizer):
             previous_pitch_onset = {prog: -128 for prog in self.config.programs}
             previous_pitch_chord = {prog: -128 for prog in self.config.programs}
             active_pedals = {}
-            ticks_per_beat = compute_ticks_per_beat(
-                TIME_SIGNATURE[1], self.time_division
-            )
+            ticks_per_beat = midi.ticks_per_quarter
 
             # Set track / sequence program if needed
             if not self.one_token_stream:
@@ -237,7 +235,7 @@ class TSD(MIDITokenizer):
                         time_signature_changes.append(
                             TimeSignature(current_tick, num, den)
                         )
-                    ticks_per_beat = compute_ticks_per_beat(den, self.time_division)
+                    ticks_per_beat = self._tpb_per_ts[den]
                 elif tok_type == "Pedal":
                     pedal_prog = (
                         int(tok_val) if self.config.use_programs else current_program

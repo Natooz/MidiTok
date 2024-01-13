@@ -13,6 +13,7 @@ import numpy as np
 from huggingface_hub import ModelHubMixin as HFHubMixin
 from huggingface_hub import hf_hub_download
 from symusic import (
+    ControlChange,
     Note,
     Pedal,
     PitchBend,
@@ -135,42 +136,30 @@ class MIDITokenizer(ABC, HFHubMixin):
         if self.config.use_time_signatures:
             self.time_signatures = self.__create_time_signatures()
 
-        # New time division to apply when preprocessing MIDIs
+        # Creates the numbers of ticks/beats depending on the note values (time
+        # signature denominator) of the tokenizer. The values are calculated depending
+        # on the maximum number of positions per beat
+        # (`self.config.max_num_pos_per_beat`) and the time signatures it supports.
+        # The highest note value will ba assigned a tick/beat value equal to
+        # `self.config.max_num_pos_per_beat`, the other note values will have a
+        # ticks/beat based on this base, i.e. `self.config.max_num_pos_per_beat`
+        # multiplied by the factor between each note value and the maximum note value.
+        self._tpb_per_ts = self.__create_tpb_per_ts()
+        # Default time division to use when decoding tokens to a MIDI.
         # This is left as a class attribute and not a property as the config is not
         # intended to be modified after its creation. Ultimately, this could be
         # ensured by converting TokenizerConfig to a frozen dataclass.
-        # The tokenizer's time division is chosen in order to make sure that is equal
-        # to the lowest possible ticks per beat value, which depends on the supported
-        # time signatures.
         # It shouldn't be used in place of the real ticks/beat value, which depends on
         # the current time signature denominator. The only exception is for tokenizers
         # which does not support time signature, i.e. which only consider 4/4.
-        # TODO this doesn't work as is yet for non-beat-based tokenizers, as the
-        #   `midi.resample` operation will keep too much accuracy for sections where
-        #   the time signature is < 8, i.e. ticks per beat < to tokenizer.time_division
-        #   We would need to resample per ticks/beat.
-        #   Setting
-        #   `self.time_division = max(res for res in self.config.beat_res.values())`
-        #   makes the tests pass as no MIDI in the tests has a time signature of */8.
-        #   https://github.com/Yikai-Liao/symusic/issues/10
-        # TODO document this somewhere.
-        #   Ideally the tokenizer's time division is set to the highest possible
-        #   ticks per beat value, which depends on the highest `config.beat_res` given
-        #   by the user and the maximum time signature denominator supported.
-        #   This would allow to keep the maximum time information when tokenizing.
-        #   In practice, if we do this, we would need to resample the time (onsets)
-        #   of all the MIDI messages differently for every every portions having
-        #   different ticks/beat values (can vary depending on the time signatures).
-        #   This would add a significant additional preprocessing time if we do it in
-        #   Python, so we do not do it. Instead we select the time division as the
-        #   highest ticks/beat in `config.beat_res`, and round the duration values of
-        #   the concerned tokens (note and time durations), even for
-        #   *NoteOff*/*PedalOff* tokens (which is necessary).
-        #   Ultimately, a resampling by ticks/beat could be implemented in a C++
-        #   preprocessing step with pybind. We could then remove the `ceil` from the
-        #   `MIDITokenizer_time_token_to_ticks` method.
-        self._tpb_per_ts = self.__create_tpb_per_ts()
-        self.time_division = max(self._tpb_per_ts.values())
+        # During preprocessing, the MIDI will be resampled to a new time division equal
+        # to the number of ticks per beat of the lowest time signature denominator it
+        # contains. This is done in order to resample as much as possible while keeping
+        # most of the accuracy. Some sections might need to be resampled again, when
+        # the time signature denominator will be higher (i.e. higher number of absolute
+        # ticks per beat).
+        # Realted: https://github.com/Yikai-Liao/symusic/issues/10
+        self.time_division = self._tpb_per_ts[TIME_SIGNATURE[1]]
 
         # Durations
         # Usages:
@@ -334,7 +323,8 @@ class MIDITokenizer(ABC, HFHubMixin):
         # Resample time, not inplace
         # The new time division is chosen depending on its highest time signature
         # denominator, and is equivalent to the highest possible tick/beat ratio.
-        new_tpq = self._tpb_per_ts[max(ts.denominator for ts in midi.time_signatures)]
+        max_midi_denom = max(ts.denominator for ts in midi.time_signatures)
+        new_tpq = self.config.max_num_pos_per_beat * max(max_midi_denom // 4, 1)
         if midi.ticks_per_quarter != new_tpq:
             midi = midi.resample(new_tpq, min_dur=1)
 
@@ -1591,6 +1581,17 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         midi = self._tokens_to_midi(tokens, programs)
 
+        # Create controls for pedals
+        # This is required so that they are saved when the MIDI is dumped, as symusic
+        # will only write the control messages.
+        if self.config.use_sustain_pedals:
+            for track in midi.tracks:
+                for pedal in track.pedals:
+                    track.controls.append(ControlChange(pedal.time, 64, 127))
+                    track.controls.append(ControlChange(pedal.end, 64, 0))
+                if len(track.pedals) > 0:
+                    track.controls.sort()
+
         # Set default tempo and time signatures at tick 0 if not present
         if len(midi.tempos) == 0 or midi.tempos[0].time != 0:
             midi.tempos.insert(0, Tempo(0, self.default_tempo))
@@ -1907,15 +1908,18 @@ class MIDITokenizer(ABC, HFHubMixin):
         """
         Return the dictionary of the possible ticks per beat values per time signature.
 
-        The set of possible values depends on the tokenizer's time division and
-        the time signatures it supports.
+        The set of possible values depends on the tokenizer's maximum number of
+        positions per beat (`self.config.max_num_pos_per_beat`) and the time signatures
+        it supports.
 
         :return: dictionary of the possible ticks per beat values per time signature,
             keys are time signature denominators, values the ticks/beat values.
         """
+        max_denom = max(ts[1] for ts in self.time_signatures)
+        max_beat_res = self.config.max_num_pos_per_beat
         return {
-            denom: compute_ticks_per_beat(denom, max(self.config.beat_res.values()))
-            for denom in {ts[1] for ts in self.time_signatures}
+            denom: max_beat_res * (max_denom // denom)
+            for denom in self.config.time_signature_range
         }
 
     def _get_midi_resampling_factor(self, midi: Score) -> np.ndarray:
@@ -1993,24 +1997,13 @@ class MIDITokenizer(ABC, HFHubMixin):
             resolution.
         """
         values = self.rests if rest else self.durations
-        tpb_to_ticks_array = {
+        return {
             tpb: np.array(
                 [self._time_token_to_ticks(time_tuple, tpb) for time_tuple in values],
                 dtype=np.intc,
             )
             for tpb in self._tpb_per_ts.values()
         }
-        # TODO explain why extend
-        for i in range(len(self._tpb_per_ts) - 1):
-            extended_tpb = max(self._tpb_per_ts.values()) * (i + 1) * 2
-            tpb_to_ticks_array[extended_tpb] = np.array(
-                [
-                    self._time_token_to_ticks(time_tuple, extended_tpb)
-                    for time_tuple in values
-                ],
-                dtype=np.intc,
-            )
-        return tpb_to_ticks_array
 
     def __create_tpb_tokens_to_ticks(
         self, rest: bool = False
@@ -2029,7 +2022,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         :return: ticks per beat + token value to duration in tick.
         """
         values = self.rests if rest else self.durations
-        tpb_tokens_to_ticks = {
+        return {
             tpb: {
                 ".".join(map(str, duration_tuple)): self._time_token_to_ticks(
                     duration_tuple, tpb
@@ -2038,16 +2031,6 @@ class MIDITokenizer(ABC, HFHubMixin):
             }
             for tpb in self._tpb_per_ts.values()
         }
-        # TODO explain why we extend
-        for i in range(len(self._tpb_per_ts) - 1):
-            extended_tpb = max(self._tpb_per_ts.values()) * (i + 1) * 2
-            tpb_tokens_to_ticks[extended_tpb] = {
-                ".".join(map(str, duration_tuple)): self._time_token_to_ticks(
-                    duration_tuple, extended_tpb
-                )
-                for duration_tuple in values
-            }
-        return tpb_tokens_to_ticks
 
     def __create_tpb_ticks_to_tokens(self) -> dict[int, dict[int, str]]:
         r"""

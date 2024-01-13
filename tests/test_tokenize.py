@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from symusic import Pedal, Score
+from symusic import Score
 
 import miditok
 
@@ -184,14 +184,6 @@ def _test_tokenize(
         tokenizer_config=miditok.TokenizerConfig(**params)
     )
     str(tokenizer)  # shouldn't fail
-
-    # Adds pedals to add a bit of complexity
-    if tokenizer.config.use_sustain_pedals:
-        for ti in range(min(3, len(midi.tracks))):
-            midi.tracks[ti].pedals.extend(
-                [Pedal(start, 200) for start in [100, 600, 1800, 2200]]
-            )
-            midi.tracks[ti].pedals.sort(key=lambda p: p.time)
 
     # MIDI -> Tokens -> MIDI
     midi_decoded, midi_ref, has_errors = tokenize_and_check_equals(

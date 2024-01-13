@@ -7,7 +7,7 @@ from symusic import Note, Score, Tempo, TimeSignature, Track
 from miditok.classes import Event, TokSequence
 from miditok.constants import MIDI_INSTRUMENTS, TIME_SIGNATURE
 from miditok.midi_tokenizer import MIDITokenizer
-from miditok.utils import compute_ticks_per_bar, compute_ticks_per_beat, get_bars_ticks
+from miditok.utils import compute_ticks_per_bar, get_bars_ticks
 
 
 class Octuple(MIDITokenizer):
@@ -224,10 +224,10 @@ class Octuple(MIDITokenizer):
             else:
                 time_signature_changes.append(TimeSignature(0, *TIME_SIGNATURE))
             current_time_sig = time_signature_changes[0]
-            ticks_per_bar = compute_ticks_per_bar(current_time_sig, self.time_division)
-            ticks_per_beat = compute_ticks_per_beat(
-                current_time_sig.denominator, self.time_division
+            ticks_per_bar = compute_ticks_per_bar(
+                current_time_sig, midi.ticks_per_quarter
             )
+            ticks_per_beat = self._tpb_per_ts[current_time_sig.denominator]
             # Set track / sequence program if needed
             if not self.one_token_stream:
                 is_drum = False
@@ -312,11 +312,9 @@ class Octuple(MIDITokenizer):
                             time_signature_changes.append(current_time_sig)
                         bar_at_last_ts_change = event_bar
                         ticks_per_bar = compute_ticks_per_bar(
-                            current_time_sig, self.time_division
+                            current_time_sig, midi.ticks_per_quarter
                         )
-                        ticks_per_beat = compute_ticks_per_beat(
-                            current_time_sig.denominator, self.time_division
-                        )
+                        ticks_per_beat = self._tpb_per_ts[current_time_sig.denominator]
 
             # Add current_inst to midi and handle notes still active
             if not self.one_token_stream:
@@ -370,7 +368,7 @@ class Octuple(MIDITokenizer):
         # POSITION
         # self.time_division is equal to the maximum possible ticks/beat value.
         max_num_beats = max(ts[0] for ts in self.time_signatures)
-        num_positions = self.time_division * max_num_beats
+        num_positions = self.config.max_num_pos_per_beat * max_num_beats
         vocab[3] += [f"Position_{i}" for i in range(num_positions)]
 
         # BAR (positional encoding)

@@ -60,13 +60,14 @@ class Structured(MIDITokenizer):
 
         # Creates the Note On, Note Off and Velocity events
         previous_tick = 0
+        ticks_per_beat = self.time_division
         for note in track.notes:
             # In this case, we directly add TimeShift events here so we don't have to
             # call __add_time_note_events and avoid delay cause by event sorting
             if not self.one_token_stream:
                 time_shift_ticks = note.start - previous_tick
                 if time_shift_ticks != 0:
-                    time_shift = self._tpb_ticks_to_tokens[self.time_division][
+                    time_shift = self._tpb_ticks_to_tokens[ticks_per_beat][
                         time_shift_ticks
                     ]
                 else:
@@ -97,7 +98,7 @@ class Structured(MIDITokenizer):
                     desc=f"{note.velocity}",
                 )
             )
-            dur = self._tpb_ticks_to_tokens[self.time_division][note.duration]
+            dur = self._tpb_ticks_to_tokens[ticks_per_beat][note.duration]
             events.append(
                 Event(
                     type_="Duration",
@@ -235,6 +236,7 @@ class Structured(MIDITokenizer):
         current_tick = 0
         current_program = 0
         current_instrument = None
+        ticks_per_beat = midi.ticks_per_quarter
         for si, seq in enumerate(tokens):
             # Set track / sequence program if needed
             if not self.one_token_stream:
@@ -254,9 +256,7 @@ class Structured(MIDITokenizer):
             for ti, token in enumerate(seq):
                 token_type, token_val = token.split("_")
                 if token_type == "TimeShift" and token_val != "0.0.1":
-                    current_tick += self._tpb_tokens_to_ticks[self.time_division][
-                        token_val
-                    ]
+                    current_tick += self._tpb_tokens_to_ticks[ticks_per_beat][token_val]
                 elif token_type == "Pitch":
                     try:
                         if (
@@ -265,7 +265,7 @@ class Structured(MIDITokenizer):
                         ):
                             pitch = int(seq[ti].split("_")[1])
                             vel = int(seq[ti + 1].split("_")[1])
-                            duration = self._tpb_tokens_to_ticks[self.time_division][
+                            duration = self._tpb_tokens_to_ticks[ticks_per_beat][
                                 seq[ti + 2].split("_")[1]
                             ]
                             new_note = Note(current_tick, duration, pitch, vel)

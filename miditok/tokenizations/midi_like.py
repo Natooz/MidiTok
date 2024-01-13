@@ -207,9 +207,7 @@ class MIDILike(MIDITokenizer):
             previous_pitch_onset = {prog: -128 for prog in self.config.programs}
             previous_pitch_chord = {prog: -128 for prog in self.config.programs}
             active_pedals = {}
-            ticks_per_beat = compute_ticks_per_beat(
-                TIME_SIGNATURE[1], self.time_division
-            )
+            ticks_per_beat = midi.ticks_per_quarter
             if max_duration_str is not None:
                 max_duration = self._time_token_to_ticks(
                     max_duration_str, ticks_per_beat
@@ -282,7 +280,7 @@ class MIDILike(MIDITokenizer):
                     tempo_changes.append(Tempo(current_tick, float(tok_val)))
                 elif tok_type == "TimeSig":
                     num, den = self._parse_token_time_signature(tok_val)
-                    ticks_per_beat = compute_ticks_per_beat(den, self.time_division)
+                    ticks_per_beat = self._tpb_per_ts[den]
                     if max_duration is not None:
                         max_duration = self._time_token_to_ticks(
                             max_duration_str, ticks_per_beat
@@ -604,12 +602,10 @@ class MIDILike(MIDITokenizer):
             for prog in self.config.programs
         }
         current_pitches_tick = {p: [] for p in self.config.programs}
-        ticks_per_beat = compute_ticks_per_beat(TIME_SIGNATURE[1], self.time_division)
+        ticks_per_beat = self.time_division
         max_duration_str = self.config.additional_params.get("max_duration", None)
         if max_duration_str is not None:
-            max_duration = self._time_token_to_ticks(
-                max_duration_str, self.time_division
-            )
+            max_duration = self._time_token_to_ticks(max_duration_str, ticks_per_beat)
         else:
             max_duration = None
         previous_pitch_onset = {program: -128 for program in self.config.programs}
@@ -682,7 +678,7 @@ class MIDILike(MIDITokenizer):
                     ]
             elif events[i].type_ == "TimeSig":
                 num, den = self._parse_token_time_signature(events[i].value)
-                ticks_per_beat = compute_ticks_per_beat(den, self.time_division)
+                ticks_per_beat = self._tpb_per_ts[den]
                 if max_duration is not None:
                     max_duration = self._time_token_to_ticks(
                         max_duration_str, ticks_per_beat

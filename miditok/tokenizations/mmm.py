@@ -305,9 +305,9 @@ class MMM(MIDITokenizer):
         tempo_changes = []
         time_signature_changes = []
         ticks_per_bar = compute_ticks_per_bar(
-            TimeSignature(0, *TIME_SIGNATURE), self.time_division
+            TimeSignature(0, *TIME_SIGNATURE), midi.ticks_per_quarter
         )
-        ticks_per_beat = compute_ticks_per_beat(TIME_SIGNATURE[1], self.time_division)
+        ticks_per_beat = midi.ticks_per_quarter
 
         current_tick = tick_at_current_bar = 0
         current_bar = -1
@@ -352,8 +352,8 @@ class MMM(MIDITokenizer):
                 time_sig = TimeSignature(current_tick, num, den)
                 if first_program is None or current_program == first_program:
                     time_signature_changes.append(time_sig)
-                ticks_per_bar = compute_ticks_per_bar(time_sig, self.time_division)
-                ticks_per_beat = compute_ticks_per_beat(den, self.time_division)
+                ticks_per_bar = compute_ticks_per_bar(time_sig, midi.ticks_per_quarter)
+                ticks_per_beat = self._tpb_per_ts[den]
             elif tok_type in ["Pitch", "PitchIntervalTime", "PitchIntervalChord"]:
                 if tok_type == "Pitch":
                     pitch = int(tok_val)
