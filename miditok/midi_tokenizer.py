@@ -324,7 +324,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         # The new time division is chosen depending on its highest time signature
         # denominator, and is equivalent to the highest possible tick/beat ratio.
         max_midi_denom = max(ts.denominator for ts in midi.time_signatures)
-        new_tpq = self.config.max_num_pos_per_beat * max(max_midi_denom // 4, 1)
+        new_tpq = int(self.config.max_num_pos_per_beat * max_midi_denom / 4)
         if midi.ticks_per_quarter != new_tpq:
             midi = midi.resample(new_tpq, min_dur=1)
 
@@ -709,6 +709,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             )
 
         # Format durations (if needed) and merge successive pedals
+        # TODO will need to recompute resampling factor to update idx after pedals rmv
         need_resample = True
         while np.any(
             overlapping_mask := (
@@ -912,11 +913,9 @@ class MIDITokenizer(ABC, HFHubMixin):
                         0, Event("Program", track.program, 0, desc="ProgramNoteOff")
                     )
                 all_events[ti] += track_events
-                # TODO remove order if possible
-                all_events[ti].sort(key=lambda x: (x.time, self._order(x)))
+                self._sort_events(all_events[ti])
         if self.one_token_stream:
-            # TODO sort magic method removing lambda?
-            all_events.sort(key=lambda x: (x.time, self._order(x)))
+            self._sort_events(all_events)
             # Add ProgramChange (named Program) tokens if requested.
             if self.config.program_changes:
                 self._insert_program_change_events(all_events)
@@ -937,40 +936,9 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         return tok_sequence
 
-    @staticmethod
-    def _order(event: Event) -> int:
-        """
-        Return the order number of an ``Event``.
-
-        Internal method used to sort events (tokens) depending on their type or
-        context of appearance. This is required, especially for multitrack
-        one-token-stream situations where there can be several tokens appearing at
-        the same moment (tick) from different tracks, that need to be sorted.
-
-        :param event: event to determine priority.
-        :return: priority as an int
-        """
-        # Global MIDI tokens first
-        if event.type_ in ["Tempo", "TimeSig"]:
-            return 0
-        # Then NoteOff
-        if event.type_ == "NoteOff" or (
-            event.type_ == "Program" and event.desc == "ProgramNoteOff"
-        ):
-            return 1
-        # Then track effects
-        if event.type_ in ["Pedal", "PedalOff"] or (
-            event.type_ == "Duration" and event.desc == "PedalDuration"
-        ):
-            return 2
-        if event.type_ == "PitchBend" or (
-            event.type_ == "Program" and event.desc == "ProgramPitchBend"
-        ):
-            return 3
-        if event.type_ == "ControlChange":
-            return 4
-        # Track notes then
-        return 10
+    def _sort_events(self, events: list[Event]) -> None:
+        # Can be overridden by subclasses if required (MMM)
+        events.sort(key=lambda e: e.time)
 
     def _create_track_events(
         self, track: Track, ticks_per_beat: np.ndarray = None
@@ -1922,7 +1890,8 @@ class MIDITokenizer(ABC, HFHubMixin):
             for denom in self.config.time_signature_range
         }
 
-    def _get_midi_resampling_factor(self, midi: Score) -> np.ndarray:
+    @staticmethod
+    def _get_midi_resampling_factor(midi: Score) -> np.ndarray:
         """
         Compute the portions of numbers of ticks in a beat in a MIDI.
 
@@ -1936,11 +1905,11 @@ class MIDITokenizer(ABC, HFHubMixin):
         ticks_per_beat = [
             [
                 midi.time_signatures[tsi + 1].time,
-                compute_ticks_per_beat(
+                midi.ticks_per_quarter
+                // compute_ticks_per_beat(
                     midi.time_signatures[tsi].denominator,
-                    self._tpb_per_ts[TIME_SIGNATURE[1]],
-                )
-                // midi.ticks_per_quarter,
+                    midi.ticks_per_quarter,
+                ),
             ]
             for tsi in range(len(midi.time_signatures) - 1)
         ]
@@ -1949,11 +1918,11 @@ class MIDITokenizer(ABC, HFHubMixin):
         ticks_per_beat.append(
             [
                 midi.end() + 1,
-                compute_ticks_per_beat(
+                midi.ticks_per_quarter
+                // compute_ticks_per_beat(
                     midi.time_signatures[-1].denominator,
-                    self._tpb_per_ts[TIME_SIGNATURE[1]],
-                )
-                // midi.ticks_per_quarter,
+                    midi.ticks_per_quarter,
+                ),
             ]
         )
 

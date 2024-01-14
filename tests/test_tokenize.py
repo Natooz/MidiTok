@@ -10,6 +10,7 @@ import pytest
 from symusic import Score
 
 import miditok
+from miditok.constants import MIDI_LOADING_EXCEPTION
 
 from .utils import (
     ALL_TOKENIZATIONS,
@@ -176,7 +177,10 @@ def _test_tokenize(
         single MIDI, with all tracks appended altogether.
     """
     # Reads the MIDI and add pedal messages to make sure there are some
-    midi = Score(Path(midi_path))
+    try:
+        midi = Score(Path(midi_path))
+    except MIDI_LOADING_EXCEPTION as e:
+        pytest.skip(f"Error when loading {midi_path.name}: {e}")
 
     # Creates the tokenizer
     tokenization, params = tok_params_set

@@ -128,6 +128,48 @@ class MIDILike(MIDITokenizer):
 
         return all_events
 
+    def _sort_events(self, events: list[Event]) -> None:
+        # This could be removed if we find a way to insert NoteOff tokens before Chords
+        if self.config.use_chords:
+            events.sort(key=lambda e: (e.time, self._order(e)))
+        else:
+            super()._sort_events(events)
+
+    @staticmethod
+    def _order(event: Event) -> int:
+        """
+        Return the order number of an ``Event``.
+
+        Internal method used to sort events (tokens) depending on their type or
+        context of appearance. This is required, especially for multitrack
+        one-token-stream situations where there can be several tokens appearing at
+        the same moment (tick) from different tracks, that need to be sorted.
+
+        :param event: event to determine priority.
+        :return: priority as an int
+        """
+        # Global MIDI tokens first
+        if event.type_ in ["Tempo", "TimeSig"]:
+            return 0
+        # Then NoteOff
+        if event.type_ == "NoteOff" or (
+            event.type_ == "Program" and event.desc == "ProgramNoteOff"
+        ):
+            return 1
+        # Then track effects
+        if event.type_ in ["Pedal", "PedalOff"] or (
+            event.type_ == "Duration" and event.desc == "PedalDuration"
+        ):
+            return 2
+        if event.type_ == "PitchBend" or (
+            event.type_ == "Program" and event.desc == "ProgramPitchBend"
+        ):
+            return 3
+        if event.type_ == "ControlChange":
+            return 4
+        # Track notes then
+        return 10
+
     def _tokens_to_midi(
         self,
         tokens: TokSequence | list[TokSequence],

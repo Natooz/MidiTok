@@ -535,6 +535,11 @@ class TokenizerConfig:
 
     @property
     def max_num_pos_per_beat(self) -> int:
+        """
+        Returns the maximum number of positions per ticks covered by the config.
+
+        :return: maximum number of positions per ticks covered by the config.
+        """
         return max(self.beat_res.values())
 
     @classmethod

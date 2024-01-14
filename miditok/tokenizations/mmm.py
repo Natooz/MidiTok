@@ -214,6 +214,9 @@ class MMM(MIDITokenizer):
 
         return events
 
+    def _sort_events(self, events: list[Event]) -> None:
+        events.sort(key=lambda e: (e.time, self._order(e)))
+
     @staticmethod
     def _order(event: Event) -> int:
         """
