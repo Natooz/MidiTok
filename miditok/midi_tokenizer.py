@@ -981,7 +981,8 @@ class MIDITokenizer(ABC, HFHubMixin):
                 )
                 # PedalOff or Duration
                 if self.config.sustain_pedal_duration:
-                    if pedal.time >= ticks_per_beat[tpb_idx, 0]:
+                    # `while` here as there might not be any note in the next section
+                    while pedal.time >= ticks_per_beat[tpb_idx, 0]:
                         tpb_idx += 1
                     dur = self._tpb_ticks_to_tokens[ticks_per_beat[tpb_idx, 1]][
                         pedal.duration
@@ -1144,7 +1145,8 @@ class MIDITokenizer(ABC, HFHubMixin):
                     )
                 )
             else:
-                if note.time >= ticks_per_beat[tpb_idx, 0]:
+                # `while` as there might not be any note in the next section
+                while note.time >= ticks_per_beat[tpb_idx, 0]:
                     tpb_idx += 1
                 dur = self._tpb_ticks_to_tokens[ticks_per_beat[tpb_idx, 1]][
                     note.duration
