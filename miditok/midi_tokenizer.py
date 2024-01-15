@@ -315,9 +315,9 @@ class MIDITokenizer(ABC, HFHubMixin):
         # Filter time signatures.
         # We need to do this first to determine the MIDI's new time division.
         self._filter_time_signatures(midi.time_signatures)
-        if len(midi.time_signatures) == 0:
+        if len(midi.time_signatures) == 0 or midi.time_signatures[0].time > 0:
             # Use the default one (4/4)
-            midi.time_signatures.append(TimeSignature(0, *TIME_SIGNATURE))
+            midi.time_signatures.insert(0, TimeSignature(0, *TIME_SIGNATURE))
 
         # Resample time, not inplace
         # The new time division is chosen depending on its highest time signature
@@ -585,15 +585,16 @@ class MIDITokenizer(ABC, HFHubMixin):
         :param time_sigs: time signature changes to quantize.
         """
         # Delay the time of each TS to the beginning of the next bar
+        # TODO need to delay again if some are removed below?
         ticks_per_bar = compute_ticks_per_bar(time_sigs[0], self.time_division)
         previous_tick = 0  # first time signature change is always at tick 0
-        for time_sig in time_sigs[1:]:
+        for i, time_sig in enumerate(time_sigs):
             # determine the current bar of time sig
             bar_offset, rest = divmod(time_sig.time - previous_tick, ticks_per_bar)
             # time sig doesn't happen on a new bar, we update it to the next bar
             if rest > 0:
                 bar_offset += 1
-                time_sig.time = previous_tick + bar_offset * ticks_per_bar
+                time_sigs[i].time = previous_tick + bar_offset * ticks_per_bar
 
             # Update values
             ticks_per_bar = compute_ticks_per_bar(time_sig, self.time_division)
