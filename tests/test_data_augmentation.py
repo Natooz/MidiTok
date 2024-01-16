@@ -11,7 +11,7 @@ from miditok.data_augmentation import (
     augment_midi_dataset,
 )
 
-from .utils import HERE
+from .utils_tests import HERE
 
 if TYPE_CHECKING:
     from pathlib import Path

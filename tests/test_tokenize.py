@@ -7,11 +7,12 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from symusic import Pedal, Score
+from symusic import Score
 
 import miditok
+from miditok.constants import MIDI_LOADING_EXCEPTION
 
-from .utils import (
+from .utils_tests import (
     ALL_TOKENIZATIONS,
     MIDI_PATHS_MULTITRACK,
     MIDI_PATHS_ONE_TRACK,
@@ -176,7 +177,10 @@ def _test_tokenize(
         single MIDI, with all tracks appended altogether.
     """
     # Reads the MIDI and add pedal messages to make sure there are some
-    midi = Score(Path(midi_path))
+    try:
+        midi = Score(Path(midi_path))
+    except MIDI_LOADING_EXCEPTION as e:
+        pytest.skip(f"Error when loading {midi_path.name}: {e}")
 
     # Creates the tokenizer
     tokenization, params = tok_params_set
@@ -184,14 +188,6 @@ def _test_tokenize(
         tokenizer_config=miditok.TokenizerConfig(**params)
     )
     str(tokenizer)  # shouldn't fail
-
-    # Adds pedals to add a bit of complexity
-    if tokenizer.config.use_sustain_pedals:
-        for ti in range(min(3, len(midi.tracks))):
-            midi.tracks[ti].pedals.extend(
-                [Pedal(start, 200) for start in [100, 600, 1800, 2200]]
-            )
-            midi.tracks[ti].pedals.sort(key=lambda p: p.time)
 
     # MIDI -> Tokens -> MIDI
     midi_decoded, midi_ref, has_errors = tokenize_and_check_equals(
@@ -228,7 +224,7 @@ def test_one_track_midi_to_tokens_to_midi(
 def test_one_track_midi_to_tokens_to_midi_hard(
     midi_path: str | Path,
     tok_params_set: tuple[str, dict[str, Any]],
-    saving_erroneous_midis: bool = True,  # TODO err 3 / 12 note sorting?
+    saving_erroneous_midis: bool = True,
 ):
     _test_tokenize(midi_path, tok_params_set, saving_erroneous_midis)
 

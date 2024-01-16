@@ -128,6 +128,48 @@ class MIDILike(MIDITokenizer):
 
         return all_events
 
+    def _sort_events(self, events: list[Event]) -> None:
+        # This could be removed if we find a way to insert NoteOff tokens before Chords
+        if self.config.use_chords:
+            events.sort(key=lambda e: (e.time, self._order(e)))
+        else:
+            super()._sort_events(events)
+
+    @staticmethod
+    def _order(event: Event) -> int:
+        """
+        Return the order number of an ``Event``.
+
+        Internal method used to sort events (tokens) depending on their type or
+        context of appearance. This is required, especially for multitrack
+        one-token-stream situations where there can be several tokens appearing at
+        the same moment (tick) from different tracks, that need to be sorted.
+
+        :param event: event to determine priority.
+        :return: priority as an int
+        """
+        # Global MIDI tokens first
+        if event.type_ in ["Tempo", "TimeSig"]:
+            return 0
+        # Then NoteOff
+        if event.type_ == "NoteOff" or (
+            event.type_ == "Program" and event.desc == "ProgramNoteOff"
+        ):
+            return 1
+        # Then track effects
+        if event.type_ in ["Pedal", "PedalOff"] or (
+            event.type_ == "Duration" and event.desc == "PedalDuration"
+        ):
+            return 2
+        if event.type_ == "PitchBend" or (
+            event.type_ == "Program" and event.desc == "ProgramPitchBend"
+        ):
+            return 3
+        if event.type_ == "ControlChange":
+            return 4
+        # Track notes then
+        return 10
+
     def _tokens_to_midi(
         self,
         tokens: TokSequence | list[TokSequence],
@@ -207,9 +249,7 @@ class MIDILike(MIDITokenizer):
             previous_pitch_onset = {prog: -128 for prog in self.config.programs}
             previous_pitch_chord = {prog: -128 for prog in self.config.programs}
             active_pedals = {}
-            ticks_per_beat = compute_ticks_per_beat(
-                TIME_SIGNATURE[1], self.time_division
-            )
+            ticks_per_beat = midi.ticks_per_quarter
             if max_duration_str is not None:
                 max_duration = self._time_token_to_ticks(
                     max_duration_str, ticks_per_beat
@@ -282,7 +322,7 @@ class MIDILike(MIDITokenizer):
                     tempo_changes.append(Tempo(current_tick, float(tok_val)))
                 elif tok_type == "TimeSig":
                     num, den = self._parse_token_time_signature(tok_val)
-                    ticks_per_beat = compute_ticks_per_beat(den, self.time_division)
+                    ticks_per_beat = self._tpb_per_ts[den]
                     if max_duration is not None:
                         max_duration = self._time_token_to_ticks(
                             max_duration_str, ticks_per_beat
@@ -604,12 +644,10 @@ class MIDILike(MIDITokenizer):
             for prog in self.config.programs
         }
         current_pitches_tick = {p: [] for p in self.config.programs}
-        ticks_per_beat = compute_ticks_per_beat(TIME_SIGNATURE[1], self.time_division)
+        ticks_per_beat = self.time_division
         max_duration_str = self.config.additional_params.get("max_duration", None)
         if max_duration_str is not None:
-            max_duration = self._time_token_to_ticks(
-                max_duration_str, self.time_division
-            )
+            max_duration = self._time_token_to_ticks(max_duration_str, ticks_per_beat)
         else:
             max_duration = None
         previous_pitch_onset = {program: -128 for program in self.config.programs}
@@ -682,7 +720,7 @@ class MIDILike(MIDITokenizer):
                     ]
             elif events[i].type_ == "TimeSig":
                 num, den = self._parse_token_time_signature(events[i].value)
-                ticks_per_beat = compute_ticks_per_beat(den, self.time_division)
+                ticks_per_beat = self._tpb_per_ts[den]
                 if max_duration is not None:
                     max_duration = self._time_token_to_ticks(
                         max_duration_str, ticks_per_beat

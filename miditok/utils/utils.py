@@ -214,7 +214,8 @@ def detect_chords(
             continue
 
         # Update the time offset the time signature denom/ticks per beat changed
-        if notes[count, 1] > ticks_per_beat[tpb_idx, 0]:
+        # `while` as there might not be any note in the next section
+        while notes[count, 1] >= ticks_per_beat[tpb_idx, 0]:
             tpb_idx += 1
             tpb_half = ticks_per_beat[tpb_idx, 1] // 2
             onset_offset_tick = ticks_per_beat[tpb_idx, 1] * onset_offset / beat_res

@@ -1,7 +1,5 @@
 """Tests on the preprocessing steps of MIDI files, before tokenization."""
 
-"""Tests on the preprocessing steps of MIDI files, before tokenization."""
-
 from pathlib import Path
 
 import pytest
@@ -9,7 +7,7 @@ from symusic import Score
 
 import miditok
 
-from .utils import MIDI_PATHS_ALL
+from .utils_tests import MIDI_PATHS_ALL
 
 CONFIG_KWARGS = {
     "use_tempos": True,

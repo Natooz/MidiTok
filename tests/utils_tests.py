@@ -162,6 +162,13 @@ def adapt_ref_midi_before_tokenize(
             for track in midi.tracks:
                 clip_durations(track.notes, max_durations)
 
+        # This is required for tests, as after resampling, for some overlapping notes
+        # with different onset times with the second note ending last (as FIFO), it can
+        # happen that after resampling the second note now ends before the first one.
+        # Example: POP909_191 at tick 3152 (time division of 16 tpq)
+        for track in midi.tracks:
+            miditok.utils.fix_offsets_overlapping_notes(track.notes)
+
         # Now we can sort the notes
         sort_midi(midi, sort_tracks=False)
 

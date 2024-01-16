@@ -128,7 +128,7 @@ class MuMIDI(MIDITokenizer):
             key=lambda x: (x[0].time, x[0].desc)
         )  # Sort by time then track
 
-        ticks_per_sample = midi.ticks_per_quarter / max(self.config.beat_res.values())
+        ticks_per_sample = midi.ticks_per_quarter / self.config.max_num_pos_per_beat
         ticks_per_bar = midi.ticks_per_quarter * 4
         tokens = []
 
@@ -229,10 +229,11 @@ class MuMIDI(MIDITokenizer):
         # pitch: notes.sort(key=lambda x: (x.start, x.pitch)) (done in midi_to_tokens)
 
         tokens = []
+        tpb = self.time_division
         for note in track.notes:
             # Note
             duration = note.end - note.start
-            dur_token = self._tpb_ticks_to_tokens[self.time_division][duration]
+            dur_token = self._tpb_ticks_to_tokens[tpb][duration]
             if not track.is_drum:
                 tokens.append(
                     [
@@ -310,17 +311,18 @@ class MuMIDI(MIDITokenizer):
         current_tick = 0
         current_bar = -1
         current_track = 0  # default set to piano
+        ticks_per_beat = midi.ticks_per_quarter
         for time_step in tokens.tokens:
             tok_type, tok_val = time_step[0].split("_")
             if tok_type == "Bar":
                 current_bar += 1
-                current_tick = current_bar * self.time_division * 4
+                current_tick = current_bar * ticks_per_beat * 4
             elif tok_type == "Position":
                 if current_bar == -1:
                     current_bar = (
                         0  # as this Position token occurs before any Bar token
                     )
-                current_tick = current_bar * self.time_division * 4 + int(tok_val)
+                current_tick = current_bar * ticks_per_beat * 4 + int(tok_val)
             elif tok_type == "Program":
                 current_track = tok_val
                 try:
@@ -333,7 +335,7 @@ class MuMIDI(MIDITokenizer):
                     continue
                 pitch = int(tok_val)
                 vel = int(vel)
-                duration = self._tpb_tokens_to_ticks[self.time_division][duration]
+                duration = self._tpb_tokens_to_ticks[ticks_per_beat][duration]
 
                 tracks[current_track].append(Note(current_tick, duration, pitch, vel))
 
@@ -390,7 +392,7 @@ class MuMIDI(MIDITokenizer):
         ]
         vocab[0] += ["Bar_None"]  # new bar token
         max_num_beats = max(ts[0] for ts in self.time_signatures)
-        num_positions = self.time_division * max_num_beats
+        num_positions = self.config.max_num_pos_per_beat * max_num_beats
         vocab[0] += [f"Position_{i}" for i in range(num_positions)]
         vocab[0] += [f"Program_{program}" for program in self.config.programs]
 

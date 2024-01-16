@@ -6,7 +6,7 @@ import pytest
 
 import miditok
 
-from .utils import ALL_TOKENIZATIONS
+from .utils_tests import ALL_TOKENIZATIONS
 
 ADDITIONAL_TOKENS_TEST = {
     "use_chords": False,  # False to speed up tests

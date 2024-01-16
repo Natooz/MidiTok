@@ -30,7 +30,7 @@ from miditok.utils import (
     remove_duplicated_notes,
 )
 
-from .utils import (
+from .utils_tests import (
     MIDI_PATHS_MULTITRACK,
     MIDI_PATHS_ONE_TRACK,
     TEST_LOG_DIR,

@@ -13,6 +13,7 @@ import numpy as np
 from huggingface_hub import ModelHubMixin as HFHubMixin
 from huggingface_hub import hf_hub_download
 from symusic import (
+    ControlChange,
     Note,
     Pedal,
     PitchBend,
@@ -58,7 +59,6 @@ from .constants import (
 )
 from .utils import (
     compute_ticks_per_bar,
-    compute_ticks_per_beat,
     convert_ids_tensors_to_list,
     detect_chords,
     get_midi_programs,
@@ -135,42 +135,30 @@ class MIDITokenizer(ABC, HFHubMixin):
         if self.config.use_time_signatures:
             self.time_signatures = self.__create_time_signatures()
 
-        # New time division to apply when preprocessing MIDIs
+        # Creates the numbers of ticks/beats depending on the note values (time
+        # signature denominator) of the tokenizer. The values are calculated depending
+        # on the maximum number of positions per beat
+        # (`self.config.max_num_pos_per_beat`) and the time signatures it supports.
+        # The highest note value will ba assigned a tick/beat value equal to
+        # `self.config.max_num_pos_per_beat`, the other note values will have a
+        # ticks/beat based on this base, i.e. `self.config.max_num_pos_per_beat`
+        # multiplied by the factor between each note value and the maximum note value.
+        self._tpb_per_ts = self.__create_tpb_per_ts()
+        # Default time division to use when decoding tokens to a MIDI.
         # This is left as a class attribute and not a property as the config is not
         # intended to be modified after its creation. Ultimately, this could be
         # ensured by converting TokenizerConfig to a frozen dataclass.
-        # The tokenizer's time division is chosen in order to make sure that is equal
-        # to the lowest possible ticks per beat value, which depends on the supported
-        # time signatures.
         # It shouldn't be used in place of the real ticks/beat value, which depends on
         # the current time signature denominator. The only exception is for tokenizers
         # which does not support time signature, i.e. which only consider 4/4.
-        # TODO this doesn't work as is yet for non-beat-based tokenizers, as the
-        #   `midi.resample` operation will keep too much accuracy for sections where
-        #   the time signature is < 8, i.e. ticks per beat < to tokenizer.time_division
-        #   We would need to resample per ticks/beat.
-        #   Setting
-        #   `self.time_division = max(res for res in self.config.beat_res.values())`
-        #   makes the tests pass as no MIDI in the tests has a time signature of */8.
-        #   https://github.com/Yikai-Liao/symusic/issues/10
-        # TODO document this somewhere.
-        #   Ideally the tokenizer's time division is set to the highest possible
-        #   ticks per beat value, which depends on the highest `config.beat_res` given
-        #   by the user and the maximum time signature denominator supported.
-        #   This would allow to keep the maximum time information when tokenizing.
-        #   In practice, if we do this, we would need to resample the time (onsets)
-        #   of all the MIDI messages differently for every every portions having
-        #   different ticks/beat values (can vary depending on the time signatures).
-        #   This would add a significant additional preprocessing time if we do it in
-        #   Python, so we do not do it. Instead we select the time division as the
-        #   highest ticks/beat in `config.beat_res`, and round the duration values of
-        #   the concerned tokens (note and time durations), even for
-        #   *NoteOff*/*PedalOff* tokens (which is necessary).
-        #   Ultimately, a resampling by ticks/beat could be implemented in a C++
-        #   preprocessing step with pybind. We could then remove the `ceil` from the
-        #   `MIDITokenizer_time_token_to_ticks` method.
-        self._tpb_per_ts = self.__create_tpb_per_ts()
-        self.time_division = max(self._tpb_per_ts.values())
+        # During preprocessing, the MIDI will be resampled to a new time division equal
+        # to the number of ticks per beat of the lowest time signature denominator it
+        # contains. This is done in order to resample as much as possible while keeping
+        # most of the accuracy. Some sections might need to be resampled again, when
+        # the time signature denominator will be higher (i.e. higher number of absolute
+        # ticks per beat).
+        # Realted: https://github.com/Yikai-Liao/symusic/issues/10
+        self.time_division = self._tpb_per_ts[TIME_SIGNATURE[1]]
 
         # Durations
         # Usages:
@@ -326,15 +314,22 @@ class MIDITokenizer(ABC, HFHubMixin):
         """
         # Filter time signatures.
         # We need to do this first to determine the MIDI's new time division.
-        self._filter_time_signatures(midi.time_signatures)
-        if len(midi.time_signatures) == 0:
-            # Use the default one (4/4)
-            midi.time_signatures.append(TimeSignature(0, *TIME_SIGNATURE))
+        if self.config.use_time_signatures:
+            self._filter_unsupported_time_signatures(midi.time_signatures)
+            # We mock the first with 0, even if there are already time signatures. This
+            # is required as if the MIDI only had */2 time signatures, we must make
+            # sure the resampling tpq is calculated according to a maximum denom of 4
+            # if the beginning of the MIDI is mocked at 4/4.
+            if len(midi.time_signatures) == 0 or midi.time_signatures[0].time != 0:
+                midi.time_signatures.insert(0, TimeSignature(0, *TIME_SIGNATURE))
+            # The new time division is chosen depending on its highest time signature
+            # denominator, and is equivalent to the highest possible tick/beat ratio.
+            max_midi_denom = max(ts.denominator for ts in midi.time_signatures)
+            new_tpq = int(self.config.max_num_pos_per_beat * max_midi_denom / 4)
+        else:
+            new_tpq = self.config.max_num_pos_per_beat
 
-        # Resample time, not inplace
-        # The new time division is chosen depending on its highest time signature
-        # denominator, and is equivalent to the highest possible tick/beat ratio.
-        new_tpq = self._tpb_per_ts[max(ts.denominator for ts in midi.time_signatures)]
+        # Resample time (not inplace)
         if midi.ticks_per_quarter != new_tpq:
             midi = midi.resample(new_tpq, min_dur=1)
 
@@ -358,7 +353,10 @@ class MIDITokenizer(ABC, HFHubMixin):
         if not self._note_on_off or (
             self.config.use_sustain_pedals and self.config.sustain_pedal_duration
         ):
-            ticks_per_beat = get_midi_ticks_per_beat(midi)
+            if self.config.use_time_signatures:
+                ticks_per_beat = get_midi_ticks_per_beat(midi)
+            else:
+                ticks_per_beat = np.array([[midi.end(), midi.ticks_per_quarter]])
         else:
             ticks_per_beat = None
         if (
@@ -369,6 +367,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         else:
             tpq_resampling_factors = None
 
+        # Preprocess track events
         for t in range(len(midi.tracks) - 1, -1, -1):
             if len(midi.tracks[t].notes) == 0:
                 del midi.tracks[t]
@@ -395,7 +394,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 )
 
         # Process tempo changes
-        if self.config.use_tempos and len(midi.tempos) > 0:
+        if self.config.use_tempos:
             midi.tempos = self._preprocess_tempos(midi.tempos, tpq_resampling_factors)
 
         # We do not change key signature changes, markers and lyrics here as they are
@@ -403,7 +402,9 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         return midi
 
-    def _filter_time_signatures(self, time_signatures: TimeSignatureTickList) -> None:
+    def _filter_unsupported_time_signatures(
+        self, time_signatures: TimeSignatureTickList
+    ) -> None:
         """
         Remove time signatures from a list that are unsupported by the tokenizer.
 
@@ -541,6 +542,11 @@ class MIDITokenizer(ABC, HFHubMixin):
         # If we delete the successive equal tempo changes, we need to sort them by time
         # Fortunately, sorting is already performed by symusic when loading the MIDI.
 
+        # Use the default tempo if there is None (shouldn't happen)
+        if len(tempos) == 0:
+            tempos.insert(0, Tempo(0, self.default_tempo))
+            return tempos
+
         tempos_soa = tempos.numpy()
 
         # Find the closest tempos
@@ -553,32 +559,45 @@ class MIDITokenizer(ABC, HFHubMixin):
             )
 
         # Find groups of tempos at the same onset ticks, equal consecutive ones
-        if len(tempos) > 1:
-            # Keep only last tempo change for groups with same tick
+        # Keep only last tempo change for groups with same tick
+        idx_groups = np.split(
+            np.arange(len(tempos_soa["time"])),
+            np.where(np.diff(tempos_soa["time"]) != 0)[0] + 1,
+        )
+        for idx_group in reversed(idx_groups):
+            if len(idx_group) > 1:
+                for key in tempos_soa:
+                    # We don't use a mask here as the number of idx to delete is
+                    # likely to be small.
+                    for idx_to_del in reversed(idx_group[:-1]):
+                        tempos_soa[key] = np.delete(tempos_soa[key], idx_to_del)
+        # Deduplicate successive tempo changes with same tempo value
+        if self.config.delete_equal_successive_tempo_changes:
             idx_groups = np.split(
                 np.arange(len(tempos_soa["time"])),
-                np.where(np.diff(tempos_soa["time"]) != 0)[0] + 1,
+                np.where(np.diff(tempos_soa["mspq"]) != 0)[0] + 1,
             )
             for idx_group in reversed(idx_groups):
                 if len(idx_group) > 1:
                     for key in tempos_soa:
-                        # We don't use a mask here as the number of idx to delete is
-                        # likely to be small.
-                        for idx_to_del in reversed(idx_group[:-1]):
+                        for idx_to_del in reversed(idx_group[1:]):
                             tempos_soa[key] = np.delete(tempos_soa[key], idx_to_del)
-            # Deduplicate successive tempo changes with same tempo value
-            if self.config.delete_equal_successive_tempo_changes:
-                idx_groups = np.split(
-                    np.arange(len(tempos_soa["time"])),
-                    np.where(np.diff(tempos_soa["mspq"]) != 0)[0] + 1,
-                )
-                for idx_group in reversed(idx_groups):
-                    if len(idx_group) > 1:
-                        for key in tempos_soa:
-                            for idx_to_del in reversed(idx_group[1:]):
-                                tempos_soa[key] = np.delete(tempos_soa[key], idx_to_del)
 
-        return Tempo.from_numpy(**tempos_soa)
+        tempos = Tempo.from_numpy(**tempos_soa)
+
+        # Make sure there is at least one tempo at tick 0
+        if len(tempos) > 0:
+            if (
+                self.config.delete_equal_successive_tempo_changes
+                and tempos[0].tempo == self.default_tempo
+            ):
+                tempos[0].time = 0
+            elif tempos[0].time != 0:
+                tempos.insert(0, Tempo(0, self.default_tempo))
+        else:
+            tempos.insert(0, Tempo(0, self.default_tempo))
+
+        return tempos
 
     def _preprocess_time_signatures(self, time_sigs: TimeSignatureTickList) -> None:
         r"""
@@ -595,38 +614,59 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         :param time_sigs: time signature changes to quantize.
         """
+
+        def are_ts_equals(ts1: TimeSignature, ts2: TimeSignature) -> bool:
+            return (ts1.numerator, ts1.denominator) == (ts2.numerator, ts2.denominator)
+
+        i = 0
         ticks_per_bar = compute_ticks_per_bar(time_sigs[0], self.time_division)
         previous_tick = 0  # first time signature change is always at tick 0
-        prev_ts = (time_sigs[0].numerator, time_sigs[0].denominator)
-        i = 1
         while i < len(time_sigs):
-            time_sig = time_sigs[i]
-            if (
-                self.config.delete_equal_successive_time_sig_changes
-                and (time_sig.numerator, time_sig.denominator) == prev_ts
-            ):
+            # 1. If it is identical to the previous one --> delete it
+            if i >= 1 and are_ts_equals(time_sigs[i], time_sigs[i - 1]):
                 del time_sigs[i]
                 continue
 
-            # determine the current bar of time sig
-            bar_offset, rest = divmod(time_sig.time - previous_tick, ticks_per_bar)
+            # 2. Delay the time of each TS to the beginning of the next bar
+            # Can happen if the previous ts has been delayed to the next bar
+            if i >= 1 and time_sigs[i].time < time_sigs[i - 1].time:
+                time_sigs[i].time = time_sigs[i - 1].time
+            bar_offset, rest = divmod(time_sigs[i].time - previous_tick, ticks_per_bar)
             # time sig doesn't happen on a new bar, we update it to the next bar
             if rest > 0:
-                bar_offset += 1
-                time_sig.time = previous_tick + bar_offset * ticks_per_bar
-
+                time_sigs[i].time = previous_tick + (bar_offset + 1) * ticks_per_bar
             # Update values
-            ticks_per_bar = compute_ticks_per_bar(time_sig, self.time_division)
+            ticks_per_bar = compute_ticks_per_bar(time_sigs[i], self.time_division)
+            previous_tick = time_sigs[i].time
 
-            # If the current time signature is now at the same time as the previous
-            # one, we delete the previous
-            if time_sig.time == previous_tick:
+            # 3. If it is at the same tick as the previous one, we delete the previous
+            if i >= 1 and time_sigs[i].time == time_sigs[i - 1].time:
                 del time_sigs[i - 1]
+                # Check the one previous the one deleted is not equal to the current one
+                if i >= 2 and are_ts_equals(time_sigs[i - 1], time_sigs[i - 2]):
+                    # If it is, we delete the current one (at i-1 now) and decrement i
+                    del time_sigs[i - 1]
+                    ticks_per_bar = compute_ticks_per_bar(
+                        time_sigs[i - 2], self.time_division
+                    )
+                    previous_tick = time_sigs[i - 2].time
+                    i -= 1
                 continue
 
-            previous_tick = time_sig.time
-            prev_ts = time_sig
+            # 4. Pass to the next one
             i += 1
+
+        # Make sure there is at least one time signature at tick 0
+        if len(time_sigs) > 0:
+            if (
+                self.config.delete_equal_successive_time_sig_changes
+                and (time_sigs[0].numerator, time_sigs[0].denominator) == TIME_SIGNATURE
+            ):
+                time_sigs[0].time = 0
+            elif time_sigs[0].time != 0:
+                time_sigs.insert(0, TimeSignature(0, *TIME_SIGNATURE))
+        else:
+            time_sigs.insert(0, TimeSignature(0, *TIME_SIGNATURE))
 
     def _preprocess_pitch_bends(
         self,
@@ -711,23 +751,20 @@ class MIDITokenizer(ABC, HFHubMixin):
         # Adjust times if needed
         if resampling_factors is not None:
             # First get the idx of the notes covered per section
-            resampling_factors = self.__convert_resampling_ratios_ticks_to_idx(
+            resampling_factors_ = self.__convert_resampling_ratios_ticks_to_idx(
                 resampling_factors, pedals_soa["time"]
             )
             pedals_soa["time"] = self._adjust_time_to_tpb(
-                pedals_soa["time"], resampling_factors
+                pedals_soa["time"], resampling_factors_
             )
 
         # Format durations (if needed) and merge successive pedals
-        need_resample = True
-        while np.any(
-            overlapping_mask := (
-                end_arr := pedals_soa["time"] + pedals_soa["duration"]
-            )[:-1]
-            >= pedals_soa["time"][1:]
-        ):
+        end_arr = pedals_soa["time"] + pedals_soa["duration"]
+        # Idx of the pedals for which the end time is higher than the time of the next
+        overlapping_mask = end_arr[:-1] >= pedals_soa["time"][1:]
+        idx_overlap = np.where(overlapping_mask)[0]
+        if len(idx_overlap) > 0:
             # Get the first idx of each group of successive values == True
-            idx_overlap = np.where(overlapping_mask)[0]
             idx_diff = np.diff(idx_overlap, prepend=-2)  # prep to keep the first idx
             first_idx_groups = idx_overlap[idx_diff > 1]
 
@@ -743,38 +780,30 @@ class MIDITokenizer(ABC, HFHubMixin):
                         pedals_soa["duration"][idx],
                         end_arr[idx + ip] - pedals_soa["time"][idx],
                     )
+                    end_arr[idx] = pedals_soa["time"][idx] + pedals_soa["duration"][idx]
                     idx_to_delete.append(idx + ip)
                     ip += 1
 
             # Deduplicate pedals
             mask = np.ones(len(pedals_soa["time"]), dtype=bool)
+            idx_to_delete = np.array(idx_to_delete)
             mask[idx_to_delete] = False
             for key in pedals_soa:
                 pedals_soa[key] = pedals_soa[key][mask]
 
-            # Resample duration values if NoteOff, otherwise adjust to the vocab
-            if self.config.sustain_pedal_duration and ticks_per_beat is not None:
-                self._adjust_durations(pedals_soa, ticks_per_beat)
-            elif resampling_factors is not None:
-                pedals_soa["duration"] = self._adjust_time_to_tpb(
-                    pedals_soa["duration"], resampling_factors, min_duration
-                )
-                self._adjust_offset_spanning_across_time_sig(
-                    pedals_soa, resampling_factors
-                )
-            need_resample = False
-
-        # Will be run at least once if no overlapping durations (while loop)
-        if need_resample:
-            if self.config.sustain_pedal_duration and ticks_per_beat is not None:
-                self._adjust_durations(pedals_soa, ticks_per_beat)
-            elif resampling_factors is not None:
-                pedals_soa["duration"] = self._adjust_time_to_tpb(
-                    pedals_soa["duration"], resampling_factors, min_duration
-                )
-                self._adjust_offset_spanning_across_time_sig(
-                    pedals_soa, resampling_factors
-                )
+        # Resample duration values if NoteOff, otherwise adjust to the vocab
+        if self.config.sustain_pedal_duration and ticks_per_beat is not None:
+            self._adjust_durations(pedals_soa, ticks_per_beat)
+        elif resampling_factors is not None:
+            resampling_factors_ = self.__convert_resampling_ratios_ticks_to_idx(
+                resampling_factors, pedals_soa["time"]
+            )
+            pedals_soa["duration"] = self._adjust_time_to_tpb(
+                pedals_soa["duration"], resampling_factors_, min_duration
+            )
+            self._adjust_offset_spanning_across_time_sig(
+                pedals_soa, resampling_factors_
+            )
 
         return Pedal.from_numpy(**pedals_soa)
 
@@ -809,7 +838,7 @@ class MIDITokenizer(ABC, HFHubMixin):
     ) -> None:
         end_arr = notes_pedals_soa["time"] + notes_pedals_soa["duration"]
         idx_first = 0
-        for idx_last, _ in resampling_factors[:-1]:
+        for idx_fact, (idx_last, _) in enumerate(resampling_factors[:-1]):
             # NoteOff/PedalOff idx with durations spanning across time sigs adjust end
             spanning_durations_idx = np.where(
                 end_arr[idx_first:idx_last] >= notes_pedals_soa["time"][idx_last]
@@ -818,7 +847,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 # Get the factor for the idx as it can be different from the next one
                 factor_for_idx = resampling_factors[
                     np.argmax(
-                        resampling_factors[idx_first:, 0]
+                        resampling_factors[idx_fact:, 0]
                         >= notes_pedals_soa["time"][idx]
                     ),
                     1,
@@ -855,7 +884,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             if tpb_idx + 1 == len(ticks_per_beat):
                 dur_idx_last = len(notes_pedals_soa["duration"])
             else:
-                dur_idx_last = np.argmax(
+                dur_idx_last = dur_idx_first + np.argmax(
                     notes_pedals_soa["time"][dur_idx_first:] >= last_tick_tpb
                 )
             notes_pedals_soa["duration"][dur_idx_first:dur_idx_last] = np_get_closest(
@@ -922,11 +951,9 @@ class MIDITokenizer(ABC, HFHubMixin):
                         0, Event("Program", track.program, 0, desc="ProgramNoteOff")
                     )
                 all_events[ti] += track_events
-                # TODO remove order if possible
-                all_events[ti].sort(key=lambda x: (x.time, self._order(x)))
+                self._sort_events(all_events[ti])
         if self.one_token_stream:
-            # TODO sort magic method removing lambda?
-            all_events.sort(key=lambda x: (x.time, self._order(x)))
+            self._sort_events(all_events)
             # Add ProgramChange (named Program) tokens if requested.
             if self.config.program_changes:
                 self._insert_program_change_events(all_events)
@@ -947,40 +974,9 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         return tok_sequence
 
-    @staticmethod
-    def _order(event: Event) -> int:
-        """
-        Return the order number of an ``Event``.
-
-        Internal method used to sort events (tokens) depending on their type or
-        context of appearance. This is required, especially for multitrack
-        one-token-stream situations where there can be several tokens appearing at
-        the same moment (tick) from different tracks, that need to be sorted.
-
-        :param event: event to determine priority.
-        :return: priority as an int
-        """
-        # Global MIDI tokens first
-        if event.type_ in ["Tempo", "TimeSig"]:
-            return 0
-        # Then NoteOff
-        if event.type_ == "NoteOff" or (
-            event.type_ == "Program" and event.desc == "ProgramNoteOff"
-        ):
-            return 1
-        # Then track effects
-        if event.type_ in ["Pedal", "PedalOff"] or (
-            event.type_ == "Duration" and event.desc == "PedalDuration"
-        ):
-            return 2
-        if event.type_ == "PitchBend" or (
-            event.type_ == "Program" and event.desc == "ProgramPitchBend"
-        ):
-            return 3
-        if event.type_ == "ControlChange":
-            return 4
-        # Track notes then
-        return 10
+    def _sort_events(self, events: list[Event]) -> None:
+        # Can be overridden by subclasses if required (MMM)
+        events.sort(key=lambda e: e.time)
 
     def _create_track_events(
         self, track: Track, ticks_per_beat: np.ndarray = None
@@ -1016,24 +1012,6 @@ class MIDITokenizer(ABC, HFHubMixin):
         previous_pitch_onset = -128  # lowest at a given time
         previous_pitch_chord = -128  # for chord intervals
 
-        # Add chords
-        if self.config.use_chords and not track.is_drum:
-            chords = detect_chords(
-                track.notes,
-                ticks_per_beat,
-                chord_maps=self.config.chord_maps,
-                program=program,
-                specify_root_note=self.config.chord_tokens_with_root_note,
-                beat_res=self._first_beat_res,
-                unknown_chords_num_notes_range=self.config.chord_unknown,
-            )
-            for chord in chords:
-                if self.config.use_programs and not self.config.program_changes:
-                    events.append(
-                        Event("Program", program, chord.time, program, "ProgramChord")
-                    )
-                events.append(chord)
-
         # Add sustain pedal
         if self.config.use_sustain_pedals:
             tpb_idx = 0
@@ -1049,7 +1027,8 @@ class MIDITokenizer(ABC, HFHubMixin):
                 )
                 # PedalOff or Duration
                 if self.config.sustain_pedal_duration:
-                    if pedal.time >= ticks_per_beat[tpb_idx, 0]:
+                    # `while` here as there might not be any note in the next section
+                    while pedal.time >= ticks_per_beat[tpb_idx, 0]:
                         tpb_idx += 1
                     dur = self._tpb_ticks_to_tokens[ticks_per_beat[tpb_idx, 1]][
                         pedal.duration
@@ -1084,6 +1063,24 @@ class MIDITokenizer(ABC, HFHubMixin):
                 )
 
         # Control changes (in the future, and handle pedals redundancy)
+
+        # Add chords
+        if self.config.use_chords and not track.is_drum:
+            chords = detect_chords(
+                track.notes,
+                ticks_per_beat,
+                chord_maps=self.config.chord_maps,
+                program=program,
+                specify_root_note=self.config.chord_tokens_with_root_note,
+                beat_res=self._first_beat_res,
+                unknown_chords_num_notes_range=self.config.chord_unknown,
+            )
+            for chord in chords:
+                if self.config.use_programs and not self.config.program_changes:
+                    events.append(
+                        Event("Program", program, chord.time, program, "ProgramChord")
+                    )
+                events.append(chord)
 
         # Creates the Note On, Note Off and Velocity events
         tpb_idx = 0
@@ -1194,7 +1191,8 @@ class MIDITokenizer(ABC, HFHubMixin):
                     )
                 )
             else:
-                if note.time >= ticks_per_beat[tpb_idx, 0]:
+                # `while` as there might not be any note in the next section
+                while note.time >= ticks_per_beat[tpb_idx, 0]:
                     tpb_idx += 1
                 dur = self._tpb_ticks_to_tokens[ticks_per_beat[tpb_idx, 1]][
                     note.duration
@@ -1591,6 +1589,17 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         midi = self._tokens_to_midi(tokens, programs)
 
+        # Create controls for pedals
+        # This is required so that they are saved when the MIDI is dumped, as symusic
+        # will only write the control messages.
+        if self.config.use_sustain_pedals:
+            for track in midi.tracks:
+                for pedal in track.pedals:
+                    track.controls.append(ControlChange(pedal.time, 64, 127))
+                    track.controls.append(ControlChange(pedal.end, 64, 0))
+                if len(track.pedals) > 0:
+                    track.controls.sort()
+
         # Set default tempo and time signatures at tick 0 if not present
         if len(midi.tempos) == 0 or midi.tempos[0].time != 0:
             midi.tempos.insert(0, Tempo(0, self.default_tempo))
@@ -1907,15 +1916,17 @@ class MIDITokenizer(ABC, HFHubMixin):
         """
         Return the dictionary of the possible ticks per beat values per time signature.
 
-        The set of possible values depends on the tokenizer's time division and
-        the time signatures it supports.
+        The set of possible values depends on the tokenizer's maximum number of
+        positions per beat (`self.config.max_num_pos_per_beat`) and the time signatures
+        it supports.
 
         :return: dictionary of the possible ticks per beat values per time signature,
             keys are time signature denominators, values the ticks/beat values.
         """
+        max_denom = max(ts[1] for ts in self.time_signatures)
         return {
-            denom: compute_ticks_per_beat(denom, max(self.config.beat_res.values()))
-            for denom in {ts[1] for ts in self.time_signatures}
+            denom: self.config.max_num_pos_per_beat * (max_denom // denom)
+            for denom in self.config.time_signature_range
         }
 
     def _get_midi_resampling_factor(self, midi: Score) -> np.ndarray:
@@ -1925,41 +1936,42 @@ class MIDITokenizer(ABC, HFHubMixin):
         The method returns a numpy array of shape ``(N,2)``, for N ticks-per-beat
         changes, and the second dimension corresponding to the ending tick and the
         number of ticks per beat of the portion.
+        **The time signatures must be sorted by time.**
 
         :param midi: MIDI to analyze.
         :return: ticks per beat values as a numpy array.
         """
-        ticks_per_beat = [
+        resampling_factors = [
             [
                 midi.time_signatures[tsi + 1].time,
-                compute_ticks_per_beat(
-                    midi.time_signatures[tsi].denominator,
-                    self._tpb_per_ts[TIME_SIGNATURE[1]],
-                )
-                // midi.ticks_per_quarter,
+                midi.ticks_per_quarter
+                // (
+                    self.config.max_num_pos_per_beat
+                    * (midi.time_signatures[tsi].denominator / 4)
+                ),
             ]
             for tsi in range(len(midi.time_signatures) - 1)
         ]
 
         # Handles the last one up to the max tick of the MIDI
-        ticks_per_beat.append(
+        resampling_factors.append(
             [
                 midi.end() + 1,
-                compute_ticks_per_beat(
-                    midi.time_signatures[-1].denominator,
-                    self._tpb_per_ts[TIME_SIGNATURE[1]],
-                )
-                // midi.ticks_per_quarter,
+                midi.ticks_per_quarter
+                // (
+                    self.config.max_num_pos_per_beat
+                    * (midi.time_signatures[-1].denominator / 4)
+                ),
             ]
         )
 
         # Remove equal successive ones
-        for i in range(len(ticks_per_beat) - 1, 0, -1):
-            if ticks_per_beat[i][1] == ticks_per_beat[i - 1][1]:
-                ticks_per_beat[i - 1][0] = ticks_per_beat[i][0]
-                del ticks_per_beat[i]
+        for i in range(len(resampling_factors) - 1, 0, -1):
+            if resampling_factors[i][1] == resampling_factors[i - 1][1]:
+                resampling_factors[i - 1][0] = resampling_factors[i][0]
+                del resampling_factors[i]
 
-        return np.array(ticks_per_beat)
+        return np.array(resampling_factors, dtype=np.intc)
 
     @staticmethod
     def __convert_resampling_ratios_ticks_to_idx(
@@ -1993,24 +2005,13 @@ class MIDITokenizer(ABC, HFHubMixin):
             resolution.
         """
         values = self.rests if rest else self.durations
-        tpb_to_ticks_array = {
+        return {
             tpb: np.array(
                 [self._time_token_to_ticks(time_tuple, tpb) for time_tuple in values],
                 dtype=np.intc,
             )
             for tpb in self._tpb_per_ts.values()
         }
-        # TODO explain why extend
-        for i in range(len(self._tpb_per_ts) - 1):
-            extended_tpb = max(self._tpb_per_ts.values()) * (i + 1) * 2
-            tpb_to_ticks_array[extended_tpb] = np.array(
-                [
-                    self._time_token_to_ticks(time_tuple, extended_tpb)
-                    for time_tuple in values
-                ],
-                dtype=np.intc,
-            )
-        return tpb_to_ticks_array
 
     def __create_tpb_tokens_to_ticks(
         self, rest: bool = False
@@ -2029,7 +2030,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         :return: ticks per beat + token value to duration in tick.
         """
         values = self.rests if rest else self.durations
-        tpb_tokens_to_ticks = {
+        return {
             tpb: {
                 ".".join(map(str, duration_tuple)): self._time_token_to_ticks(
                     duration_tuple, tpb
@@ -2038,16 +2039,6 @@ class MIDITokenizer(ABC, HFHubMixin):
             }
             for tpb in self._tpb_per_ts.values()
         }
-        # TODO explain why we extend
-        for i in range(len(self._tpb_per_ts) - 1):
-            extended_tpb = max(self._tpb_per_ts.values()) * (i + 1) * 2
-            tpb_tokens_to_ticks[extended_tpb] = {
-                ".".join(map(str, duration_tuple)): self._time_token_to_ticks(
-                    duration_tuple, extended_tpb
-                )
-                for duration_tuple in values
-            }
-        return tpb_tokens_to_ticks
 
     def __create_tpb_ticks_to_tokens(self) -> dict[int, dict[int, str]]:
         r"""

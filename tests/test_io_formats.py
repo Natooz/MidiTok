@@ -10,7 +10,7 @@ from symusic import Score
 
 import miditok
 
-from .utils import (
+from .utils_tests import (
     ALL_TOKENIZATIONS,
     HERE,
     TOKENIZER_CONFIG_KWARGS,

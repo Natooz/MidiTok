@@ -125,11 +125,12 @@ class CPWord(MIDITokenizer):
             TimeSignature(0, *current_time_sig), time_division
         )
         ticks_per_beat = compute_ticks_per_beat(current_time_sig[1], time_division)
-        ticks_per_pos = ticks_per_beat // max(self.config.beat_res.values())
+        ticks_per_pos = ticks_per_beat // self.config.max_num_pos_per_beat
         # First look for a TimeSig token, if any is given at tick 0, to update
         # current_time_sig
         if self.config.use_time_signatures:
             for event in events:
+                # There should be a TimeSig token at tick 0
                 if event.type_ == "TimeSig":
                     current_time_sig = list(map(int, event.value.split("/")))
                     ticks_per_bar = compute_ticks_per_bar(
@@ -138,14 +139,7 @@ class CPWord(MIDITokenizer):
                     ticks_per_beat = compute_ticks_per_beat(
                         current_time_sig[1], time_division
                     )
-                    break
-                if event.type_ in [
-                    "Pitch",
-                    "Velocity",
-                    "Duration",
-                    "PitchBend",
-                    "Pedal",
-                ]:
+                    ticks_per_pos = ticks_per_beat // self.config.max_num_pos_per_beat
                     break
         # Then look for a Tempo token, if any is given at tick 0, to update
         # current_tempo
@@ -263,7 +257,7 @@ class CPWord(MIDITokenizer):
                 ticks_per_beat = compute_ticks_per_beat(
                     current_time_sig[1], time_division
                 )
-                ticks_per_pos = ticks_per_beat // max(self.config.beat_res.values())
+                ticks_per_pos = ticks_per_beat // self.config.max_num_pos_per_beat
                 # We decrease the previous tick so that a Position token is enforced
                 # for the next event
                 previous_tick -= 1
@@ -452,11 +446,11 @@ class CPWord(MIDITokenizer):
                 if len(time_signature_changes) == 0:
                     time_signature_changes.append(TimeSignature(0, *TIME_SIGNATURE))
             current_time_sig = time_signature_changes[0]
-            ticks_per_bar = compute_ticks_per_bar(current_time_sig, self.time_division)
-            ticks_per_beat = compute_ticks_per_beat(
-                current_time_sig.denominator, self.time_division
+            ticks_per_bar = compute_ticks_per_bar(
+                current_time_sig, midi.ticks_per_quarter
             )
-            ticks_per_pos = ticks_per_beat // max(self.config.beat_res.values())
+            ticks_per_beat = self._tpb_per_ts[current_time_sig.denominator]
+            ticks_per_pos = ticks_per_beat // self.config.max_num_pos_per_beat
             # Set track / sequence program if needed
             if not self.one_token_stream:
                 current_tick = tick_at_last_ts_change = tick_at_current_bar = 0
@@ -523,11 +517,11 @@ class CPWord(MIDITokenizer):
                                 tick_at_last_ts_change = tick_at_current_bar
                                 bar_at_last_ts_change = current_bar
                                 ticks_per_bar = compute_ticks_per_bar(
-                                    current_time_sig, self.time_division
+                                    current_time_sig, midi.ticks_per_quarter
                                 )
-                                ticks_per_beat = compute_ticks_per_beat(
-                                    current_time_sig.denominator, self.time_division
-                                )
+                                ticks_per_beat = self._tpb_per_ts[
+                                    current_time_sig.denominator
+                                ]
                                 ticks_per_pos = ticks_per_beat // max(
                                     self.config.beat_res.values()
                                 )
@@ -620,7 +614,7 @@ class CPWord(MIDITokenizer):
         # POSITION
         # self.time_division is equal to the maximum possible ticks/beat value.
         max_num_beats = max(ts[0] for ts in self.time_signatures)
-        num_positions = self.time_division * max_num_beats
+        num_positions = self.config.max_num_pos_per_beat * max_num_beats
         vocab[1].append("Ignore_None")
         vocab[1].append("Bar_None")
         vocab[1] += [f"Position_{i}" for i in range(num_positions)]
