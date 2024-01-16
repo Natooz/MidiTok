@@ -8,7 +8,7 @@ from torch import randint
 
 import miditok
 
-from .utils import MIDI_PATHS_MULTITRACK, MIDI_PATHS_ONE_TRACK
+from .utils_tests import MIDI_PATHS_MULTITRACK, MIDI_PATHS_ONE_TRACK
 
 if TYPE_CHECKING:
     from pathlib import Path

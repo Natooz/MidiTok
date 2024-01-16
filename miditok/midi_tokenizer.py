@@ -367,6 +367,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         else:
             tpq_resampling_factors = None
 
+        # Preprocess track events
         for t in range(len(midi.tracks) - 1, -1, -1):
             if len(midi.tracks[t].notes) == 0:
                 del midi.tracks[t]

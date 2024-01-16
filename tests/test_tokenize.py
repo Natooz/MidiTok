@@ -12,7 +12,7 @@ from symusic import Score
 import miditok
 from miditok.constants import MIDI_LOADING_EXCEPTION
 
-from .utils import (
+from .utils_tests import (
     ALL_TOKENIZATIONS,
     MIDI_PATHS_MULTITRACK,
     MIDI_PATHS_ONE_TRACK,
@@ -224,7 +224,7 @@ def test_one_track_midi_to_tokens_to_midi(
 def test_one_track_midi_to_tokens_to_midi_hard(
     midi_path: str | Path,
     tok_params_set: tuple[str, dict[str, Any]],
-    saving_erroneous_midis: bool = True,  # TODO err 3 / 12 note sorting?
+    saving_erroneous_midis: bool = True,
 ):
     _test_tokenize(midi_path, tok_params_set, saving_erroneous_midis)
 

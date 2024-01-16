@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 import miditok
 
-from .utils import (
+from .utils_tests import (
     MIDI_PATHS_ONE_TRACK,
     SEED,
     TOKENIZATIONS_BPE,

@@ -20,7 +20,7 @@ from torch import (
 import miditok
 from miditok.utils.utils import miditoolkit_to_symusic
 
-from .utils import HERE, MIDI_PATHS_ALL
+from .utils_tests import HERE, MIDI_PATHS_ALL
 
 if TYPE_CHECKING:
     from pathlib import Path

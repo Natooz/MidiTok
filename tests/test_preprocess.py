@@ -7,7 +7,7 @@ from symusic import Score
 
 import miditok
 
-from .utils import MIDI_PATHS_ALL
+from .utils_tests import MIDI_PATHS_ALL
 
 CONFIG_KWARGS = {
     "use_tempos": True,
