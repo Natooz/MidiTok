@@ -353,7 +353,10 @@ class MIDITokenizer(ABC, HFHubMixin):
         if not self._note_on_off or (
             self.config.use_sustain_pedals and self.config.sustain_pedal_duration
         ):
-            ticks_per_beat = get_midi_ticks_per_beat(midi)
+            if self.config.use_time_signatures:
+                ticks_per_beat = get_midi_ticks_per_beat(midi)
+            else:
+                ticks_per_beat = np.array([[midi.end(), midi.ticks_per_quarter]])
         else:
             ticks_per_beat = None
         if (
@@ -610,6 +613,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         :param time_sigs: time signature changes to quantize.
         """
+
         def are_ts_equals(ts1: TimeSignature, ts2: TimeSignature) -> bool:
             return (ts1.numerator, ts1.denominator) == (ts2.numerator, ts2.denominator)
 
