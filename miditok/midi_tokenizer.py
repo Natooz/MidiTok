@@ -314,7 +314,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         """
         # Filter time signatures.
         # We need to do this first to determine the MIDI's new time division.
-        self._filter_time_signatures(midi.time_signatures)
+        self._filter_unsupported_time_signatures(midi.time_signatures)
         if len(midi.time_signatures) == 0 or midi.time_signatures[0].time > 0:
             # Use the default one (4/4)
             midi.time_signatures.insert(0, TimeSignature(0, *TIME_SIGNATURE))
@@ -384,7 +384,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 )
 
         # Process tempo changes
-        if self.config.use_tempos and len(midi.tempos) > 0:
+        if self.config.use_tempos:
             midi.tempos = self._preprocess_tempos(midi.tempos, tpq_resampling_factors)
 
         # We do not change key signature changes, markers and lyrics here as they are
@@ -392,7 +392,9 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         return midi
 
-    def _filter_time_signatures(self, time_signatures: TimeSignatureTickList) -> None:
+    def _filter_unsupported_time_signatures(
+        self, time_signatures: TimeSignatureTickList
+    ) -> None:
         """
         Remove time signatures from a list that are unsupported by the tokenizer.
 
@@ -530,6 +532,11 @@ class MIDITokenizer(ABC, HFHubMixin):
         # If we delete the successive equal tempo changes, we need to sort them by time
         # Fortunately, sorting is already performed by symusic when loading the MIDI.
 
+        # Use the default tempo if there is None (shouldn't happen)
+        if len(tempos) == 0:
+            tempos.insert(0, Tempo(0, self.default_tempo))
+            return tempos
+
         tempos_soa = tempos.numpy()
 
         # Find the closest tempos
@@ -542,32 +549,45 @@ class MIDITokenizer(ABC, HFHubMixin):
             )
 
         # Find groups of tempos at the same onset ticks, equal consecutive ones
-        if len(tempos) > 1:
-            # Keep only last tempo change for groups with same tick
+        # Keep only last tempo change for groups with same tick
+        idx_groups = np.split(
+            np.arange(len(tempos_soa["time"])),
+            np.where(np.diff(tempos_soa["time"]) != 0)[0] + 1,
+        )
+        for idx_group in reversed(idx_groups):
+            if len(idx_group) > 1:
+                for key in tempos_soa:
+                    # We don't use a mask here as the number of idx to delete is
+                    # likely to be small.
+                    for idx_to_del in reversed(idx_group[:-1]):
+                        tempos_soa[key] = np.delete(tempos_soa[key], idx_to_del)
+        # Deduplicate successive tempo changes with same tempo value
+        if self.config.delete_equal_successive_tempo_changes:
             idx_groups = np.split(
                 np.arange(len(tempos_soa["time"])),
-                np.where(np.diff(tempos_soa["time"]) != 0)[0] + 1,
+                np.where(np.diff(tempos_soa["mspq"]) != 0)[0] + 1,
             )
             for idx_group in reversed(idx_groups):
                 if len(idx_group) > 1:
                     for key in tempos_soa:
-                        # We don't use a mask here as the number of idx to delete is
-                        # likely to be small.
-                        for idx_to_del in reversed(idx_group[:-1]):
+                        for idx_to_del in reversed(idx_group[1:]):
                             tempos_soa[key] = np.delete(tempos_soa[key], idx_to_del)
-            # Deduplicate successive tempo changes with same tempo value
-            if self.config.delete_equal_successive_tempo_changes:
-                idx_groups = np.split(
-                    np.arange(len(tempos_soa["time"])),
-                    np.where(np.diff(tempos_soa["mspq"]) != 0)[0] + 1,
-                )
-                for idx_group in reversed(idx_groups):
-                    if len(idx_group) > 1:
-                        for key in tempos_soa:
-                            for idx_to_del in reversed(idx_group[1:]):
-                                tempos_soa[key] = np.delete(tempos_soa[key], idx_to_del)
 
-        return Tempo.from_numpy(**tempos_soa)
+        tempos = Tempo.from_numpy(**tempos_soa)
+
+        # Make sure there is at least one tempo at tick 0
+        if len(tempos) > 0:
+            if (
+                self.config.delete_equal_successive_tempo_changes
+                and tempos[0].tempo == self.default_tempo
+            ):
+                tempos[0].time = 0
+            elif tempos[0].time != 0:
+                tempos.insert(0, Tempo(0, self.default_tempo))
+        else:
+            tempos.insert(0, Tempo(0, self.default_tempo))
+
+        return tempos
 
     def _preprocess_time_signatures(self, time_sigs: TimeSignatureTickList) -> None:
         r"""
@@ -793,7 +813,7 @@ class MIDITokenizer(ABC, HFHubMixin):
     ) -> None:
         end_arr = notes_pedals_soa["time"] + notes_pedals_soa["duration"]
         idx_first = 0
-        for idx_last, _ in resampling_factors[:-1]:
+        for idx_fact, (idx_last, _) in enumerate(resampling_factors[:-1]):
             # NoteOff/PedalOff idx with durations spanning across time sigs adjust end
             spanning_durations_idx = np.where(
                 end_arr[idx_first:idx_last] >= notes_pedals_soa["time"][idx_last]
@@ -802,7 +822,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 # Get the factor for the idx as it can be different from the next one
                 factor_for_idx = resampling_factors[
                     np.argmax(
-                        resampling_factors[idx_first:, 0]
+                        resampling_factors[idx_fact:, 0]
                         >= notes_pedals_soa["time"][idx]
                     ),
                     1,
