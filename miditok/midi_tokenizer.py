@@ -316,7 +316,11 @@ class MIDITokenizer(ABC, HFHubMixin):
         # We need to do this first to determine the MIDI's new time division.
         if self.config.use_time_signatures:
             self._filter_unsupported_time_signatures(midi.time_signatures)
-            if len(midi.time_signatures) == 0:
+            # We mock the first with 0, even if there are already time signatures. This
+            # is required as if the MIDI only had */2 time signatures, we must make
+            # sure the resampling tpq is calculated according to a maximum denom of 4
+            # if the beginning of the MIDI is mocked at 4/4.
+            if len(midi.time_signatures) == 0 or midi.time_signatures[0].time != 0:
                 midi.time_signatures.insert(0, TimeSignature(0, *TIME_SIGNATURE))
             # The new time division is chosen depending on its highest time signature
             # denominator, and is equivalent to the highest possible tick/beat ratio.
@@ -606,10 +610,6 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         :param time_sigs: time signature changes to quantize.
         """
-        if len(time_sigs) == 0:
-            time_sigs.insert(0, TimeSignature(0, *TIME_SIGNATURE))
-            return
-
         def are_ts_equals(ts1: TimeSignature, ts2: TimeSignature) -> bool:
             return (ts1.numerator, ts1.denominator) == (ts2.numerator, ts2.denominator)
 
