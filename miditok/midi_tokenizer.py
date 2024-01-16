@@ -314,16 +314,18 @@ class MIDITokenizer(ABC, HFHubMixin):
         """
         # Filter time signatures.
         # We need to do this first to determine the MIDI's new time division.
-        self._filter_unsupported_time_signatures(midi.time_signatures)
-        if len(midi.time_signatures) == 0 or midi.time_signatures[0].time > 0:
-            # Use the default one (4/4)
-            midi.time_signatures.insert(0, TimeSignature(0, *TIME_SIGNATURE))
+        if self.config.use_time_signatures:
+            self._filter_unsupported_time_signatures(midi.time_signatures)
+            if len(midi.time_signatures) == 0:
+                midi.time_signatures.insert(0, TimeSignature(0, *TIME_SIGNATURE))
+            # The new time division is chosen depending on its highest time signature
+            # denominator, and is equivalent to the highest possible tick/beat ratio.
+            max_midi_denom = max(ts.denominator for ts in midi.time_signatures)
+            new_tpq = int(self.config.max_num_pos_per_beat * max_midi_denom / 4)
+        else:
+            new_tpq = self.config.max_num_pos_per_beat
 
-        # Resample time, not inplace
-        # The new time division is chosen depending on its highest time signature
-        # denominator, and is equivalent to the highest possible tick/beat ratio.
-        max_midi_denom = max(ts.denominator for ts in midi.time_signatures)
-        new_tpq = int(self.config.max_num_pos_per_beat * max_midi_denom / 4)
+        # Resample time (not inplace)
         if midi.ticks_per_quarter != new_tpq:
             midi = midi.resample(new_tpq, min_dur=1)
 
@@ -604,44 +606,62 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         :param time_sigs: time signature changes to quantize.
         """
-        # Delay the time of each TS to the beginning of the next bar
-        # TODO need to delay again if some are removed below?
+        if len(time_sigs) == 0:
+            time_sigs.insert(0, TimeSignature(0, *TIME_SIGNATURE))
+            return
+
+        def are_ts_equals(ts1: TimeSignature, ts2: TimeSignature) -> bool:
+            return (ts1.numerator, ts1.denominator) == (ts2.numerator, ts2.denominator)
+
+        i = 0
         ticks_per_bar = compute_ticks_per_bar(time_sigs[0], self.time_division)
         previous_tick = 0  # first time signature change is always at tick 0
-        for i, time_sig in enumerate(time_sigs):
-            # determine the current bar of time sig
-            bar_offset, rest = divmod(time_sig.time - previous_tick, ticks_per_bar)
+        while i < len(time_sigs):
+            # 1. If it is identical to the previous one --> delete it
+            if i >= 1 and are_ts_equals(time_sigs[i], time_sigs[i - 1]):
+                del time_sigs[i]
+                continue
+
+            # 2. Delay the time of each TS to the beginning of the next bar
+            # Can happen if the previous ts has been delayed to the next bar
+            if i >= 1 and time_sigs[i].time < time_sigs[i - 1].time:
+                time_sigs[i].time = time_sigs[i - 1].time
+            bar_offset, rest = divmod(time_sigs[i].time - previous_tick, ticks_per_bar)
             # time sig doesn't happen on a new bar, we update it to the next bar
             if rest > 0:
-                bar_offset += 1
-                time_sigs[i].time = previous_tick + bar_offset * ticks_per_bar
-
+                time_sigs[i].time = previous_tick + (bar_offset + 1) * ticks_per_bar
             # Update values
-            ticks_per_bar = compute_ticks_per_bar(time_sig, self.time_division)
-            previous_tick = time_sig.time
+            ticks_per_bar = compute_ticks_per_bar(time_sigs[i], self.time_division)
+            previous_tick = time_sigs[i].time
 
-        # Deduplicate by time
-        # If the current time signature is now at the same time as the previous
-        # one, we delete the previous
-        i = 1
-        while i < len(time_sigs):
-            if time_sigs[i].time == time_sigs[i - 1].time:
+            # 3. If it is at the same tick as the previous one, we delete the previous
+            if i >= 1 and time_sigs[i].time == time_sigs[i - 1].time:
                 del time_sigs[i - 1]
-            else:
-                i += 1
+                # Check the one previous the one deleted is not equal to the current one
+                if i >= 2 and are_ts_equals(time_sigs[i - 1], time_sigs[i - 2]):
+                    # If it is, we delete the current one (at i-1 now) and decrement i
+                    del time_sigs[i - 1]
+                    ticks_per_bar = compute_ticks_per_bar(
+                        time_sigs[i - 2], self.time_division
+                    )
+                    previous_tick = time_sigs[i - 2].time
+                    i -= 1
+                continue
 
-        # Deduplicate by value
-        if self.config.delete_equal_successive_time_sig_changes:
-            i = 1
-            while i < len(time_sigs):
-                time_sig = time_sigs[i]
-                if (time_sig.numerator, time_sig.denominator) == (
-                    time_sigs[i - 1].numerator,
-                    time_sigs[i - 1].denominator,
-                ):
-                    del time_sigs[i]
-                else:
-                    i += 1
+            # 4. Pass to the next one
+            i += 1
+
+        # Make sure there is at least one time signature at tick 0
+        if len(time_sigs) > 0:
+            if (
+                self.config.delete_equal_successive_time_sig_changes
+                and (time_sigs[0].numerator, time_sigs[0].denominator) == TIME_SIGNATURE
+            ):
+                time_sigs[0].time = 0
+            elif time_sigs[0].time != 0:
+                time_sigs.insert(0, TimeSignature(0, *TIME_SIGNATURE))
+        else:
+            time_sigs.insert(0, TimeSignature(0, *TIME_SIGNATURE))
 
     def _preprocess_pitch_bends(
         self,
