@@ -68,6 +68,17 @@ include = [
     "/miditok",
 ]
 
+[tool.coverage.report]
+exclude_also = [
+    "def __repr__",
+]
+omit = [
+    # omit benchmark files
+    "tests/benchmark_fast_bpe.py",
+    "tests/benchmark_preprocess.py",
+    "tests/benchmark_tokenize.py",
+]
+
 [tool.ruff]
 target-version = "py38"
 extend-select = [
