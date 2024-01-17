@@ -8,7 +8,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from math import log2
 from pathlib import Path
-from typing import Any, Sequence
+from typing import TYPE_CHECKING, Any
 
 from numpy import ndarray
 
@@ -47,6 +47,9 @@ from .constants import (
     USE_TEMPOS,
     USE_TIME_SIGNATURE,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 IGNORED_CONFIG_KEY_DICT = [
     "miditok_version",

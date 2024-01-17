@@ -272,6 +272,8 @@ def notes_equals(note1: Note, note2: Note) -> str:
 
 
 def tempos_equals(tempos1: TempoTickList, tempos2: TempoTickList) -> bool:
+    if len(tempos1) != len(tempos2):
+        return False
     for tempo1, tempo2 in zip(tempos1, tempos2):
         if (
             tempo1.time != tempo2.time

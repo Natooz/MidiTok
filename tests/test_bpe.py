@@ -5,7 +5,7 @@ from __future__ import annotations
 import random
 from copy import copy, deepcopy
 from time import time
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING
 
 import pytest
 from symusic import Score
@@ -22,6 +22,7 @@ from .utils_tests import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from pathlib import Path
 
 default_params = deepcopy(TOKENIZER_CONFIG_KWARGS)

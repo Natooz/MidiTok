@@ -5,7 +5,7 @@ import json
 from abc import ABC
 from copy import deepcopy
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
+from typing import TYPE_CHECKING, Any
 
 from symusic import Score
 from torch import LongTensor, randint
@@ -15,6 +15,8 @@ from tqdm import tqdm
 from miditok.constants import MIDI_FILES_EXTENSIONS
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping, Sequence
+
     from miditok import MIDITokenizer
 
 

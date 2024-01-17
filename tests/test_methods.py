@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING
 
 from miditoolkit import Instrument, MidiFile, Pedal
 from tensorflow import Tensor as tfTensor
@@ -23,6 +23,7 @@ from miditok.utils.utils import miditoolkit_to_symusic
 from .utils_tests import HERE, MIDI_PATHS_ALL
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from pathlib import Path
 
     from symusic import Score, Track

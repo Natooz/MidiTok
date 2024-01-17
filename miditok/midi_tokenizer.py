@@ -5,9 +5,9 @@ import json
 import math
 import warnings
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Iterable, Sequence
 from copy import deepcopy
 from pathlib import Path
-from typing import Callable, Iterable, Sequence
 
 import numpy as np
 from huggingface_hub import ModelHubMixin as HFHubMixin
