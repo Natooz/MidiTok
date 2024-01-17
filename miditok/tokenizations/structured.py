@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import numpy as np
 from symusic import Note, Score, Track
 
 from miditok.classes import Event, TokSequence
 from miditok.constants import MIDI_INSTRUMENTS
 from miditok.midi_tokenizer import MIDITokenizer
+from miditok.utils.utils import np_get_closest
 
 
 class Structured(MIDITokenizer):
@@ -67,6 +69,12 @@ class Structured(MIDITokenizer):
             if not self.one_token_stream:
                 time_shift_ticks = note.start - previous_tick
                 if time_shift_ticks != 0:
+                    time_shift_ticks = int(
+                        np_get_closest(
+                            self._tpb_to_time_array[ticks_per_beat],
+                            np.array([time_shift_ticks]),
+                        )
+                    )
                     time_shift = self._tpb_ticks_to_tokens[ticks_per_beat][
                         time_shift_ticks
                     ]
@@ -134,6 +142,12 @@ class Structured(MIDITokenizer):
                 # Time shift
                 time_shift_ticks = event.time - previous_tick
                 if time_shift_ticks != 0:
+                    time_shift_ticks = int(
+                        np_get_closest(
+                            self._tpb_to_time_array[time_division],
+                            np.array([time_shift_ticks]),
+                        )
+                    )
                     time_shift = self._tpb_ticks_to_tokens[time_division][
                         time_shift_ticks
                     ]

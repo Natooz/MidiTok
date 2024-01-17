@@ -1,6 +1,6 @@
 #!/usr/bin/python3 python
 
-"""Measure the average MIDI preprocessing speed."""
+"""Measure the average MIDI tokenization speed."""
 
 from __future__ import annotations
 
@@ -32,8 +32,8 @@ DATASETS = ["Maestro", "MMD", "POP909"]
 MAX_NUM_FILES = 500
 
 
-def benchmark_preprocess():
-    r"""Read MIDI files and call `tokenizer.preprocess_midi` on them."""
+def benchmark_tokenize():
+    r"""Read MIDI files and tokenize them."""
     print(f"CPU: {processor()}")
     print(f"System: {system()}")
     print(f"miditok: {version('miditok')}")
@@ -55,7 +55,7 @@ def benchmark_preprocess():
                     midi = Score(midi_path)
                     # midi = MidiFile(midi_path)
                     t0 = time()
-                    tokenizer.preprocess_midi(midi)
+                    tokenizer.midi_to_tokens(midi)
                     times.append(time() - t0)
                 except:  # noqa: E722, S112
                     continue
@@ -66,7 +66,7 @@ def benchmark_preprocess():
             results.append(f"{mean:.2f} ± {std:.2f} ms")
             print(f"{dataset} - {tokenization}: {results[-1]}")
 
-    csv_file_path = HERE / "benchmark_preprocess.csv"
+    csv_file_path = HERE / "benchmark_tokenize.csv"
     write_header = not csv_file_path.is_file()
     with Path.open(csv_file_path, "a") as csvfile:
         writer = csv.writer(csvfile)
@@ -81,4 +81,4 @@ def benchmark_preprocess():
 
 
 if __name__ == "__main__":
-    benchmark_preprocess()
+    benchmark_tokenize()

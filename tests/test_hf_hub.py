@@ -18,7 +18,7 @@ def test_push_and_load_to_hf_hub(hf_token: str):
     while num_tries < MAX_NUM_TRIES_HF_PUSH:
         try:
             tokenizer.push_to_hub("Natooz/MidiTok-tests", private=True, token=hf_token)
-        except HfHubHTTPError as e:  # noqa: PERF203
+        except HfHubHTTPError as e:
             if e.response.status_code == 429:  # hourly quota exceeded
                 # We performed to many tests, we skip it to not break the HF servers 🥲
                 pytest.skip(

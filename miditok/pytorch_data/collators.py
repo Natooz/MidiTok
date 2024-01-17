@@ -3,10 +3,13 @@ from __future__ import annotations
 
 import warnings
 from copy import deepcopy
-from typing import Any, Mapping
+from typing import TYPE_CHECKING, Any
 
 import torch
 from torch import LongTensor
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 
 class DataCollator:

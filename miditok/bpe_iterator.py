@@ -1,13 +1,14 @@
 """Iterator to be used when training a tokenizer with the 🤗tokenizers library."""
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING
 
 from symusic import Score
 
 from .constants import MIDI_FILES_EXTENSIONS, MIDI_LOADING_EXCEPTION
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from pathlib import Path
 
     from .midi_tokenizer import MIDITokenizer
