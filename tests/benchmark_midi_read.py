@@ -28,20 +28,29 @@ def read_midi_files(
 ) -> tuple[list[float], list[float], list[float]]:
     times_mtk, times_sms, times_ptm = [], [], []
     for midi_path in tqdm(midi_paths, desc="Loading MIDIs"):
-        # Miditoolkit
-        t0 = time()
-        _ = MidiFile(midi_path)
-        times_mtk.append(time() - t0)
+        # We count times only if all libraries load the file without error
+        try:
+            # Miditoolkit
+            t0 = time()
+            _ = MidiFile(midi_path)
+            t_mtk = time() - t0
 
-        # Symusic
-        t0 = time()
-        _ = Score(midi_path)
-        times_sms.append(time() - t0)
+            # Symusic
+            t0 = time()
+            _ = Score(midi_path)
+            t_sms = time() - t0
 
-        # Pretty MIDI
-        t0 = time()
-        _ = PrettyMIDI(str(midi_path))
-        times_ptm.append(time() - t0)
+            # Pretty MIDI
+            t0 = time()
+            _ = PrettyMIDI(str(midi_path))
+            t_ptm = time() - t0
+        except:  # noqa: E722, S112
+            continue
+
+        times_mtk.append(t_mtk)
+        times_sms.append(t_sms)
+        times_ptm.append(t_ptm)
+
     return times_sms, times_mtk, times_ptm
 
 
