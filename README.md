@@ -27,7 +27,7 @@ MidiTok uses [Symusic](https://github.com/Yikai-Liao/symusic) to read and write 
 
 ## Usage example
 
-The most basic and useful methods are summarized here. And [here](colab-notebooks/Full_Example_HuggingFace_GPT2_Transformer.ipynb) is a simple notebook example showing how to use Hugging Face models to generate music, with MidiTok taking care of tokenizing MIDIs.
+Below is a complete yet concise example of how you can use MidiTok. And [here](colab-notebooks/Full_Example_HuggingFace_GPT2_Transformer.ipynb) is a simple notebook example showing how to use Hugging Face models to generate music, with MidiTok taking care of tokenizing MIDIs.
 
 ```python
 from miditok import REMI, TokenizerConfig
