@@ -1,6 +1,6 @@
 #!/usr/bin/python3 python
 
-"""Measure the average MIDI preprocessing speed."""
+"""Measure the average MIDI tokenization speed."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ MIDI_PATHS_ALL = sorted(
 TOKENIZATIONS = ["REMI", "TSD", "MIDILike", "Structured"]
 
 
-def benchmark_preprocess(midi_paths: list[Path]):
+def benchmark_tokenize(midi_paths: list[Path]):
     r"""
     Read MIDI files and call `tokenizer.preprocess_midi` on them.
 
@@ -50,15 +50,15 @@ def benchmark_preprocess(midi_paths: list[Path]):
         for midi_path in midi_paths:
             midi = Score(midi_path)
             t0 = time()
-            tokenizer.preprocess_midi(midi)
+            tokenizer.midi_to_tokens(midi)
             t1 = time() - t0
             times.append(t1)
 
-        times = np.array(times) * 1e3
+        times = np.array(times)
         mean = np.mean(times)
         std = np.std(times)
-        print(f"{tokenization}: {mean:.3f} ± {std:.3f} ms")
+        print(f"{tokenization}: {mean:.3f} ± {std:.3f} sec")
 
 
 if __name__ == "__main__":
-    benchmark_preprocess(MIDI_PATHS_ALL)
+    benchmark_tokenize(MIDI_PATHS_ALL)

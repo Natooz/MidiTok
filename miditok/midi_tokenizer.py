@@ -157,7 +157,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         # most of the accuracy. Some sections might need to be resampled again, when
         # the time signature denominator will be higher (i.e. higher number of absolute
         # ticks per beat).
-        # Realted: https://github.com/Yikai-Liao/symusic/issues/10
+        # Related: https://github.com/Yikai-Liao/symusic/issues/10
         self.time_division = self._tpb_per_ts[TIME_SIGNATURE[1]]
 
         # Durations
