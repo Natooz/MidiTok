@@ -342,7 +342,9 @@ class MIDITokenizer(ABC, HFHubMixin):
         # Process time signature changes
         # We need to do it before computing the ticks_per_beat sections
         if self.config.use_time_signatures and len(midi.time_signatures) > 0:
-            self._preprocess_time_signatures(midi.time_signatures)
+            self._preprocess_time_signatures(
+                midi.time_signatures, midi.ticks_per_quarter
+            )
 
         # Compute resampling ratios to update times of events when several time sig,
         # and ticks per beat ratios.
@@ -599,7 +601,9 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         return tempos
 
-    def _preprocess_time_signatures(self, time_sigs: TimeSignatureTickList) -> None:
+    def _preprocess_time_signatures(
+        self, time_sigs: TimeSignatureTickList, time_division: int
+    ) -> None:
         r"""
         Resamples the time signature changes.
 
@@ -613,13 +617,14 @@ class MIDITokenizer(ABC, HFHubMixin):
         are sorted: ``midi.time_signatures.sort()``.
 
         :param time_sigs: time signature changes to quantize.
+        :param time_division: time division in ticks per quarter of the MIDI.
         """
 
         def are_ts_equals(ts1: TimeSignature, ts2: TimeSignature) -> bool:
             return (ts1.numerator, ts1.denominator) == (ts2.numerator, ts2.denominator)
 
         i = 0
-        ticks_per_bar = compute_ticks_per_bar(time_sigs[0], self.time_division)
+        ticks_per_bar = compute_ticks_per_bar(time_sigs[0], time_division)
         previous_tick = 0  # first time signature change is always at tick 0
         while i < len(time_sigs):
             # 1. If it is identical to the previous one --> delete it
@@ -636,7 +641,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             if rest > 0:
                 time_sigs[i].time = previous_tick + (bar_offset + 1) * ticks_per_bar
             # Update values
-            ticks_per_bar = compute_ticks_per_bar(time_sigs[i], self.time_division)
+            ticks_per_bar = compute_ticks_per_bar(time_sigs[i], time_division)
             previous_tick = time_sigs[i].time
 
             # 3. If it is at the same tick as the previous one, we delete the previous
@@ -647,7 +652,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                     # If it is, we delete the current one (at i-1 now) and decrement i
                     del time_sigs[i - 1]
                     ticks_per_bar = compute_ticks_per_bar(
-                        time_sigs[i - 2], self.time_division
+                        time_sigs[i - 2], time_division
                     )
                     previous_tick = time_sigs[i - 2].time
                     i -= 1
