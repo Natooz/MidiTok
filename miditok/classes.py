@@ -185,13 +185,13 @@ class TokSequence:
         # Start from True assumption as some attributes might be unfilled (None)
         attributes = ["tokens", "ids", "bytes", "events"]
         eq = [True for _ in attributes]
-        common_attr = False
+        one_common_attr = False
         for i, attr in enumerate(attributes):
             if getattr(self, attr) is not None and getattr(other, attr) is not None:
                 eq[i] = getattr(self, attr) == getattr(other, attr)
-                common_attr = True
+                one_common_attr = True
 
-        return all(eq) if common_attr else False
+        return one_common_attr and all(eq)
 
 
 class TokenizerConfig:

@@ -1525,12 +1525,12 @@ class MIDITokenizer(ABC, HFHubMixin):
             for obj in arg[1]:
                 kwarg = {arg[0]: obj}
                 seq.append(TokSequence(**kwarg))
-                if not self.is_multi_voc and seq[-1].ids is not None:
+                if self.has_bpe and seq[-1].ids is not None:
                     seq[-1].ids_bpe_encoded = self._are_ids_bpe_encoded(seq[-1].ids)
         else:  # 1 subscript, one_token_stream and no multi-voc
             kwarg = {arg[0]: arg[1]}
             seq = TokSequence(**kwarg)
-            if not self.is_multi_voc:
+            if self.has_bpe:
                 seq.ids_bpe_encoded = self._are_ids_bpe_encoded(seq.ids)
 
         return seq
@@ -2703,16 +2703,24 @@ class MIDITokenizer(ABC, HFHubMixin):
                 dic["programs"] = programs
             json.dump(dic, outfile)
 
-    @staticmethod
-    def load_tokens(path: str | Path) -> dict[str, list[int]]:
+    def load_tokens(
+        self, path: str | Path, raw: bool = False
+    ) -> TokSequence | list[TokSequence] | dict:
         r"""
         Load tokens saved as JSON files.
 
         :param path: path of the file to load.
+        :param raw: if given ``True``, will return the raw content of the json file.
+            (default: ``False``)
         :return: the tokens, with the associated information saved with.
         """
         with Path(path).open() as file:
-            return json.load(file)
+            json_content = json.load(file)
+
+        if raw:
+            return json_content
+
+        return self._convert_sequence_to_tokseq(json_content["ids"])
 
     def _save_pretrained(self, *args, **kwargs) -> None:  # noqa: ANN002
         # called by `ModelHubMixin.from_pretrained`.
