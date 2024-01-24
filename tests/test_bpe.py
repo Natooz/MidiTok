@@ -84,6 +84,8 @@ def test_bpe_conversion(
         tokens = tokenizer(file_path, apply_bpe=False)
         if not tokenizer.one_token_stream:
             tokens = tokens[0]
+        # Need to complete bytes here as it's not done by default
+        tokenizer.complete_sequence(tokens, complete_bytes=True)
         to_tok = tokenizer._bytes_to_tokens(tokens.bytes)
         to_id = tokenizer._tokens_to_ids(to_tok)
         to_by = tokenizer._ids_to_bytes(to_id, as_one_str=True)

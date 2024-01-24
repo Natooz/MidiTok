@@ -2687,7 +2687,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         elif isinstance(tokens[0], TokSequence):
             ids_bpe_encoded = []
             for seq in tokens:
-                if tokens.ids is None:
+                if seq.ids is None:
                     self.complete_sequence(seq)
                 ids_bpe_encoded.append(seq.ids_bpe_encoded)
                 ids.append(seq.ids)
