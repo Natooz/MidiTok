@@ -1,12 +1,18 @@
 """Tests for the saving/loading methods of tokenizers."""
 
-from pathlib import Path
+from __future__ import annotations
+
+from copy import deepcopy
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
 import miditok
 
-from .utils_tests import ALL_TOKENIZATIONS
+from .utils_tests import ALL_TOKENIZATIONS, MIDI_PATHS_MULTITRACK
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 ADDITIONAL_TOKENS_TEST = {
     "use_chords": False,  # False to speed up tests
@@ -18,6 +24,28 @@ ADDITIONAL_TOKENS_TEST = {
     "num_tempos": 32,
     "tempo_range": (40, 250),
 }
+
+TOK_PARAMS_MULTITRACK = []
+tokenizations_non_one_stream = [
+    "TSD",
+    "REMI",
+    "MIDILike",
+    "Structured",
+    "CPWord",
+    "Octuple",
+]
+for tokenization_ in ALL_TOKENIZATIONS:
+    params_ = {"use_programs": True}
+    TOK_PARAMS_MULTITRACK.append((tokenization_, params_))
+
+    if tokenization_ in tokenizations_non_one_stream:
+        params_tmp = deepcopy(params_)
+        params_tmp["one_token_stream_for_programs"] = False
+        # Disable tempos for Octuple with one_token_stream_for_programs, as tempos are
+        # carried by note tokens
+        if tokenization_ == "Octuple":
+            params_tmp["use_tempos"] = False
+        TOK_PARAMS_MULTITRACK.append((tokenization_, params_tmp))
 
 
 @pytest.mark.parametrize("tokenization", ALL_TOKENIZATIONS)
@@ -55,3 +83,25 @@ def test_saving_loading_tokenizer(tokenization: str, tmp_path: Path):
     if tokenization == "Octuple":
         tokenizer.vocab[0]["PAD_None"] = 8
         assert tokenizer != tokenizer2
+
+
+@pytest.mark.parametrize("midi_path", MIDI_PATHS_MULTITRACK[:3])
+@pytest.mark.parametrize("tok_params_set", TOK_PARAMS_MULTITRACK)
+def test_multitrack_midi_to_tokens_to_midi(
+    midi_path: str | Path,
+    tok_params_set: tuple[str, dict[str, Any]],
+    tmp_path: Path,
+):
+    # Create tokenizer
+    tokenization, params = tok_params_set
+    tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
+        tokenizer_config=miditok.TokenizerConfig(**params)
+    )
+
+    # Tokenize the file, save tokens and load them back
+    tokens = tokenizer(midi_path)
+    tokenizer.save_tokens(tokens, tmp_path / "tokens.json")
+    tokens_loaded = tokenizer.load_tokens(tmp_path / "tokens.json")
+
+    # Assert tokens are the same
+    assert tokens == tokens_loaded
