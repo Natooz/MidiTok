@@ -108,7 +108,7 @@ We also perform data augmentation on the pitch, velocity and duration dimension.
 
     # Creates the tokenizer and list the file paths
     tokenizer = REMI()  # using defaults parameters (constants.py)
-    midi_paths = list(Path("path", "to", "dataset").glob("**/*.mid"))
+    data_path = Path("path", "to", "dataset")
 
     # A validation method to discard MIDIs we do not want
     # It can also be used for custom pre-processing, for instance if you want to merge
@@ -121,7 +121,7 @@ We also perform data augmentation on the pitch, velocity and duration dimension.
     # Performs data augmentation on one pitch octave (up and down), velocities and
     # durations
     augment_midi_dataset(
-        midi_paths,
+        data_path,
         pitch_offsets=[-12, 12],
         velocity_offsets=[-4, 5],
         duration_offsets=[-0.5, 1],
@@ -129,7 +129,7 @@ We also perform data augmentation on the pitch, velocity and duration dimension.
         Path("to", "new", "location", "augmented"),
     )
     tokenizer.tokenize_midi_dataset(        # 2 velocity and 1 duration values
-        midi_paths,
+        data_path,
         Path("path", "to", "tokens"),
         midi_valid,
     )
