@@ -10,7 +10,11 @@ import numpy as np
 from symusic import Score
 from tqdm import tqdm
 
-from miditok.constants import MIDI_INSTRUMENTS, MIDI_LOADING_EXCEPTION
+from miditok.constants import (
+    MIDI_FILES_EXTENSIONS,
+    MIDI_INSTRUMENTS,
+    MIDI_LOADING_EXCEPTION,
+)
 
 
 def augment_midi_dataset(
@@ -73,7 +77,9 @@ def augment_midi_dataset(
         if isinstance(out_path, str):
             out_path = Path(out_path)
         out_path.mkdir(parents=True, exist_ok=True)
-    files_paths = list(Path(data_path).glob("**/*.mid"))
+    files_paths = [
+        path for path in data_path.glob("**/*") if path.suffix in MIDI_FILES_EXTENSIONS
+    ]
 
     num_augmentations, num_tracks_augmented = 0, 0
     for file_path in tqdm(files_paths, desc="Performing data augmentation"):

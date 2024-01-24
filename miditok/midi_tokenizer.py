@@ -2470,10 +2470,11 @@ class MIDITokenizer(ABC, HFHubMixin):
             if isinstance(midi_paths, str):
                 midi_paths = Path(midi_paths)
             root_dir = midi_paths
-            midi_paths = sum(
-                (list(midi_paths.glob(f"**/*{ext}")) for ext in MIDI_FILES_EXTENSIONS),
-                [],
-            )
+            midi_paths = [
+                path
+                for path in midi_paths.glob("**/*")
+                if path.suffix in MIDI_FILES_EXTENSIONS
+            ]
         # User gave a list of paths, we need to find the root / deepest common subdir
         else:
             all_parts = [Path(path).parent.parts for path in midi_paths]
