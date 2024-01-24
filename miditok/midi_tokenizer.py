@@ -1319,18 +1319,20 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         return tokens
 
-    def complete_sequence(self, seq: TokSequence) -> None:
+    def complete_sequence(self, seq: TokSequence, complete_bytes: bool = False) -> None:
         r"""
         Complete (inplace) a :class:`miditok.TokSequence`.
 
         The input sequence can have some of its attributes (``ids``, ``tokens``) not
         initialized (i.e. ``None``). This method will initialize them from the present
-        ones. The ``bytes`` attribute will be created if the tokenizer has been trained
-        with BPE. The ``events`` attribute will not be filled as it is only intended
-        for debug purpose.
+        ones. The ``events`` attribute will not be filled as it is only intended for
+        debug purpose. The ``bytes`` attribute will be created if ``complete_bytes`` is
+        provided as ``True`` and if the tokenizer is trained with BPE.
 
         :param seq: input :class:`miditok.TokSequence`, must have at least one
             attribute defined.
+        :param complete_bytes: will complete the bytes form of each token. This is only
+            applicable if the tokenizer is trained with BPE.
         """
         if seq.tokens is None:
             if seq.events is not None:
@@ -1342,7 +1344,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         if seq.ids is None:
             seq.ids = self._tokens_to_ids(seq.tokens)
 
-        if self.has_bpe and seq.bytes is None:
+        if complete_bytes and self.has_bpe and seq.bytes is None:
             seq.bytes = self._ids_to_bytes(seq.ids, as_one_str=True)
 
     def _tokens_to_ids(
@@ -1560,6 +1562,12 @@ class MIDITokenizer(ABC, HFHubMixin):
         """
         return np.any(np.array(ids) >= len(self))
 
+    def _preprocess_tokseq_before_decoding(self, tokseq: TokSequence) -> None:
+        if tokseq.ids_bpe_encoded:
+            self.decode_bpe(tokseq)
+        if tokseq.tokens is None:
+            self.complete_sequence(tokseq)
+
     def tokens_to_midi(
         self,
         tokens: TokSequence | list[TokSequence] | list[int | list[int]] | np.ndarray,
@@ -1591,6 +1599,11 @@ class MIDITokenizer(ABC, HFHubMixin):
             tokens = self._convert_sequence_to_tokseq(
                 tokens, complete_seq=True, decode_bpe=True
             )
+        elif isinstance(tokens, TokSequence):
+            self._preprocess_tokseq_before_decoding(tokens)
+        else:  # list[TokSequence]
+            for seq in tokens:
+                self._preprocess_tokseq_before_decoding(seq)
 
         midi = self._tokens_to_midi(tokens, programs)
 
@@ -2379,7 +2392,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         """
         if isinstance(seq, list):
             for seq_ in seq:
-                self.complete_sequence(seq_)
+                self.complete_sequence(seq_, complete_bytes=True)
             encoded_tokens = self._bpe_model.encode_batch(
                 [[t.bytes] for t in seq], is_pretokenized=True
             )
@@ -2388,7 +2401,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 seq_.ids_bpe_encoded = True
 
         else:
-            self.complete_sequence(seq)
+            self.complete_sequence(seq, complete_bytes=True)
             encoded_tokens = self._bpe_model.encode([seq.bytes], is_pretokenized=True)
             seq.ids = encoded_tokens.ids
             seq.ids_bpe_encoded = True
@@ -2680,7 +2693,8 @@ class MIDITokenizer(ABC, HFHubMixin):
         ids_bpe_encoded = None
 
         if isinstance(tokens, TokSequence):
-            self.complete_sequence(tokens)
+            if tokens.ids is None:
+                self.complete_sequence(tokens)
             ids_bpe_encoded = tokens.ids_bpe_encoded
             ids = tokens.ids
         elif isinstance(tokens, list) and len(tokens) == 0:
@@ -2688,7 +2702,8 @@ class MIDITokenizer(ABC, HFHubMixin):
         elif isinstance(tokens[0], TokSequence):
             ids_bpe_encoded = []
             for seq in tokens:
-                self.complete_sequence(seq)
+                if tokens.ids is None:
+                    self.complete_sequence(seq)
                 ids_bpe_encoded.append(seq.ids_bpe_encoded)
                 ids.append(seq.ids)
         else:
