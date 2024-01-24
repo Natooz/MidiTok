@@ -1467,8 +1467,6 @@ class MIDITokenizer(ABC, HFHubMixin):
     def _convert_sequence_to_tokseq(
         self,
         input_seq: list[int | str | list[int | str]] | np.ndarray,
-        complete_seq: bool = False,
-        decode_bpe: bool = False,
     ) -> TokSequence | list[TokSequence]:
         r"""
         Convert a sequence of tokens/ids into a (list of) :class:`miditok.TokSequence`.
@@ -1479,9 +1477,6 @@ class MIDITokenizer(ABC, HFHubMixin):
         :param input_seq: sequence to convert. It can be a list of ids (integers),
             tokens (string) or events (Event). It can also be a Pytorch or TensorFlow
             tensor, or Numpy array representing ids.
-        :param complete_seq: will complete the output sequence(s). (default: ``False``)
-        :param decode_bpe: if the input sequence contains ids, and that they contain
-            BPE tokens, these tokens will be decoded. (default: ``False``)
         :return: the input sequence as a (list of) :class:`miditok.TokSequence`.
         """
         # Deduce the type of data (ids/tokens/events)
@@ -1538,16 +1533,6 @@ class MIDITokenizer(ABC, HFHubMixin):
             if not self.is_multi_voc:
                 seq.ids_bpe_encoded = self._are_ids_bpe_encoded(seq.ids)
 
-        # decode BPE and complete the output sequence(s) if requested
-        if self.has_bpe and decode_bpe:
-            self.decode_bpe(seq)
-        if complete_seq:
-            if isinstance(seq, TokSequence):
-                self.complete_sequence(seq)
-            else:
-                for seq_ in seq:
-                    self.complete_sequence(seq_)
-
         return seq
 
     def _are_ids_bpe_encoded(self, ids: list[int] | np.ndarray) -> bool:
@@ -1560,12 +1545,12 @@ class MIDITokenizer(ABC, HFHubMixin):
         :param ids: ids to check.
         :return: boolean, ``True`` if ids are encoded with BPE, ``False`` otherwise.
         """
-        return np.any(np.array(ids) >= len(self))
+        return np.any(np.array(ids) >= len(self.vocab))
 
     def _preprocess_tokseq_before_decoding(self, tokseq: TokSequence) -> None:
-        if tokseq.ids_bpe_encoded:
-            self.decode_bpe(tokseq)
         if tokseq.tokens is None:
+            if tokseq.ids_bpe_encoded:
+                self.decode_bpe(tokseq)
             self.complete_sequence(tokseq)
 
     def tokens_to_midi(
@@ -1596,10 +1581,10 @@ class MIDITokenizer(ABC, HFHubMixin):
             isinstance(tokens, list)
             and any(not isinstance(seq, TokSequence) for seq in tokens)
         ):
-            tokens = self._convert_sequence_to_tokseq(
-                tokens, complete_seq=True, decode_bpe=True
-            )
-        elif isinstance(tokens, TokSequence):
+            tokens = self._convert_sequence_to_tokseq(tokens)
+
+        # Preprocess TokSequence(s)
+        if isinstance(tokens, TokSequence):
             self._preprocess_tokseq_before_decoding(tokens)
         else:  # list[TokSequence]
             for seq in tokens:
