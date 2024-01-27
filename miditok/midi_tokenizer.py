@@ -2865,6 +2865,11 @@ class MIDITokenizer(ABC, HFHubMixin):
                 }
                 continue
             if key == "config":
+                if "chord_maps" in value:
+                    value["chord_maps"] = {
+                        chord_quality: tuple(chord_map)
+                        for chord_quality, chord_map in value["chord_maps"].items()
+                    }
                 for beat_res_key in ["beat_res", "beat_res_rest"]:
                     # check here for previous versions (< v2.1.5)
                     if beat_res_key in value:
