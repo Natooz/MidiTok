@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import math
+import sys
 import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable, Sequence
@@ -2815,7 +2816,23 @@ class MIDITokenizer(ABC, HFHubMixin):
                     library_version=CURRENT_MIDITOK_VERSION,
                 )
 
-        return cls(params=params_path)
+        # Checking config file tokenization
+        with Path(params_path).open() as file:
+            tokenization = json.load(file)["tokenization"]
+        cls_name = cls.__name__
+        if cls_name not in ["MIDITokenizer", tokenization]:
+            warnings.warn(
+                ".from_pretrained called with an invalid class name. The current class"
+                f"is {cls_name} whereas the config file comes from a {tokenization} "
+                f"tokenizer. Returning an instance of {tokenization}.",
+                stacklevel=2,
+            )
+
+        if cls_name == tokenization:
+            return cls(params=params_path)
+
+        miditok_module = sys.modules[".".join(__name__.split(".")[:-1])]
+        return getattr(miditok_module, tokenization)(params=params_path)
 
     def _load_params(self, config_file_path: str | Path) -> None:
         r"""
@@ -3100,7 +3117,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         :param other: tokenizer to compare.
         :return: True if the vocabulary(ies) are identical, False otherwise.
         """
-        if not isinstance(other, MIDITokenizer):
+        if not isinstance(other, type(self)):
             return False
         bpe_voc_eq = True
         if self._bpe_model is not None and other._bpe_model is not None:
