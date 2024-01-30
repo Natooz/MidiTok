@@ -88,7 +88,6 @@ Contributions are gratefully welcomed, feel free to open an issue or send a PR i
 
 ### Todos
 
-* `AutoTokenizer` class to be used with `from_pretrained` (and `from_config`?) similar to what is implemented in the Hugging face libraries;
 * `PitchDrum` tokens for pitches of drum tracks;
 * `no_duration_drums` option, discarding duration tokens for drum notes;
 * Extend unimplemented additional tokens to all compatible tokenizations;

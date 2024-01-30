@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path("..").resolve()))
 project = "MidiTok"
 copyright = "2023, Nathan Fradet"  # noqa: A001
 author = "Nathan Fradet"
-release = "3.0.0"
+release = "3.0.1"
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

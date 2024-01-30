@@ -15,9 +15,9 @@ jobs:
       matrix:
         python-version: ["3.8", "3.9", "3.10", "3.11"]  # tensorflow not supported with 3.12
         os: [ ubuntu-latest, windows-latest ]
-        include:
-          - python-version: "3.11"
-            os: macos-latest
+        #include:  # TODO uncomment when multithreading pytest-xdist is fixed (PR #142)
+        #  - python-version: "3.11"
+        #    os: macos-latest
 
     steps:
       - uses: actions/checkout@v4

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "miditok"
-version = "3.0.0"
+version = "3.0.1"
 description = "MIDI / symbolic music tokenizers for Deep Learning models."
 readme = "README.md"
 license = "MIT"
