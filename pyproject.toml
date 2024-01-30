@@ -45,6 +45,7 @@ dependencies = [
 
 [project.optional-dependencies]
 tests = [
+    "pytest==7.4.4",  # TODO remove when issue with xdist/macOS is fixed for v8
     "pytest-cov",
     "pytest-xdist[psutil]",
     "torch",
