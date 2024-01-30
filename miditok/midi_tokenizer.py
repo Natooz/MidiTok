@@ -377,7 +377,10 @@ class MIDITokenizer(ABC, HFHubMixin):
                 continue
             # Preprocesses notes
             midi.tracks[t].notes = self._preprocess_notes(
-                midi.tracks[t].notes, tpq_resampling_factors, ticks_per_beat
+                midi.tracks[t].notes,
+                midi.tracks[t].is_drum,
+                tpq_resampling_factors,
+                ticks_per_beat,
             )
 
             if len(midi.tracks[t].notes) == 0:
@@ -433,6 +436,7 @@ class MIDITokenizer(ABC, HFHubMixin):
     def _preprocess_notes(
         self,
         notes: NoteTickList,
+        is_drums: bool,
         resampling_factors: np.ndarray = None,
         ticks_per_beat: np.ndarray = None,
         min_duration: int = 1,
@@ -446,6 +450,8 @@ class MIDITokenizer(ABC, HFHubMixin):
         deleted.
 
         :param notes: notes to preprocess.
+        :param is_drums: specifies if the track is drums, as the notes pitches may be
+            filtered differently.
         :param resampling_factors: sections of resampling factors, when we need to
             adjust the times of events to a specific ticks/beat value. This is required
             when the MIDI has time signatures with different denominators. The factors
@@ -466,10 +472,14 @@ class MIDITokenizer(ABC, HFHubMixin):
         note_soa = notes.numpy()
 
         # Delete notes outside of pitch range
+        pitch_range = (
+            self.config.drums_pitch_range
+            if is_drums and self.config.use_drums_pitch_tokens
+            else self.config.pitch_range
+        )
         idx_out_of_pitch_range = np.where(
             np.logical_or(
-                note_soa["pitch"] < self.config.pitch_range[0],
-                note_soa["pitch"] >= self.config.pitch_range[1],
+                note_soa["pitch"] < pitch_range[0], note_soa["pitch"] >= pitch_range[1]
             )
         )[0]
         if len(idx_out_of_pitch_range) > 0:
@@ -1007,7 +1017,6 @@ class MIDITokenizer(ABC, HFHubMixin):
         """
         program = track.program if not track.is_drum else -1
         events = []
-        note_token_name = "NoteOn" if self._note_on_off else "Pitch"
         # max_time_interval is adjusted depending on the time signature denom / tpb
         max_time_interval = 0
         if self.config.use_pitch_intervals:
@@ -1154,6 +1163,10 @@ class MIDITokenizer(ABC, HFHubMixin):
 
             # Pitch / NoteOn
             if add_absolute_pitch_token:
+                if self.config.use_drums_pitch_tokens and track.is_drum:
+                    note_token_name = "DrumOn" if self._note_on_off else "PitchDrum"
+                else:
+                    note_token_name = "NoteOn" if self._note_on_off else "Pitch"
                 events.append(
                     Event(
                         type_=note_token_name,
@@ -1189,7 +1202,9 @@ class MIDITokenizer(ABC, HFHubMixin):
                     )
                 events.append(
                     Event(
-                        type_="NoteOff",
+                        type_="DrumOff"
+                        if self.config.use_drums_pitch_tokens and track.is_drum
+                        else "NoteOff",
                         value=note.pitch,
                         time=note.end,
                         program=program,
@@ -1673,8 +1688,27 @@ class MIDITokenizer(ABC, HFHubMixin):
             for tok in vocab:
                 self.add_to_vocab(tok)
 
+    def _add_note_tokens_to_vocab_list(self, vocab: list[str]) -> None:
+        # NoteOn + NoteOff
+        if self._note_on_off:
+            vocab += [f"NoteOn_{i}" for i in range(*self.config.pitch_range)]
+            vocab += [f"NoteOff_{i}" for i in range(*self.config.pitch_range)]
+        # Pitch + Duration (later done after velocity)
+        else:
+            vocab += [f"Pitch_{i}" for i in range(*self.config.pitch_range)]
+
+        # Velocity
+        vocab += [f"Velocity_{i}" for i in self.velocities]
+
+        # Duration
+        if not self._note_on_off:
+            vocab += [
+                f"Duration_{'.'.join(map(str, duration))}"
+                for duration in self.durations
+            ]
+
     def _add_additional_tokens_to_vocab_list(self, vocab: list[str]) -> None:
-        # PITCH INTERVALS
+        # PitchInterval
         if self.config.use_pitch_intervals:
             for interval_type in ("PitchIntervalTime", "PitchIntervalChord"):
                 vocab += [
@@ -1685,27 +1719,40 @@ class MIDITokenizer(ABC, HFHubMixin):
                     )
                 ]
 
-        # CHORD
+        # PitchDrum
+        if self.config.use_drums_pitch_tokens:
+            pitch_token_name = "DrumOn" if self._note_on_off else "PitchDrum"
+            vocab += [
+                f"{pitch_token_name}_{pitch_bend}"
+                for pitch_bend in range(*self.config.drums_pitch_range)
+            ]
+            if self._note_on_off:
+                vocab += [
+                    f"DrumOff_{pitch_bend}"
+                    for pitch_bend in range(*self.config.drums_pitch_range)
+                ]
+
+        # Chord
         if self.config.use_chords:
             vocab += self._create_chords_tokens()
 
-        # REST
+        # Rest
         if self.config.use_rests:
             vocab += [f'Rest_{".".join(map(str, rest))}' for rest in self.rests]
 
-        # TEMPO
+        # Tempo
         if self.config.use_tempos:
             vocab += [f"Tempo_{i}" for i in self.tempos]
 
-        # PROGRAM
+        # Program
         if self.config.use_programs:
             vocab += [f"Program_{program}" for program in self.config.programs]
 
-        # TIME SIGNATURE
+        # TimeSig
         if self.config.use_time_signatures:
             vocab += [f"TimeSig_{i[0]}/{i[1]}" for i in self.time_signatures]
 
-        # PEDAL
+        # Pedal
         if self.config.use_sustain_pedals:
             if self.config.use_programs:
                 vocab += [f"Pedal_{program}" for program in self.config.programs]
@@ -1716,7 +1763,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 if not self.config.sustain_pedal_duration:
                     vocab.append("PedalOff_0")
 
-        # PITCH BEND
+        # PitchBend
         if self.config.use_pitch_bends:
             vocab += [f"PitchBend_{pitch_bend}" for pitch_bend in self.pitch_bends]
 
@@ -2588,7 +2635,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         current_pitches = {p: [] for p in self.config.programs}
         previous_pitch_onset = {program: -128 for program in self.config.programs}
         previous_pitch_chord = {program: -128 for program in self.config.programs}
-        note_tokens_types = ["Pitch", "NoteOn"]
+        note_tokens_types = ["Pitch", "NoteOn", "PitchDrum"]
         if self.config.use_pitch_intervals:
             note_tokens_types += ["PitchIntervalTime", "PitchIntervalChord"]
 
@@ -2611,7 +2658,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 elif event_type in ["TimeShift", "Time-Shift", "Rest"]:
                     current_pitches = {p: [] for p in self.config.programs}
                 elif event_type in note_tokens_types:
-                    if event_type == "Pitch":
+                    if event_type in {"Pitch", "NoteOn", "PitchDrum"}:
                         pitch_val = int(event_value)
                         previous_pitch_onset[current_program] = pitch_val
                         previous_pitch_chord[current_program] = pitch_val

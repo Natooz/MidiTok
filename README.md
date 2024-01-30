@@ -88,7 +88,6 @@ Contributions are gratefully welcomed, feel free to open an issue or send a PR i
 
 ### Todos
 
-* `PitchDrum` tokens for pitches of drum tracks;
 * `no_duration_drums` option, discarding duration tokens for drum notes;
 * Extend unimplemented additional tokens to all compatible tokenizations;
 * Control Change messages;

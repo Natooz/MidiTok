@@ -23,6 +23,7 @@ from .constants import (
     CURRENT_TOKENIZERS_VERSION,
     DELETE_EQUAL_SUCCESSIVE_TEMPO_CHANGES,
     DELETE_EQUAL_SUCCESSIVE_TIME_SIG_CHANGES,
+    DRUM_PITCH_RANGE,
     LOG_TEMPOS,
     MAX_PITCH_INTERVAL,
     NUM_TEMPOS,
@@ -39,6 +40,7 @@ from .constants import (
     TEMPO_RANGE,
     TIME_SIGNATURE_RANGE,
     USE_CHORDS,
+    USE_DRUMS_PITCH_TOKENS,
     USE_PITCH_BENDS,
     USE_PITCH_INTERVALS,
     USE_PROGRAMS,
@@ -274,6 +276,11 @@ class TokenizerConfig:
         ``Pitch``, ``Velocity`` and ``Duration`` tokens. The :ref:`Octuple`, :ref:`MMM`
         and :ref:`MuMIDI` tokenizers use natively ``Program`` tokens, this option is
         always enabled. (default: ``False``)
+    :param use_drums_pitch_tokens: will use dedicated ``PitchDrum`` tokens for pitches
+        of drums tracks. In the MIDI norm, the pitches of drums tracks corresponds to
+        discrete drum elements (bass drum, high tom, cymbals...) which are unrelated to
+        the pitch value of other instruments/programs. Using dedicated tokens for drums
+        allow to disambiguate this, and is thus recommended. (default: ``True``)
     :param beat_res_rest: the beat resolution of ``Rest`` tokens. It follows the same
         data pattern as the ``beat_res`` argument, however the maximum resolution for
         rests cannot be higher than the highest "global" resolution (``beat_res``).
@@ -359,6 +366,10 @@ class TokenizerConfig:
     :param pitch_intervals_max_time_dist: sets the default maximum time interval in
         beats between two consecutive notes to be represented with pitch intervals.
         (default: ``1``)
+    :param drums_pitch_range: range of pitch values to use for the drums tracks. This
+        argument is only used when ``use_drums_pitch_tokens`` is ``True``. (default:
+        ``(27, 88)``, recommended range from the GM2 specs without the "Applause" at
+        pitch 88 of the orchestra drum set)
     :param kwargs: additional parameters that will be saved in
         ``config.additional_params``.
     """
@@ -377,6 +388,7 @@ class TokenizerConfig:
         use_pitch_bends: bool = USE_PITCH_BENDS,
         use_programs: bool = USE_PROGRAMS,
         use_pitch_intervals: bool = USE_PITCH_INTERVALS,
+        use_drums_pitch_tokens: bool = USE_DRUMS_PITCH_TOKENS,
         beat_res_rest: dict[tuple[int, int], int] = BEAT_RES_REST,
         chord_maps: dict[str, tuple] = CHORD_MAPS,
         chord_tokens_with_root_note: bool = CHORD_TOKENS_WITH_ROOT_NOTE,
@@ -401,6 +413,7 @@ class TokenizerConfig:
         program_changes: bool = PROGRAM_CHANGES,
         max_pitch_interval: int = MAX_PITCH_INTERVAL,
         pitch_intervals_max_time_dist: bool = PITCH_INTERVALS_MAX_TIME_DIST,
+        drums_pitch_range: tuple[int, int] = DRUM_PITCH_RANGE,
         **kwargs,
     ) -> None:
         # Checks
@@ -461,6 +474,7 @@ class TokenizerConfig:
         self.use_pitch_bends: bool = use_pitch_bends
         self.use_programs: bool = use_programs
         self.use_pitch_intervals = use_pitch_intervals
+        self.use_drums_pitch_tokens = use_drums_pitch_tokens
 
         # Rest params
         self.beat_res_rest: dict[tuple[int, int], int] = beat_res_rest
@@ -518,6 +532,9 @@ class TokenizerConfig:
         # Pitch as interval tokens
         self.max_pitch_interval = max_pitch_interval
         self.pitch_intervals_max_time_dist = pitch_intervals_max_time_dist
+
+        # Drums
+        self.drums_pitch_range = drums_pitch_range
 
         # Pop legacy kwargs
         legacy_args = (

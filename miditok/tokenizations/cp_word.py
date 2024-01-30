@@ -148,13 +148,14 @@ class CPWord(MIDITokenizer):
                 if event.type_ == "Tempo":
                     current_tempo = event.value
                     break
-                if event.type_ in [
+                if event.type_ in {
                     "Pitch",
+                    "PitchDrum",
                     "Velocity",
                     "Duration",
                     "PitchBend",
                     "Pedal",
-                ]:
+                }:
                     break
         # Add the time events
         for e, event in enumerate(events):
@@ -264,7 +265,7 @@ class CPWord(MIDITokenizer):
 
             # Convert event to CP Event
             # Update max offset time of the notes encountered
-            if event.type_ == "Pitch" and e + 2 < len(events):
+            if event.type_ in {"Pitch", "PitchDrum"} and e + 2 < len(events):
                 all_events.append(
                     self.__create_cp_token(
                         event.time,
@@ -272,6 +273,7 @@ class CPWord(MIDITokenizer):
                         vel=events[e + 1].value,
                         dur=events[e + 2].value,
                         program=current_program,
+                        pitch_drum=event.type_ == "PitchDrum",
                     )
                 )
                 previous_note_end = max(previous_note_end, event.desc)
@@ -299,11 +301,12 @@ class CPWord(MIDITokenizer):
         time_signature: str | None = None,
         program: int | None = None,
         desc: str = "",
+        pitch_drum: bool = False,
     ) -> list[Event]:
         r"""
         Create a CP Word token.
 
-        It follow the structure:
+        It follows the structure:
             (index. Token type)
             0. *Family*
             1. *Bar*/*Position*
@@ -332,6 +335,7 @@ class CPWord(MIDITokenizer):
             (read note above)
         :param desc: an optional argument for debug and used to spot position tokens
             in track_to_tokens
+        :param pitch_drum: will create a ``PitchDrum`` token instead of ``Pitch``.
         :return: The compound token as a list of integers
         """
 
@@ -368,8 +372,9 @@ class CPWord(MIDITokenizer):
         elif rest is not None:
             cp_token[self.vocab_types_idx["Rest"]] = create_event("Rest", rest)
         elif pitch is not None:
+            pitch_token_name = "PitchDrum" if pitch_drum else "Pitch"
             cp_token[0].value = "Note"
-            cp_token[2] = create_event("Pitch", pitch)
+            cp_token[2] = create_event(pitch_token_name, pitch)
             cp_token[3] = create_event("Velocity", vel)
             cp_token[4] = create_event("Duration", dur)
             if program is not None:
@@ -622,6 +627,10 @@ class CPWord(MIDITokenizer):
         # PITCH
         vocab[2].append("Ignore_None")
         vocab[2] += [f"Pitch_{i}" for i in range(*self.config.pitch_range)]
+        if self.config.use_drums_pitch_tokens:
+            vocab[2] += [
+                f"PitchDrum_{i}" for i in range(*self.config.drums_pitch_range)
+            ]
 
         # VELOCITY
         vocab[3].append("Ignore_None")
@@ -695,6 +704,12 @@ class CPWord(MIDITokenizer):
             dic[key].append("Ignore")
         dic["Ignore"] = list(dic.keys())
 
+        if self.config.use_drums_pitch_tokens:
+            dic["PitchDrum"] = dic["Pitch"]
+            for key, values in dic.items():
+                if "Pitch" in values:
+                    dic[key].append("PitchDrum")
+
         return dic
 
     def _tokens_errors(self, tokens: list[list[str]]) -> int:
@@ -741,7 +756,10 @@ class CPWord(MIDITokenizer):
                 if token_type == "Bar":
                     current_pos = -1
                     current_pitches = {p: [] for p in self.config.programs}
-                elif self.config.remove_duplicated_notes and token_type == "Pitch":
+                elif self.config.remove_duplicated_notes and token_type in {
+                    "Pitch",
+                    "PitchDrum",
+                }:
                     if self.config.use_programs:
                         program = int(self[5, token[5]].split("_")[1])
                     if int(token_value) in current_pitches[program]:

@@ -357,8 +357,13 @@ class MMM(MIDITokenizer):
                     time_signature_changes.append(time_sig)
                 ticks_per_bar = compute_ticks_per_bar(time_sig, midi.ticks_per_quarter)
                 ticks_per_beat = self._tpb_per_ts[den]
-            elif tok_type in ["Pitch", "PitchIntervalTime", "PitchIntervalChord"]:
-                if tok_type == "Pitch":
+            elif tok_type in {
+                "Pitch",
+                "PitchDrum",
+                "PitchIntervalTime",
+                "PitchIntervalChord",
+            }:
+                if tok_type in {"Pitch", "PitchDrum"}:
                     pitch = int(tok_val)
                     previous_pitch_onset = pitch
                     previous_pitch_chord = pitch
@@ -413,24 +418,16 @@ class MMM(MIDITokenizer):
         vocab += ["Bar_Start", "Bar_End", "Bar_Fill"]
         vocab += ["Fill_Start", "Fill_End"]
 
-        # PITCH
-        vocab += [f"Pitch_{i}" for i in range(*self.config.pitch_range)]
+        # NoteOn/NoteOff/Velocity
+        self._add_note_tokens_to_vocab_list(vocab)
 
-        # VELOCITY
-        vocab += [f"Velocity_{i}" for i in self.velocities]
-
-        # DURATION
-        vocab += [
-            f'Duration_{".".join(map(str, duration))}' for duration in self.durations
-        ]
-
-        # TIME SHIFTS
+        # TimeShift
         vocab += [
             f'TimeShift_{".".join(map(str, self.durations[i]))}'
             for i in range(len(self.durations))
         ]
 
-        # NOTE DENSITY
+        # NoteDensity
         vocab += [
             f"NoteDensity_{i}" for i in self.config.additional_params["note_densities"]
         ]
@@ -490,6 +487,12 @@ class MMM(MIDITokenizer):
 
         dic["Fill"] = list(dic.keys())
 
+        if self.config.use_drums_pitch_tokens:
+            dic["PitchDrum"] = dic["Pitch"]
+            for key, values in dic.items():
+                if "Pitch" in values:
+                    dic[key].append("PitchDrum")
+
         return dic
 
     def _tokens_errors(self, tokens: list[str]) -> int:
@@ -503,7 +506,7 @@ class MMM(MIDITokenizer):
         :param tokens: sequence of tokens string to check.
         :return: the number of errors predicted (no more than one per token).
         """
-        note_tokens_types = ["Pitch"]
+        note_tokens_types = ["Pitch", "PitchDrum"]
         if self.config.use_pitch_intervals:
             note_tokens_types += ["PitchIntervalTime", "PitchIntervalChord"]
 
@@ -514,7 +517,7 @@ class MMM(MIDITokenizer):
         previous_pitch_onset = previous_pitch_chord = -128
 
         # Init first note and current pitches if needed
-        if previous_type == "Pitch":
+        if previous_type in {"Pitch", "PitchDrum"}:
             pitch_val = int(tokens[0].split("_")[1])
             current_pitches.append(pitch_val)
 
@@ -524,13 +527,13 @@ class MMM(MIDITokenizer):
 
             # Good token type
             if event_type in self.tokens_types_graph[previous_type]:
-                if event_type in ["Bar", "TimeShift"]:  # reset
+                if event_type in {"Bar", "TimeShift"}:  # reset
                     current_pitches = []
                 elif (
                     self.config.remove_duplicated_notes
                     and event_type in note_tokens_types
                 ):
-                    if event_type == "Pitch":
+                    if event_type in {"Pitch", "PitchDrum"}:
                         pitch_val = int(event_value)
                         previous_pitch_onset = pitch_val
                         previous_pitch_chord = pitch_val

@@ -19,7 +19,7 @@ class Octuple(MIDITokenizer):
     represents a single note. Tokens (*Pitch*, *Velocity*...) are first independently
     converted to embeddings which are then merged (pooled) into a single one.
     Each pooled token will be a list of the form (index: Token type):
-    * 0: Pitch;
+    * 0: Pitch/PitchDrum;
     * 1: Velocity;
     * 2: Duration;
     * 3: Position;
@@ -124,9 +124,12 @@ class Octuple(MIDITokenizer):
                 current_tempo = event.value
             elif event.type_ == "Program":
                 current_program = event.value
-            elif event.type_ == "Pitch" and e + 2 < len(events):
+            elif event.type_ in {"Pitch", "PitchDrum"} and e + 2 < len(events):
+                pitch_token_name = (
+                    "PitchDrum" if event.type_ == "PitchDrum" else "Pitch"
+                )
                 new_event = [
-                    Event(type_="Pitch", value=event.value, time=event.time),
+                    Event(type_=pitch_token_name, value=event.value, time=event.time),
                     Event(type_="Velocity", value=events[e + 1].value, time=event.time),
                     Event(type_="Duration", value=events[e + 2].value, time=event.time),
                     Event(type_="Position", value=current_pos, time=event.time),
@@ -356,6 +359,10 @@ class Octuple(MIDITokenizer):
 
         # PITCH
         vocab[0] += [f"Pitch_{i}" for i in range(*self.config.pitch_range)]
+        if self.config.use_drums_pitch_tokens:
+            vocab[0] += [
+                f"PitchDrum_{i}" for i in range(*self.config.drums_pitch_range)
+            ]
 
         # VELOCITY
         vocab[1] += [f"Velocity_{i}" for i in self.velocities]

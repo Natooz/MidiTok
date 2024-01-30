@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from symusic import Note, Score, Tempo, Track
 
 from miditok.classes import Event, TokSequence
-from miditok.constants import DRUM_PITCH_RANGE, MIDI_INSTRUMENTS
+from miditok.constants import MIDI_INSTRUMENTS
 from miditok.midi_tokenizer import MIDITokenizer
 from miditok.utils import detect_chords, get_midi_ticks_per_beat
 
@@ -28,7 +28,7 @@ class MuMIDI(MIDITokenizer):
     positional encoding. As in the original paper, the pitches of drums are distinct
     from those of all other instruments.
     Each pooled token will be a list of the form (index: Token type):
-    * 0: Pitch / DrumPitch / Position / Bar / Program / (Chord) / (Rest);
+    * 0: Pitch / PitchDrum / Position / Bar / Program / (Chord) / (Rest);
     * 1: BarPosEnc;
     * 2: PositionPosEnc;
     * (-3 / 3: Tempo);
@@ -40,9 +40,6 @@ class MuMIDI(MIDITokenizer):
     For generation, the decoding implies sample from several distributions, which can
     be very delicate. Hence, we do not recommend this tokenization for generation with
     small models.
-
-    **Add a `drum_pitch_range` entry in the config, mapping to a tuple of values to
-    restrict the range of drum pitches to use.**
 
     **Notes:**
         * Tokens are first sorted by time, then track, then pitch values.
@@ -59,15 +56,13 @@ class MuMIDI(MIDITokenizer):
         self.config.one_token_stream_for_programs = True
         self.config.program_changes = False
 
-        if "drum_pitch_range" not in self.config.additional_params:
-            self.config.additional_params["drum_pitch_range"] = DRUM_PITCH_RANGE
         if "max_bar_embedding" not in self.config.additional_params:
             # this attribute might increase if the tokenizer encounter longer MIDIs
             self.config.additional_params["max_bar_embedding"] = 60
 
         self.vocab_types_idx = {
             "Pitch": 0,
-            "DrumPitch": 0,
+            "PitchDrum": 0,
             "Position": 0,
             "Bar": 0,
             "Program": 0,
@@ -251,7 +246,7 @@ class MuMIDI(MIDITokenizer):
                 tokens.append(
                     [
                         Event(
-                            type_="DrumPitch",
+                            type_="PitchDrum",
                             value=note.pitch,
                             time=note.start,
                             desc=-1,
@@ -329,7 +324,7 @@ class MuMIDI(MIDITokenizer):
                     _ = tracks[current_track]
                 except KeyError:
                     tracks[current_track] = []
-            elif tok_type in ("Pitch", "DrumPitch"):
+            elif tok_type in {"Pitch", "PitchDrum"}:
                 vel, duration = (time_step[i].split("_")[1] for i in (-2, -1))
                 if any(val == "None" for val in (vel, duration)):
                     continue
@@ -373,7 +368,7 @@ class MuMIDI(MIDITokenizer):
         :class:`miditok.MIDITokenizer`.
 
         For MUMIDI, token index 0 is used as a padding index for training.
-        * 0: Pitch / DrumPitch / Position / Bar / Program / (Chord) / (Rest)
+        * 0: Pitch / PitchDrum / Position / Bar / Program / (Chord) / (Rest)
         * 1: BarPosEnc
         * 2: PositionPosEnc
         * (-3 / 3: Tempo)
@@ -386,10 +381,7 @@ class MuMIDI(MIDITokenizer):
 
         # PITCH & DRUM PITCHES & BAR & POSITIONS & PROGRAM
         vocab[0] += [f"Pitch_{i}" for i in range(*self.config.pitch_range)]
-        vocab[0] += [
-            f"DrumPitch_{i}"
-            for i in range(*self.config.additional_params["drum_pitch_range"])
-        ]
+        vocab[0] += [f"PitchDrum_{i}" for i in range(*self.config.drums_pitch_range)]
         vocab[0] += ["Bar_None"]  # new bar token
         max_num_beats = max(ts[0] for ts in self.time_signatures)
         num_positions = self.config.max_num_pos_per_beat * max_num_beats
@@ -440,9 +432,9 @@ class MuMIDI(MIDITokenizer):
         dic = {
             "Bar": ["Bar", "Position"],
             "Position": ["Program"],
-            "Program": ["Pitch", "DrumPitch"],
+            "Program": ["Pitch", "PitchDrum"],
             "Pitch": ["Pitch", "Program", "Bar", "Position"],
-            "DrumPitch": ["DrumPitch", "Program", "Bar", "Position"],
+            "PitchDrum": ["PitchDrum", "Program", "Bar", "Position"],
         }
 
         if self.config.use_chords:

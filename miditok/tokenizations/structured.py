@@ -95,8 +95,18 @@ class Structured(MIDITokenizer):
                         type_="Program", value=program, time=note.start, desc=note.end
                     )
                 )
+            pitch_token_name = (
+                "PitchDrum"
+                if track.is_drum and self.config.use_drums_pitch_tokens
+                else "Pitch"
+            )
             events.append(
-                Event(type_="Pitch", value=note.pitch, time=note.start, desc=note.end)
+                Event(
+                    type_=pitch_token_name,
+                    value=note.pitch,
+                    time=note.start,
+                    desc=note.end,
+                )
             )
             events.append(
                 Event(
@@ -133,12 +143,14 @@ class Structured(MIDITokenizer):
         :return: the same events, with time events inserted.
         """
         all_events = []
-        token_type_to_check = "Program" if self.one_token_stream else "Pitch"
+        token_types_to_check = (
+            {"Program"} if self.one_token_stream else {"Pitch", "PitchDrum"}
+        )
 
         # Add "TimeShift" tokens before each "Pitch" tokens
         previous_tick = 0
         for event in events:
-            if event.type_ == token_type_to_check:
+            if event.type_ in token_types_to_check:
                 # Time shift
                 time_shift_ticks = event.time - previous_tick
                 if time_shift_ticks != 0:
@@ -271,7 +283,7 @@ class Structured(MIDITokenizer):
                 token_type, token_val = token.split("_")
                 if token_type == "TimeShift" and token_val != "0.0.1":
                     current_tick += self._tpb_tokens_to_ticks[ticks_per_beat][token_val]
-                elif token_type == "Pitch":
+                elif token_type in {"Pitch", "PitchDrum"}:
                     try:
                         if (
                             seq[ti + 1].split("_")[0] == "Velocity"
@@ -321,26 +333,17 @@ class Structured(MIDITokenizer):
         """
         vocab = []
 
-        # PITCH
-        vocab += [f"Pitch_{i}" for i in range(*self.config.pitch_range)]
+        # NoteOn/NoteOff/Velocity
+        self._add_note_tokens_to_vocab_list(vocab)
 
-        # VELOCITY
-        vocab += [f"Velocity_{i}" for i in self.velocities]
-
-        # DURATION
-        vocab += [
-            f'Duration_{".".join(map(str, duration))}' for duration in self.durations
-        ]
-
-        # TIME SHIFT (same as durations)
+        # TimeShift (same as durations)
         vocab.append("TimeShift_0.0.1")  # for a time shift of 0
         vocab += [
             f'TimeShift_{".".join(map(str, duration))}' for duration in self.durations
         ]
 
-        # PROGRAM
-        if self.config.use_programs:
-            vocab += [f"Program_{program}" for program in self.config.programs]
+        # Add additional tokens (just Program for Structured)
+        self._add_additional_tokens_to_vocab_list(vocab)
 
         return vocab
 
@@ -352,11 +355,12 @@ class Structured(MIDITokenizer):
         """
         dic = {
             "Pitch": ["Velocity"],
+            "PitchDrum": ["Velocity"],
             "Velocity": ["Duration"],
             "Duration": ["TimeShift"],
-            "TimeShift": ["Pitch"],
+            "TimeShift": ["Pitch", "PitchDrum"],
         }
         if self.config.use_programs:
-            dic["Program"] = ["Pitch"]
+            dic["Program"] = ["Pitch", "PitchDrum"]
             dic["TimeShift"] = ["Program"]
         return dic

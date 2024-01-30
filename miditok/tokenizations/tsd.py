@@ -109,9 +109,14 @@ class TSD(MIDITokenizer):
             all_events.append(event)
 
             # Update max offset time of the notes encountered
-            if event.type_ in ["Pitch", "PitchIntervalTime", "PitchIntervalChord"]:
+            if event.type_ in {
+                "Pitch",
+                "PitchDrum",
+                "PitchIntervalTime",
+                "PitchIntervalChord",
+            }:
                 previous_note_end = max(previous_note_end, event.desc)
-            elif event.type_ in [
+            elif event.type_ in {
                 "Program",
                 "Tempo",
                 "TimeSig",
@@ -119,7 +124,7 @@ class TSD(MIDITokenizer):
                 "PedalOff",
                 "PitchBend",
                 "Chord",
-            ]:
+            }:
                 previous_note_end = max(previous_note_end, event.time)
 
         return all_events
@@ -192,8 +197,13 @@ class TSD(MIDITokenizer):
                 elif tok_type == "Rest":
                     current_tick = max(previous_note_end, current_tick)
                     current_tick += self._tpb_rests_to_ticks[ticks_per_beat][tok_val]
-                elif tok_type in ["Pitch", "PitchIntervalTime", "PitchIntervalChord"]:
-                    if tok_type == "Pitch":
+                elif tok_type in [
+                    "Pitch",
+                    "PitchDrum",
+                    "PitchIntervalTime",
+                    "PitchIntervalChord",
+                ]:
+                    if tok_type in {"Pitch", "PitchDrum"}:
                         pitch = int(tok_val)
                         previous_pitch_onset[current_program] = pitch
                         previous_pitch_chord[current_program] = pitch
@@ -321,18 +331,10 @@ class TSD(MIDITokenizer):
         """
         vocab = []
 
-        # NOTE ON
-        vocab += [f"Pitch_{i}" for i in range(*self.config.pitch_range)]
+        # NoteOn/NoteOff/Velocity
+        self._add_note_tokens_to_vocab_list(vocab)
 
-        # VELOCITY
-        vocab += [f"Velocity_{i}" for i in self.velocities]
-
-        # DURATION
-        vocab += [
-            f"Duration_{'.'.join(map(str, duration))}" for duration in self.durations
-        ]
-
-        # TIME SHIFTS
+        # TimeShift
         vocab += [
             f"TimeShift_{'.'.join(map(str, self.durations[i]))}"
             for i in range(len(self.durations))
@@ -501,5 +503,11 @@ class TSD(MIDITokenizer):
                 if token_type in dic:
                     dic["Program"].append(token_type)
                     dic[token_type].append("Program")
+
+        if self.config.use_drums_pitch_tokens:
+            dic["PitchDrum"] = dic["Pitch"]
+            for key, values in dic.items():
+                if "Pitch" in values:
+                    dic[key].append("PitchDrum")
 
         return dic

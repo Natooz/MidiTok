@@ -114,16 +114,21 @@ class MIDILike(MIDITokenizer):
             all_events.append(event)
 
             # Update max offset time of the notes encountered
-            if event.type_ in ["NoteOn", "PitchIntervalTime", "PitchIntervalChord"]:
+            if event.type_ in {
+                "NoteOn",
+                "DrumOn",
+                "PitchIntervalTime",
+                "PitchIntervalChord",
+            }:
                 previous_note_end = max(previous_note_end, event.desc)
-            elif event.type_ in [
+            elif event.type_ in {
                 "Program",
                 "Tempo",
                 "Pedal",
                 "PedalOff",
                 "PitchBend",
                 "Chord",
-            ]:
+            }:
                 previous_note_end = max(previous_note_end, event.time)
 
         return all_events
@@ -149,15 +154,15 @@ class MIDILike(MIDITokenizer):
         :return: priority as an int
         """
         # Global MIDI tokens first
-        if event.type_ in ["Tempo", "TimeSig"]:
+        if event.type_ in {"Tempo", "TimeSig"}:
             return 0
         # Then NoteOff
-        if event.type_ == "NoteOff" or (
+        if event.type_ in {"NoteOff", "DrumOff"} or (
             event.type_ == "Program" and event.desc == "ProgramNoteOff"
         ):
             return 1
         # Then track effects
-        if event.type_ in ["Pedal", "PedalOff"] or (
+        if event.type_ in {"Pedal", "PedalOff"} or (
             event.type_ == "Duration" and event.desc == "PedalDuration"
         ):
             return 2
@@ -276,7 +281,9 @@ class MIDILike(MIDITokenizer):
                     current_tick += self._tpb_rests_to_ticks[ticks_per_beat][tok_val]
                 elif tok_type in [
                     "NoteOn",
+                    "DrumOn",
                     "NoteOff",
+                    "DrumOff",
                     "PitchIntervalTime",
                     "PitchIntervalChord",
                 ]:
@@ -291,18 +298,18 @@ class MIDILike(MIDITokenizer):
                         previous_pitch_chord[current_program] = pitch
                     else:
                         pitch = int(tok_val)
-                        if tok_type == "NoteOn":
+                        if tok_type in {"NoteOn", "DrumOn"}:
                             previous_pitch_onset[current_program] = pitch
                             previous_pitch_chord[current_program] = pitch
 
                     # if NoteOn adds it to the queue with FIFO
-                    if tok_type != "NoteOff":
+                    if tok_type not in {"NoteOff", "DrumOff"}:
                         if ti + 1 < len(seq):
                             vel = int(seq[ti + 1].split("_")[1])
                             active_notes[current_program][pitch].append(
                                 (current_tick, vel)
                             )
-                    # NoteOff, creates the note
+                    # NoteOff/DrumOff, creates the note
                     elif len(active_notes[current_program][pitch]) > 0:
                         note_onset_tick, vel = active_notes[current_program][pitch].pop(
                             0
@@ -416,16 +423,10 @@ class MIDILike(MIDITokenizer):
         """
         vocab = []
 
-        # NOTE ON
-        vocab += [f"NoteOn_{i}" for i in range(*self.config.pitch_range)]
+        # NoteOn/NoteOff/Velocity
+        self._add_note_tokens_to_vocab_list(vocab)
 
-        # NOTE OFF
-        vocab += [f"NoteOff_{i}" for i in range(*self.config.pitch_range)]
-
-        # VELOCITY
-        vocab += [f"Velocity_{i}" for i in self.velocities]
-
-        # TIME SHIFTS
+        # TimeShift
         vocab += [
             f'TimeShift_{".".join(map(str, duration))}' for duration in self.durations
         ]
@@ -616,6 +617,13 @@ class MIDILike(MIDITokenizer):
                     dic["Program"].append(token_type)
                     dic[token_type].append("Program")
 
+        if self.config.use_drums_pitch_tokens:
+            for tok1, tok2 in {("DrumOn", "NoteOn"), ("DrumOff", "NoteOff")}:
+                dic[tok1] = dic[tok2]
+                for key, values in dic.items():
+                    if tok2 in values:
+                        dic[key].append(tok1)
+
         return dic
 
     def _tokens_errors(self, tokens: list[str]) -> int:
@@ -665,12 +673,13 @@ class MIDILike(MIDITokenizer):
             ):
                 err += 1
             # Good token type
-            elif events[i].type_ in [
+            elif events[i].type_ in {
                 "NoteOn",
+                "DrumOn",
                 "PitchIntervalTime",
                 "PitchIntervalChord",
-            ]:
-                if events[i].type_ == "NoteOn":
+            }:
+                if events[i].type_ in {"NoteOn", "DrumOn"}:
                     pitch_val = int(events[i].value)
                     previous_pitch_onset[current_program] = pitch_val
                     previous_pitch_chord[current_program] = pitch_val
@@ -695,7 +704,7 @@ class MIDILike(MIDITokenizer):
                     continue
 
                 current_pitches_tick[current_program].append(pitch_val)
-            elif events[i].type_ == "NoteOff":
+            elif events[i].type_ in {"NoteOff", "DrumOff"}:
                 if len(active_pitches[current_program][int(events[i].value)]) == 0:
                     err += 1  # this pitch wasn't being played
                     continue

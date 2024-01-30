@@ -43,6 +43,7 @@ USE_TIME_SIGNATURE = False
 USE_SUSTAIN_PEDALS = False
 USE_PITCH_BENDS = False
 USE_PROGRAMS = False
+USE_DRUMS_PITCH_TOKENS = True
 
 # Pitch as intervals
 USE_PITCH_INTERVALS = False
@@ -101,15 +102,17 @@ PROGRAMS = list(range(-1, 128))
 ONE_TOKEN_STREAM_FOR_PROGRAMS = True
 PROGRAM_CHANGES = False
 
+# Drums
+# Recommended range from the GM2 specs
+# Note: we ignore the "Applause" at pitch 88 of the orchestra drum set, increase to 89
+# if you need it.
+DRUM_PITCH_RANGE = (27, 88)
+
 # Other
 REMOVE_DUPLICATED_NOTES = False
 
 
 # Tokenizers specific parameters
-# For MuMIDI, recommended range from the GM2 specs
-# Note: we ignore the "Applause" at pitch 88 of the orchestra drum set, increase to 89
-# if you need it.
-DRUM_PITCH_RANGE = (27, 88)
 MMM_DENSITY_BINS_MAX = (10, 20)
 
 # Defaults values when writing new MIDI files
