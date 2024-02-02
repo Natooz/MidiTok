@@ -617,7 +617,7 @@ class MIDILike(MIDITokenizer):
                     dic["Program"].append(token_type)
                     dic[token_type].append("Program")
 
-        if self.config.use_drums_pitch_tokens:
+        if self.config.use_pitchdrum_tokens:
             for tok1, tok2 in {("DrumOn", "NoteOn"), ("DrumOff", "NoteOff")}:
                 dic[tok1] = dic[tok2]
                 for key, values in dic.items():

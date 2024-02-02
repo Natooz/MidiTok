@@ -487,7 +487,7 @@ class MMM(MIDITokenizer):
 
         dic["Fill"] = list(dic.keys())
 
-        if self.config.use_drums_pitch_tokens:
+        if self.config.use_pitchdrum_tokens:
             dic["PitchDrum"] = dic["Pitch"]
             for key, values in dic.items():
                 if "Pitch" in values:
