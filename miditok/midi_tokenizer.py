@@ -474,7 +474,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         # Delete notes outside of pitch range
         pitch_range = (
             self.config.drums_pitch_range
-            if is_drums and self.config.use_drums_pitch_tokens
+            if is_drums and self.config.use_pitchdrum_tokens
             else self.config.pitch_range
         )
         idx_out_of_pitch_range = np.where(
@@ -1163,7 +1163,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
             # Pitch / NoteOn
             if add_absolute_pitch_token:
-                if self.config.use_drums_pitch_tokens and track.is_drum:
+                if self.config.use_pitchdrum_tokens and track.is_drum:
                     note_token_name = "DrumOn" if self._note_on_off else "PitchDrum"
                 else:
                     note_token_name = "NoteOn" if self._note_on_off else "Pitch"
@@ -1203,7 +1203,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 events.append(
                     Event(
                         type_="DrumOff"
-                        if self.config.use_drums_pitch_tokens and track.is_drum
+                        if self.config.use_pitchdrum_tokens and track.is_drum
                         else "NoteOff",
                         value=note.pitch,
                         time=note.end,
@@ -1720,7 +1720,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 ]
 
         # PitchDrum
-        if self.config.use_drums_pitch_tokens:
+        if self.config.use_pitchdrum_tokens:
             pitch_token_name = "DrumOn" if self._note_on_off else "PitchDrum"
             vocab += [
                 f"{pitch_token_name}_{pitch_bend}"

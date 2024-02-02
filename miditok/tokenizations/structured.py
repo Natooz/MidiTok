@@ -97,7 +97,7 @@ class Structured(MIDITokenizer):
                 )
             pitch_token_name = (
                 "PitchDrum"
-                if track.is_drum and self.config.use_drums_pitch_tokens
+                if track.is_drum and self.config.use_pitchdrum_tokens
                 else "Pitch"
             )
             events.append(

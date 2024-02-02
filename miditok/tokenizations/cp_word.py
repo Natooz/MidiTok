@@ -627,7 +627,7 @@ class CPWord(MIDITokenizer):
         # PITCH
         vocab[2].append("Ignore_None")
         vocab[2] += [f"Pitch_{i}" for i in range(*self.config.pitch_range)]
-        if self.config.use_drums_pitch_tokens:
+        if self.config.use_pitchdrum_tokens:
             vocab[2] += [
                 f"PitchDrum_{i}" for i in range(*self.config.drums_pitch_range)
             ]
@@ -704,7 +704,7 @@ class CPWord(MIDITokenizer):
             dic[key].append("Ignore")
         dic["Ignore"] = list(dic.keys())
 
-        if self.config.use_drums_pitch_tokens:
+        if self.config.use_pitchdrum_tokens:
             dic["PitchDrum"] = dic["Pitch"]
             for key, values in dic.items():
                 if "Pitch" in values:

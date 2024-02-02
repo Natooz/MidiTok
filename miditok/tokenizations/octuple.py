@@ -359,7 +359,7 @@ class Octuple(MIDITokenizer):
 
         # PITCH
         vocab[0] += [f"Pitch_{i}" for i in range(*self.config.pitch_range)]
-        if self.config.use_drums_pitch_tokens:
+        if self.config.use_pitchdrum_tokens:
             vocab[0] += [
                 f"PitchDrum_{i}" for i in range(*self.config.drums_pitch_range)
             ]

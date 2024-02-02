@@ -40,9 +40,9 @@ from .constants import (
     TEMPO_RANGE,
     TIME_SIGNATURE_RANGE,
     USE_CHORDS,
-    USE_DRUMS_PITCH_TOKENS,
     USE_PITCH_BENDS,
     USE_PITCH_INTERVALS,
+    USE_PITCHDRUM_TOKENS,
     USE_PROGRAMS,
     USE_RESTS,
     USE_SUSTAIN_PEDALS,
@@ -276,7 +276,7 @@ class TokenizerConfig:
         ``Pitch``, ``Velocity`` and ``Duration`` tokens. The :ref:`Octuple`, :ref:`MMM`
         and :ref:`MuMIDI` tokenizers use natively ``Program`` tokens, this option is
         always enabled. (default: ``False``)
-    :param use_drums_pitch_tokens: will use dedicated ``PitchDrum`` tokens for pitches
+    :param use_pitchdrum_tokens: will use dedicated ``PitchDrum`` tokens for pitches
         of drums tracks. In the MIDI norm, the pitches of drums tracks corresponds to
         discrete drum elements (bass drum, high tom, cymbals...) which are unrelated to
         the pitch value of other instruments/programs. Using dedicated tokens for drums
@@ -388,7 +388,7 @@ class TokenizerConfig:
         use_pitch_bends: bool = USE_PITCH_BENDS,
         use_programs: bool = USE_PROGRAMS,
         use_pitch_intervals: bool = USE_PITCH_INTERVALS,
-        use_drums_pitch_tokens: bool = USE_DRUMS_PITCH_TOKENS,
+        use_pitchdrum_tokens: bool = USE_PITCHDRUM_TOKENS,
         beat_res_rest: dict[tuple[int, int], int] = BEAT_RES_REST,
         chord_maps: dict[str, tuple] = CHORD_MAPS,
         chord_tokens_with_root_note: bool = CHORD_TOKENS_WITH_ROOT_NOTE,
@@ -474,7 +474,7 @@ class TokenizerConfig:
         self.use_pitch_bends: bool = use_pitch_bends
         self.use_programs: bool = use_programs
         self.use_pitch_intervals = use_pitch_intervals
-        self.use_drums_pitch_tokens = use_drums_pitch_tokens
+        self.use_pitchdrum_tokens = use_pitchdrum_tokens
 
         # Rest params
         self.beat_res_rest: dict[tuple[int, int], int] = beat_res_rest
