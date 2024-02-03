@@ -1952,15 +1952,30 @@ class MIDITokenizer(ABC, HFHubMixin):
                 (beat, pos, beat_res)
                 for beat in range(*beat_range)
                 for pos in range(beat_res)
+                if not (beat == 0 and pos == 0)
             ]
-        durations += [
+        durations.append(
             (
                 max(max(self.config.beat_res)),
                 0,
                 self.config.beat_res[max(self.config.beat_res)],
             )
-        ]  # the last one
-        del durations[0]  # removes duration of 0
+        )  # adds the last one
+
+        # Sort them
+        durations.sort(key=lambda dt: dt[0] + dt[1] / dt[2])
+
+        # Deduplicate identical values
+        # For two identical values, we only keep the tuple having the lowest res
+        i = 0
+        while i < len(durations) - 1:
+            dur_i_b, dur_i_p, dur_i_r = durations[i]
+            dur_ip_b, dur_ip_p, dur_ip_r = durations[i + 1]
+            if (dur_i_b + dur_i_p / dur_i_r) == (dur_ip_b + dur_ip_p / dur_ip_r):
+                del durations[i if dur_i_r > dur_ip_r else i + 1]
+            else:
+                i += 1
+
         return durations
 
     def __create_tpb_per_ts(self) -> dict[int, int]:
