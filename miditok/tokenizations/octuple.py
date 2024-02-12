@@ -7,7 +7,7 @@ from symusic import Note, Score, Tempo, TimeSignature, Track
 from miditok.classes import Event, TokSequence
 from miditok.constants import MIDI_INSTRUMENTS, TIME_SIGNATURE
 from miditok.midi_tokenizer import MIDITokenizer
-from miditok.utils import compute_ticks_per_bar, get_bars_ticks
+from miditok.utils import compute_ticks_per_bar, compute_ticks_per_beat, get_bars_ticks
 
 
 class Octuple(MIDITokenizer):
@@ -103,6 +103,8 @@ class Octuple(MIDITokenizer):
         ticks_per_bar = compute_ticks_per_bar(
             TimeSignature(0, *current_time_sig), time_division
         )
+        ticks_per_beat = compute_ticks_per_beat(current_time_sig[1], time_division)
+        ticks_per_pos = ticks_per_beat // self.config.max_num_pos_per_beat
         for e, event in enumerate(events):
             # Set current bar and position
             # This is done first, as we need to compute these values with the current
@@ -110,7 +112,11 @@ class Octuple(MIDITokenizer):
             if event.time != previous_tick:
                 elapsed_tick = event.time - current_tick_from_ts_time
                 current_bar = current_bar_from_ts_time + elapsed_tick // ticks_per_bar
-                current_pos = elapsed_tick % ticks_per_bar
+                tick_at_current_bar = (
+                    current_tick_from_ts_time
+                    + (current_bar - current_bar_from_ts_time) * ticks_per_bar
+                )
+                current_pos = (event.time - tick_at_current_bar) // ticks_per_pos
                 previous_tick = event.time
 
             if event.type_ == "TimeSig":
@@ -120,6 +126,10 @@ class Octuple(MIDITokenizer):
                 ticks_per_bar = compute_ticks_per_bar(
                     TimeSignature(event.time, *current_time_sig), time_division
                 )
+                ticks_per_beat = compute_ticks_per_beat(
+                    current_time_sig[1], time_division
+                )
+                ticks_per_pos = ticks_per_beat // self.config.max_num_pos_per_beat
             elif event.type_ == "Tempo":
                 current_tempo = event.value
             elif event.type_ == "Program":
@@ -231,6 +241,7 @@ class Octuple(MIDITokenizer):
                 current_time_sig, midi.ticks_per_quarter
             )
             ticks_per_beat = self._tpb_per_ts[current_time_sig.denominator]
+            ticks_per_pos = ticks_per_beat // self.config.max_num_pos_per_beat
             # Set track / sequence program if needed
             if not self.one_token_stream:
                 is_drum = False
@@ -256,9 +267,6 @@ class Octuple(MIDITokenizer):
                 # Note attributes
                 pitch = int(time_step[0].split("_")[1])
                 vel = int(time_step[1].split("_")[1])
-                duration = self._tpb_tokens_to_ticks[ticks_per_beat][
-                    time_step[2].split("_")[1]
-                ]
                 if self.config.use_programs:
                     current_program = int(time_step[5].split("_")[1])
 
@@ -268,28 +276,8 @@ class Octuple(MIDITokenizer):
                 current_tick = (
                     tick_at_last_ts_change
                     + (event_bar - bar_at_last_ts_change) * ticks_per_bar
-                    + event_pos
+                    + event_pos * ticks_per_pos
                 )
-
-                # Append the created note
-                new_note = Note(current_tick, duration, pitch, vel)
-                if self.one_token_stream:
-                    check_inst(current_program)
-                    tracks[current_program].notes.append(new_note)
-                else:
-                    current_instrument.notes.append(new_note)
-
-                # Tempo, adds a TempoChange if necessary
-                if (
-                    si == 0
-                    and self.config.use_tempos
-                    and time_step[self.vocab_types_idx["Tempo"]].split("_")[1] != "None"
-                ):
-                    tempo = float(
-                        time_step[self.vocab_types_idx["Tempo"]].split("_")[1]
-                    )
-                    if tempo != round(tempo_changes[-1].tempo, 2):
-                        tempo_changes.append(Tempo(current_tick, tempo))
 
                 # Time Signature, adds a TimeSignatureChange if necessary
                 if (
@@ -318,6 +306,34 @@ class Octuple(MIDITokenizer):
                             current_time_sig, midi.ticks_per_quarter
                         )
                         ticks_per_beat = self._tpb_per_ts[current_time_sig.denominator]
+                        ticks_per_pos = (
+                            ticks_per_beat // self.config.max_num_pos_per_beat
+                        )
+
+                # Note duration
+                duration = self._tpb_tokens_to_ticks[ticks_per_beat][
+                    time_step[2].split("_")[1]
+                ]
+
+                # Append the created note
+                new_note = Note(current_tick, duration, pitch, vel)
+                if self.one_token_stream:
+                    check_inst(current_program)
+                    tracks[current_program].notes.append(new_note)
+                else:
+                    current_instrument.notes.append(new_note)
+
+                # Tempo, adds a TempoChange if necessary
+                if (
+                    si == 0
+                    and self.config.use_tempos
+                    and time_step[self.vocab_types_idx["Tempo"]].split("_")[1] != "None"
+                ):
+                    tempo = float(
+                        time_step[self.vocab_types_idx["Tempo"]].split("_")[1]
+                    )
+                    if tempo != round(tempo_changes[-1].tempo, 2):
+                        tempo_changes.append(Tempo(current_tick, tempo))
 
             # Add current_inst to midi and handle notes still active
             if not self.one_token_stream:
