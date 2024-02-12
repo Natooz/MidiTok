@@ -7,7 +7,7 @@ from symusic import Note, Score, Tempo, TimeSignature, Track
 from miditok.classes import Event, TokSequence
 from miditok.constants import MIDI_INSTRUMENTS, TIME_SIGNATURE
 from miditok.midi_tokenizer import MIDITokenizer
-from miditok.utils import compute_ticks_per_bar, get_bars_ticks, compute_ticks_per_beat
+from miditok.utils import compute_ticks_per_bar, compute_ticks_per_beat, get_bars_ticks
 
 
 class Octuple(MIDITokenizer):
@@ -126,8 +126,9 @@ class Octuple(MIDITokenizer):
                 ticks_per_bar = compute_ticks_per_bar(
                     TimeSignature(event.time, *current_time_sig), time_division
                 )
-                ticks_per_beat = compute_ticks_per_beat(current_time_sig[1], time_division)
-                ticks_per_pos = ticks_per_beat // self.config.max_num_pos_per_beat
+                ticks_per_beat = compute_ticks_per_beat(
+                    current_time_sig[1], time_division
+                )
             elif event.type_ == "Tempo":
                 current_tempo = event.value
             elif event.type_ == "Program":
@@ -304,7 +305,9 @@ class Octuple(MIDITokenizer):
                             current_time_sig, midi.ticks_per_quarter
                         )
                         ticks_per_beat = self._tpb_per_ts[current_time_sig.denominator]
-                        ticks_per_pos = ticks_per_beat // self.config.max_num_pos_per_beat
+                        ticks_per_pos = (
+                            ticks_per_beat // self.config.max_num_pos_per_beat
+                        )
 
                 # Note duration
                 duration = self._tpb_tokens_to_ticks[ticks_per_beat][

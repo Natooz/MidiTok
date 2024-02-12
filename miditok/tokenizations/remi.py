@@ -437,8 +437,8 @@ class REMI(MIDITokenizer):
                             current_time_sig, midi.ticks_per_quarter
                         )
                         ticks_per_beat = self._tpb_per_ts[den]
-                        ticks_per_pos = ticks_per_beat // max(
-                            self.config.beat_res.values()
+                        ticks_per_pos = (
+                            ticks_per_beat // self.config.max_num_pos_per_beat
                         )
                 elif tok_type == "Pedal":
                     pedal_prog = (
