@@ -129,6 +129,7 @@ class Octuple(MIDITokenizer):
                 ticks_per_beat = compute_ticks_per_beat(
                     current_time_sig[1], time_division
                 )
+                ticks_per_pos = ticks_per_beat // self.config.max_num_pos_per_beat
             elif event.type_ == "Tempo":
                 current_tempo = event.value
             elif event.type_ == "Program":
