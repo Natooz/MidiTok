@@ -758,17 +758,24 @@ def split_midi(midi: Score, max_num_beats: int, min_num_beats: int = 1) -> list[
     current_beat = 0
     previous_tempo, previous_time_sig = None, None
     previous_key_sig = KeySignature(0, 0, 0)
-    while current_beat < len(beats_ticks) - 1:
+    while current_beat < len(beats_ticks):
         # Determine the number of beats for this section
-        num_beats = min(len(beats_ticks) - 1 - current_beat, max_num_beats)
+        num_beats = min(len(beats_ticks) - current_beat, max_num_beats)
         if num_beats < min_num_beats:
             break
 
         # Extract the section
         current_tick = beats_ticks[current_beat]
-        tick_end = beats_ticks[current_beat + num_beats]
-        midi_split = copy(midi).adjust_time(
-            (current_tick, tick_end), (0, tick_end - current_tick)
+        if (
+            num_beats != max_num_beats
+            or current_beat == len(beats_ticks) - max_num_beats
+        ):
+            # Will be the last iteration
+            tick_end = midi.end() + 1
+        else:
+            tick_end = beats_ticks[current_beat + num_beats]
+        midi_split = midi.clip(current_tick, tick_end, clip_end=False).shift_time(
+            -current_tick
         )
         if len(midi_split.tempos) == 0:
             midi_split.tempos.append(previous_tempo)
@@ -786,3 +793,52 @@ def split_midi(midi: Score, max_num_beats: int, min_num_beats: int = 1) -> list[
         previous_tempo.time = previous_time_sig.time = previous_key_sig.time = 0
 
     return midis_split
+
+
+def concat_midis(midis: Sequence[Score], end_ticks: Sequence[int]) -> Score:
+    """
+    Concatenate a sequence of MIDIs.
+
+    **Note:** the tracks are concatenated in the same order as they are given.
+    **The MIDIs must all have the same time division.** (``midi.ticks_per_quarter``)
+
+    :param midis: MIDIs to concatenate.
+    :param end_ticks: the ticks indicating the end of each MIDI. The end for the last
+        MIDI is not required.
+    :return: the concatenated MIDI.
+    """
+    if not all(midi.ticks_per_quarter == midis[0].ticks_per_quarter for midi in midis):
+        err_msg = "The MIDIs given do not have all the same time division."
+        raise ValueError(err_msg)
+    if not len(end_ticks) >= len(midis) - 1:
+        err = f"Missing end values: got {len(end_ticks)}, expected {len(midis) - 1}."
+        raise ValueError(err)
+
+    # Create the concatenated MIDI with empty tracks
+    midi_concat = Score(midis[0].ticks_per_quarter)
+    midi_concat.tracks = midis[0].tracks
+
+    for mi in range(len(midis)):
+        # Shift the MIDI
+        midi = midis[mi]
+        if mi > 0:
+            midi = midi.shift_time(end_ticks[mi - 1])
+
+        # Concatenate global messages
+        midi_concat.tempos.extend(midi.tempos)
+        midi_concat.time_signatures.extend(midi.time_signatures)
+        midi_concat.key_signatures.extend(midi.key_signatures)
+        midi_concat.lyrics.extend(midi.lyrics)
+        midi_concat.markers.extend(midi.markers)
+
+        # Concatenate track messages (except for the first MIDI)
+        if mi == 0:
+            continue
+        for ti, track in enumerate(midi.tracks):
+            midi_concat.tracks[ti].notes.extend(track.notes)
+            midi_concat.tracks[ti].controls.extend(track.controls)
+            midi_concat.tracks[ti].pitch_bends.extend(track.pitch_bends)
+            midi_concat.tracks[ti].pedals.extend(track.pedals)
+
+    # TODO deduplicate identical successive tempos, time sig, key_sig?
+    return midi_concat

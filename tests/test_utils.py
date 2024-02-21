@@ -295,16 +295,27 @@ def test_get_bars(midi_path: Path, save_bars_markers: bool = False):
 
 
 @pytest.mark.parametrize("midi_path", MIDI_PATHS_MULTITRACK)
-def test_split_midi(midi_path: Path, max_num_beats: int = 16):
+def test_split_concat_midi(midi_path: Path, max_num_beats: int = 16):
     midi = Score(midi_path)
     midi_splits = miditok.utils.split_midi(midi, max_num_beats)
-    num_beats = len(miditok.utils.get_beats_ticks(midi))
+    ticks_beat = miditok.utils.get_beats_ticks(midi)
 
     # Check there is the good number of split MIDIs
-    assert len(midi_splits) == ceil(num_beats / max_num_beats)
+    assert len(midi_splits) == ceil(len(ticks_beat) / max_num_beats)
 
-    """from tests.utils_tests import HERE
+    # Saves each chunk separately (for debug purposes)
+    from tests.utils_tests import HERE
+
     for i, midi_split in enumerate(midi_splits):
-        midi_split.dump_midi(HERE / "midi_splits" / f"{i}.mid")"""
+        midi_split.dump_midi(HERE / "midi_splits" / f"{i}.mid")
 
-    # TODO concat split MIDIs and assert its equal to original MIDI
+    # Concatenate split MIDIs and assert its equal to original one
+    end_ticks = [
+        ticks_beat[i] for i in range(max_num_beats, len(ticks_beat), max_num_beats)
+    ]
+    midi_concat = miditok.utils.concat_midis(midi_splits, end_ticks)
+
+    # Assert the concatenated MIDI is identical to the original one
+    assert midi.tracks == midi_concat.tracks
+    assert midi.lyrics == midi_concat.lyrics
+    assert midi.markers == midi_concat.markers

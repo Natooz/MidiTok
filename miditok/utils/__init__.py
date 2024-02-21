@@ -3,6 +3,7 @@
 from .utils import (
     compute_ticks_per_bar,
     compute_ticks_per_beat,
+    concat_midis,
     convert_ids_tensors_to_list,
     detect_chords,
     fix_offsets_overlapping_notes,
@@ -21,6 +22,7 @@ from .utils import (
 __all__ = [
     "compute_ticks_per_bar",
     "compute_ticks_per_beat",
+    "concat_midis",
     "convert_ids_tensors_to_list",
     "detect_chords",
     "fix_offsets_overlapping_notes",
