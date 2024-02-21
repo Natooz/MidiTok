@@ -118,6 +118,7 @@ MMM_DENSITY_BINS_MAX = (10, 20)
 # Defaults values when writing new MIDI files
 TEMPO = 120
 TIME_SIGNATURE = (4, 4)
+KEY_SIGNATURE_KEY = KEY_SIGNATURE_TONALITY = 0  # C major
 DELETE_EQUAL_SUCCESSIVE_TIME_SIG_CHANGES = False
 
 # Used with chords

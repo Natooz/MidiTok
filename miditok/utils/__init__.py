@@ -7,6 +7,7 @@ from .utils import (
     detect_chords,
     fix_offsets_overlapping_notes,
     get_bars_ticks,
+    get_beats_ticks,
     get_midi_programs,
     get_midi_ticks_per_beat,
     merge_same_program_tracks,
@@ -14,6 +15,7 @@ from .utils import (
     merge_tracks_per_class,
     num_bar_pos,
     remove_duplicated_notes,
+    split_midi,
 )
 
 __all__ = [
@@ -23,6 +25,7 @@ __all__ = [
     "detect_chords",
     "fix_offsets_overlapping_notes",
     "get_bars_ticks",
+    "get_beats_ticks",
     "get_midi_programs",
     "get_midi_ticks_per_beat",
     "merge_same_program_tracks",
@@ -30,4 +33,5 @@ __all__ = [
     "merge_tracks_per_class",
     "num_bar_pos",
     "remove_duplicated_notes",
+    "split_midi",
 ]

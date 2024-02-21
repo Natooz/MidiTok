@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 from symusic import (
     ControlChange,
+    KeySignature,
     Note,
     Pedal,
     PitchBend,
@@ -656,6 +657,47 @@ def get_bars_ticks(midi: Score) -> list[int]:
     return bars_ticks
 
 
+def get_beats_ticks(midi: Score) -> list[int]:
+    """
+    Return the ticks of the beats of a MIDI.
+
+    **Note:** When encountering multiple time signature messages at a same tick, we
+    this method will automatically consider the last one (coming in the list). Other
+    software can proceed differently. Logic Pro, for example, uses the first one.
+    I haven't found documentation or recommendations for this specific situation. It
+    might be better to use the first one and discard the others.
+
+    :param midi: MIDI to analyze.
+    :return: list of ticks for each beat.
+    """
+    max_tick = midi.end()
+    beat_ticks = []
+    time_sigs = copy(midi.time_signatures)
+    # Mock the last one to cover the last section in the loop below
+    if time_sigs[-1].time != max_tick:
+        time_sigs.append(TimeSignature(max_tick, *TIME_SIGNATURE))
+
+    # Section from tick 0 to first time sig is 4/4 if first time sig time is not 0
+    if time_sigs[0].time == 0:
+        current_time_sig = time_sigs[0]
+    else:
+        current_time_sig = TimeSignature(0, *TIME_SIGNATURE)
+
+    # Compute beats, one time signature portion at a time
+    for time_signature in time_sigs:
+        ticks_per_beat = compute_ticks_per_beat(
+            current_time_sig.denominator, midi.ticks_per_quarter
+        )
+        ticks_diff = time_signature.time - current_time_sig.time
+        num_beats = ceil(ticks_diff / ticks_per_beat)
+        beat_ticks += [
+            current_time_sig.time + ticks_per_beat * i for i in range(num_beats)
+        ]
+        current_time_sig = time_signature
+
+    return beat_ticks
+
+
 def get_midi_ticks_per_beat(midi: Score) -> np.ndarray:
     """
     Compute the portions of numbers of ticks in a beat in a MIDI.
@@ -694,3 +736,53 @@ def get_midi_ticks_per_beat(midi: Score) -> np.ndarray:
             del ticks_per_beat[i]
 
     return np.array(ticks_per_beat)
+
+
+def split_midi(midi: Score, max_num_beats: int, min_num_beats: int = 1) -> list[Score]:
+    """
+    Split a MIDI into several smaller MIDIs.
+
+    The segmented MIDIs will all start at tick 0.
+
+    :param midi: MIDI object to split.
+    :param max_num_beats: maximum number of beats per segment.
+    :param min_num_beats: minimum number of beats per segment. This only applied to the
+        last segment of the input MIDI. (default: ``1``)
+    :return: a list of segmented MIDI objects.
+    """
+    if min_num_beats < 1:
+        raise ValueError(_ := f"`min_num_beats` must be > 0 (got {min_num_beats}).")
+
+    midis_split = []
+    beats_ticks = get_beats_ticks(midi)
+    current_beat = 0
+    previous_tempo, previous_time_sig = None, None
+    previous_key_sig = KeySignature(0, 0, 0)
+    while current_beat < len(beats_ticks) - 1:
+        # Determine the number of beats for this section
+        num_beats = min(len(beats_ticks) - 1 - current_beat, max_num_beats)
+        if num_beats < min_num_beats:
+            break
+
+        # Extract the section
+        current_tick = beats_ticks[current_beat]
+        tick_end = beats_ticks[current_beat + num_beats]
+        midi_split = copy(midi).adjust_time(
+            (current_tick, tick_end), (0, tick_end - current_tick)
+        )
+        if len(midi_split.tempos) == 0:
+            midi_split.tempos.append(previous_tempo)
+        if len(midi_split.time_signatures) == 0:
+            midi_split.time_signatures.append(previous_time_sig)
+        if len(midi_split.key_signatures) == 0:
+            midi_split.key_signatures.append(previous_key_sig)
+        midis_split.append(midi_split)
+
+        # Update the variables for the next iteration
+        current_beat += num_beats
+        previous_tempo = midi_split.tempos[-1]
+        previous_time_sig = midi_split.time_signatures[-1]
+        previous_key_sig = midi_split.key_signatures[-1]
+        previous_tempo.time = previous_time_sig.time = previous_key_sig.time = 0
+
+    return midis_split

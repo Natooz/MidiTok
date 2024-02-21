@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import copy
+from math import ceil
 from typing import TYPE_CHECKING
 
 import pytest
@@ -291,3 +292,19 @@ def test_get_bars(midi_path: Path, save_bars_markers: bool = False):
         for bar_num, bar_tick in enumerate(bars_ticks):
             midi.markers.append(TextMeta(bar_tick, f"Bar {bar_num + 1}"))
         midi.dump_midi(TEST_LOG_DIR / f"{midi_path.stem}_bars.mid")
+
+
+@pytest.mark.parametrize("midi_path", MIDI_PATHS_MULTITRACK)
+def test_split_midi(midi_path: Path, max_num_beats: int = 16):
+    midi = Score(midi_path)
+    midi_splits = miditok.utils.split_midi(midi, max_num_beats)
+    num_beats = len(miditok.utils.get_beats_ticks(midi))
+
+    # Check there is the good number of split MIDIs
+    assert len(midi_splits) == ceil(num_beats / max_num_beats)
+
+    """from tests.utils_tests import HERE
+    for i, midi_split in enumerate(midi_splits):
+        midi_split.dump_midi(HERE / "midi_splits" / f"{i}.mid")"""
+
+    # TODO concat split MIDIs and assert its equal to original MIDI
