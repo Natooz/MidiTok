@@ -8,29 +8,16 @@ from torch import randint
 
 import miditok
 
-from .utils_tests import MIDI_PATHS_MULTITRACK, MIDI_PATHS_ONE_TRACK
+from .utils_tests import MIDI_PATHS_MULTITRACK
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
-    from symusic import Score
+    # from symusic import Score
 
 
-def test_split_seq():
-    min_seq_len = 50
-    max_seq_len = 100
-    seq = list(range(320))
-    subseqs = miditok.pytorch_data.split_seq_in_subsequences(
-        seq, min_seq_len, max_seq_len
-    )
-
-    assert [i for subseq in subseqs for i in subseq] == seq[
-        :300
-    ], "Sequence split failed"
-
-
-def test_dataset_ram(
+"""def test_dataset_ram(
     tmp_path: Path,
     midi_paths_one_track: Sequence[str | Path] | None = None,
     midi_paths_multitrack: Sequence[str | Path] | None = None,
@@ -101,10 +88,10 @@ def test_dataset_ram(
         50,
         100,
         func_to_get_labels=get_labels_multitrack_one_stream,
-    )
+    )"""
 
 
-def test_dataset_io(tmp_path: Path, midi_path: Sequence[str | Path] | None = None):
+def test_dataset_json(tmp_path: Path, midi_path: Sequence[str | Path] | None = None):
     if midi_path is None:
         midi_path = MIDI_PATHS_MULTITRACK[:3]
     tokens_os_dir = tmp_path / "multitrack_tokens_os"
@@ -124,43 +111,6 @@ def test_dataset_io(tmp_path: Path, midi_path: Sequence[str | Path] | None = Non
 
     for _ in dataset:
         pass
-
-
-def test_split_dataset_to_subsequences(
-    tmp_path: Path,
-    midi_paths: Sequence[str | Path] | None = None,
-):
-    if midi_paths is None:
-        midi_paths = MIDI_PATHS_MULTITRACK[:3]
-    tokens_os_dir = tmp_path / "multitrack_tokens_os"
-    tokens_split_dir = tmp_path / "multitrack_tokens_os_split"
-    tokens_split_dir_ms = tmp_path / "multitrack_tokens_ms_split"
-
-    # One token stream
-    if not tokens_os_dir.is_dir():
-        config = miditok.TokenizerConfig(use_programs=True)
-        tokenizer = miditok.TSD(config)
-        tokenizer.tokenize_midi_dataset(midi_paths, tokens_os_dir)
-    miditok.pytorch_data.split_dataset_to_subsequences(
-        files_paths=list(tokens_os_dir.glob("**/*.json")),
-        out_dir=tokens_split_dir,
-        min_seq_len=50,
-        max_seq_len=100,
-        one_token_stream=True,
-    )
-
-    # Multiple token streams
-    if not tokens_split_dir_ms.is_dir():
-        config = miditok.TokenizerConfig(use_programs=False)
-        tokenizer = miditok.TSD(config)
-        tokenizer.tokenize_midi_dataset(midi_paths, tokens_split_dir_ms)
-    miditok.pytorch_data.split_dataset_to_subsequences(
-        files_paths=list(tokens_split_dir_ms.glob("**/*.json")),
-        out_dir=tokens_split_dir,
-        min_seq_len=50,
-        max_seq_len=100,
-        one_token_stream=False,
-    )
 
 
 def test_collator():

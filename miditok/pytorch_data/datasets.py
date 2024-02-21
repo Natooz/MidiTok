@@ -3,16 +3,16 @@ from __future__ import annotations
 
 import json
 from abc import ABC
-from copy import deepcopy
 from pathlib import Path
+from tempfile import mkdtemp
 from typing import TYPE_CHECKING, Any
 
 from symusic import Score
-from torch import LongTensor, randint
+from torch import LongTensor
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
-from miditok.constants import MIDI_FILES_EXTENSIONS
+from miditok.utils import split_midi
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -20,130 +20,23 @@ if TYPE_CHECKING:
     from miditok import MIDITokenizer
 
 
-def split_seq_in_subsequences(
-    seq: Sequence[any], min_seq_len: int, max_seq_len: int
-) -> list[Sequence[Any]]:
-    r"""
-    Split a sequence of tokens into subsequences.
-
-    The subsequences will have lengths comprised between ``min_seq_len`` and
-    ``max_seq_len``: ``min_seq_len <= len(sub_seq) <= max_seq_len``.
-
-    :param seq: sequence to split.
-    :param min_seq_len: minimum sequence length.
-    :param max_seq_len: maximum sequence length.
-    :return: list of subsequences.
-    """
-    sub_seq = []
-    i = 0
-    while i < len(seq):
-        if i >= len(seq) - min_seq_len:
-            break  # last sample is too short
-        sub_seq.append(LongTensor(seq[i : i + max_seq_len]))
-        i += len(sub_seq[-1])  # could be replaced with max_seq_len
-
-    return sub_seq
-
-
-def split_dataset_to_subsequences(
-    files_paths: Sequence[Path | str],
-    out_dir: Path | str,
-    min_seq_len: int,
-    max_seq_len: int,
-    one_token_stream: bool = True,
-) -> None:
-    """
-    Split a dataset of tokens files into subsequences.
-
-    This method is particularly useful if you plan to use a
-    :class:`miditok.pytorch_data.DatasetJsonIO`, as it would split token sequences
-    into subsequences with the desired lengths before loading them for training.
-
-    :param files_paths: list of files of tokens to split.
-    :param out_dir: output directory to save the subsequences.
-    :param min_seq_len: minimum sequence length.
-    :param max_seq_len: maximum sequence length.
-    :param one_token_stream: give False if the token files contains multiple tracks,
-        i.e. the first dimension of the value of the "ids" entry corresponds to several
-        tracks. Otherwise, leave False. (default: True)
-    """
-    out_dir = Path(out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    for file_path in files_paths:
-        with Path(file_path).open() as json_file:
-            tokens = json.load(json_file)
-
-        # Split sequence(s)
-        if one_token_stream:
-            subseqs = split_seq_in_subsequences(tokens["ids"], min_seq_len, max_seq_len)
-        else:
-            subseqs = []
-            for track_seq in tokens["ids"]:
-                subseqs += split_seq_in_subsequences(
-                    track_seq, min_seq_len, max_seq_len
-                )
-
-        # Save subsequences
-        for i, subseq in enumerate(subseqs):
-            path = out_dir / f"{file_path.name}_{i}.json"
-            with path.open("w") as outfile:
-                new_tok = deepcopy(tokens)
-                new_tok["ids"] = subseq
-                json.dump(tokens, outfile)
-
-
 class _DatasetABC(Dataset, ABC):
     r"""
     Abstract ``Dataset`` class.
 
     It holds samples (and optionally labels) and implements the basic magic methods.
-
-    :param samples: sequence of input samples. It can directly be data, or a paths to
-        files to be loaded.
-    :param labels: sequence of labels associated with the samples. (default: ``None``)
-    :param sample_key_name: name of the dictionary key containing the sample data when
-        iterating the dataset. (default: ``"input_ids"``)
-    :param labels_key_name: name of the dictionary key containing the labels data when
-        iterating the dataset. (default: ``"labels"``)
     """
 
     def __init__(
         self,
-        samples: Sequence[Any] | None = None,
-        labels: Sequence[Any] | None = None,
-        sample_key_name: str = "input_ids",
-        labels_key_name: str = "labels",
     ) -> None:
-        if samples is not None and labels is not None and len(samples) != len(labels):
-            msg = "The number of samples must be the same as the number of labels"
-            raise ValueError(msg)
-        self.samples = samples if samples is not None else []
-        self.labels = labels
-        self.sample_key_name = sample_key_name
-        self.labels_key_name = labels_key_name
         self.__iter_count = 0
 
-    def reduce_num_samples(self, num_samples: int) -> None:
-        r"""
-        Reduce the size of the dataset, by keeping `num_samples` samples.
-
-        :param num_samples: number of samples to keep. They will be randomly picked.
-        """
-        idx = randint(0, len(self), (num_samples,))
-        self.samples = [self.samples[id_] for id_ in idx.tolist()]
-        if self.labels is not None:
-            self.labels = [self.labels[id_] for id_ in idx.tolist()]
-
     def __len__(self) -> int:
-        return len(self.samples)
+        raise NotImplementedError
 
     def __getitem__(self, idx: int) -> Mapping[str, Any]:
-        item = {self.sample_key_name: self.samples[idx]}
-        if self.labels is not None:
-            item[self.labels_key_name] = self.labels[idx]
-
-        return item
+        raise NotImplementedError
 
     def __iter__(self) -> _DatasetABC:
         return self
@@ -155,12 +48,6 @@ class _DatasetABC(Dataset, ABC):
 
         self.__iter_count += 1
         return self[self.__iter_count - 1]
-
-    def __repr__(self) -> str:
-        return self.__str__()
-
-    def __str__(self) -> str:
-        return "No data loaded" if len(self) == 0 else f"{len(self.samples)} samples"
 
 
 class DatasetTok(_DatasetABC):
@@ -189,14 +76,15 @@ class DatasetTok(_DatasetABC):
     Additionally, you can use the `func_to_get_labels` argument to provide a method
     allowing to use labels (one label per file).
 
-    :param files_paths: list of paths to files to load.
+    :param files_paths: paths to MIDI files to load.
+    :param tokenizer: tokenizer.
     :param min_seq_len: minimum sequence length (in num of tokens)
     :param max_seq_len: maximum sequence length (in num of tokens)
-    :param tokenizer: tokenizer object, to use to load MIDIs instead of tokens.
-        (default: ``None``)
-    :param one_token_stream: give False if the token files contains multiple tracks,
-        i.e. the first dimension of the value of the "ids" entry corresponds to
-        several tracks. Otherwise, leave False. (default: ``True``)
+    :param midi_split_max_num_beat:
+    :param midi_split_min_num_beat:
+    :param pre_tokenize:
+    :param save_dir:
+    :param save_dir_tmp:
     :param func_to_get_labels: a function to retrieve the label of a file. The method
         must take two positional arguments: the first is either a MidiFile or the
         tokens loaded from the json file, the second is the path to the file just
@@ -212,61 +100,122 @@ class DatasetTok(_DatasetABC):
     def __init__(
         self,
         files_paths: Sequence[Path],
+        tokenizer: MIDITokenizer,
         min_seq_len: int,
         max_seq_len: int,
-        tokenizer: MIDITokenizer = None,
-        one_token_stream: bool = True,
+        midi_split_max_num_beat: int | None = None,
+        midi_split_min_num_beat: int = 1,
+        pre_tokenize: bool = False,
+        save_dir: Path | None = None,
+        save_dir_tmp: bool = False,
         func_to_get_labels: Callable[[Score | Sequence, Path], int] | None = None,
         sample_key_name: str = "input_ids",
         labels_key_name: str = "labels",
     ) -> None:
-        labels = None if func_to_get_labels is None else []
-        samples = []
-        if tokenizer is not None:
-            one_token_stream = tokenizer.one_token_stream
+        super().__init__()
+        # If MIDI splitting, check the save_dir doesn't already contain them
+        if midi_split_max_num_beat and save_dir.is_dir():
+            # TODO find a way to identify if save_dir contains split MIDIs
+            files_paths = list(save_dir.glob("**/*.mid"))
+            # Disable split, no need anymore
+            midi_split_max_num_beat = None
 
-        for file_path in tqdm(
-            files_paths,
-            desc=f"Loading data: {files_paths[0].parent}",
-            miniters=int(len(files_paths) / 20),
-            maxinterval=480,
-        ):
-            label = None
-            # Loading a MIDI file
-            if file_path.suffix in MIDI_FILES_EXTENSIONS:
-                midi = Score(file_path)
-                if func_to_get_labels is not None:
-                    label = func_to_get_labels(midi, file_path)
-                tokens_ids = tokenizer(midi)
-                if one_token_stream:
-                    tokens_ids = tokens_ids.ids
+        # Set class attributes
+        self.files_paths = files_paths
+        self.tokenizer = tokenizer
+        self.min_seq_len = min_seq_len
+        self.max_seq_len = max_seq_len
+        self.pre_tokenize = pre_tokenize
+        self.func_to_get_labels = func_to_get_labels
+        self.sample_key_name = sample_key_name
+        self.labels_key_name = labels_key_name
+        if save_dir_tmp:
+            save_dir = Path(mkdtemp(prefix="miditok-dataset"))
+        self.samples, self.labels = ([], []) if func_to_get_labels else (None, None)
+
+        # TODO method to help to determine midi_split_max_num_beat
+
+        # Load the MIDIs here to split and/or pre-tokenize them
+        if midi_split_max_num_beat or pre_tokenize:
+            for file_path in tqdm(
+                files_paths,
+                desc=f"Preprocessing files: {files_paths[0].parent}",
+                miniters=int(len(files_paths) / 20),
+                maxinterval=480,
+            ):
+                midis = Score(file_path)
+
+                if midi_split_max_num_beat:
+                    midis_split = split_midi(
+                        midis, midi_split_max_num_beat, midi_split_min_num_beat
+                    )
+                    # Save them if needed
+                    if save_dir:
+                        for _i, midi in enumerate(midis_split):
+                            midi.dump(save_dir / "")  # TODO good file tree
                 else:
-                    tokens_ids = [seq.ids for seq in tokens_ids]
-            # Loading json tokens
-            else:
-                with file_path.open() as json_file:
-                    tokens = json.load(json_file)
-                if func_to_get_labels is not None:
-                    label = func_to_get_labels(tokens, file_path)
-                tokens_ids = tokens["ids"]
+                    midis = [midis]
 
-            # Cut tokens in samples of appropriate length
-            if one_token_stream:
-                tokens_ids = [tokens_ids]
-            for seq in tokens_ids:
-                subseqs = split_seq_in_subsequences(seq, min_seq_len, max_seq_len)
-                samples += subseqs
-                if label is not None:
-                    labels += [label] * len(subseqs)
+                # Pre-tokenize the MIDI(s) and store the tokens in memory
+                if pre_tokenize:
+                    for midi in midis:
+                        token_ids = tokenizer.midi_to_tokens(midi).ids
+                        # TODO document that this is only possible when pre-tokenizing
+                        if tokenizer.one_token_stream:
+                            token_ids = [token_ids]
+                        for seq in token_ids:
+                            self.samples.append(LongTensor(seq))
+                            if func_to_get_labels:
+                                self.labels.append(func_to_get_labels(seq, file_path))
 
+        if self.labels:
+            self.labels = LongTensor(self.labels)
+
+    def __getitem__(self, idx: int) -> Mapping[str, Any]:
+        """
+        Return the `idx` elements of the dataset.
+
+        If the dataset is pre-tokenized, the method will return the token ids.
+        Otherwise, it will tokenize the `idx`th MIDI file on the fly.
+
+        :param idx: idx of the file/sample.
+        :return: the token ids, with optionally the associated label.
+        """
+        labels = None
+        if self.pre_tokenize:
+            token_ids = self.samples[idx]
+            if self.func_to_get_labels is not None:
+                labels = self.labels[idx]
+        else:
+            midi = Score(self.files_paths[idx])
+            token_ids = self.tokenizer.midi_to_tokens(midi)
+            # If one_token_stream, we only take the first track/sequence
+            if self.tokenizer.one_token_stream:
+                token_ids = token_ids[0]
+            if self.func_to_get_labels is not None:
+                labels = self.func_to_get_labels(midi, self.files_paths[idx])
+
+        item = {self.sample_key_name: token_ids}
         if labels is not None:
-            labels = LongTensor(labels)
-        super().__init__(
-            samples,
-            labels,
-            sample_key_name=sample_key_name,
-            labels_key_name=labels_key_name,
-        )
+            item[self.labels_key_name] = labels
+
+        return item
+
+    def __len__(self) -> int:
+        """
+        Return the size of the dataset.
+
+        :return: number of elements in the dataset.
+        """
+        return len(self.samples) if self.pre_tokenize else len(self.files_paths)
+
+    def __repr__(self) -> str:  # noqa:D105
+        return self.__str__()
+
+    def __str__(self) -> str:  # noqa:D105
+        if self.pre_tokenize:
+            return f"Pre-tokenized dataset with {len(self.samples)} samples"
+        return f"{len(self.files_paths)} MIDI files."
 
 
 class DatasetJsonIO(_DatasetABC):
@@ -299,7 +248,8 @@ class DatasetJsonIO(_DatasetABC):
         max_seq_len: int | None = None,
     ) -> None:
         self.max_seq_len = max_seq_len
-        super().__init__(files_paths)
+        self.files_paths = files_paths
+        super().__init__()
 
     def __getitem__(self, idx: int) -> Mapping[str, LongTensor]:
         """
@@ -308,9 +258,17 @@ class DatasetJsonIO(_DatasetABC):
         :param idx: index of the file to load.
         :return: the tokens as a dictionary mapping to the token ids as a tensor.
         """
-        with self.samples[idx].open() as json_file:
+        with self.files_paths[idx].open() as json_file:
             token_ids = json.load(json_file)["ids"]
         if self.max_seq_len is not None and len(token_ids) > self.max_seq_len:
             token_ids = token_ids[: self.max_seq_len]
 
         return {"input_ids": LongTensor(token_ids)}
+
+    def __len__(self) -> int:
+        """
+        Return the size of the dataset.
+
+        :return: number of elements in the dataset.
+        """
+        return len(self.files_paths)
