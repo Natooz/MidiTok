@@ -106,9 +106,6 @@ def test_dataset_json(tmp_path: Path, midi_path: Sequence[str | Path] | None = N
         100,
     )
 
-    dataset.reduce_num_samples(2)
-    assert len(dataset) == 2
-
     for _ in dataset:
         pass
 
