@@ -801,6 +801,8 @@ def concat_midis(midis: Sequence[Score], end_ticks: Sequence[int]) -> Score:
 
     **Note:** the tracks are concatenated in the same order as they are given.
     **The MIDIs must all have the same time division.** (``midi.ticks_per_quarter``)
+    The concatenated MIDI might have identical consecutive tempos, time signatures or
+    key signatures values.
 
     :param midis: MIDIs to concatenate.
     :param end_ticks: the ticks indicating the end of each MIDI. The end for the last
@@ -840,5 +842,4 @@ def concat_midis(midis: Sequence[Score], end_ticks: Sequence[int]) -> Score:
             midi_concat.tracks[ti].pitch_bends.extend(track.pitch_bends)
             midi_concat.tracks[ti].pedals.extend(track.pedals)
 
-    # TODO deduplicate identical successive tempos, time sig, key_sig?
     return midi_concat

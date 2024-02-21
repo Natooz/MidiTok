@@ -303,11 +303,10 @@ def test_split_concat_midi(midi_path: Path, max_num_beats: int = 16):
     # Check there is the good number of split MIDIs
     assert len(midi_splits) == ceil(len(ticks_beat) / max_num_beats)
 
-    # Saves each chunk separately (for debug purposes)
+    """# Saves each chunk separately (for debug purposes)
     from tests.utils_tests import HERE
-
     for i, midi_split in enumerate(midi_splits):
-        midi_split.dump_midi(HERE / "midi_splits" / f"{i}.mid")
+        midi_split.dump_midi(HERE / "midi_splits" / f"{i}.mid")"""
 
     # Concatenate split MIDIs and assert its equal to original one
     end_ticks = [
@@ -316,6 +315,8 @@ def test_split_concat_midi(midi_path: Path, max_num_beats: int = 16):
     midi_concat = miditok.utils.concat_midis(midi_splits, end_ticks)
 
     # Assert the concatenated MIDI is identical to the original one
+    # We do not test tempos, time signatures and key signature as they are duplicated
+    # in midi_concat (same consecutive ones for each chunk).
     assert midi.tracks == midi_concat.tracks
     assert midi.lyrics == midi_concat.lyrics
     assert midi.markers == midi_concat.markers
