@@ -11,10 +11,14 @@ from .collators import DataCollator
 from .datasets import (
     DatasetJsonIO,
     DatasetTok,
+    get_num_beats_for_token_seq_len,
+    get_num_tokens_per_beat_distribution,
 )
 
 __all__ = [
     "DatasetTok",
     "DatasetJsonIO",
     "DataCollator",
+    "get_num_tokens_per_beat_distribution",
+    "get_num_beats_for_token_seq_len",
 ]
