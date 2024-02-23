@@ -385,7 +385,11 @@ class REMI(MIDITokenizer):
                         pitch = previous_pitch_onset[current_program] + int(tok_val)
                     else:  # PitchIntervalChord
                         pitch = previous_pitch_chord[current_program] + int(tok_val)
-                    if not self.config.pitch_range[0] <= pitch <= self.config.pitch_range[1]:
+                    if (
+                        not self.config.pitch_range[0]
+                        <= pitch
+                        <= self.config.pitch_range[1]
+                    ):
                         continue
 
                     # We update previous_pitch_onset and previous_pitch_chord even if

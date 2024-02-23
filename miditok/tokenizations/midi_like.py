@@ -295,7 +295,11 @@ class MIDILike(MIDITokenizer):
                         pitch = previous_pitch_chord[current_program] + int(tok_val)
                     else:
                         pitch = int(tok_val)
-                    if not self.config.pitch_range[0] <= pitch <= self.config.pitch_range[1]:
+                    if (
+                        not self.config.pitch_range[0]
+                        <= pitch
+                        <= self.config.pitch_range[1]
+                    ):
                         continue
 
                     # if NoteOn adds it to the queue with FIFO
