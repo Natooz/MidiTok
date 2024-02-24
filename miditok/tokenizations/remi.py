@@ -381,17 +381,23 @@ class REMI(MIDITokenizer):
                 }:
                     if tok_type in {"Pitch", "PitchDrum"}:
                         pitch = int(tok_val)
-                        previous_pitch_onset[current_program] = pitch
-                        previous_pitch_chord[current_program] = pitch
-                    # We update previous_pitch_onset and previous_pitch_chord even if
-                    # the try fails.
                     elif tok_type == "PitchIntervalTime":
                         pitch = previous_pitch_onset[current_program] + int(tok_val)
-                        previous_pitch_onset[current_program] = pitch
-                        previous_pitch_chord[current_program] = pitch
                     else:  # PitchIntervalChord
                         pitch = previous_pitch_chord[current_program] + int(tok_val)
-                        previous_pitch_chord[current_program] = pitch
+                    if (
+                        not self.config.pitch_range[0]
+                        <= pitch
+                        <= self.config.pitch_range[1]
+                    ):
+                        continue
+
+                    # We update previous_pitch_onset and previous_pitch_chord even if
+                    # the try fails.
+                    if tok_type != "PitchIntervalChord":
+                        previous_pitch_onset[current_program] = pitch
+                    previous_pitch_chord[current_program] = pitch
+
                     try:
                         vel_type, vel = seq[ti + 1].split("_")
                         dur_type, dur = seq[ti + 2].split("_")

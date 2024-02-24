@@ -291,16 +291,16 @@ class MIDILike(MIDITokenizer):
                     # the try fails.
                     if tok_type == "PitchIntervalTime":
                         pitch = previous_pitch_onset[current_program] + int(tok_val)
-                        previous_pitch_onset[current_program] = pitch
-                        previous_pitch_chord[current_program] = pitch
                     elif tok_type == "PitchIntervalChord":
                         pitch = previous_pitch_chord[current_program] + int(tok_val)
-                        previous_pitch_chord[current_program] = pitch
                     else:
                         pitch = int(tok_val)
-                        if tok_type in {"NoteOn", "DrumOn"}:
-                            previous_pitch_onset[current_program] = pitch
-                            previous_pitch_chord[current_program] = pitch
+                    if (
+                        not self.config.pitch_range[0]
+                        <= pitch
+                        <= self.config.pitch_range[1]
+                    ):
+                        continue
 
                     # if NoteOn adds it to the queue with FIFO
                     if tok_type not in {"NoteOff", "DrumOff"}:
@@ -309,6 +309,10 @@ class MIDILike(MIDITokenizer):
                             active_notes[current_program][pitch].append(
                                 (current_tick, vel)
                             )
+                        previous_pitch_chord[current_program] = pitch
+                        if tok_type != "PitchIntervalChord":
+                            previous_pitch_onset[current_program] = pitch
+
                     # NoteOff/DrumOff, creates the note
                     elif len(active_notes[current_program][pitch]) > 0:
                         note_onset_tick, vel = active_notes[current_program][pitch].pop(

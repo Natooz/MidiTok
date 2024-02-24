@@ -365,17 +365,23 @@ class MMM(MIDITokenizer):
             }:
                 if tok_type in {"Pitch", "PitchDrum"}:
                     pitch = int(tok_val)
-                    previous_pitch_onset = pitch
-                    previous_pitch_chord = pitch
-                # We update previous_pitch_onset and previous_pitch_chord even if the
-                # try fails.
                 elif tok_type == "PitchIntervalTime":
                     pitch = previous_pitch_onset + int(tok_val)
-                    previous_pitch_onset = pitch
-                    previous_pitch_chord = pitch
                 else:  # PitchIntervalChord
                     pitch = previous_pitch_chord + int(tok_val)
-                    previous_pitch_chord = pitch
+                if (
+                    not self.config.pitch_range[0]
+                    <= pitch
+                    <= self.config.pitch_range[1]
+                ):
+                    continue
+
+                # We update previous_pitch_onset and previous_pitch_chord even if
+                # the try fails.
+                if tok_type != "PitchIntervalChord":
+                    previous_pitch_onset = pitch
+                previous_pitch_chord = pitch
+
                 try:
                     vel_type, vel = tokens[ti + 1].split("_")
                     dur_type, dur = tokens[ti + 2].split("_")
