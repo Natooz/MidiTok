@@ -14,7 +14,7 @@ import miditok
 if TYPE_CHECKING:
     from pathlib import Path
 
-MAX_NUM_TRIES_HF_PUSH = 5
+MAX_NUM_TRIES_HF_PUSH = 3
 NUM_SECONDS_RETRY = 8
 
 AUTO_TOKENIZER_CASES = [
