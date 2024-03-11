@@ -89,7 +89,7 @@ class MIDITokenizer(ABC, HFHubMixin):
     def __init__(
         self,
         tokenizer_config: TokenizerConfig = None,
-        params: str | Path | None = None,
+        params: str | Path | dict | None = None,
     ) -> None:
         # Initialize params
         self.config = deepcopy(tokenizer_config)
@@ -166,7 +166,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         # Duration: tpb --> np.array (ticks) to get the closest;
         # Duration/TimeShift/Rest: ticks + tpb --> token (str);
         # Duration/TimeShift/Rest: token + tpb --> ticks (int);
-        self.durations = self.__create_durations_tuples()
+        self.durations = self._create_durations_tuples()
         self._tpb_to_time_array = self.__create_tpb_to_ticks_array()
         self._tpb_tokens_to_ticks = self.__create_tpb_tokens_to_ticks()
         self._tpb_ticks_to_tokens = self.__create_tpb_ticks_to_tokens()
@@ -1929,7 +1929,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 for token_type in original_token_types:
                     self.tokens_types_graph[token_type].append(special_token_type)
 
-    def __create_durations_tuples(self) -> list[tuple[int, int, int]]:
+    def _create_durations_tuples(self) -> list[tuple[int, int, int]]:
         r"""
         Create the possible durations in beat / position units as tuples of intergers.
 
@@ -2919,17 +2919,20 @@ class MIDITokenizer(ABC, HFHubMixin):
         miditok_module = sys.modules[".".join(__name__.split(".")[:-1])]
         return getattr(miditok_module, tokenization)(params=params_path)
 
-    def _load_params(self, config_file_path: str | Path) -> None:
+    def _load_params(self, config_file: str | Path | dict) -> None:
         r"""
         Load the parameters of the tokenizer from a config file.
 
         This method is not intended to be called outside __init__, when creating a
         tokenizer.
 
-        :param config_file_path: path to the tokenizer config file (encoded as json).
+        :param config_file_path: json path or dictionary of the tokenizer config file.
         """
-        with Path(config_file_path).open() as param_file:
-            params = json.load(param_file)
+        if isinstance(config_file, (str, Path)):
+            with Path(config_file).open() as param_file:
+                params = json.load(param_file)
+        else:
+            params = config_file
 
         # Grab config, or creates one with default parameters (for retro-compatibility
         # with previous version)
