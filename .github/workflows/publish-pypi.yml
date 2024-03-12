@@ -40,7 +40,7 @@ jobs:
       - build
     runs-on: ubuntu-latest
     environment:
-      name: pypi
+      name: PyPI
       url: https://pypi.org/p/MidiTok
     permissions:
       id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
