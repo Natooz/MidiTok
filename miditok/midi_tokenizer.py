@@ -166,7 +166,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         # Duration: tpb --> np.array (ticks) to get the closest;
         # Duration/TimeShift/Rest: ticks + tpb --> token (str);
         # Duration/TimeShift/Rest: token + tpb --> ticks (int);
-        self.durations = self.__create_durations_tuples()
+        self.durations = self._create_durations_tuples()
         self._tpb_to_time_array = self.__create_tpb_to_ticks_array()
         self._tpb_tokens_to_ticks = self.__create_tpb_tokens_to_ticks()
         self._tpb_ticks_to_tokens = self.__create_tpb_ticks_to_tokens()
@@ -1929,7 +1929,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 for token_type in original_token_types:
                     self.tokens_types_graph[token_type].append(special_token_type)
 
-    def __create_durations_tuples(self) -> list[tuple[int, int, int]]:
+    def _create_durations_tuples(self) -> list[tuple[int, int, int]]:
         r"""
         Create the possible durations in beat / position units as tuples of intergers.
 
