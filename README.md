@@ -33,7 +33,7 @@ Below is a complete yet concise example of how you can use MidiTok. And [here](c
 
 ```python
 from miditok import REMI, TokenizerConfig
-from miditok.pytorch_data import DatasetTok, DataCollator
+from miditok.pytorch_data import DatasetMIDI, DataCollator
 from pathlib import Path
 from symusic import Score
 
@@ -54,7 +54,7 @@ tokenizer.save_params(Path("path", "to", "save", "tokenizer.json"))
 tokenizer.push_to_hub("username/model-name", private=True, token="your_hf_token")
 
 # Creates a Dataset and a collator to be used with a PyTorch DataLoader to train a model
-dataset = DatasetTok(
+dataset = DatasetMIDI(  # TODO update usage
     files_paths=midi_paths,
     min_seq_len=100,
     max_seq_len=1024,
@@ -64,6 +64,7 @@ collator = DataCollator(
     tokenizer["PAD_None"], tokenizer["BOS_None"], tokenizer["EOS_None"]
 )
 from torch.utils.data import DataLoader
+
 data_loader = DataLoader(dataset=dataset, collate_fn=collator)
 for batch in data_loader:
     print("Train your model on this batch...")

@@ -59,6 +59,7 @@ class DataCollator:
         self.labels_pad_idx = labels_pad_idx
         self.inputs_kwarg_name = inputs_kwarg_name
         self.labels_kwarg_name = labels_kwarg_name
+        # TODO max seq len?
 
     def __call__(self, batch: list[Mapping[str, Any]]) -> Mapping[str, LongTensor]:
         """

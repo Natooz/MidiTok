@@ -10,15 +10,15 @@ files on the fly when it is iterated during batch creations.
 from .collators import DataCollator
 from .datasets import (
     DatasetJsonIO,
-    DatasetTok,
+    DatasetMIDI,
+    get_distribution_num_tokens_per_bar,
     get_num_beats_for_token_seq_len,
-    get_num_tokens_per_beat_distribution,
 )
 
 __all__ = [
-    "DatasetTok",
+    "DatasetMIDI",
     "DatasetJsonIO",
     "DataCollator",
-    "get_num_tokens_per_beat_distribution",
+    "get_distribution_num_tokens_per_bar",
     "get_num_beats_for_token_seq_len",
 ]
