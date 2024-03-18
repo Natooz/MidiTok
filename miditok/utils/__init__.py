@@ -11,12 +11,14 @@ from .utils import (
     get_beats_ticks,
     get_midi_programs,
     get_midi_ticks_per_beat,
+    get_num_notes_per_bar,
     merge_same_program_tracks,
     merge_tracks,
     merge_tracks_per_class,
     num_bar_pos,
     remove_duplicated_notes,
-    split_midi,
+    split_midi_per_beats,
+    split_midi_per_ticks,
 )
 
 __all__ = [
@@ -34,6 +36,8 @@ __all__ = [
     "merge_tracks",
     "merge_tracks_per_class",
     "num_bar_pos",
+    "get_num_notes_per_bar",
     "remove_duplicated_notes",
-    "split_midi",
+    "split_midi_per_beats",
+    "split_midi_per_ticks",
 ]

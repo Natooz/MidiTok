@@ -698,6 +698,50 @@ def get_beats_ticks(midi: Score) -> list[int]:
     return beat_ticks
 
 
+def get_num_notes_per_bar(
+    midi: Score, tracks_indep: bool = False
+) -> list[int | list[int]]:
+    """
+    Return the number of notes within each bar of a MIDI.
+
+    :param midi: MIDI object to analyze.
+    :param tracks_indep: whether to process each track independently or all together.
+    :return: the number of notes within each bar.
+    """
+    # Get bar and note times
+    bar_ticks = get_bars_ticks(midi)
+    if bar_ticks[-1] != midi.end():
+        bar_ticks.append(midi.end())
+    tracks_times = [track.notes.numpy()["time"] for track in midi.tracks]
+    num_notes_per_bar = []
+    if not tracks_indep:
+        tracks_times = [np.concatenate(tracks_times)]
+        tracks_times[-1].sort()
+    elif len(midi.tracks) > 1:
+        num_notes_per_bar = [[] for _ in range(len(bar_ticks) - 1)]
+
+    for notes_times in tracks_times:
+        current_note_time_idx = previous_note_time_idx = 0
+        current_bar_tick_idx = 0
+        while current_bar_tick_idx < len(bar_ticks) - 1:
+            while (
+                current_note_time_idx < len(notes_times)
+                and notes_times[current_note_time_idx]
+                < bar_ticks[current_bar_tick_idx + 1]
+            ):
+                current_note_time_idx += 1
+            num_notes = current_note_time_idx - previous_note_time_idx
+            if tracks_indep and len(midi.tracks) > 1:
+                num_notes_per_bar[current_bar_tick_idx].append(num_notes)
+            else:
+                num_notes_per_bar.append(num_notes)
+
+            current_bar_tick_idx += 1
+            previous_note_time_idx = current_note_time_idx
+
+    return num_notes_per_bar
+
+
 def get_midi_ticks_per_beat(midi: Score) -> np.ndarray:
     """
     Compute the portions of numbers of ticks in a beat in a MIDI.
@@ -738,42 +782,29 @@ def get_midi_ticks_per_beat(midi: Score) -> np.ndarray:
     return np.array(ticks_per_beat)
 
 
-def split_midi(midi: Score, max_num_beats: int, min_num_beats: int = 1) -> list[Score]:
+def split_midi_per_ticks(midi: Score, ticks: list[int]) -> list[Score]:
     """
     Split a MIDI into several smaller MIDIs.
 
     The segmented MIDIs will all start at tick 0.
+    Example: for a MIDI with an end tick at 1000, and a list of tick
+    ``[2000, 5000, 7000]``, this method will return a list of four MIDIs which
+    correspond respectively to the portions of the original MIDI from tick 0 to 2000,
+    2000 to 5000, 5000 to 7000 and 10000 to 10000.
 
     :param midi: MIDI object to split.
-    :param max_num_beats: maximum number of beats per segment.
-    :param min_num_beats: minimum number of beats per segment. This only applied to the
-        last segment of the input MIDI. (default: ``1``)
+    :param ticks: list of ticks to which the MIDI will be split.
     :return: a list of segmented MIDI objects.
     """
-    if min_num_beats < 1:
-        raise ValueError(_ := f"`min_num_beats` must be > 0 (got {min_num_beats}).")
-
     midis_split = []
-    beats_ticks = get_beats_ticks(midi)
-    current_beat = 0
+    midi_end_tick = midi.end()
+    if ticks[-1] != midi_end_tick:
+        ticks.append(midi_end_tick)
+
+    current_tick = 0
     previous_tempo, previous_time_sig = None, None
     previous_key_sig = KeySignature(0, 0, 0)
-    while current_beat < len(beats_ticks):
-        # Determine the number of beats for this section
-        num_beats = min(len(beats_ticks) - current_beat, max_num_beats)
-        if num_beats < min_num_beats:
-            break
-
-        # Extract the section
-        current_tick = beats_ticks[current_beat]
-        if (
-            num_beats != max_num_beats
-            or current_beat == len(beats_ticks) - max_num_beats
-        ):
-            # Will be the last iteration
-            tick_end = midi.end() + 1
-        else:
-            tick_end = beats_ticks[current_beat + num_beats]
+    for tick_end in ticks:
         midi_split = midi.clip(current_tick, tick_end, clip_end=False).shift_time(
             -current_tick
         )
@@ -786,13 +817,55 @@ def split_midi(midi: Score, max_num_beats: int, min_num_beats: int = 1) -> list[
         midis_split.append(midi_split)
 
         # Update the variables for the next iteration
-        current_beat += num_beats
         previous_tempo = midi_split.tempos[-1]
         previous_time_sig = midi_split.time_signatures[-1]
         previous_key_sig = midi_split.key_signatures[-1]
         previous_tempo.time = previous_time_sig.time = previous_key_sig.time = 0
+        current_tick = tick_end
 
     return midis_split
+
+
+def split_midi_per_beats(
+    midi: Score, max_num_beats: int, min_num_beats: int = 1
+) -> list[Score]:
+    """
+    Split a MIDI into several smaller MIDIs per number of beats.
+
+    This method splits a MIDI into smaller chunks that contains ``max_num_beats``
+    beats. The segmented MIDIs will all start at tick 0.
+
+    :param midi: MIDI object to split.
+    :param max_num_beats: maximum number of beats per segment.
+    :param min_num_beats: minimum number of beats per segment. This only applied to the
+        last segment of the input MIDI. (default: ``1``)
+    :return: a list of segmented MIDI objects.
+    """
+    if min_num_beats < 1:
+        raise ValueError(_ := f"`min_num_beats` must be > 0 (got {min_num_beats}).")
+
+    ticks_split = []
+    beats_ticks = get_beats_ticks(midi)
+    current_beat = 0
+    while current_beat < len(beats_ticks):
+        # Determine the number of beats for this section
+        num_beats = min(len(beats_ticks) - current_beat, max_num_beats)
+        if num_beats < min_num_beats:
+            break
+
+        # Extract the section
+        if (
+            num_beats != max_num_beats
+            or current_beat == len(beats_ticks) - max_num_beats
+        ):
+            # Will be the last iteration
+            tick_end = midi.end() + 1
+        else:
+            tick_end = beats_ticks[current_beat + num_beats]
+        ticks_split.append(tick_end)
+        current_beat += num_beats
+
+    return split_midi_per_ticks(midi, ticks_split)
 
 
 def concat_midis(midis: Sequence[Score], end_ticks: Sequence[int]) -> Score:

@@ -13,7 +13,13 @@ from torch import LongTensor
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
-from miditok.utils import get_beats_ticks, split_midi
+from miditok.constants import MAX_NUM_FILES_NUM_TOKENS_PER_NOTE
+from miditok.utils import (
+    get_bars_ticks,
+    get_beats_ticks,
+    get_num_notes_per_bar,
+    split_midi_per_ticks,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -21,7 +27,7 @@ if TYPE_CHECKING:
     from miditok import MIDITokenizer
 
 
-def get_distribution_num_tokens_per_bar(
+def get_distribution_num_tokens_per_beat(
     files_paths: Sequence[Path], tokenizer: MIDITokenizer
 ) -> list[float]:
     """
@@ -33,7 +39,9 @@ def get_distribution_num_tokens_per_bar(
         each track if ``tokenizer.one_token_stream`` is ``False``.
     """
     tpb_dist = []
-    for files_path in tqdm(files_paths, desc="Calculating the tokens/bar distribution"):
+    for files_path in tqdm(
+        files_paths, desc="Calculating the tokens/beat distribution"
+    ):
         # Load MIDI and tokenize it
         midi = Score(files_path)
         ticks_beats = get_beats_ticks(midi)
@@ -78,10 +86,48 @@ def get_num_beats_for_token_seq_len(
         `sequence_length`` tokens.
     :return: number of beats covering *x*% of the sequences of *y* tokens.
     """
-    tpb_dist = get_distribution_num_tokens_per_bar(files_paths, tokenizer)
+    tpb_dist = get_distribution_num_tokens_per_beat(files_paths, tokenizer)
     bpt_dist = np.reciprocal(np.array(tpb_dist)) * sequence_length
     bpt_dist.sort()
     return np.percentile(bpt_dist, ratio_of_full_sequence_length * 100)
+
+
+def split_midi_per_note_density(
+    midi: Score,
+    max_seq_len: int,
+    average_num_tokens_per_note: float,
+    one_token_stream: bool,
+) -> list[Score]:
+    """
+    Split a MIDI into chunks depending on their note density.
+
+    Using note densities aims to reduce the amount of padding when splitting the MIDIs.
+
+    :param midi: MIDI to split.
+    :param max_seq_len: maximum number of tokens per sequence.
+    :param average_num_tokens_per_note: average number of tokens per note associated to
+        this tokenizer.
+    :param one_token_stream: whether the tokenizer is ``one_token_stream``.
+    :return: the list of split MIDIs.
+    """
+    bar_ticks = get_bars_ticks(midi)
+    num_notes_per_bar = get_num_notes_per_bar(
+        midi,
+        tracks_indep=~one_token_stream,
+    )
+    num_tokens_per_bar = [
+        npb * average_num_tokens_per_note for npb in num_notes_per_bar
+    ]
+    ticks_split = []
+    num_tokens = 0
+    for bi, tpb in enumerate(num_tokens_per_bar):  # TODO use bi
+        next_num_tokens = num_tokens + tpb
+        if next_num_tokens > max_seq_len:
+            ticks_split = bar_ticks[bi]  # TODO bi good??
+        else:
+            num_tokens = next_num_tokens
+
+    return split_midi_per_ticks(midi, ticks_split)
 
 
 class _DatasetABC(Dataset, ABC):
@@ -134,13 +180,10 @@ class DatasetMIDI(_DatasetABC):
 
     :param files_paths: paths to MIDI files to load.
     :param tokenizer: tokenizer.
-    :param min_seq_len: minimum sequence length (in num of tokens)
     :param max_seq_len: maximum sequence length (in num of tokens)
-    :param midi_split_max_num_beat:
-    :param midi_split_min_num_beat:
-    :param pre_tokenize:
     :param save_dir:
     :param save_dir_tmp:
+    :param pre_tokenize:
     :param func_to_get_labels: a function to retrieve the label of a file. The method
         must take two positional arguments: the first is either the
         :class:`miditok.TokSequence` returned when tokenizing a MIDI, the second is the
@@ -158,13 +201,12 @@ class DatasetMIDI(_DatasetABC):
         self,
         files_paths: Sequence[Path],
         tokenizer: MIDITokenizer,
-        min_seq_len: int,
         max_seq_len: int,
-        midi_split_max_num_beat: int | None = None,
-        midi_split_min_num_beat: int = 1,
-        pre_tokenize: bool = False,
+        split_midis: bool = True,
+        average_num_tokens_per_note: float | None = None,
         save_dir: Path | None = None,
         save_dir_tmp: bool = False,
+        pre_tokenize: bool = False,
         func_to_get_labels: Callable[[Score | Sequence, Path], int] | None = None,
         sample_key_name: str = "input_ids",
         labels_key_name: str = "labels",
@@ -172,26 +214,30 @@ class DatasetMIDI(_DatasetABC):
         super().__init__()
 
         # If MIDI splitting, check the save_dir doesn't already contain them
-        if save_dir_tmp:
-            save_dir = Path(mkdtemp(prefix="miditok-dataset"))
         midi_split_hidden_file_path = None
-        if midi_split_max_num_beat:
+        if split_midis:
             if save_dir is None:
-                msg = (
-                    "When splitting MIDIs, you must give a `save_dir` or use a "
-                    "temporary directory (`save_dir_tmp`) to save them"
-                )
-                raise ValueError(msg)
+                if save_dir_tmp:
+                    save_dir = Path(mkdtemp(prefix="miditok-dataset"))
+                else:
+                    msg = (
+                        "When splitting MIDIs, you must give a `save_dir` or use a "
+                        "temporary directory (`save_dir_tmp`) to save them"
+                    )
+                    raise ValueError(msg)
             midi_split_hidden_file_path = save_dir / f".{hash(files_paths)}"
             if midi_split_hidden_file_path.is_file():
                 files_paths = list(save_dir.glob("**/*.mid"))
                 # Disable split, no need anymore
-                midi_split_max_num_beat = None
+                split_midis = False
+            elif average_num_tokens_per_note is None:
+                get_average_num_tokens_per_note(
+                    files_paths[:MAX_NUM_FILES_NUM_TOKENS_PER_NOTE]
+                )
 
         # Set class attributes
         self.files_paths = files_paths
         self.tokenizer = tokenizer
-        self.min_seq_len = min_seq_len
         self.max_seq_len = max_seq_len
         self.pre_tokenize = pre_tokenize
         self.func_to_get_labels = func_to_get_labels
@@ -199,13 +245,14 @@ class DatasetMIDI(_DatasetABC):
         self.labels_key_name = labels_key_name
         self.samples, self.labels = ([], []) if func_to_get_labels else (None, None)
 
-        # TODO split at bars, allow at beats?
+        # TODO rolling note density (per bar?) --> estimate num_tokens per bar -->
+        # notes/bar --> tokens/notes --> estimate tokens/bar
 
         # Load the MIDIs here to split and/or pre-tokenize them
-        if midi_split_max_num_beat or pre_tokenize:
+        if split_midis or pre_tokenize:
             # Find the highest common subdir
             root_dir = None
-            if midi_split_max_num_beat and save_dir:
+            if split_midis and save_dir:
                 all_parts = [path.parent.parts for path in files_paths]
                 max_depth = max(len(parts) for parts in all_parts)
                 root_parts = []
@@ -222,11 +269,12 @@ class DatasetMIDI(_DatasetABC):
                 maxinterval=480,
             ):
                 # Split MIDI if requested
-                if midi_split_max_num_beat:
-                    midis = split_midi(
+                if split_midis:
+                    midis = split_midi_per_note_density(
                         Score(file_path),
-                        midi_split_max_num_beat,
-                        midi_split_min_num_beat,
+                        max_seq_len,
+                        average_num_tokens_per_note,
+                        tokenizer.one_token_stream,
                     )
                     # Save them if needed
                     if save_dir:
@@ -251,7 +299,7 @@ class DatasetMIDI(_DatasetABC):
                                 self.labels.append(func_to_get_labels(seq, file_path))
 
             # Save file in save_dir to indicate MIDI split has been performed
-            if midi_split_max_num_beat:
+            if split_midis:
                 with midi_split_hidden_file_path.open("w") as f:
                     f.write(f"{len(self.files_paths)} files after MIDI splits")
 

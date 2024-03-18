@@ -295,9 +295,18 @@ def test_get_bars(midi_path: Path, save_bars_markers: bool = False):
 
 
 @pytest.mark.parametrize("midi_path", MIDI_PATHS_MULTITRACK)
+def test_get_num_notes_per_bar(midi_path: Path):
+    midi = Score(midi_path)
+    num_notes = miditok.utils.get_num_notes_per_bar(midi)
+    num_notes_track_indep = miditok.utils.get_num_notes_per_bar(midi, tracks_indep=True)
+    num_notes_track_indep_summed = [sum(num_n) for num_n in num_notes_track_indep]
+    assert num_notes == num_notes_track_indep_summed
+
+
+@pytest.mark.parametrize("midi_path", MIDI_PATHS_MULTITRACK)
 def test_split_concat_midi(midi_path: Path, max_num_beats: int = 16):
     midi = Score(midi_path)
-    midi_splits = miditok.utils.split_midi(midi, max_num_beats)
+    midi_splits = miditok.utils.split_midi_per_beats(midi, max_num_beats)
     ticks_beat = miditok.utils.get_beats_ticks(midi)
 
     # Check there is the good number of split MIDIs
