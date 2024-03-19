@@ -257,6 +257,7 @@ class DatasetMIDI(_DatasetABC):
             # If not one_token_stream, we only take the first track/sequence
             token_ids = tokseq.ids if self.tokenizer.one_token_stream else tokseq[0].ids
             if self.func_to_get_labels is not None:
+                # tokseq can be given as a list of TokSequence to get the labels
                 labels = self.func_to_get_labels(midi, tokseq, self.files_paths[idx])
                 if not isinstance(labels, LongTensor):
                     labels = LongTensor(labels)

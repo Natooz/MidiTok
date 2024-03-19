@@ -14,7 +14,7 @@ import miditok
 from .utils_tests import MIDI_PATHS_MULTITRACK
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
     from pathlib import Path
 
     from symusic import Score
@@ -41,15 +41,22 @@ def get_labels_seq_len(midi: Score, tokseq: TokSequence, _: Path) -> int:
     return len(tokseq) // len(midi.tracks)
 
 
-# TODO param labels func int/list/tensor
+def get_labels_seq(midi: Score, tokseq: TokSequence, _: Path) -> list[int]:
+    if isinstance(tokseq, list):
+        return tokseq[0].ids[: -len(midi.tracks)]
+    return tokseq.ids[: -len(midi.tracks)]
+
+
 @pytest.mark.parametrize("one_token_stream", [True, False], ids=["1 strm", "n strms"])
 @pytest.mark.parametrize("split_midis", [True, False], ids=["split", "no split"])
 @pytest.mark.parametrize("pre_tokenize", [True, False], ids=["pretok", "no pretok"])
+@pytest.mark.parametrize("func_labels", [get_labels_seq_len, get_labels_seq])
 def test_dataset_midi(
     tmp_path: Path,
     one_token_stream: bool,
     split_midis: bool,
     pre_tokenize: bool,
+    func_labels: Callable,
     midi_paths: Sequence[Path] = MIDI_PATHS_MULTITRACK,
     max_seq_len: int = 500,
 ):
@@ -66,7 +73,7 @@ def test_dataset_midi(
         split_midis=split_midis,
         save_dir=tmp_path,
         pre_tokenize=pre_tokenize,
-        func_to_get_labels=get_labels_seq_len,
+        func_to_get_labels=func_labels,
     )
     t1 = time() - t0
     print(f"Dataset init took {t1:.2f} sec")
