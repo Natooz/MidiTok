@@ -862,6 +862,8 @@ def split_midi_per_beats(
             tick_end = midi.end() + 1
         else:
             tick_end = beats_ticks[current_beat + num_beats]
+        if tick_end > midi.end():
+            break
         ticks_split.append(tick_end)
         current_beat += num_beats
 
