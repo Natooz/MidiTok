@@ -196,7 +196,6 @@ class DatasetMIDI(_DatasetABC):
                         Score(file_path),
                         max_seq_len,
                         average_num_tokens_per_note,
-                        tokenizer.one_token_stream,
                     )
                     # Save them if needed
                     if save_dir:

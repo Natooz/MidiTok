@@ -142,10 +142,10 @@ def test_collator():
         {"input_ids": randint(0, 300, (seq_len,))} for seq_len in seq_lengths
     ]
     batch_collated = collator(batch_from_dataloader)
-    # seq_len + 1 as we add 2 tokens (BOS & EOS) but shift labels so -1
+    # seq_len - 1 as we shift labels
     assert list(batch_collated["input_ids"].size()) == [
         len(seq_lengths),
-        max(seq_lengths) + 1,
+        max(seq_lengths) - 1,
     ]
 
     # This time with labels already in batch and embed pooling, padding right
@@ -160,6 +160,6 @@ def test_collator():
     batch_collated = collator(batch_from_dataloader)
     assert list(batch_collated["input_ids"].size()) == [
         len(seq_lengths),
-        max(seq_lengths) + 1,
+        max(seq_lengths) - 1,
         5,
     ]
