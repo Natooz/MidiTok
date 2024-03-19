@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from time import time
 from typing import TYPE_CHECKING
 
+import pytest
 from torch import randint
+from torch.utils.data import DataLoader
 
 import miditok
 
@@ -14,7 +17,9 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
-    # from symusic import Score
+    from symusic import Score
+
+    from miditok import TokSequence
 
 
 def test_get_num_beats_for_token_seq_len(
@@ -32,93 +37,91 @@ def test_get_num_beats_for_token_seq_len(
     )
 
 
-"""def test_dataset_ram(
+def get_labels_seq_len(midi: Score, tokseq: TokSequence, _: Path) -> int:
+    return len(tokseq) // len(midi.tracks)
+
+
+# TODO param labels func int/list/tensor
+@pytest.mark.parametrize("one_token_stream", [True, False], ids=["1 strm", "n strms"])
+@pytest.mark.parametrize("split_midis", [True, False], ids=["split", "no split"])
+@pytest.mark.parametrize("pre_tokenize", [True, False], ids=["pretok", "no pretok"])
+def test_dataset_midi(
     tmp_path: Path,
-    midi_paths_one_track: Sequence[str | Path] | None = None,
-    midi_paths_multitrack: Sequence[str | Path] | None = None,
+    one_token_stream: bool,
+    split_midis: bool,
+    pre_tokenize: bool,
+    midi_paths: Sequence[Path] = MIDI_PATHS_MULTITRACK,
+    max_seq_len: int = 500,
 ):
-    if midi_paths_one_track is None:
-        midi_paths_one_track = MIDI_PATHS_ONE_TRACK[:6]
-    if midi_paths_multitrack is None:
-        midi_paths_multitrack = MIDI_PATHS_MULTITRACK[:6]
-    tokens_os_dir = tmp_path / "multitrack_tokens_os"
-    dummy_labels = {
-        label: i
-        for i, label in enumerate(
-            {path.name.split("_")[0] for path in midi_paths_one_track}
-        )
-    }
-
-    def get_labels_one_track(_: Sequence, file_path: Path) -> int:
-        return dummy_labels[file_path.name.split("_")[0]]
-
-    def get_labels_multitrack(midi: Score, _: Path) -> int:
-        return len(midi.tracks)
-
-    def get_labels_multitrack_one_stream(tokens: Sequence, _: Path) -> int:
-        return len(tokens) // 4
-
-    # MIDI + One token stream + labels
-    config = miditok.TokenizerConfig(use_programs=True)
-    tokenizer_os = miditok.TSD(config)
-    dataset_os = miditok.pytorch_data.DatasetTok(
-        midi_paths_one_track,
-        50,
-        100,
-        tokenizer_os,
-        func_to_get_labels=get_labels_one_track,
+    # Creating the Dataset, splitting MIDIs
+    config = miditok.TokenizerConfig(use_programs=one_token_stream)
+    tokenizer = miditok.TSD(config)
+    t0 = time()
+    dataset = miditok.pytorch_data.DatasetMIDI(
+        midi_paths,
+        tokenizer,
+        max_seq_len,
+        tokenizer["BOS_None"],
+        tokenizer["EOS_None"],
+        split_midis=split_midis,
+        save_dir=tmp_path,
+        pre_tokenize=pre_tokenize,
+        func_to_get_labels=get_labels_seq_len,
     )
+    t1 = time() - t0
+    print(f"Dataset init took {t1:.2f} sec")
+
     # Test iteration, and collator with user labels
-    for _ in dataset_os:
-        pass
+    batch = [dataset[i] for i in range(min(len(dataset), 10))]
+
+    # Test with DataLoader and collator
     collator = miditok.pytorch_data.DataCollator(
-        0,
-        1,
-        2,
+        tokenizer["PAD_None"],
         pad_on_left=True,
     )
-    _ = collator([dataset_os[i] for i in range(4)])
+    _ = collator(batch)
+    dataloader = DataLoader(dataset, 16, collate_fn=collator)
+    for _ in dataloader:
+        pass
 
-    # MIDI + Multiple token streams + labels
-    tokenizer_ms = miditok.TSD(miditok.TokenizerConfig())
-    dataset_ms = miditok.pytorch_data.DatasetTok(
-        midi_paths_multitrack,
-        50,
-        100,
-        tokenizer_ms,
-        func_to_get_labels=get_labels_multitrack,
-    )
-    _ = dataset_ms.__repr__()
-    dataset_ms.reduce_num_samples(2)
-    assert len(dataset_ms) == 2
-
-    # JSON + one token stream
-    if not tokens_os_dir.is_dir():
-        tokenizer_os.tokenize_midi_dataset(
-            midi_paths_multitrack,
-            tokens_os_dir,
+    # Recreate the dataset, if the MIDI split is already done in tmp_path, it shouldn't
+    # be done twice. This second init should be faster than the first.
+    if split_midis:
+        t0 = time()
+        dataset2 = miditok.pytorch_data.DatasetMIDI(
+            midi_paths,
+            tokenizer,
+            max_seq_len,
+            tokenizer["BOS_None"],
+            tokenizer["EOS_None"],
+            split_midis=split_midis,
+            save_dir=tmp_path,
+            pre_tokenize=pre_tokenize,  # not useful but just to make sure
+            func_to_get_labels=get_labels_seq_len,
         )
-    _ = miditok.pytorch_data.DatasetTok(
-        list(tokens_os_dir.glob("**/*.json")),
-        50,
-        100,
-        func_to_get_labels=get_labels_multitrack_one_stream,
-    )"""
+        t1 = time() - t0
+        print(f"Second Dataset init took {t1:.2f} sec")
+
+        dataset.files_paths.sort()
+        dataset2.files_paths.sort()
+        assert dataset.files_paths == dataset2.files_paths
 
 
-def test_dataset_json(tmp_path: Path, midi_path: Sequence[str | Path] | None = None):
+def test_dataset_jsonio(tmp_path: Path, midi_path: Sequence[Path] | None = None):
     if midi_path is None:
         midi_path = MIDI_PATHS_MULTITRACK[:3]
     tokens_os_dir = tmp_path / "multitrack_tokens_os"
 
+    config = miditok.TokenizerConfig(use_programs=True)
+    tokenizer = miditok.TSD(config)
     if not tokens_os_dir.is_dir():
-        config = miditok.TokenizerConfig(use_programs=True)
-        tokenizer = miditok.TSD(config)
         tokenizer.tokenize_midi_dataset(midi_path, tokens_os_dir)
 
     dataset = miditok.pytorch_data.DatasetJsonIO(
         list(tokens_os_dir.glob("**/*.json")),
         100,
+        tokenizer["BOS_None"],
+        tokenizer["EOS_None"],
     )
 
     for _ in dataset:
@@ -128,8 +131,6 @@ def test_dataset_json(tmp_path: Path, midi_path: Sequence[str | Path] | None = N
 def test_collator():
     collator = miditok.pytorch_data.DataCollator(
         0,
-        1,
-        2,
         pad_on_left=True,
         copy_inputs_as_labels=True,
         shift_labels=True,

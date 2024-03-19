@@ -11,14 +11,22 @@ from .collators import DataCollator
 from .datasets import (
     DatasetJsonIO,
     DatasetMIDI,
-    get_distribution_num_tokens_per_bar,
+)
+from .split_utils import (
+    get_average_num_tokens_per_note,
+    get_distribution_num_tokens_per_beat,
     get_num_beats_for_token_seq_len,
+    split_dataset_to_subsequences,
+    split_seq_in_subsequences,
 )
 
 __all__ = [
     "DatasetMIDI",
     "DatasetJsonIO",
     "DataCollator",
-    "get_distribution_num_tokens_per_bar",
+    "get_average_num_tokens_per_note",
+    "get_distribution_num_tokens_per_beat",
     "get_num_beats_for_token_seq_len",
+    "split_dataset_to_subsequences",
+    "split_seq_in_subsequences",
 ]
