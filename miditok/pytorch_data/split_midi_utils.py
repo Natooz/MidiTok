@@ -5,23 +5,146 @@ import json
 from copy import deepcopy
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from warnings import warn
 
 import numpy as np
 from symusic import Score
 from torch import LongTensor
 from tqdm import tqdm
 
+from miditok.constants import MAX_NUM_FILES_NUM_TOKENS_PER_NOTE
 from miditok.utils import (
     get_bars_ticks,
     get_beats_ticks,
     get_num_notes_per_bar,
     split_midi_per_ticks,
+    split_midi_per_tracks,
 )
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from miditok import MIDITokenizer
+
+
+def split_midis_for_training(
+    files_paths: Sequence[Path],
+    tokenizer: MIDITokenizer,
+    save_dir: Path,
+    max_seq_len: int,
+    average_num_tokens_per_note: float | None = None,
+    minimize_padding: bool = False,
+    min_seq_len: int | None = None,
+) -> list[Path]:
+    """
+    Split a list of MIDIs into smaller chunks to use for training.
+
+    MIDI splitting allows to split each MIDI from a dataset into chunks of lengths
+    calculated in function of the note densities of its bars in order to reduce the
+    padding of the batches, using the
+    :py:func:`miditok.pytorch_data.split_midi_per_note_density` method.
+    The MIDIs are only split at bars, in order have chunks starting at relevant times.
+
+    MIDI splitting can be performed on a dataset once. This method will save a hidden
+    file, with a name corresponding to the hash of the list of file paths, in the
+    ``save_dir`` directory. When called, it will first check that this file does not
+    already exist, and if it is the case will return the paths to all the MIDI files
+    within ``save_dir``.
+
+    **If your tokenizer does not tokenize all tracks in one sequence of tokens**
+    (``tokenizer.one_token_stream``), the MIDI tracks will be split independently.
+
+    :param files_paths: paths to MIDI files to split.
+    :param tokenizer: tokenizer.
+    :param save_dir: path to the directory to save the MIDI splits.
+    :param max_seq_len: maximum token sequence length that the model will be trained
+        with.
+    :param average_num_tokens_per_note: average number of tokens per note associated to
+        this tokenizer. If given ``None``, this value will automatically be calculated
+        from the first 200 MIDI files with the
+        :py:func:`miditok.pytorch_data.get_average_num_tokens_per_note` method.
+    :param minimize_padding: will split the MIDIs into chunks in order to minimize
+        padding at best, at the cost of parts of bars that will be omitted.
+        (default: ``False``)
+    :param min_seq_len: minimum sequence length, only used when splitting at the last
+        bar of the MIDI. (default: ``None``, see default value of
+        :py:func:`miditok.pytorch_data.split_midi_per_note_density`)
+    :return: the paths to the MIDI splits.
+    """
+    # Safety checks
+    midi_split_hidden_file_path = save_dir / f".{hash(tuple(files_paths))}"
+    if midi_split_hidden_file_path.is_file():
+        warn(
+            f"These MIDI have already been split in the saving directory ({save_dir})."
+            f" Skipping MIDI splitting.",
+            stacklevel=2,
+        )
+        return list(save_dir.glob("**/*.mid"))
+    if not average_num_tokens_per_note:
+        average_num_tokens_per_note = get_average_num_tokens_per_note(
+            tokenizer, files_paths[:MAX_NUM_FILES_NUM_TOKENS_PER_NOTE]
+        )
+
+    # Determine the deepest common subdirectory to replicate file tree
+    all_parts = [path.parent.parts for path in files_paths]
+    max_depth = max(len(parts) for parts in all_parts)
+    root_parts = []
+    for depth in range(max_depth):
+        if len({parts[depth] for parts in all_parts}) > 1:
+            break
+        root_parts.append(all_parts[0][depth])
+    root_dir = Path(*root_parts)
+
+    # Splitting MIDIs
+    new_files_paths = []
+    for file_path in tqdm(
+        files_paths,
+        desc=f"Splitting MIDIs ({save_dir})",
+        miniters=int(len(files_paths) / 20),
+        maxinterval=480,
+    ):
+        midis = [Score(file_path)]
+
+        # Separate track first if needed
+        tracks_separated = False
+        if not tokenizer.one_token_stream and len(midis[0].tracks) > 1:
+            midis = split_midi_per_tracks(midis[0])
+            tracks_separated = True
+
+        # Split per note density
+        for ti, midi_to_split in enumerate(midis):
+            midi_splits = split_midi_per_note_density(
+                midi_to_split,
+                max_seq_len,
+                average_num_tokens_per_note,
+                minimize_padding,
+                min_seq_len,
+            )
+
+            # Save them
+            for _i, midi_to_save in enumerate(midi_splits):
+                # Skip it if there are no notes, this can happen with
+                # portions of tracks with no notes but tempo/signature
+                # changes happening later
+                if len(midi_to_save.tracks) == 0 or midi_to_save.note_num() == 0:
+                    continue
+                if tracks_separated:
+                    file_name = f"{file_path.stem}_t{ti}_{_i}.mid"
+                else:
+                    file_name = f"{file_path.stem}_{_i}.mid"
+                # use with_stem when dropping support for python 3.8
+                saving_path = (
+                    save_dir / file_path.relative_to(root_dir).parent / file_name
+                )
+                saving_path.parent.mkdir(parents=True, exist_ok=True)
+                midi_to_save.dump_midi(saving_path)
+                new_files_paths.append(saving_path)
+
+    # Save file in save_dir to indicate MIDI split has been performed
+    with midi_split_hidden_file_path.open("w") as f:
+        f.write(f"{len(files_paths)} files after MIDI splits")
+
+    return new_files_paths
 
 
 def get_distribution_num_tokens_per_beat(

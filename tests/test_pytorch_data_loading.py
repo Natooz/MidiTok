@@ -60,9 +60,32 @@ def test_dataset_midi(
     midi_paths: Sequence[Path] = MIDI_PATHS_MULTITRACK,
     max_seq_len: int = 1000,
 ):
-    # Creating the Dataset, splitting MIDIs
     config = miditok.TokenizerConfig(use_programs=one_token_stream)
     tokenizer = miditok.TSD(config)
+
+    # Split MIDIs if requested
+    # We perform it twice as the second time, the method would return the same paths as
+    # the ones created in the first call.
+    if split_midis:
+        t0 = time()
+        midi_paths_split1 = miditok.pytorch_data.split_midis_for_training(
+            midi_paths, tokenizer, tmp_path, max_seq_len
+        )
+        t1 = time() - t0
+        print(f"First MIDI split call: {t1:.2f} sec")
+        t0 = time()
+        midi_paths_split2 = miditok.pytorch_data.split_midis_for_training(
+            midi_paths, tokenizer, tmp_path, max_seq_len
+        )
+        t1 = time() - t0
+        print(f"Second MIDI split call: {t1:.2f} sec")
+
+        midi_paths_split1.sort()
+        midi_paths_split2.sort()
+        assert midi_paths_split1 == midi_paths_split2
+        midi_paths = midi_paths_split1
+
+    # Creating the Dataset, splitting MIDIs
     t0 = time()
     dataset = miditok.pytorch_data.DatasetMIDI(
         midi_paths,
@@ -70,8 +93,6 @@ def test_dataset_midi(
         max_seq_len,
         tokenizer["BOS_None"],
         tokenizer["EOS_None"],
-        split_midis=split_midis,
-        save_dir=tmp_path,
         pre_tokenize=pre_tokenize,
         func_to_get_labels=func_labels,
     )
@@ -90,28 +111,6 @@ def test_dataset_midi(
     dataloader = DataLoader(dataset, 16, collate_fn=collator)
     for _ in dataloader:
         pass
-
-    # Recreate the dataset, if the MIDI split is already done in tmp_path, it shouldn't
-    # be done twice. This second init should be faster than the first.
-    if split_midis:
-        t0 = time()
-        dataset2 = miditok.pytorch_data.DatasetMIDI(
-            midi_paths,
-            tokenizer,
-            max_seq_len,
-            tokenizer["BOS_None"],
-            tokenizer["EOS_None"],
-            split_midis=split_midis,
-            save_dir=tmp_path,
-            pre_tokenize=pre_tokenize,  # not useful but just to make sure
-            func_to_get_labels=get_labels_seq_len,
-        )
-        t1 = time() - t0
-        print(f"Second Dataset init took {t1:.2f} sec")
-
-        dataset.files_paths.sort()
-        dataset2.files_paths.sort()
-        assert dataset.files_paths == dataset2.files_paths
 
 
 def test_dataset_jsonio(tmp_path: Path, midi_path: Sequence[Path] | None = None):

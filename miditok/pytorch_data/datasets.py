@@ -3,26 +3,16 @@ from __future__ import annotations
 
 import json
 from abc import ABC
-from pathlib import Path
-from tempfile import mkdtemp
 from typing import TYPE_CHECKING, Any
-from warnings import warn
 
 from symusic import Score
 from torch import LongTensor
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
-from miditok.constants import MAX_NUM_FILES_NUM_TOKENS_PER_NOTE
-from miditok.utils import split_midi_per_tracks
-
-from .split_midi_utils import (
-    get_average_num_tokens_per_note,
-    split_midi_per_note_density,
-)
-
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
+    from pathlib import Path
 
     from miditok import MIDITokenizer, TokSequence
 
@@ -79,20 +69,13 @@ class DatasetMIDI(_DatasetABC):
     r"""
     A``Dataset`` loading and tokenizing MIDIs during training.
 
-    This class can be used for several strategies, with two major independent options:
-    MIDI splitting and pre-tokenizing.
+    This class can be used for either tokenize MIDIs on the fly when iterating it, or
+    by pre-tokenizing all the MIDIs at its initialization and store the tokens in
+    memory.
 
-    # TODO document MIDI split and global workflow
-    **MIDI splitting** will allow to split each MIDI from the original dataset chunks
-    of lengths calculated in function of the note densities of its bars in order to
-    reduce the padding of the batches. MIDI splitting can be controlled with the
-    ``split_midis``, ``average_num_tokens_per_note``, ``save_dir`` and
-    ``split_kwargs`` arguments.
-    # TODO done once with save_dir
-    # TODO if no one_token_stream --> Tracks will be separated
-
-    **Pre-tokenizing** signifies that the ``DatasetMIDI`` will tokenize the MIDI
-    dataset at its initialization, and store the token ids in RAM.
+    **Important note:** you should probably use this class in concert with the
+    :py:func:`miditok.pytorch_data.split_midis_for_training` method in order to train
+    your model with chunks of MIDIs of token sequence lengths close to ``max_seq_len``.
 
     Additionally, you can use the ``func_to_get_labels`` argument to provide a method
     allowing to use labels (one label per file).
@@ -102,13 +85,6 @@ class DatasetMIDI(_DatasetABC):
     :param max_seq_len: maximum sequence length (in num of tokens)
     :param bos_token_id: *BOS* token id. (default: ``None``)
     :param eos_token_id: *EOS* token id. (default: ``None``)
-    :param split_midis:
-    :param split_kwargs: keyword arguments to pass to the
-        :py:func:`miditok.pytorch_data.save_pretrained` method. Note that if the
-        ``average_num_tokens_per_note`` is not given, it will automatically be
-        calculated from the first 200 MIDI files with the
-        :py:func:`miditok.pytorch_data.get_average_num_tokens_per_note` method.
-    :param save_dir:
     :param pre_tokenize:
     :param func_to_get_labels: a function to retrieve the label of a file. The method
         must take two positional arguments: the first is either the
@@ -130,9 +106,6 @@ class DatasetMIDI(_DatasetABC):
         max_seq_len: int,
         bos_token_id: int | None = None,
         eos_token_id: int | None = None,
-        split_midis: bool = True,
-        split_kwargs: dict[str, Any] | None = None,
-        save_dir: Path | None = None,
         pre_tokenize: bool = False,
         func_to_get_labels: Callable[
             [Score, TokSequence | list[TokSequence], Path],
@@ -159,131 +132,25 @@ class DatasetMIDI(_DatasetABC):
             [1 for tok in [bos_token_id, eos_token_id] if tok is not None]
         )
 
-        # If MIDI splitting, check the save_dir doesn't already contain them
-        midi_split_hidden_file_path = None
-        if split_midis:
-            if save_dir is None:
-                save_dir = Path(mkdtemp(prefix="miditok-dataset"))
-                warn(
-                    f"The MIDI splits will be saved in a temporary directory: "
-                    f"{save_dir}",
-                    stacklevel=2,
-                )
-            midi_split_hidden_file_path = save_dir / f".{hash(tuple(self.files_paths))}"
-            if midi_split_hidden_file_path.is_file():
-                self.files_paths = list(save_dir.glob("**/*.mid"))
-                # Disable split, no need anymore
-                split_midis = False
-            if not split_kwargs:
-                split_kwargs = {}
-            if not split_kwargs.get("average_num_tokens_per_note"):
-                split_kwargs[
-                    "average_num_tokens_per_note"
-                ] = get_average_num_tokens_per_note(
-                    tokenizer, self.files_paths[:MAX_NUM_FILES_NUM_TOKENS_PER_NOTE]
-                )
-
-        # Load the MIDIs here to split and/or pre-tokenize them
-        if split_midis or pre_tokenize:
-            # Find the highest common subdir
-            root_dir = None
-            if split_midis and save_dir:
-                all_parts = [path.parent.parts for path in self.files_paths]
-                max_depth = max(len(parts) for parts in all_parts)
-                root_parts = []
-                for depth in range(max_depth):
-                    if len({parts[depth] for parts in all_parts}) > 1:
-                        break
-                    root_parts.append(all_parts[0][depth])
-                root_dir = Path(*root_parts)
-
-            # pbar desc
-            if split_midis and pre_tokenize:
-                pbar_desc = f"Splitting MIDIs ({save_dir}) and pre-tokenizing"
-            elif split_midis:
-                pbar_desc = f"Splitting MIDIs ({save_dir})"
-            else:
-                pbar_desc = "Pre-tokenizing"
-
-            new_files_paths = []
+        # Pre-tokenize the MIDI files
+        if pre_tokenize:
             for file_path in tqdm(
                 self.files_paths,
-                desc=pbar_desc,
+                desc="Pre-tokenizing",
                 miniters=int(len(self.files_paths) / 20),
                 maxinterval=480,
             ):
-                midis = [Score(file_path)]
-
-                # Split MIDI if requested
-                # TODO separate from the DatasetMIDI class?
-                if split_midis:
-                    # Separate track first if needed, but only if we do not
-                    # pre-tokenize as it would otherwise increase the overall duration
-                    # by pre-processing MIDIs multiple times pointlessly.
-                    tracks_separated = False
-                    if (
-                        not tokenizer.one_token_stream
-                        and not pre_tokenize
-                        and len(midis[0].tracks) > 1
-                    ):
-                        midis = split_midi_per_tracks(midis[0])
-                        tracks_separated = True
-
-                    # Split per note density
-                    midis_splits = []
-                    for ti, midi_to_split in enumerate(midis):
-                        midi_splits = split_midi_per_note_density(
-                            midi_to_split,
-                            self._effective_max_seq_len,
-                            **split_kwargs,
-                        )
-
-                        # Save them
-                        for _i, midi_to_save in enumerate(midi_splits):
-                            # Skip it if there are no notes, this can happen with
-                            # portions of tracks with no notes but tempo/signature
-                            # changes happening later
-                            if (
-                                len(midi_to_save.tracks) == 0
-                                or midi_to_save.note_num() == 0
-                            ):
-                                continue
-                            if tracks_separated:
-                                file_name = f"{file_path.stem}_t{ti}_{_i}.mid"
-                            else:
-                                file_name = f"{file_path.stem}_{_i}.mid"
-                            # use with_stem when dropping support for python 3.8
-                            saving_path = (
-                                save_dir
-                                / file_path.relative_to(root_dir).parent
-                                / file_name
-                            )
-                            saving_path.parent.mkdir(parents=True, exist_ok=True)
-                            midi_to_save.dump_midi(saving_path)
-                            new_files_paths.append(saving_path)
-                            midis_splits.append(midi_to_save)
-                    # Reassign original MIDI(s) with splits
-                    midis = midis_splits
-
-                # Pre-tokenize the MIDI(s) and store the tokens in memory
-                if pre_tokenize:
-                    for midi in midis:
-                        tokseq = self._tokenize_midi(midi)
-                        if tokenizer.one_token_stream:
-                            tokseq = [tokseq]
-                        for seq in tokseq:
-                            self.samples.append(LongTensor(seq.ids))
-                            if func_to_get_labels:
-                                label = func_to_get_labels(midi, seq, file_path)
-                                if not isinstance(label, LongTensor):
-                                    label = LongTensor(label)
-                                self.labels.append(label)
-
-            # Save file in save_dir to indicate MIDI split has been performed
-            if split_midis:
-                self.files_paths = new_files_paths
-                with midi_split_hidden_file_path.open("w") as f:
-                    f.write(f"{len(self.files_paths)} files after MIDI splits")
+                midi = Score(file_path)
+                tokseq = self._tokenize_midi(midi)
+                if tokenizer.one_token_stream:
+                    tokseq = [tokseq]
+                for seq in tokseq:
+                    self.samples.append(LongTensor(seq.ids))
+                    if func_to_get_labels:
+                        label = func_to_get_labels(midi, seq, file_path)
+                        if not isinstance(label, LongTensor):
+                            label = LongTensor(label)
+                        self.labels.append(label)
 
     def __getitem__(self, idx: int) -> dict[str, LongTensor]:
         """
