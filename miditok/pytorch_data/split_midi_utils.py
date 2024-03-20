@@ -160,6 +160,8 @@ def split_midi_per_note_density(
         else:
             num_tokens_current_chunk = num_tokens_next
 
+    if len(ticks_split) == 0:
+        return [midi]
     return split_midi_per_ticks(midi, ticks_split)
 
 

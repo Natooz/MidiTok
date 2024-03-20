@@ -6,6 +6,7 @@ from abc import ABC
 from pathlib import Path
 from tempfile import mkdtemp
 from typing import TYPE_CHECKING, Any
+from warnings import warn
 
 from symusic import Score
 from torch import LongTensor
@@ -13,6 +14,7 @@ from torch.utils.data import Dataset
 from tqdm import tqdm
 
 from miditok.constants import MAX_NUM_FILES_NUM_TOKENS_PER_NOTE
+from miditok.utils import split_midi_per_tracks
 
 from .split_midi_utils import (
     get_average_num_tokens_per_note,
@@ -81,15 +83,19 @@ class DatasetMIDI(_DatasetABC):
     MIDI splitting and pre-tokenizing.
 
     # TODO document MIDI split and global workflow
+    **MIDI splitting** will allow to split each MIDI from the original dataset chunks
+    of lengths calculated in function of the note densities of its bars in order to
+    reduce the padding of the batches. MIDI splitting can be controlled with the
+    ``split_midis``, ``average_num_tokens_per_note``, ``save_dir`` and
+    ``split_kwargs`` arguments.
+    # TODO done once with save_dir
+    # TODO if no one_token_stream --> Tracks will be separated
 
     **Pre-tokenizing** signifies that the ``DatasetMIDI`` will tokenize the MIDI
     dataset at its initialization, and store the token ids in RAM.
 
     Additionally, you can use the ``func_to_get_labels`` argument to provide a method
     allowing to use labels (one label per file).
-    **If your tokenizer tokenizes tracks independently** (``one_token_stream``
-    property) **and you don't pre-tokenize the dataset, only the tokens of the first
-    track will be used**.
 
     :param files_paths: paths to MIDI files to load.
     :param tokenizer: tokenizer.
@@ -97,9 +103,12 @@ class DatasetMIDI(_DatasetABC):
     :param bos_token_id: *BOS* token id. (default: ``None``)
     :param eos_token_id: *EOS* token id. (default: ``None``)
     :param split_midis:
-    :param average_num_tokens_per_note:
+    :param split_kwargs: keyword arguments to pass to the
+        :py:func:`miditok.pytorch_data.save_pretrained` method. Note that if the
+        ``average_num_tokens_per_note`` is not given, it will automatically be
+        calculated from the first 200 MIDI files with the
+        :py:func:`miditok.pytorch_data.get_average_num_tokens_per_note` method.
     :param save_dir:
-    :param save_dir_tmp:
     :param pre_tokenize:
     :param func_to_get_labels: a function to retrieve the label of a file. The method
         must take two positional arguments: the first is either the
@@ -122,9 +131,8 @@ class DatasetMIDI(_DatasetABC):
         bos_token_id: int | None = None,
         eos_token_id: int | None = None,
         split_midis: bool = True,
-        average_num_tokens_per_note: float | None = None,
+        split_kwargs: dict[str, Any] | None = None,
         save_dir: Path | None = None,
-        save_dir_tmp: bool = False,
         pre_tokenize: bool = False,
         func_to_get_labels: Callable[
             [Score, TokSequence | list[TokSequence], Path],
@@ -155,21 +163,23 @@ class DatasetMIDI(_DatasetABC):
         midi_split_hidden_file_path = None
         if split_midis:
             if save_dir is None:
-                if save_dir_tmp:
-                    save_dir = Path(mkdtemp(prefix="miditok-dataset"))
-                else:
-                    msg = (
-                        "When splitting MIDIs, you must give a `save_dir` or use a "
-                        "temporary directory (`save_dir_tmp`) to save them"
-                    )
-                    raise ValueError(msg)
+                save_dir = Path(mkdtemp(prefix="miditok-dataset"))
+                warn(
+                    f"The MIDI splits will be saved in a temporary directory: "
+                    f"{save_dir}",
+                    stacklevel=2,
+                )
             midi_split_hidden_file_path = save_dir / f".{hash(tuple(self.files_paths))}"
             if midi_split_hidden_file_path.is_file():
                 self.files_paths = list(save_dir.glob("**/*.mid"))
                 # Disable split, no need anymore
                 split_midis = False
-            elif average_num_tokens_per_note is None:
-                average_num_tokens_per_note = get_average_num_tokens_per_note(
+            if not split_kwargs:
+                split_kwargs = {}
+            if not split_kwargs.get("average_num_tokens_per_note"):
+                split_kwargs[
+                    "average_num_tokens_per_note"
+                ] = get_average_num_tokens_per_note(
                     tokenizer, self.files_paths[:MAX_NUM_FILES_NUM_TOKENS_PER_NOTE]
                 )
 
@@ -202,28 +212,58 @@ class DatasetMIDI(_DatasetABC):
                 miniters=int(len(self.files_paths) / 20),
                 maxinterval=480,
             ):
+                midis = [Score(file_path)]
+
                 # Split MIDI if requested
-                # TODO if not one_token_stream, split by tracks
+                # TODO separate from the DatasetMIDI class?
                 if split_midis:
-                    midis = split_midi_per_note_density(
-                        Score(file_path),
-                        self._effective_max_seq_len,
-                        average_num_tokens_per_note,
-                    )
-                    # Save them if needed
-                    if save_dir:
-                        for _i, midi in enumerate(midis):
+                    # Separate track first if needed, but only if we do not
+                    # pre-tokenize as it would otherwise increase the overall duration
+                    # by pre-processing MIDIs multiple times pointlessly.
+                    tracks_separated = False
+                    if (
+                        not tokenizer.one_token_stream
+                        and not pre_tokenize
+                        and len(midis[0].tracks) > 1
+                    ):
+                        midis = split_midi_per_tracks(midis[0])
+                        tracks_separated = True
+
+                    # Split per note density
+                    midis_splits = []
+                    for ti, midi_to_split in enumerate(midis):
+                        midi_splits = split_midi_per_note_density(
+                            midi_to_split,
+                            self._effective_max_seq_len,
+                            **split_kwargs,
+                        )
+
+                        # Save them
+                        for _i, midi_to_save in enumerate(midi_splits):
+                            # Skip it if there are no notes, this can happen with
+                            # portions of tracks with no notes but tempo/signature
+                            # changes happening later
+                            if (
+                                len(midi_to_save.tracks) == 0
+                                or midi_to_save.note_num() == 0
+                            ):
+                                continue
+                            if tracks_separated:
+                                file_name = f"{file_path.stem}_t{ti}_{_i}.mid"
+                            else:
+                                file_name = f"{file_path.stem}_{_i}.mid"
                             # use with_stem when dropping support for python 3.8
                             saving_path = (
                                 save_dir
                                 / file_path.relative_to(root_dir).parent
-                                / f"{file_path.stem}_{_i}.mid"
+                                / file_name
                             )
                             saving_path.parent.mkdir(parents=True, exist_ok=True)
-                            midi.dump_midi(saving_path)
+                            midi_to_save.dump_midi(saving_path)
                             new_files_paths.append(saving_path)
-                else:
-                    midis = [Score(file_path)]
+                            midis_splits.append(midi_to_save)
+                    # Reassign original MIDI(s) with splits
+                    midis = midis_splits
 
                 # Pre-tokenize the MIDI(s) and store the tokens in memory
                 if pre_tokenize:

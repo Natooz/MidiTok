@@ -828,6 +828,7 @@ def split_midi_per_ticks(midi: Score, ticks: list[int]) -> list[Score]:
     """
     midis_split = []
     midi_end_tick = midi.end() + 1  # to encompass the last events
+    ticks = ticks.copy()
     if ticks[-1] != midi_end_tick:
         ticks.append(midi_end_tick)
 
