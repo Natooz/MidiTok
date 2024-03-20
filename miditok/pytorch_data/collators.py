@@ -66,11 +66,11 @@ class DataCollator:
         out_batch = {}
         x, y = None, None
 
-        # Figure out inputs + adds BOS and EOS tokens
+        # Figure out inputs
         if self.inputs_kwarg_name in batch[0]:
             x = [seq[self.inputs_kwarg_name] for seq in batch]
 
-        # Figure out labels + adds BOS and EOS tokens
+        # Figure out labels
         if self.labels_kwarg_name in batch[0]:
             y = [seq[self.labels_kwarg_name] for seq in batch]
         elif self.copy_inputs_as_labels:

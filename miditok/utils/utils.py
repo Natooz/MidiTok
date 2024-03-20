@@ -432,6 +432,36 @@ def merge_tracks(
     return tracks_[0]
 
 
+def merge_midis(midis: Sequence[Score]) -> Score:
+    """
+    Merge a list of MIDIs into a single one.
+
+    This method will combine all their tracks and global events such as tempo changes
+    or time signature changes.
+
+    :param midis: MIDIs to merge.
+    :return: the merged MIDI.
+    """
+    if not all(midi.tpq == midis[0].tpq for midi in midis):
+        msg = (
+            "Some `Score`s have different time divisions (`tpq`). They must be all"
+            "identical in order to merge the `Scores`s."
+        )
+        raise ValueError(msg)
+
+    midi = Score(midis[0].tpq)
+    for midi_split in midis:
+        midi.tracks.extend(midi_split.tracks)
+        midi.tempos.extend(midi_split.tempos)
+        midi.time_signatures.extend(midi_split.time_signatures)
+        midi.key_signatures.extend(midi_split.key_signatures)
+        midi.lyrics.extend(midi_split.lyrics)
+        midi.markers.extend(midi_split.markers)
+
+    # sorting is done by Symusic automatically
+    return midi
+
+
 def merge_same_program_tracks(
     tracks: list[Track] | TrackTickList, effects: bool = True
 ) -> None:
@@ -797,7 +827,7 @@ def split_midi_per_ticks(midi: Score, ticks: list[int]) -> list[Score]:
     :return: a list of segmented MIDI objects.
     """
     midis_split = []
-    midi_end_tick = midi.end()
+    midi_end_tick = midi.end() + 1  # to encompass the last events
     if ticks[-1] != midi_end_tick:
         ticks.append(midi_end_tick)
 
@@ -868,6 +898,33 @@ def split_midi_per_beats(
         current_beat += num_beats
 
     return split_midi_per_ticks(midi, ticks_split)
+
+
+def split_midi_per_tracks(midi: Score) -> list[Score]:
+    """
+    Split a MIDI into several smaller MIDIs.
+
+    The segmented MIDIs will all start at tick 0.
+    Example: for a MIDI with an end tick at 1000, and a list of tick
+    ``[2000, 5000, 7000]``, this method will return a list of four MIDIs which
+    correspond respectively to the portions of the original MIDI from tick 0 to 2000,
+    2000 to 5000, 5000 to 7000 and 10000 to 10000.
+
+    :param midi: MIDI object to split.
+    :return: a list of segmented MIDI objects.
+    """
+    midis_split = []
+    for track in midi.tracks:
+        midi_split = Score(midi.tpq)
+        midi_split.tempos = midi.tempos
+        midi_split.time_signatures = midi.time_signatures
+        midi_split.key_signatures = midi.key_signatures
+        midi_split.lyrics = midi.lyrics
+        midi_split.markers = midi.markers
+        midi_split.tracks.append(track.copy())
+
+        midis_split.append(midi_split)
+    return midis_split
 
 
 def concat_midis(midis: Sequence[Score], end_ticks: Sequence[int]) -> Score:

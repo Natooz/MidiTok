@@ -14,7 +14,10 @@ from tqdm import tqdm
 
 from miditok.constants import MAX_NUM_FILES_NUM_TOKENS_PER_NOTE
 
-from .split_utils import get_average_num_tokens_per_note, split_midi_per_note_density
+from .split_midi_utils import (
+    get_average_num_tokens_per_note,
+    split_midi_per_note_density,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -93,6 +96,8 @@ class DatasetMIDI(_DatasetABC):
     :param max_seq_len: maximum sequence length (in num of tokens)
     :param bos_token_id: *BOS* token id. (default: ``None``)
     :param eos_token_id: *EOS* token id. (default: ``None``)
+    :param split_midis:
+    :param average_num_tokens_per_note:
     :param save_dir:
     :param save_dir_tmp:
     :param pre_tokenize:
@@ -182,10 +187,18 @@ class DatasetMIDI(_DatasetABC):
                     root_parts.append(all_parts[0][depth])
                 root_dir = Path(*root_parts)
 
+            # pbar desc
+            if split_midis and pre_tokenize:
+                pbar_desc = f"Splitting MIDIs ({save_dir}) and pre-tokenizing"
+            elif split_midis:
+                pbar_desc = f"Splitting MIDIs ({save_dir})"
+            else:
+                pbar_desc = "Pre-tokenizing"
+
             new_files_paths = []
             for file_path in tqdm(
                 self.files_paths,
-                desc=f"Preprocessing files: {self.files_paths[0].parent}",
+                desc=pbar_desc,
                 miniters=int(len(self.files_paths) / 20),
                 maxinterval=480,
             ):
@@ -194,7 +207,7 @@ class DatasetMIDI(_DatasetABC):
                 if split_midis:
                     midis = split_midi_per_note_density(
                         Score(file_path),
-                        max_seq_len,
+                        self._effective_max_seq_len,
                         average_num_tokens_per_note,
                     )
                     # Save them if needed

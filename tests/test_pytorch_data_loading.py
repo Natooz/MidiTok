@@ -58,7 +58,7 @@ def test_dataset_midi(
     pre_tokenize: bool,
     func_labels: Callable,
     midi_paths: Sequence[Path] = MIDI_PATHS_MULTITRACK,
-    max_seq_len: int = 500,
+    max_seq_len: int = 1000,
 ):
     # Creating the Dataset, splitting MIDIs
     config = miditok.TokenizerConfig(use_programs=one_token_stream)

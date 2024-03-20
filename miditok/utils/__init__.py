@@ -12,6 +12,7 @@ from .utils import (
     get_midi_programs,
     get_midi_ticks_per_beat,
     get_num_notes_per_bar,
+    merge_midis,
     merge_same_program_tracks,
     merge_tracks,
     merge_tracks_per_class,
@@ -19,6 +20,7 @@ from .utils import (
     remove_duplicated_notes,
     split_midi_per_beats,
     split_midi_per_ticks,
+    split_midi_per_tracks,
 )
 
 __all__ = [
@@ -32,6 +34,7 @@ __all__ = [
     "get_beats_ticks",
     "get_midi_programs",
     "get_midi_ticks_per_beat",
+    "merge_midis",
     "merge_same_program_tracks",
     "merge_tracks",
     "merge_tracks_per_class",
@@ -40,4 +43,5 @@ __all__ = [
     "remove_duplicated_notes",
     "split_midi_per_beats",
     "split_midi_per_ticks",
+    "split_midi_per_tracks",
 ]

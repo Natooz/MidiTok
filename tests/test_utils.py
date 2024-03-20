@@ -329,3 +329,24 @@ def test_split_concat_midi(midi_path: Path, max_num_beats: int = 16):
     assert midi.tracks == midi_concat.tracks
     assert midi.lyrics == midi_concat.lyrics
     assert midi.markers == midi_concat.markers
+
+
+@pytest.mark.parametrize("midi_path", MIDI_PATHS_MULTITRACK)
+def test_split_midi_per_tracks(midi_path: Path):
+    midi = Score(midi_path)
+    midi_splits = miditok.utils.split_midi_per_tracks(midi)
+
+    # Check there is the good number of split MIDIs
+    assert len(midi_splits) == len(midi.tracks)
+
+    # Merge split MIDIs and assert its equal to original one
+    for midi_split in midi_splits[1:]:  # dedup global events
+        midi_split.tempos = []
+        midi_split.time_signatures = []
+        midi_split.key_signatures = []
+        midi_split.lyrics = []
+        midi_split.markers = []
+    midi_merged = miditok.utils.merge_midis(midi_splits)
+
+    # Assert the merges MIDI is identical to the original one
+    assert midi == midi_merged

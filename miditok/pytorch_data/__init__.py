@@ -12,7 +12,7 @@ from .datasets import (
     DatasetJsonIO,
     DatasetMIDI,
 )
-from .split_utils import (
+from .split_midi_utils import (
     get_average_num_tokens_per_note,
     get_distribution_num_tokens_per_beat,
     get_num_beats_for_token_seq_len,

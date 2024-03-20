@@ -93,33 +93,72 @@ def split_midi_per_note_density(
     midi: Score,
     max_seq_len: int,
     average_num_tokens_per_note: float,
+    minimize_padding: bool = False,
+    min_seq_len: int | None = None,
 ) -> list[Score]:
     """
-    Split a MIDI into chunks depending on their note density.
+    Split a MIDI (at bars) into chunks depending on their note densities.
 
-    Using note densities aims to reduce the amount of padding when splitting the MIDIs.
-    # TODO splitting: minimize padding or maximize amount of data --> sort samples?
+    This method aims to split MIDIs at bars to reduce the amount of padding to apply to
+    batches during training. It offers several parameters to control where to split
+    depending on the desired outcome, e.g. reduce padding or keep the largest amount of
+    data at the cost of padding.
+
+    This method will estimate the number of tokens for each bar depending on the
+    tokenizer's average number of tokens per note (tpn), will loop over the
+    estimated number of tokens per bar to determine the bars at which the MIDI
+    will be "cut".
+
+    When the ongoing MIDI chunk has an estimated token sequence length exceeding
+    ``max_seq_len``, the cut will be made at the end of the current bar if:
+    * ``minimize_padding``;
+    * ``num_tokens_next - max_seq_len > tpb / 2``, i.e. the token sequence would cover
+    at least half of the current bar;
+    * the current bar is the last one and the last token sequence length would make at
+    least alf the maximum sequence length, this to not create orphan MIDIs of very
+    short length that would not help to train a model.
+
+    Otherwise, the cut will be at the end of the current bar, thus loosing a few notes.
 
     :param midi: MIDI to split.
     :param max_seq_len: maximum number of tokens per sequence.
     :param average_num_tokens_per_note: average number of tokens per note associated to
         this tokenizer.
+    :param minimize_padding: will split the MIDIs into chunks in order to minimize
+        padding at best, at the cost of parts of bars that will be omitted.
+        (default: ``False``)
+    :param min_seq_len: minimum sequence length, only used when splitting at the last
+        bar of the MIDI. (default: ``max_seq_len // 2``)
     :return: the list of split MIDIs.
     """
+    if min_seq_len is None:
+        min_seq_len = max_seq_len // 2
     bar_ticks = get_bars_ticks(midi)
     num_notes_per_bar = get_num_notes_per_bar(midi)
     num_tokens_per_bar = [
         npb * average_num_tokens_per_note for npb in num_notes_per_bar
     ]
+
     ticks_split = []
-    num_tokens = 0
+    num_tokens_current_chunk = 0
     for bi, tpb in enumerate(num_tokens_per_bar):
-        next_num_tokens = num_tokens + tpb
-        if next_num_tokens > max_seq_len:
-            ticks_split.append(bar_ticks[bi])  # TODO bi good??
-            num_tokens = 0
+        num_tokens_next = num_tokens_current_chunk + tpb
+        if num_tokens_next > max_seq_len:
+            diff_num_tokens = num_tokens_next - max_seq_len
+
+            # Cut at the **beginning** of the current bar
+            if not minimize_padding and (
+                diff_num_tokens < tpb / 2  # would cover short part of the bar
+                or (bi + 1 == len(bar_ticks) and diff_num_tokens < min_seq_len)
+            ):
+                ticks_split.append(bar_ticks[bi])
+                num_tokens_current_chunk = tpb
+            # Cut at the **end** of the current bar
+            else:
+                ticks_split.append(bar_ticks[bi + 1])
+                num_tokens_current_chunk = 0
         else:
-            num_tokens = next_num_tokens
+            num_tokens_current_chunk = num_tokens_next
 
     return split_midi_per_ticks(midi, ticks_split)
 
@@ -145,7 +184,6 @@ def get_average_num_tokens_per_note(
             num_tokens_per_note.append(len(tok_seq) / num_notes)
         else:
             for track, seq in zip(midi.tracks, tok_seq):
-                # TODO test this
                 num_tokens_per_note.append(len(seq) / track.note_num())
 
     return sum(num_tokens_per_note) / len(num_tokens_per_note)
