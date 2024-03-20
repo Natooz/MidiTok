@@ -277,7 +277,7 @@ def split_midi_per_note_density(
                 ticks_split.append(bar_ticks[bi])
                 num_tokens_current_chunk = tpb
             # Cut at the **end** of the current bar
-            else:
+            elif bi + 1 < len(bar_ticks):
                 ticks_split.append(bar_ticks[bi + 1])
                 num_tokens_current_chunk = 0
         else:
