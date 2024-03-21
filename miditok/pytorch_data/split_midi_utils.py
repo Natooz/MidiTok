@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from warnings import warn
 
 import numpy as np
-from symusic import Score
+from symusic import Score, TextMeta
 from torch import LongTensor
 from tqdm import tqdm
 
@@ -128,6 +128,10 @@ def split_midis_for_training(
                 # changes happening later
                 if len(midi_to_save.tracks) == 0 or midi_to_save.note_num() == 0:
                     continue
+                # Add a marker to indicate chunk number
+                midi_to_save.markers.append(
+                    TextMeta(0, f"miditok: chunk {_i}/{len(midi_splits) - 1}")
+                )
                 if tracks_separated:
                     file_name = f"{file_path.stem}_t{ti}_{_i}.mid"
                 else:

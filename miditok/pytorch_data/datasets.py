@@ -189,30 +189,43 @@ class DatasetMIDI(_DatasetABC):
         return item
 
     def _tokenize_midi(self, midi: Score) -> TokSequence | list[TokSequence]:
-        # Tokenize
+        # Tokenize it
         tokseq = self.tokenizer.midi_to_tokens(midi)
 
         # If tokenizing on the fly a multi-stream tokenizer, only keeps the first track
         if not self.pre_tokenize and not self.tokenizer.one_token_stream:
             tokseq = [tokseq[0]]
 
-        # Preprocessing token ids
-        # TODO only BOS when real beginning of a MIDI (first chunk of split)
-        # TODO only EOS when real end of a MIDI (last chunk of split)
+        # If this file is a chunk (split_midis_for_training), determine its id.
+        # By default, we add BOS and EOS tokens following the values of
+        # self.bos_token_id and self.eos_token_id (that may be None), except when the
+        # file is identified as a chunk.
+        add_bos_token = add_eos_token = True
+        for marker in midi.markers:
+            if marker.time != 0:
+                break
+            if marker.text.startswith("miditok: chunk"):
+                chunk_id, chunk_id_last = map(
+                    int, marker.text.split(" ")[-1].split("/")
+                )
+                add_bos_token = chunk_id == 0
+                add_eos_token = chunk_id == chunk_id_last
+
+        # Preprocessing token ids: reduce sequence length, add BOS/EOS tokens
         if self.tokenizer.one_token_stream:
             tokseq.ids = self._preprocess_token_ids(
                 tokseq.ids,
                 self._effective_max_seq_len,
-                self.bos_token_id,
-                self.eos_token_id,
+                self.bos_token_id if add_bos_token else None,
+                self.eos_token_id if add_eos_token else None,
             )
         else:
             for seq in tokseq:
                 seq.ids = self._preprocess_token_ids(
                     seq.ids,
                     self._effective_max_seq_len,
-                    self.bos_token_id,
-                    self.eos_token_id,
+                    self.bos_token_id if add_bos_token else None,
+                    self.eos_token_id if add_eos_token else None,
                 )
 
         return tokseq
