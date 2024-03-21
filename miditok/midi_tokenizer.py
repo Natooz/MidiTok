@@ -3159,7 +3159,8 @@ class MIDITokenizer(ABC, HFHubMixin):
             return self.__get_from_voc(item[1], item[0])
         if self.is_multi_voc and isinstance(item, str):
             if all(item in voc for voc in self.vocab):
-                return [voc[item] for voc in self.vocab]
+                # It should be the same id for all sub-vocabs
+                return self.vocab[0][item]
 
             msg = (
                 "This tokenizer uses multiple vocabularies / embedding pooling. To"

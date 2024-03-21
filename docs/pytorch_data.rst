@@ -1,6 +1,6 @@
-========================
-PyTorch data loaders
-========================
+=================================
+Using MidiTok with PyTorch models
+=================================
 
 MidiTok features PyTorch ``Dataset`` objects to load MIDI or token files during training.
 You can use them with a PyTorch ``DataLoader`` or your preferred libraries.

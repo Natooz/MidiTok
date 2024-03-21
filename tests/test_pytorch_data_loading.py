@@ -44,15 +44,21 @@ def get_labels_seq_len(midi: Score, tokseq: TokSequence, _: Path) -> int:
 def get_labels_seq(midi: Score, tokseq: TokSequence, _: Path) -> list[int]:
     if isinstance(tokseq, list):
         return tokseq[0].ids[: -len(midi.tracks)]
-    return tokseq.ids[: -len(midi.tracks)]
+    if len(tokseq) > len(midi.tracks):
+        return tokseq.ids[: -len(midi.tracks)]
+    return tokseq.ids
 
 
+@pytest.mark.parametrize(
+    "tokenizer_cls", [miditok.TSD, miditok.Octuple], ids=["TSD", "Octuple"]
+)
 @pytest.mark.parametrize("one_token_stream", [True, False], ids=["1 strm", "n strms"])
 @pytest.mark.parametrize("split_midis", [True, False], ids=["split", "no split"])
 @pytest.mark.parametrize("pre_tokenize", [True, False], ids=["pretok", "no pretok"])
 @pytest.mark.parametrize("func_labels", [get_labels_seq_len, get_labels_seq])
 def test_dataset_midi(
     tmp_path: Path,
+    tokenizer_cls: Callable,
     one_token_stream: bool,
     split_midis: bool,
     pre_tokenize: bool,
@@ -61,7 +67,7 @@ def test_dataset_midi(
     max_seq_len: int = 1000,
 ):
     config = miditok.TokenizerConfig(use_programs=one_token_stream)
-    tokenizer = miditok.TSD(config)
+    tokenizer = tokenizer_cls(config)
 
     # Split MIDIs if requested
     # We perform it twice as the second time, the method would return the same paths as

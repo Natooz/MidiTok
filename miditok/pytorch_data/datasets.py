@@ -31,18 +31,26 @@ class _DatasetABC(Dataset, ABC):
 
     @staticmethod
     def _preprocess_token_ids(
-        token_ids: list[int],
+        token_ids: list[int | list[int]],
         max_seq_len: int,
         bos_token_id: int | None = None,
         eos_token_id: int | None = None,
-    ) -> list[int]:
+        enforce_eos_token_if_seq_len_exceed_lim: bool = False,
+    ) -> list[int | list[int]]:
         # Reduce sequence length
         if len(token_ids) > max_seq_len:
             token_ids = token_ids[:max_seq_len]
+            if not enforce_eos_token_if_seq_len_exceed_lim:
+                eos_token_id = None
+
         # Adds BOS and EOS tokens
         if bos_token_id:
+            if isinstance(token_ids[0], list):
+                bos_token_id = [bos_token_id] * len(token_ids[0])
             token_ids.insert(0, bos_token_id)
         if eos_token_id:
+            if isinstance(token_ids[0], list):
+                eos_token_id = [eos_token_id] * len(token_ids[0])
             token_ids.append(eos_token_id)
 
         return token_ids
@@ -76,6 +84,11 @@ class DatasetMIDI(_DatasetABC):
     **Important note:** you should probably use this class in concert with the
     :py:func:`miditok.pytorch_data.split_midis_for_training` method in order to train
     your model with chunks of MIDIs of token sequence lengths close to ``max_seq_len``.
+    When using this class with MIDI chunks, the ``BOS`` and ``EOS`` tokens will only be
+    added to the first and last chunks respectively. This allows to not train the model
+    with ``EOS`` tokens that would incorrectly inform the model the end of the data
+    samples, and break the causality chain of consecutive chunks with incorrectly
+    placed ``BOS`` tokens.
 
     Additionally, you can use the ``func_to_get_labels`` argument to provide a method
     allowing to use labels (one label per file).
@@ -218,6 +231,7 @@ class DatasetMIDI(_DatasetABC):
                 self._effective_max_seq_len,
                 self.bos_token_id if add_bos_token else None,
                 self.eos_token_id if add_eos_token else None,
+                enforce_eos_token_if_seq_len_exceed_lim=False,
             )
         else:
             for seq in tokseq:
@@ -226,6 +240,7 @@ class DatasetMIDI(_DatasetABC):
                     self._effective_max_seq_len,
                     self.bos_token_id if add_bos_token else None,
                     self.eos_token_id if add_eos_token else None,
+                    enforce_eos_token_if_seq_len_exceed_lim=False,
                 )
 
         return tokseq
