@@ -33,6 +33,7 @@ def split_midis_for_training(
     save_dir: Path,
     max_seq_len: int,
     average_num_tokens_per_note: float | None = None,
+    num_overlap_bars: int = 0,
     minimize_padding: bool = False,
     min_seq_len: int | None = None,
 ) -> list[Path]:
@@ -63,6 +64,11 @@ def split_midis_for_training(
         this tokenizer. If given ``None``, this value will automatically be calculated
         from the first 200 MIDI files with the
         :py:func:`miditok.pytorch_data.get_average_num_tokens_per_note` method.
+    :param num_overlap_bars: will create chunks with consecutive overlapping bars. For
+        example, if this argument is given ``1``, two consecutive MIDI chunks might
+        end at the bar *n* and start at the bar *n-1* respectively, thus they will
+        encompass the same bar. This allows to create a causality chain between chunks.
+        (default: ``0``).
     :param minimize_padding: will split the MIDIs into chunks in order to minimize
         padding at best, at the cost of parts of bars that will be omitted.
         (default: ``False``)
@@ -117,6 +123,7 @@ def split_midis_for_training(
                 midi_to_split,
                 max_seq_len,
                 average_num_tokens_per_note,
+                num_overlap_bars,
                 minimize_padding,
                 min_seq_len,
             )
@@ -220,6 +227,7 @@ def split_midi_per_note_density(
     midi: Score,
     max_seq_len: int,
     average_num_tokens_per_note: float,
+    num_overlap_bars: int = 0,
     minimize_padding: bool = False,
     min_seq_len: int | None = None,
 ) -> list[Score]:
@@ -251,6 +259,11 @@ def split_midi_per_note_density(
     :param max_seq_len: maximum number of tokens per sequence.
     :param average_num_tokens_per_note: average number of tokens per note associated to
         this tokenizer.
+    :param num_overlap_bars: will create chunks with consecutive overlapping bars. For
+        example, if this argument is given ``1``, two consecutive MIDI chunks might
+        end at the bar *n* and start at the bar *n-1* respectively, thus they will
+        encompass the same bar. This allows to create a causality chain between chunks.
+        (default: ``0``).
     :param minimize_padding: will split the MIDIs into chunks in order to minimize
         padding at best, at the cost of parts of bars that will be omitted.
         (default: ``False``)
@@ -258,6 +271,12 @@ def split_midi_per_note_density(
         bar of the MIDI. (default: ``max_seq_len // 2``)
     :return: the list of split MIDIs.
     """
+    if num_overlap_bars < 0:
+        msg = (
+            f"`num_overlap_bars` must be greater or equal to 0 (received "
+            f"{num_overlap_bars})."
+        )
+        raise ValueError(msg)
     if min_seq_len is None:
         min_seq_len = max_seq_len // 2
     bar_ticks = get_bars_ticks(midi)
@@ -267,8 +286,10 @@ def split_midi_per_note_density(
     ]
 
     ticks_split = []
-    num_tokens_current_chunk = 0
-    for bi, tpb in enumerate(num_tokens_per_bar):
+    num_tokens_current_chunk = num_bars_current_chunk = 0
+    bi = last_bi_cut = 0
+    while bi < len(bar_ticks):
+        tpb = num_tokens_per_bar[bi]
         num_tokens_next = num_tokens_current_chunk + tpb
         if num_tokens_next > max_seq_len:
             diff_num_tokens = num_tokens_next - max_seq_len
@@ -278,14 +299,29 @@ def split_midi_per_note_density(
                 diff_num_tokens < tpb / 2  # would cover short part of the bar
                 or (bi + 1 == len(bar_ticks) and diff_num_tokens < min_seq_len)
             ):
-                ticks_split.append(bar_ticks[bi])
-                num_tokens_current_chunk = tpb
+                bi_to_cut = bi
+
             # Cut at the **end** of the current bar
             elif bi + 1 < len(bar_ticks):
-                ticks_split.append(bar_ticks[bi + 1])
-                num_tokens_current_chunk = 0
+                bi_to_cut = bi + 1
+
+            # Last bar --> need to update conditions to handle overlap
+            else:
+                continue
+
+            # Apply bar overlap and add tick cut to the list
+            # We make sure that the chunk will be at least one bar long
+            bi_to_cut = max(last_bi_cut + 1, bi_to_cut - num_overlap_bars)
+            num_tokens_current_chunk = sum(
+                num_tokens_per_bar[i] for i in range(bi_to_cut, bi + 1)
+            )
+            ticks_split.append(bar_ticks[bi_to_cut])
+            last_bi_cut = bi_to_cut
+
         else:
             num_tokens_current_chunk = num_tokens_next
+            num_bars_current_chunk += 1
+            bi += 1
 
     if len(ticks_split) == 0:
         return [midi]

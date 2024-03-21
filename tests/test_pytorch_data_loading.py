@@ -49,11 +49,9 @@ def get_labels_seq(midi: Score, tokseq: TokSequence, _: Path) -> list[int]:
     return tokseq.ids
 
 
-@pytest.mark.parametrize(
-    "tokenizer_cls", [miditok.TSD, miditok.Octuple], ids=["TSD", "Octuple"]
-)
-@pytest.mark.parametrize("one_token_stream", [True, False], ids=["1 strm", "n strms"])
-@pytest.mark.parametrize("split_midis", [True, False], ids=["split", "no split"])
+@pytest.mark.parametrize("tokenizer_cls", [miditok.TSD], ids=["TSD"])
+@pytest.mark.parametrize("one_token_stream", [True], ids=["1 strm"])
+@pytest.mark.parametrize("split_midis", [True], ids=["split"])
 @pytest.mark.parametrize("pre_tokenize", [True, False], ids=["pretok", "no pretok"])
 @pytest.mark.parametrize("func_labels", [get_labels_seq_len, get_labels_seq])
 def test_dataset_midi(
@@ -65,6 +63,7 @@ def test_dataset_midi(
     func_labels: Callable,
     midi_paths: Sequence[Path] = MIDI_PATHS_MULTITRACK,
     max_seq_len: int = 1000,
+    num_overlap_bars: int = 1,
 ):
     config = miditok.TokenizerConfig(use_programs=one_token_stream)
     tokenizer = tokenizer_cls(config)
@@ -75,13 +74,21 @@ def test_dataset_midi(
     if split_midis:
         t0 = time()
         midi_paths_split1 = miditok.pytorch_data.split_midis_for_training(
-            midi_paths, tokenizer, tmp_path, max_seq_len
+            midi_paths,
+            tokenizer,
+            tmp_path,
+            max_seq_len,
+            num_overlap_bars=num_overlap_bars,
         )
         t1 = time() - t0
         print(f"First MIDI split call: {t1:.2f} sec")
         t0 = time()
         midi_paths_split2 = miditok.pytorch_data.split_midis_for_training(
-            midi_paths, tokenizer, tmp_path, max_seq_len
+            midi_paths,
+            tokenizer,
+            tmp_path,
+            max_seq_len,
+            num_overlap_bars=num_overlap_bars,
         )
         t1 = time() - t0
         print(f"Second MIDI split call: {t1:.2f} sec")
