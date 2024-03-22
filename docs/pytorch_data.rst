@@ -26,6 +26,49 @@ Code example
 --------------------------
 
 MidiTok also provides an "all-in-one" data collator: :class:`miditok.pytorch_data.DataCollator` to be used with PyTorch a ``DataLoader`` in order to pad batches and create attention masks.
+Here is a complete example showing how to use this module to train any model.
+
+..  code-block:: python
+
+    from miditok import REMI, TokenizerConfig
+    from miditok.pytorch_data import DatasetMIDI, DataCollator, split_midis_for_training
+    from torch.utils.data import DataLoader
+    from pathlib import Path
+
+    # Creating a multitrack tokenizer configuration, read the doc to explore other parameters
+    config = TokenizerConfig(num_velocities=16, use_chords=True, use_programs=True)
+    tokenizer = REMI(config)
+
+    # Train the tokenizer with Byte Pair Encoding (BPE)
+    midi_paths = list(Path("path", "to", "midis").glob("**/*.mid"))
+    tokenizer.learn_bpe(vocab_size=30000, files_paths=midi_paths)
+    tokenizer.save_params(Path("path", "to", "save", "tokenizer.json"))
+    # And pushing it to the Hugging Face hub (you can download it back with .from_pretrained)
+    tokenizer.push_to_hub("username/model-name", private=True, token="your_hf_token")
+
+    # Split MIDIs into smaller chunks for training
+    dataset_chunks_dir = Path("path", "to", "midi_chunks")
+    split_midis_for_training(
+        files_paths=midi_paths,
+        tokenizer=tokenizer,
+        save_dir=dataset_chunks_dir,
+        max_seq_len=1024,
+    )
+
+    # Create a Dataset, a DataLoader and a collator to train a model
+    dataset = DatasetMIDI(
+        files_paths=list(dataset_chunks_dir.glob("**/*.mid")),
+        tokenizer=tokenizer,
+        max_seq_len=1024,
+        bos_token_id=tokenizer["BOS_None"],
+        eos_token_id=tokenizer["EOS_None"],
+    )
+    collator = DataCollator(tokenizer["PAD_None"])
+    dataloader = DataLoader(dataset, batch_size=64, collate_fn=collator)
+
+    # Iterate over the dataloader to train a model
+    for batch in dataloader:
+        print("Train your model on this batch...")
 
 **Note:** This module is imported only if ``torch`` is installed in your Python environment.
 
