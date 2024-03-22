@@ -165,10 +165,10 @@ class DatasetMIDI(_DatasetABC):
 
     def __getitem__(self, idx: int) -> dict[str, LongTensor]:
         """
-        Return the `idx` elements of the dataset.
+        Return the ``idx`` elements of the dataset.
 
         If the dataset is pre-tokenized, the method will return the token ids.
-        Otherwise, it will tokenize the `idx`th MIDI file on the fly.
+        Otherwise, it will tokenize the ``idx``th MIDI file on the fly.
 
         :param idx: idx of the file/sample.
         :return: the token ids, with optionally the associated label.
@@ -260,25 +260,23 @@ class DatasetMIDI(_DatasetABC):
         return f"{len(self.files_paths)} MIDI files."
 
 
-class DatasetJsonIO(_DatasetABC):
+class DatasetJSON(_DatasetABC):
     r"""
-    Basic ``Dataset`` loading Json files of tokenized MIDIs on the fly.
+    Basic ``Dataset`` loading JSON files of tokenized MIDIs.
 
-    When indexing it (``dataset[idx]``), this class will load the ``files_paths[idx]``
-    json file and return the token ids, that can be used to train generative models.
+    When indexed (``dataset[idx]``), a ``DatasetJSON`` will load the
+    ``files_paths[idx]`` JSON file and return the token ids, that can be used to train
+    generative models.
+
     **This class is only compatible with tokens saved as a single stream of tokens
     (** ``tokenizer.one_token_stream`` **).** If you plan to use it with token files
-    containing multiple token streams, you should first it with
-    ``miditok.pytorch_data.split_dataset_to_subsequences()``.
+    containing multiple token streams, you should first split each track token sequence
+     with the :py:func:`miditok.pytorch_data.split_dataset_to_subsequences` method.
 
-    It allows to reduce the sequence length up to a `max_seq_len` limit, but will not
-    split the sequences into subsequences. If your dataset contains sequences with
-    lengths largely varying, you might want to first split it into subsequences with
-    the ``miditok.pytorch_data.split_dataset_to_subsequences()`` method before loading
+    If your dataset contains token sequences with lengths largely varying, you might
+    want to first split it into subsequences with the
+    :py:func:`miditok.pytorch_data.split_dataset_to_subsequences` method before loading
     it to avoid losing data.
-
-    This ``Dataset`` class is well suited if you are using a large dataset, or have
-    access to limited RAM resources.
 
     :param files_paths: list of paths to files to load.
     :param max_seq_len: maximum sequence length (in num of tokens). (default: ``None``)
@@ -304,7 +302,7 @@ class DatasetJsonIO(_DatasetABC):
 
     def __getitem__(self, idx: int) -> dict[str, LongTensor]:
         """
-        Load the tokens from the ``idx`` json file.
+        Load the tokens from the ``idx`` JSON file.
 
         :param idx: index of the file to load.
         :return: the tokens as a dictionary mapping to the token ids as a tensor.

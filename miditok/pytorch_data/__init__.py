@@ -2,7 +2,7 @@
 
 from .collators import DataCollator
 from .datasets import (
-    DatasetJsonIO,
+    DatasetJSON,
     DatasetMIDI,
 )
 from .split_midi_utils import (
@@ -15,7 +15,7 @@ from .split_midi_utils import (
 
 __all__ = [
     "DatasetMIDI",
-    "DatasetJsonIO",
+    "DatasetJSON",
     "DataCollator",
     "get_average_num_tokens_per_note",
     "split_midis_for_training",

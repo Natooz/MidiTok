@@ -9,7 +9,7 @@ For most purposes, the :class:`miditok.pytorch_data.DatasetMIDI` should fulfill 
 
 MidiTok also provides an "all-in-one" data collator: :class:`miditok.pytorch_data.DataCollator` to be used with PyTorch a ``DataLoader`` in order to pad batches and create attention masks.
 
-**Note:** *This module is imported only if* ``torch`` *is installed in your Python environment.*
+**Note:** This module is imported only if ``torch`` is installed in your Python environment.
 
 .. automodule:: miditok.pytorch_data
     :members:

@@ -325,8 +325,8 @@ def split_seq_in_subsequences(
 
 
 def split_dataset_to_subsequences(
-    files_paths: Sequence[Path | str],
-    out_dir: Path | str,
+    files_paths: Sequence[Path],
+    out_dir: Path,
     min_seq_len: int,
     max_seq_len: int,
     one_token_stream: bool = True,
@@ -335,7 +335,7 @@ def split_dataset_to_subsequences(
     Split a dataset of tokens files into subsequences.
 
     This method is particularly useful if you plan to use a
-    :class:`miditok.pytorch_data.DatasetJsonIO`, as it would split token sequences
+    :class:`miditok.pytorch_data.DatasetJSON`, as it would split token sequences
     into subsequences with the desired lengths before loading them for training.
 
     :param files_paths: list of files of tokens to split.
@@ -346,7 +346,6 @@ def split_dataset_to_subsequences(
         i.e. the first dimension of the value of the "ids" entry corresponds to several
         tracks. Otherwise, leave False. (default: True)
     """
-    out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     for file_path in files_paths:

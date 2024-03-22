@@ -114,19 +114,26 @@ def test_dataset_midi(
         pass
 
 
-def test_dataset_jsonio(tmp_path: Path, midi_path: Sequence[Path] | None = None):
+def test_dataset_json(tmp_path: Path, midi_path: Sequence[Path] | None = None):
     if midi_path is None:
-        midi_path = MIDI_PATHS_MULTITRACK[:3]
-    tokens_os_dir = tmp_path / "multitrack_tokens_os"
+        midi_path = MIDI_PATHS_MULTITRACK[:5]
+    tokens_dir_path = tmp_path / "multitrack_tokens_dataset_json"
 
     config = miditok.TokenizerConfig(use_programs=True)
     tokenizer = miditok.TSD(config)
-    if not tokens_os_dir.is_dir():
-        tokenizer.tokenize_midi_dataset(midi_path, tokens_os_dir)
+    if not tokens_dir_path.is_dir():
+        tokenizer.tokenize_midi_dataset(midi_path, tokens_dir_path)
 
-    dataset = miditok.pytorch_data.DatasetJsonIO(
-        list(tokens_os_dir.glob("**/*.json")),
-        100,
+    tokens_split_dir_path = tmp_path / "multitrack_tokens_dataset_json_split"
+    miditok.pytorch_data.split_dataset_to_subsequences(
+        list(tokens_dir_path.glob("**/*.json")),
+        tokens_split_dir_path,
+        300,
+        1000,
+    )
+    dataset = miditok.pytorch_data.DatasetJSON(
+        list(tokens_split_dir_path.glob("**/*.json")),
+        1000,
         tokenizer["BOS_None"],
         tokenizer["EOS_None"],
     )
