@@ -275,7 +275,7 @@ class DatasetJSON(_DatasetABC):
 
     If your dataset contains token sequences with lengths largely varying, you might
     want to first split it into subsequences with the
-    :py:func:`miditok.pytorch_data.split_dataset_to_subsequences` method before loading
+    :py:func:`miditok.pytorch_data.split_midis_for_training` method before loading
     it to avoid losing data.
 
     :param files_paths: list of paths to files to load.
