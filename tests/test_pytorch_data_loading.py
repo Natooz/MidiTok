@@ -49,11 +49,14 @@ def get_labels_seq(midi: Score, tokseq: TokSequence, _: Path) -> list[int]:
     return tokseq.ids
 
 
-@pytest.mark.parametrize("tokenizer_cls", [miditok.TSD], ids=["TSD"])
-@pytest.mark.parametrize("one_token_stream", [True], ids=["1 strm"])
-@pytest.mark.parametrize("split_midis", [True], ids=["split"])
+@pytest.mark.parametrize(
+    "tokenizer_cls", [miditok.TSD, miditok.Octuple], ids=["TSD", "Octuple"]
+)
+@pytest.mark.parametrize("one_token_stream", [True, False], ids=["1 strm", "n strm"])
+@pytest.mark.parametrize("split_midis", [True, False], ids=["split", "no split"])
 @pytest.mark.parametrize("pre_tokenize", [True, False], ids=["pretok", "no pretok"])
 @pytest.mark.parametrize("func_labels", [get_labels_seq_len, get_labels_seq])
+@pytest.mark.parametrize("num_overlap_bars", [0, 1], ids=["no overlap", "overlap"])
 def test_dataset_midi(
     tmp_path: Path,
     tokenizer_cls: Callable,
@@ -61,9 +64,9 @@ def test_dataset_midi(
     split_midis: bool,
     pre_tokenize: bool,
     func_labels: Callable,
+    num_overlap_bars: int,
     midi_paths: Sequence[Path] = MIDI_PATHS_MULTITRACK,
     max_seq_len: int = 1000,
-    num_overlap_bars: int = 1,
 ):
     config = miditok.TokenizerConfig(use_programs=one_token_stream)
     tokenizer = tokenizer_cls(config)

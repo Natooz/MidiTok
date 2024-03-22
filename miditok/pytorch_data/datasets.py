@@ -38,6 +38,7 @@ class _DatasetABC(Dataset, ABC):
         enforce_eos_token_if_seq_len_exceed_lim: bool = False,
     ) -> list[int | list[int]]:
         # Reduce sequence length
+        max_seq_len -= sum([1 for t in [bos_token_id, eos_token_id] if t is not None])
         if len(token_ids) > max_seq_len:
             token_ids = token_ids[:max_seq_len]
             if not enforce_eos_token_if_seq_len_exceed_lim:
@@ -141,9 +142,6 @@ class DatasetMIDI(_DatasetABC):
         self.sample_key_name = sample_key_name
         self.labels_key_name = labels_key_name
         self.samples, self.labels = ([], []) if func_to_get_labels else (None, None)
-        self._effective_max_seq_len = max_seq_len - sum(
-            [1 for tok in [bos_token_id, eos_token_id] if tok is not None]
-        )
 
         # Pre-tokenize the MIDI files
         if pre_tokenize:
@@ -228,7 +226,7 @@ class DatasetMIDI(_DatasetABC):
         if self.tokenizer.one_token_stream:
             tokseq.ids = self._preprocess_token_ids(
                 tokseq.ids,
-                self._effective_max_seq_len,
+                self.max_seq_len,
                 self.bos_token_id if add_bos_token else None,
                 self.eos_token_id if add_eos_token else None,
                 enforce_eos_token_if_seq_len_exceed_lim=False,
@@ -237,7 +235,7 @@ class DatasetMIDI(_DatasetABC):
             for seq in tokseq:
                 seq.ids = self._preprocess_token_ids(
                     seq.ids,
-                    self._effective_max_seq_len,
+                    self.max_seq_len,
                     self.bos_token_id if add_bos_token else None,
                     self.eos_token_id if add_eos_token else None,
                     enforce_eos_token_if_seq_len_exceed_lim=False,

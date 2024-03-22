@@ -857,6 +857,50 @@ def split_midi_per_ticks(midi: Score, ticks: list[int]) -> list[Score]:
     return midis_split
 
 
+def extract_chunk_from_midi(
+    midi: Score, tick_start: int, tick_end: int, clip_end: bool = False
+) -> Score:
+    """
+    Extract a chunk of a ``Score``.
+
+    The returned chunk will have a starting time at tick 0, i.e. the times of its
+    events will be shifted by ``-tick_start``.
+
+    :param midi: object to extract a chunk from.
+    :param tick_start: starting tick of the chunk to extract.
+    :param tick_end: ending tick of the chunk to extract.
+    :param clip_end: if given ``True``, the chunk at ``tick_end + 1`` and thus include
+        the events occurring at ``tick_end``. (default: ``False``)
+    :return: chunk of the ``midi`` starting at ``tick_start and ending at ``tick_end``.
+    """
+    # Get the tempo, time sig and key sig at the beginning of the chunk to extract
+    # There might not be default key signatures in the Score
+    tempo, time_signature, key_signature = None, None, KeySignature(0, 0, 0)
+    for tempo_ in midi.tempos:
+        if tempo_.time > tick_start:
+            break
+        tempo = tempo_
+    for time_signature_ in midi.time_signatures:
+        if time_signature_.time > tick_start:
+            break
+        time_signature = time_signature_
+    for key_signature_ in midi.key_signatures:
+        if key_signature_.time > tick_start:
+            break
+        key_signature = key_signature_
+    tempo.time = time_signature.time = key_signature.time = 0
+
+    # Clip the MIDI and append the global attributes
+    midi_split = midi.clip(tick_start, tick_end, clip_end=clip_end).shift_time(
+        -tick_start
+    )
+    midi_split.tempos.append(tempo)
+    midi_split.time_signatures.append(time_signature)
+    midi_split.key_signatures.append(key_signature)
+
+    return midi_split
+
+
 def split_midi_per_beats(
     midi: Score, max_num_beats: int, min_num_beats: int = 1
 ) -> list[Score]:
