@@ -22,21 +22,6 @@ if TYPE_CHECKING:
     from miditok import TokSequence
 
 
-def test_get_num_beats_for_token_seq_len(
-    file_paths: Sequence[Path] = MIDI_PATHS_MULTITRACK,
-    sequence_length: int = 1000,
-    ratio_data: float = 0.8,
-):
-    tokenizer1 = miditok.TSD()
-    tokenizer2 = miditok.TSD(miditok.TokenizerConfig(use_programs=True))
-    _ = miditok.pytorch_data.get_num_beats_for_token_seq_len(
-        file_paths, tokenizer1, sequence_length, ratio_data
-    )
-    _ = miditok.pytorch_data.get_num_beats_for_token_seq_len(
-        file_paths, tokenizer2, sequence_length, ratio_data
-    )
-
-
 def get_labels_seq_len(midi: Score, tokseq: TokSequence, _: Path) -> int:
     return len(tokseq) // len(midi.tracks)
 

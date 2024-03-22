@@ -76,7 +76,7 @@ class _DatasetABC(Dataset, ABC):
 
 class DatasetMIDI(_DatasetABC):
     r"""
-    A``Dataset`` loading and tokenizing MIDIs during training.
+    A ``Dataset`` loading and tokenizing MIDIs during training.
 
     This class can be used for either tokenize MIDIs on the fly when iterating it, or
     by pre-tokenizing all the MIDIs at its initialization and store the tokens in
