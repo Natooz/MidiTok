@@ -19,7 +19,7 @@ copyright = "2024, Nathan Fradet"  # noqa: A001
 author = "Nathan Fradet"
 
 
-with Path("pyproject.toml").open("rb") as f:
+with (Path(__file__).parent.parent / "pyproject.toml").open("rb") as f:
     data = tomllib.load(f)
     version = data["project"]["version"]
 
