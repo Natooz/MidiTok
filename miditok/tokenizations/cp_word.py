@@ -32,6 +32,7 @@ class CPWord(MIDITokenizer):
     *Duration*) are first independently converted to embeddings which are then merged
     (pooled) into a single one.
     Each compound token will be a list of the form (index: Token type):
+
     * 0: Family;
     * 1: Bar/Position;
     * 2: Pitch;

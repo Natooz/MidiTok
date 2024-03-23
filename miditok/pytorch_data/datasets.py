@@ -271,7 +271,7 @@ class DatasetJSON(_DatasetABC):
     **This class is only compatible with tokens saved as a single stream of tokens
     (** ``tokenizer.one_token_stream`` **).** If you plan to use it with token files
     containing multiple token streams, you should first split each track token sequence
-     with the :py:func:`miditok.pytorch_data.split_dataset_to_subsequences` method.
+    with the :py:func:`miditok.pytorch_data.split_dataset_to_subsequences` method.
 
     If your dataset contains token sequences with lengths largely varying, you might
     want to first split it into subsequences with the
