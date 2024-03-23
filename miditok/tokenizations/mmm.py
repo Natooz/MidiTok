@@ -25,7 +25,7 @@ class MMM(MIDITokenizer):
     The reason being that ``NoteOff`` tokens perform poorer for generation with causal
     models.
 
-    **Add a** ``density_bins_max`` entry in the config, mapping to a tuple specifying
+    **Add a** ``density_bins_max`` **entry in the config, mapping to a tuple specifying
     the number of density bins, and the maximum density in notes per beat to consider.
     (default: (10, 20))**
 
