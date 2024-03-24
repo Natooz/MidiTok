@@ -234,17 +234,17 @@ class MIDITokenizer(ABC, HFHubMixin):
         The different (hidden / protected) vocabulary attributes of the class are:
 
         * ``._vocab_base`` : Dict[str: int] token -> id - Registers all known base
-        tokens;
+            tokens;
         * ``.__vocab_base_inv`` : Dict[int: str] id -> token - Inverse of
-        ``._base_vocab`` , to go the other way;
+            ``._base_vocab`` , to go the other way;
         * ``._vocab_base_id_to_byte`` : Dict[int: str] id -> byte - Link ids to their
-        associated unique bytes;
+            associated unique bytes;
         * ``._vocab_base_byte_to_token`` : Dict[str: str] - similar as above but for
-        tokens;
+            tokens;
         * ``._vocab_bpe_bytes_to_tokens`` : Dict[str: List[str]] byte(s) -> token(s)
-        used to decode BPE;
+            used to decode BPE;
         * ``._bpe_model.get_vocab()`` : Dict[str: int] byte -> id - bpe model
-        vocabulary, based on unique bytes.
+            vocabulary, based on unique bytes.
 
         Before training the tokenizer with BPE, bytes are obtained by running
         ``chr(id)`` . After training, if we did start from an empty vocabulary, some

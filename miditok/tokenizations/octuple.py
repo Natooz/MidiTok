@@ -48,8 +48,8 @@ class Octuple(MIDITokenizer):
     * Tokens are first sorted by time, then track, then pitch values.
     * Tracks with the same *Program* will be merged.
     * When decoding multiple token sequences (of multiple tracks), i.e. when
-    `config.use_programs` is False, only the tempos and time signatures of the
-    first sequence will be decoded for the whole MIDI.
+        `config.use_programs` is False, only the tempos and time signatures of the
+        first sequence will be decoded for the whole MIDI.
     """
 
     def _tweak_config_before_creating_voc(self) -> None:
