@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 from symusic import (
     ControlChange,
+    KeySignature,
     Note,
     Pedal,
     PitchBend,
@@ -431,6 +432,36 @@ def merge_tracks(
     return tracks_[0]
 
 
+def merge_midis(midis: Sequence[Score]) -> Score:
+    """
+    Merge a list of MIDIs into a single one.
+
+    This method will combine all their tracks and global events such as tempo changes
+    or time signature changes.
+
+    :param midis: MIDIs to merge.
+    :return: the merged MIDI.
+    """
+    if not all(midi.tpq == midis[0].tpq for midi in midis):
+        msg = (
+            "Some `Score`s have different time divisions (`tpq`). They must be all"
+            "identical in order to merge the `Scores`s."
+        )
+        raise ValueError(msg)
+
+    midi = Score(midis[0].tpq)
+    for midi_split in midis:
+        midi.tracks.extend(midi_split.tracks)
+        midi.tempos.extend(midi_split.tempos)
+        midi.time_signatures.extend(midi_split.time_signatures)
+        midi.key_signatures.extend(midi_split.key_signatures)
+        midi.lyrics.extend(midi_split.lyrics)
+        midi.markers.extend(midi_split.markers)
+
+    # sorting is done by Symusic automatically
+    return midi
+
+
 def merge_same_program_tracks(
     tracks: list[Track] | TrackTickList, effects: bool = True
 ) -> None:
@@ -656,6 +687,91 @@ def get_bars_ticks(midi: Score) -> list[int]:
     return bars_ticks
 
 
+def get_beats_ticks(midi: Score) -> list[int]:
+    """
+    Return the ticks of the beats of a MIDI.
+
+    **Note:** When encountering multiple time signature messages at a same tick, we
+    this method will automatically consider the last one (coming in the list). Other
+    software can proceed differently. Logic Pro, for example, uses the first one.
+    I haven't found documentation or recommendations for this specific situation. It
+    might be better to use the first one and discard the others.
+
+    :param midi: MIDI to analyze.
+    :return: list of ticks for each beat.
+    """
+    max_tick = midi.end()
+    beat_ticks = []
+    time_sigs = copy(midi.time_signatures)
+    # Mock the last one to cover the last section in the loop below
+    if time_sigs[-1].time != max_tick:
+        time_sigs.append(TimeSignature(max_tick, *TIME_SIGNATURE))
+
+    # Section from tick 0 to first time sig is 4/4 if first time sig time is not 0
+    if time_sigs[0].time == 0:
+        current_time_sig = time_sigs[0]
+    else:
+        current_time_sig = TimeSignature(0, *TIME_SIGNATURE)
+
+    # Compute beats, one time signature portion at a time
+    for time_signature in time_sigs:
+        ticks_per_beat = compute_ticks_per_beat(
+            current_time_sig.denominator, midi.ticks_per_quarter
+        )
+        ticks_diff = time_signature.time - current_time_sig.time
+        num_beats = ceil(ticks_diff / ticks_per_beat)
+        beat_ticks += [
+            current_time_sig.time + ticks_per_beat * i for i in range(num_beats)
+        ]
+        current_time_sig = time_signature
+
+    return beat_ticks
+
+
+def get_num_notes_per_bar(
+    midi: Score, tracks_indep: bool = False
+) -> list[int | list[int]]:
+    """
+    Return the number of notes within each bar of a MIDI.
+
+    :param midi: MIDI object to analyze.
+    :param tracks_indep: whether to process each track independently or all together.
+    :return: the number of notes within each bar.
+    """
+    # Get bar and note times
+    bar_ticks = get_bars_ticks(midi)
+    if bar_ticks[-1] != midi.end():
+        bar_ticks.append(midi.end())
+    tracks_times = [track.notes.numpy()["time"] for track in midi.tracks]
+    num_notes_per_bar = []
+    if not tracks_indep:
+        tracks_times = [np.concatenate(tracks_times)]
+        tracks_times[-1].sort()
+    elif len(midi.tracks) > 1:
+        num_notes_per_bar = [[] for _ in range(len(bar_ticks) - 1)]
+
+    for notes_times in tracks_times:
+        current_note_time_idx = previous_note_time_idx = 0
+        current_bar_tick_idx = 0
+        while current_bar_tick_idx < len(bar_ticks) - 1:
+            while (
+                current_note_time_idx < len(notes_times)
+                and notes_times[current_note_time_idx]
+                < bar_ticks[current_bar_tick_idx + 1]
+            ):
+                current_note_time_idx += 1
+            num_notes = current_note_time_idx - previous_note_time_idx
+            if tracks_indep and len(midi.tracks) > 1:
+                num_notes_per_bar[current_bar_tick_idx].append(num_notes)
+            else:
+                num_notes_per_bar.append(num_notes)
+
+            current_bar_tick_idx += 1
+            previous_note_time_idx = current_note_time_idx
+
+    return num_notes_per_bar
+
+
 def get_midi_ticks_per_beat(midi: Score) -> np.ndarray:
     """
     Compute the portions of numbers of ticks in a beat in a MIDI.
@@ -694,3 +810,213 @@ def get_midi_ticks_per_beat(midi: Score) -> np.ndarray:
             del ticks_per_beat[i]
 
     return np.array(ticks_per_beat)
+
+
+def split_midi_per_ticks(midi: Score, ticks: list[int]) -> list[Score]:
+    """
+    Split a MIDI into several smaller MIDIs.
+
+    The segmented MIDIs will all start at tick 0.
+    Example: for a MIDI with an end tick at 1000, and a list of tick
+    ``[2000, 5000, 7000]``, this method will return a list of four MIDIs which
+    correspond respectively to the portions of the original MIDI from tick 0 to 2000,
+    2000 to 5000, 5000 to 7000 and 10000 to 10000.
+
+    :param midi: MIDI object to split.
+    :param ticks: list of ticks to which the MIDI will be split.
+    :return: a list of segmented MIDI objects.
+    """
+    midis_split = []
+    midi_end_tick = midi.end() + 1  # to encompass the last events
+    ticks = ticks.copy()
+    if ticks[-1] != midi_end_tick:
+        ticks.append(midi_end_tick)
+
+    current_tick = 0
+    previous_tempo, previous_time_sig = None, None
+    previous_key_sig = KeySignature(0, 0, 0)
+    for tick_end in ticks:
+        midi_split = midi.clip(current_tick, tick_end, clip_end=False).shift_time(
+            -current_tick
+        )
+        if len(midi_split.tempos) == 0:
+            midi_split.tempos.append(previous_tempo)
+        if len(midi_split.time_signatures) == 0:
+            midi_split.time_signatures.append(previous_time_sig)
+        if len(midi_split.key_signatures) == 0:
+            midi_split.key_signatures.append(previous_key_sig)
+        midis_split.append(midi_split)
+
+        # Update the variables for the next iteration
+        previous_tempo = midi_split.tempos[-1]
+        previous_time_sig = midi_split.time_signatures[-1]
+        previous_key_sig = midi_split.key_signatures[-1]
+        previous_tempo.time = previous_time_sig.time = previous_key_sig.time = 0
+        current_tick = tick_end
+
+    return midis_split
+
+
+def extract_chunk_from_midi(
+    midi: Score, tick_start: int, tick_end: int, clip_end: bool = False
+) -> Score:
+    """
+    Extract a chunk of a ``Score``.
+
+    The returned chunk will have a starting time at tick 0, i.e. the times of its
+    events will be shifted by ``-tick_start``.
+
+    :param midi: object to extract a chunk from.
+    :param tick_start: starting tick of the chunk to extract.
+    :param tick_end: ending tick of the chunk to extract.
+    :param clip_end: if given ``True``, the chunk at ``tick_end + 1`` and thus include
+        the events occurring at ``tick_end``. (default: ``False``)
+    :return: chunk of the ``midi`` starting at ``tick_start and ending at ``tick_end``.
+    """
+    # Get the tempo, time sig and key sig at the beginning of the chunk to extract
+    # There might not be default key signatures in the Score
+    tempo, time_signature, key_signature = None, None, KeySignature(0, 0, 0)
+    for tempo_ in midi.tempos:
+        if tempo_.time > tick_start:
+            break
+        tempo = tempo_
+    for time_signature_ in midi.time_signatures:
+        if time_signature_.time > tick_start:
+            break
+        time_signature = time_signature_
+    for key_signature_ in midi.key_signatures:
+        if key_signature_.time > tick_start:
+            break
+        key_signature = key_signature_
+    tempo.time = time_signature.time = key_signature.time = 0
+
+    # Clip the MIDI and append the global attributes
+    midi_split = midi.clip(tick_start, tick_end, clip_end=clip_end).shift_time(
+        -tick_start
+    )
+    midi_split.tempos.append(tempo)
+    midi_split.time_signatures.append(time_signature)
+    midi_split.key_signatures.append(key_signature)
+
+    return midi_split
+
+
+def split_midi_per_beats(
+    midi: Score, max_num_beats: int, min_num_beats: int = 1
+) -> list[Score]:
+    """
+    Split a MIDI into several smaller MIDIs per number of beats.
+
+    This method splits a MIDI into smaller chunks that contains ``max_num_beats``
+    beats. The segmented MIDIs will all start at tick 0.
+
+    :param midi: MIDI object to split.
+    :param max_num_beats: maximum number of beats per segment.
+    :param min_num_beats: minimum number of beats per segment. This only applied to the
+        last segment of the input MIDI. (default: ``1``)
+    :return: a list of segmented MIDI objects.
+    """
+    if min_num_beats < 1:
+        raise ValueError(_ := f"`min_num_beats` must be > 0 (got {min_num_beats}).")
+
+    ticks_split = []
+    beats_ticks = get_beats_ticks(midi)
+    current_beat = 0
+    while current_beat < len(beats_ticks):
+        # Determine the number of beats for this section
+        num_beats = min(len(beats_ticks) - current_beat, max_num_beats)
+        if num_beats < min_num_beats:
+            break
+
+        # Extract the section
+        if (
+            num_beats != max_num_beats
+            or current_beat == len(beats_ticks) - max_num_beats
+        ):
+            # Will be the last iteration
+            tick_end = midi.end() + 1
+        else:
+            tick_end = beats_ticks[current_beat + num_beats]
+        if tick_end > midi.end():
+            break
+        ticks_split.append(tick_end)
+        current_beat += num_beats
+
+    return split_midi_per_ticks(midi, ticks_split)
+
+
+def split_midi_per_tracks(midi: Score) -> list[Score]:
+    """
+    Split a MIDI into several smaller MIDIs.
+
+    The segmented MIDIs will all start at tick 0.
+    Example: for a MIDI with an end tick at 1000, and a list of tick
+    ``[2000, 5000, 7000]``, this method will return a list of four MIDIs which
+    correspond respectively to the portions of the original MIDI from tick 0 to 2000,
+    2000 to 5000, 5000 to 7000 and 10000 to 10000.
+
+    :param midi: MIDI object to split.
+    :return: a list of segmented MIDI objects.
+    """
+    midis_split = []
+    for track in midi.tracks:
+        midi_split = Score(midi.tpq)
+        midi_split.tempos = midi.tempos
+        midi_split.time_signatures = midi.time_signatures
+        midi_split.key_signatures = midi.key_signatures
+        midi_split.lyrics = midi.lyrics
+        midi_split.markers = midi.markers
+        midi_split.tracks.append(track.copy())
+
+        midis_split.append(midi_split)
+    return midis_split
+
+
+def concat_midis(midis: Sequence[Score], end_ticks: Sequence[int]) -> Score:
+    """
+    Concatenate a sequence of MIDIs.
+
+    **Note:** the tracks are concatenated in the same order as they are given.
+    **The MIDIs must all have the same time division.** (``midi.ticks_per_quarter``)
+    The concatenated MIDI might have identical consecutive tempos, time signatures or
+    key signatures values.
+
+    :param midis: MIDIs to concatenate.
+    :param end_ticks: the ticks indicating the end of each MIDI. The end for the last
+        MIDI is not required.
+    :return: the concatenated MIDI.
+    """
+    if not all(midi.ticks_per_quarter == midis[0].ticks_per_quarter for midi in midis):
+        err_msg = "The MIDIs given do not have all the same time division."
+        raise ValueError(err_msg)
+    if not len(end_ticks) >= len(midis) - 1:
+        err = f"Missing end values: got {len(end_ticks)}, expected {len(midis) - 1}."
+        raise ValueError(err)
+
+    # Create the concatenated MIDI with empty tracks
+    midi_concat = Score(midis[0].ticks_per_quarter)
+    midi_concat.tracks = midis[0].tracks
+
+    for mi in range(len(midis)):
+        # Shift the MIDI
+        midi = midis[mi]
+        if mi > 0:
+            midi = midi.shift_time(end_ticks[mi - 1])
+
+        # Concatenate global messages
+        midi_concat.tempos.extend(midi.tempos)
+        midi_concat.time_signatures.extend(midi.time_signatures)
+        midi_concat.key_signatures.extend(midi.key_signatures)
+        midi_concat.lyrics.extend(midi.lyrics)
+        midi_concat.markers.extend(midi.markers)
+
+        # Concatenate track messages (except for the first MIDI)
+        if mi == 0:
+            continue
+        for ti, track in enumerate(midi.tracks):
+            midi_concat.tracks[ti].notes.extend(track.notes)
+            midi_concat.tracks[ti].controls.extend(track.controls)
+            midi_concat.tracks[ti].pitch_bends.extend(track.pitch_bends)
+            midi_concat.tracks[ti].pedals.extend(track.pedals)
+
+    return midi_concat

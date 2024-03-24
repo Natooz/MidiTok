@@ -232,6 +232,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         Get the base vocabulary, as a dictionary mapping tokens (str) to their ids.
 
         The different (hidden / protected) vocabulary attributes of the class are:
+
         * ``._vocab_base`` : Dict[str: int] token -> id - Registers all known base
         tokens;
         * ``.__vocab_base_inv`` : Dict[int: str] id -> token - Inverse of
@@ -3159,7 +3160,8 @@ class MIDITokenizer(ABC, HFHubMixin):
             return self.__get_from_voc(item[1], item[0])
         if self.is_multi_voc and isinstance(item, str):
             if all(item in voc for voc in self.vocab):
-                return [voc[item] for voc in self.vocab]
+                # It should be the same id for all sub-vocabs
+                return self.vocab[0][item]
 
             msg = (
                 "This tokenizer uses multiple vocabularies / embedding pooling. To"

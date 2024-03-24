@@ -103,7 +103,7 @@ for tpi in range(len(TOK_PARAMS_ONE_TRACK_HARD) - 1, -1, -1):
         del TOK_PARAMS_ONE_TRACK_HARD[tpi]
         continue
     # Parametrize PedalOff cases for configurations using pedals
-    if "use_sustain_pedals" in params_ and params_["use_sustain_pedals"]:
+    if params_.get("use_sustain_pedals"):
         params_copy = deepcopy(params_)
         params_copy["sustain_pedal_duration"] = True
         TOK_PARAMS_ONE_TRACK_HARD.insert(tpi + 1, (tokenization_, params_copy))

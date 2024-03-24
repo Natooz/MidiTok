@@ -21,8 +21,6 @@ class DataCollator:
     batch, following the padding applied.
 
     :param pad_token_id: padding token id.
-    :param bos_token_id: BOS token id. (default: ``None``)
-    :param eos_token_id: EOS token id. (default: ``None``)
     :param pad_on_left: if given True, it will pad the sequences on the left. This
         can be required when using some libraries expecting padding on left, for
         example when generating with Hugging Face Transformers. (default: ``False``)
@@ -41,8 +39,6 @@ class DataCollator:
     def __init__(
         self,
         pad_token_id: int,
-        bos_token_id: int | None = None,
-        eos_token_id: int | None = None,
         pad_on_left: bool = False,
         copy_inputs_as_labels: bool = False,
         shift_labels: bool = False,
@@ -51,8 +47,6 @@ class DataCollator:
         labels_kwarg_name: str = "labels",
     ) -> None:
         self.pad_token = pad_token_id
-        self.bos_token = bos_token_id
-        self.eos_token = eos_token_id
         self.pad_on_left = pad_on_left
         self.copy_inputs_as_labels = copy_inputs_as_labels
         self.shift_labels = shift_labels
@@ -72,25 +66,13 @@ class DataCollator:
         out_batch = {}
         x, y = None, None
 
-        # Figure out inputs + adds BOS and EOS tokens
+        # Figure out inputs
         if self.inputs_kwarg_name in batch[0]:
             x = [seq[self.inputs_kwarg_name] for seq in batch]
-            _add_bos_eos_tokens_to_batch(
-                x,
-                bos_tok_id=self.bos_token,
-                eos_tok_id=self.eos_token,
-            )
 
-        # Figure out labels + adds BOS and EOS tokens
+        # Figure out labels
         if self.labels_kwarg_name in batch[0]:
             y = [seq[self.labels_kwarg_name] for seq in batch]
-            # If not classification
-            if y[0].dim() > 0:
-                _add_bos_eos_tokens_to_batch(
-                    y,
-                    bos_tok_id=self.bos_token,
-                    eos_tok_id=self.eos_token,
-                )
         elif self.copy_inputs_as_labels:
             y = deepcopy(x)
 
@@ -131,43 +113,6 @@ class DataCollator:
             out_batch["attention_mask"] = attention_mask
 
         return out_batch
-
-
-def _add_bos_eos_tokens_to_batch(
-    batch: list[LongTensor],
-    bos_tok_id: int | None = None,
-    eos_tok_id: int | None = None,
-) -> None:
-    """
-    Add (inplace) **BOS** and **EOS** tokens to inputs.
-
-    :param batch: batch as a list of Tensors.
-    :param bos_tok_id: BOS token id. (default: ``None``)
-    :param eos_tok_id: EOS token id. (default: ``None``)
-    """
-    if bos_tok_id is None and eos_tok_id is None:
-        return
-
-    sos_shape = list(batch[0].shape)
-    sos_shape[0] = 1  # (1) or (1,Z)
-    for i in range(len(batch)):
-        if bos_tok_id is not None and eos_tok_id is not None:
-            batch[i] = torch.cat(
-                [
-                    torch.full(sos_shape, bos_tok_id),
-                    batch[i],
-                    torch.full(sos_shape, eos_tok_id),
-                ],
-                dim=0,
-            ).long()
-        elif bos_tok_id is not None:
-            batch[i] = torch.cat(
-                [torch.full(sos_shape, bos_tok_id), batch[i]], dim=0
-            ).long()
-        else:  # EOS not None
-            batch[i] = torch.cat(
-                [batch[i], torch.full(sos_shape, eos_tok_id)], dim=0
-            ).long()
 
 
 def _pad_batch(

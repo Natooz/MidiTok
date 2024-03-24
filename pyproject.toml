@@ -53,7 +53,8 @@ tests = [
     "miditoolkit",
 ]
 docs = [
-    "sphinx-rtd-theme",
+    "furo",  # theme
+    "sphinx-copybutton",
     "torch",  # for pytorch_data module
 ]
 

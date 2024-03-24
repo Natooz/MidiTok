@@ -120,13 +120,13 @@ We also perform data augmentation on the pitch, velocity and duration dimension.
 
     # Performs data augmentation on one pitch octave (up and down), velocities and
     # durations
+    midi_aug_path = Path("to", "new", "location", "augmented")
     augment_midi_dataset(
         data_path,
         pitch_offsets=[-12, 12],
         velocity_offsets=[-4, 5],
         duration_offsets=[-0.5, 1],
         out_path=midi_aug_path,
-        Path("to", "new", "location", "augmented"),
     )
     tokenizer.tokenize_midi_dataset(        # 2 velocity and 1 duration values
         data_path,

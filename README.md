@@ -29,15 +29,13 @@ MidiTok uses [Symusic](https://github.com/Yikai-Liao/symusic) to read and write 
 
 ## Usage example
 
-Below is a complete yet concise example of how you can use MidiTok. And [here](colab-notebooks/Full_Example_HuggingFace_GPT2_Transformer.ipynb) is a simple notebook example showing how to use Hugging Face models to generate music, with MidiTok taking care of tokenizing MIDIs.
+Tokenizing and detokenzing can be done by calling the tokenizer:
 
 ```python
 from miditok import REMI, TokenizerConfig
-from miditok.pytorch_data import DatasetTok, DataCollator
-from pathlib import Path
 from symusic import Score
 
-# Creating a multitrack tokenizer configuration, read the doc to explore other parameters
+# Creating a multitrack tokenizer, read the doc to explore all the parameters
 config = TokenizerConfig(num_velocities=16, use_chords=True, use_programs=True)
 tokenizer = REMI(config)
 
@@ -45,27 +43,49 @@ tokenizer = REMI(config)
 midi = Score("path/to/your_midi.mid")
 tokens = tokenizer(midi)  # calling the tokenizer will automatically detect MIDIs, paths and tokens
 converted_back_midi = tokenizer(tokens)  # PyTorch / Tensorflow / Numpy tensors supported
+```
 
-# Trains the tokenizer with BPE, and save it to load it back later
+Here is a complete yet concise example of how you can use MidiTok to train any PyTorch model. And [here](colab-notebooks/Full_Example_HuggingFace_GPT2_Transformer.ipynb) is a simple notebook example showing how to use Hugging Face models to generate music, with MidiTok taking care of tokenizing MIDIs.
+
+```python
+from miditok import REMI, TokenizerConfig
+from miditok.pytorch_data import DatasetMIDI, DataCollator, split_midis_for_training
+from torch.utils.data import DataLoader
+from pathlib import Path
+
+# Creating a multitrack tokenizer, read the doc to explore all the parameters
+config = TokenizerConfig(num_velocities=16, use_chords=True, use_programs=True)
+tokenizer = REMI(config)
+
+# Train the tokenizer with Byte Pair Encoding (BPE)
 midi_paths = list(Path("path", "to", "midis").glob("**/*.mid"))
 tokenizer.learn_bpe(vocab_size=30000, files_paths=midi_paths)
 tokenizer.save_params(Path("path", "to", "save", "tokenizer.json"))
 # And pushing it to the Hugging Face hub (you can download it back with .from_pretrained)
 tokenizer.push_to_hub("username/model-name", private=True, token="your_hf_token")
 
-# Creates a Dataset and a collator to be used with a PyTorch DataLoader to train a model
-dataset = DatasetTok(
+# Split MIDIs into smaller chunks for training
+dataset_chunks_dir = Path("path", "to", "midi_chunks")
+split_midis_for_training(
     files_paths=midi_paths,
-    min_seq_len=100,
-    max_seq_len=1024,
     tokenizer=tokenizer,
+    save_dir=dataset_chunks_dir,
+    max_seq_len=1024,
 )
-collator = DataCollator(
-    tokenizer["PAD_None"], tokenizer["BOS_None"], tokenizer["EOS_None"]
+
+# Create a Dataset, a DataLoader and a collator to train a model
+dataset = DatasetMIDI(
+    files_paths=list(dataset_chunks_dir.glob("**/*.mid")),
+    tokenizer=tokenizer,
+    max_seq_len=1024,
+    bos_token_id=tokenizer["BOS_None"],
+    eos_token_id=tokenizer["EOS_None"],
 )
-from torch.utils.data import DataLoader
-data_loader = DataLoader(dataset=dataset, collate_fn=collator)
-for batch in data_loader:
+collator = DataCollator(tokenizer["PAD_None"])
+dataloader = DataLoader(dataset, batch_size=64, collate_fn=collator)
+
+# Iterate over the dataloader to train a model
+for batch in dataloader:
     print("Train your model on this batch...")
 ```
 

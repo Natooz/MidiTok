@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import copy
+from math import ceil
 from typing import TYPE_CHECKING
 
 import pytest
@@ -291,3 +292,61 @@ def test_get_bars(midi_path: Path, save_bars_markers: bool = False):
         for bar_num, bar_tick in enumerate(bars_ticks):
             midi.markers.append(TextMeta(bar_tick, f"Bar {bar_num + 1}"))
         midi.dump_midi(TEST_LOG_DIR / f"{midi_path.stem}_bars.mid")
+
+
+@pytest.mark.parametrize("midi_path", MIDI_PATHS_MULTITRACK)
+def test_get_num_notes_per_bar(midi_path: Path):
+    midi = Score(midi_path)
+    num_notes = miditok.utils.get_num_notes_per_bar(midi)
+    num_notes_track_indep = miditok.utils.get_num_notes_per_bar(midi, tracks_indep=True)
+    num_notes_track_indep_summed = [sum(num_n) for num_n in num_notes_track_indep]
+    assert num_notes == num_notes_track_indep_summed
+
+
+@pytest.mark.parametrize("midi_path", MIDI_PATHS_MULTITRACK)
+def test_split_concat_midi(midi_path: Path, max_num_beats: int = 16):
+    midi = Score(midi_path)
+    midi_splits = miditok.utils.split_midi_per_beats(midi, max_num_beats)
+    ticks_beat = miditok.utils.get_beats_ticks(midi)
+
+    # Check there is the good number of split MIDIs
+    assert len(midi_splits) == ceil(len(ticks_beat) / max_num_beats)
+
+    """# Saves each chunk separately (for debug purposes)
+    from tests.utils_tests import HERE
+    for i, midi_split in enumerate(midi_splits):
+        midi_split.dump_midi(HERE / "midi_splits" / f"{i}.mid")"""
+
+    # Concatenate split MIDIs and assert its equal to original one
+    end_ticks = [
+        ticks_beat[i] for i in range(max_num_beats, len(ticks_beat), max_num_beats)
+    ]
+    midi_concat = miditok.utils.concat_midis(midi_splits, end_ticks)
+
+    # Assert the concatenated MIDI is identical to the original one
+    # We do not test tempos, time signatures and key signature as they are duplicated
+    # in midi_concat (same consecutive ones for each chunk).
+    assert midi.tracks == midi_concat.tracks
+    assert midi.lyrics == midi_concat.lyrics
+    assert midi.markers == midi_concat.markers
+
+
+@pytest.mark.parametrize("midi_path", MIDI_PATHS_MULTITRACK)
+def test_split_midi_per_tracks(midi_path: Path):
+    midi = Score(midi_path)
+    midi_splits = miditok.utils.split_midi_per_tracks(midi)
+
+    # Check there is the good number of split MIDIs
+    assert len(midi_splits) == len(midi.tracks)
+
+    # Merge split MIDIs and assert its equal to original one
+    for midi_split in midi_splits[1:]:  # dedup global events
+        midi_split.tempos = []
+        midi_split.time_signatures = []
+        midi_split.key_signatures = []
+        midi_split.lyrics = []
+        midi_split.markers = []
+    midi_merged = miditok.utils.merge_midis(midi_splits)
+
+    # Assert the merges MIDI is identical to the original one
+    assert midi == midi_merged

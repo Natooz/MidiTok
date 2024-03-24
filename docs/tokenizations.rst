@@ -21,7 +21,7 @@ REMI
 REMIPlus
 ------------------------
 
-REMI+ is an extended version of :ref:`REMI` (Huang and Yang) for general multi-track, multi-signature symbolic music sequences, introduced in `FIGARO (Rütte et al.) <https://arxiv.org/abs/2201.10936>`, which handle multiple instruments by adding ``Program`` tokens before the ``Pitch`` ones.
+REMI+ is an extended version of :ref:`REMI` (Huang and Yang) for general multi-track, multi-signature symbolic music sequences, introduced in `FIGARO (Rütte et al.) <https://arxiv.org/abs/2201.10936>`_, which handle multiple instruments by adding ``Program`` tokens before the ``Pitch`` ones.
 
 In the previous versions of MidiTok, we used to implement REMI+ as a dedicated class. Now that all the tokenizers supports the additional tokens in a more flexible way, you can get the REMI+ tokenization by using the :ref:`REMI` tokenizer with ``config.use_programs`` and ``config.one_token_stream_for_programs`` and ``config.use_time_signatures`` set to ``True``.
 
@@ -95,6 +95,17 @@ MMM
 Create yours
 ------------------------
 
-You can easily create your own tokenizer and benefit from the MidiTok framework. Just create a class inheriting from :class:`miditok.MIDITokenizer`, and override the :py:func:`miditok.MIDITokenizer._add_time_events`, :py:func:`miditok.MIDITokenizer._tokens_to_midi`, :py:func:`miditok.MIDITokenizer._create_vocabulary` and :py:func:`miditok.MIDITokenizer._create_token_types_graph` (and optionally if needed :py:func:`miditok.MIDITokenizer._midi_to_tokens`, :py:func:`miditok.MIDITokenizer._create_track_events` and :py:func:`miditok.MIDITokenizer._create_midi_events`) methods with your tokenization strategy.
+You can easily create your own tokenizer and benefit from the MidiTok framework. Just create a class inheriting from :class:`miditok.MIDITokenizer`, and override:
+
+* :py:func:`miditok.MIDITokenizer._add_time_events` to create time events from global and track events;
+* :py:func:`miditok.MIDITokenizer._tokens_to_midi` to decode tokens into a ``Score`` object;
+* :py:func:`miditok.MIDITokenizer._create_vocabulary` to create the tokenizer's vocabulary;
+* :py:func:`miditok.MIDITokenizer._create_token_types_graph` to create the possible token types successions (used for eval only).
+
+If needed, you can override the methods:
+
+* :py:func:`miditok.MIDITokenizer._midi_to_tokens` the main method calling specific tokenization methods;
+* :py:func:`miditok.MIDITokenizer._create_track_events` to include special track events;
+* :py:func:`miditok.MIDITokenizer._create_midi_events` to include special global events.
 
 If you think people can benefit from it, feel free to send a pull request on `Github <https://github.com/Natooz/MidiTok>`_.
