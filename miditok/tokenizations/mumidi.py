@@ -28,12 +28,13 @@ class MuMIDI(MIDITokenizer):
     positional encoding. As in the original paper, the pitches of drums are distinct
     from those of all other instruments.
     Each pooled token will be a list of the form (index: Token type):
-        * 0: Pitch / PitchDrum / Position / Bar / Program / (Chord) / (Rest);
-        * 1: BarPosEnc;
-        * 2: PositionPosEnc;
-        * (-3 / 3: Tempo);
-        * -2: Velocity;
-        * -1: Duration.
+
+    * 0: Pitch / PitchDrum / Position / Bar / Program / (Chord) / (Rest);
+    * 1: BarPosEnc;
+    * 2: PositionPosEnc;
+    * (-3 / 3: Tempo);
+    * -2: Velocity;
+    * -1: Duration.
 
     The output hidden states of the model will then be fed to several output layers
     (one per token type). This means that the training requires to add multiple losses.
@@ -42,8 +43,9 @@ class MuMIDI(MIDITokenizer):
     small models.
 
     **Notes:**
-        * Tokens are first sorted by time, then track, then pitch values.
-        * Tracks with the same *Program* will be merged.
+
+    * Tokens are first sorted by time, then track, then pitch values.
+    * Tracks with the same *Program* will be merged.
     """
 
     def _tweak_config_before_creating_voc(self) -> None:

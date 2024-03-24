@@ -19,14 +19,15 @@ class Octuple(MIDITokenizer):
     represents a single note. Tokens (*Pitch*, *Velocity*...) are first independently
     converted to embeddings which are then merged (pooled) into a single one.
     Each pooled token will be a list of the form (index: Token type):
-        * 0: Pitch/PitchDrum;
-        * 1: Velocity;
-        * 2: Duration;
-        * 3: Position;
-        * 4: Bar;
-        * (+ Optional) Program;
-        * (+ Optional) Tempo;
-        * (+ Optional) TimeSignature.
+
+    * 0: Pitch/PitchDrum;
+    * 1: Velocity;
+    * 2: Duration;
+    * 3: Position;
+    * 4: Bar;
+    * (+ Optional) Program;
+    * (+ Optional) Tempo;
+    * (+ Optional) TimeSignature.
 
     Its considerably reduces the sequence lengths, while handling multitrack.
     The output hidden states of the model will then be fed to several output layers
@@ -36,6 +37,7 @@ class Octuple(MIDITokenizer):
     small models.
 
     **Notes:**
+
     * As the time signature is carried simultaneously with the note tokens, if a Time
     Signature change occurs and that the following bar do not contain any note, the
     time will be shifted by one or multiple bars depending on the previous time
@@ -43,7 +45,6 @@ class Octuple(MIDITokenizer):
     cannot represent time signature accurately, hence some unavoidable errors of
     conversion can happen. **For this reason, Octuple is implemented with Time
     Signature but tested without.**
-
     * Tokens are first sorted by time, then track, then pitch values.
     * Tracks with the same *Program* will be merged.
     * When decoding multiple token sequences (of multiple tracks), i.e. when
