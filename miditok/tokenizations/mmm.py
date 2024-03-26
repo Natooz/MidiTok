@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import numpy as np
-from symusic import Note, Score, Tempo, TimeSignature, Track
+from symusic import Note, Pedal, PitchBend, Score, Tempo, TimeSignature, Track
 
 from miditok.classes import Event, TokSequence
-from miditok.constants import MIDI_INSTRUMENTS, MMM_DENSITY_BINS_MAX, TIME_SIGNATURE
+from miditok.constants import (
+    MIDI_INSTRUMENTS,
+    MMM_DENSITY_BINS_MAX,
+    MMM_GENRES,
+    TIME_SIGNATURE,
+)
 from miditok.midi_tokenizer import MIDITokenizer
 from miditok.utils import compute_ticks_per_bar, compute_ticks_per_beat
 
@@ -38,12 +43,12 @@ class MMM(MIDITokenizer):
         self.config.program_changes = False
         self.config.use_programs = True
         self.config.use_rests = False
-        self.config.use_sustain_pedals = False
-        self.config.use_pitch_bends = False
         # Recreate densities here just in case density_bins_max was loaded from params
         # (list to np array)
         if "density_bins_max" not in self.config.additional_params:
             self.config.additional_params["density_bins_max"] = MMM_DENSITY_BINS_MAX
+        if "genres" not in self.config.additional_params:
+            self.config.additional_params["genres"] = MMM_GENRES
         if "note_densities" in self.config.additional_params:
             if isinstance(
                 self.config.additional_params["note_densities"], (list, tuple)
@@ -231,20 +236,15 @@ class MMM(MIDITokenizer):
         # Global MIDI tokens
         if event.type_ in ["Tempo", "TimeSig"]:
             return 0
-        # Then NoteOff
-        if event.type_ == "NoteOff" or (
-            event.type_ == "Program" and event.desc == "ProgramNoteOff"
-        ):
-            return 1
         # Then track effects
-        if event.type_ in ["Pedal", "PedalOff"] or (
+        if event.type_ in {"Pedal", "PedalOff"} or (
             event.type_ == "Duration" and event.desc == "PedalDuration"
         ):
-            return 2
+            return 1
         if event.type_ == "PitchBend" or (
             event.type_ == "Program" and event.desc == "ProgramPitchBend"
         ):
-            return 3
+            return 2
         if event.type_ == "ControlChange":
             return 4
         # Track notes then
@@ -311,6 +311,7 @@ class MMM(MIDITokenizer):
             TimeSignature(0, *TIME_SIGNATURE), midi.ticks_per_quarter
         )
         ticks_per_beat = midi.ticks_per_quarter
+        active_pedals_start = None
 
         current_tick = tick_at_current_bar = 0
         current_bar = -1
@@ -396,6 +397,23 @@ class MMM(MIDITokenizer):
                     # However with generated sequences this can happen, or if the
                     # sequence isn't finished
                     pass
+            elif tok_type == "Pedal":
+                if self.config.sustain_pedal_duration and ti + 1 < len(tokens):
+                    if tokens[ti + 1].split("_")[0] == "Duration":
+                        duration = self._tpb_tokens_to_ticks[ticks_per_beat][
+                            tokens[ti + 1].split("_")[1]
+                        ]
+                        tracks[-1].pedals.append(Pedal(current_tick, duration))
+                elif active_pedals_start is None:
+                    active_pedals_start = current_tick
+            elif tok_type == "PedalOff":
+                if active_pedals_start is not None:
+                    tracks[-1].pedals.append(
+                        Pedal(active_pedals_start, current_tick - active_pedals_start)
+                    )
+                    active_pedals_start = None
+            elif tok_type == "PitchBend":
+                tracks[-1].pitch_bends.append(PitchBend(current_tick, int(tok_val)))
 
         # create MidiFile
         midi.tracks = tracks
@@ -419,17 +437,17 @@ class MMM(MIDITokenizer):
         """
         vocab = []
 
-        # TRACK / BAR / FILL
+        # TRACK / BAR / FILLIN
         vocab += ["Track_Start", "Track_End"]
         vocab += ["Bar_Start", "Bar_End", "Bar_Fill"]
-        vocab += ["Fill_Start", "Fill_End"]
+        vocab += ["FillIn_Start", "FillIn_End"]
 
         # NoteOn/NoteOff/Velocity
         self._add_note_tokens_to_vocab_list(vocab)
 
         # TimeShift
         vocab += [
-            f'TimeShift_{".".join(map(str, self.durations[i]))}'
+            f"TimeShift_{'.'.join(map(str, self.durations[i]))}"
             for i in range(len(self.durations))
         ]
 
@@ -437,6 +455,9 @@ class MMM(MIDITokenizer):
         vocab += [
             f"NoteDensity_{i}" for i in self.config.additional_params["note_densities"]
         ]
+
+        # Genres
+        vocab += [f"Genre_{g}" for g in self.config.additional_params["genres"]]
 
         # Add additional tokens (handles Programs too)
         self._add_additional_tokens_to_vocab_list(vocab)
@@ -490,6 +511,61 @@ class MMM(MIDITokenizer):
                 dic["Tempo"] += ["Chord"]
             if self.config.use_pitch_intervals:
                 dic["Tempo"] += ["PitchIntervalTime", "PitchIntervalChord"]
+
+        if self.config.use_sustain_pedals:
+            dic["TimeShift"].append("Pedal")
+            dic["Bar"].append("Pedal")
+            if self.config.sustain_pedal_duration:
+                dic["Pedal"] = ["Duration"]
+                dic["Duration"].append("Pedal")
+            else:
+                dic["PedalOff"] = [
+                    "Pedal",
+                    "PedalOff",
+                    "Pitch",
+                    "TimeShift",
+                    "Bar",
+                ]
+                dic["Pedal"] = ["Pedal", "Pitch", "TimeShift", "Bar"]
+                dic["TimeShift"].append("PedalOff")
+            if self.config.use_chords:
+                dic["Pedal"].append("Chord")
+                if not self.config.sustain_pedal_duration:
+                    dic["PedalOff"].append("Chord")
+                    dic["Chord"].append("PedalOff")
+            if self.config.use_tempos:
+                dic["Tempo"].append("Pedal")
+                if not self.config.sustain_pedal_duration:
+                    dic["Tempo"].append("PedalOff")
+            if self.config.use_time_signatures:
+                dic["TimeSig"].append("Pedal")
+                if not self.config.sustain_pedal_duration:
+                    dic["TimeSig"].append("PedalOff")
+            if self.config.use_pitch_intervals:
+                if self.config.sustain_pedal_duration:
+                    dic["Duration"] += ["PitchIntervalTime", "PitchIntervalChord"]
+                else:
+                    dic["Pedal"] += ["PitchIntervalTime", "PitchIntervalChord"]
+                    dic["PedalOff"] += ["PitchIntervalTime", "PitchIntervalChord"]
+
+        if self.config.use_pitch_bends:
+            # As a Program token will precede PitchBend otherwise
+            # Else no need to add Program as its already in
+            dic["PitchBend"] = ["Pitch", "TimeShift", "Bar"]
+            dic["TimeShift"].append("PitchBend")
+            dic["Bar"].append("PitchBend")
+            if self.config.use_tempos:
+                dic["Tempo"].append("PitchBend")
+            if self.config.use_time_signatures:
+                dic["TimeSig"].append("PitchBend")
+            if self.config.use_sustain_pedals:
+                dic["Pedal"].append("PitchBend")
+                if self.config.sustain_pedal_duration:
+                    dic["Duration"].append("PitchBend")
+                else:
+                    dic["PedalOff"].append("PitchBend")
+            if self.config.use_chords:
+                dic["PitchBend"].append("Chord")
 
         dic["Fill"] = list(dic.keys())
 

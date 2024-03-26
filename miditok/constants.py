@@ -34,7 +34,7 @@ NUM_VELOCITIES = 32
 # default special tokens
 BOS_TOKEN_NAME = "BOS"
 EOS_TOKEN_NAME = "EOS"
-SPECIAL_TOKENS = ["PAD", BOS_TOKEN_NAME, EOS_TOKEN_NAME, "MASK"]
+SPECIAL_TOKENS = {"PAD", BOS_TOKEN_NAME, EOS_TOKEN_NAME, "MASK"}
 
 USE_CHORDS = False
 USE_RESTS = False
@@ -114,6 +114,21 @@ REMOVE_DUPLICATED_NOTES = False
 
 # Tokenizers specific parameters
 MMM_DENSITY_BINS_MAX = (10, 20)
+MMM_GENRES = {
+    "funk",
+    "jazz",
+    "rnb",
+    "rock",
+    "metal",
+    "reggae",
+    "disco",
+    "electronic",
+    "samba",
+    "swing",
+    "afro-cuban",
+    "pop",
+    "hip-hop",
+}
 
 # Defaults values when writing new MIDI files
 TEMPO = 120
