@@ -13,7 +13,6 @@ from tqdm import tqdm
 
 from miditok.constants import MAX_NUM_FILES_NUM_TOKENS_PER_NOTE
 from miditok.utils import (
-    extract_chunk_from_midi,
     get_bars_ticks,
     get_num_notes_per_bar,
     split_midi_per_tracks,
@@ -267,10 +266,9 @@ def split_midi_per_note_density(
     if len(ticks_split) == 1:
         return [midi]
 
-    midis_splits = []
-    for tick_start, tick_end in ticks_split:
-        midis_splits.append(extract_chunk_from_midi(midi, tick_start, tick_end))
-    return midis_splits
+    return [
+        midi.clip(t_start, t_end).shift_time(-t_start) for t_start, t_end in ticks_split
+    ]
 
 
 def get_average_num_tokens_per_note(
