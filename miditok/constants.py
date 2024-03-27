@@ -114,7 +114,7 @@ REMOVE_DUPLICATED_NOTES = False
 
 # Tokenizers specific parameters
 MMM_DENSITY_BINS_MAX = (10, 20)
-MMM_GENRES = {
+MMM_GENRES = [
     "funk",
     "jazz",
     "rnb",
@@ -128,7 +128,7 @@ MMM_GENRES = {
     "afro-cuban",
     "pop",
     "hip-hop",
-}
+]
 
 # Defaults values when writing new MIDI files
 TEMPO = 120

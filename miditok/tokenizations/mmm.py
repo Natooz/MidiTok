@@ -528,6 +528,7 @@ class MMM(MIDITokenizer):
                 ]
                 dic["Pedal"] = ["Pedal", "Pitch", "TimeShift", "Bar"]
                 dic["TimeShift"].append("PedalOff")
+                dic["Bar"].append("PedalOff")
             if self.config.use_chords:
                 dic["Pedal"].append("Chord")
                 if not self.config.sustain_pedal_duration:
