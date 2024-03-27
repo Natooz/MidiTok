@@ -476,12 +476,7 @@ class REMI(MIDITokenizer):
                         )
                         if self.one_token_stream:
                             check_inst(pedal_prog)
-                            tracks[pedal_prog].pedals.append(
-                                Pedal(
-                                    active_pedals[pedal_prog],
-                                    current_tick - active_pedals[pedal_prog],
-                                )
-                            )
+                            tracks[pedal_prog].pedals.append(new_pedal)
                         else:
                             current_instrument.pedals.append(new_pedal)
                         del active_pedals[pedal_prog]
