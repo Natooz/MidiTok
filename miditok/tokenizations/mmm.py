@@ -9,7 +9,6 @@ from miditok.classes import Event, TokSequence
 from miditok.constants import (
     MIDI_INSTRUMENTS,
     MMM_DENSITY_BINS_MAX,
-    MMM_GENRES,
     TIME_SIGNATURE,
 )
 from miditok.midi_tokenizer import MIDITokenizer
@@ -47,8 +46,6 @@ class MMM(MIDITokenizer):
         # (list to np array)
         if "density_bins_max" not in self.config.additional_params:
             self.config.additional_params["density_bins_max"] = MMM_DENSITY_BINS_MAX
-        if "genres" not in self.config.additional_params:
-            self.config.additional_params["genres"] = MMM_GENRES
         if "note_densities" in self.config.additional_params:
             if isinstance(
                 self.config.additional_params["note_densities"], (list, tuple)
@@ -455,9 +452,6 @@ class MMM(MIDITokenizer):
         vocab += [
             f"NoteDensity_{i}" for i in self.config.additional_params["note_densities"]
         ]
-
-        # Genres
-        vocab += [f"Genre_{g}" for g in self.config.additional_params["genres"]]
 
         # Add additional tokens (handles Programs too)
         self._add_additional_tokens_to_vocab_list(vocab)
