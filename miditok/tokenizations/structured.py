@@ -347,20 +347,20 @@ class Structured(MIDITokenizer):
 
         return vocab
 
-    def _create_token_types_graph(self) -> dict[str, list[str]]:
+    def _create_token_types_graph(self) -> dict[str, set[str]]:
         r"""
         Return a graph/dictionary of the possible token types successions.
 
         :return: the token types transitions dictionary.
         """
         dic = {
-            "Pitch": ["Velocity"],
-            "PitchDrum": ["Velocity"],
-            "Velocity": ["Duration"],
-            "Duration": ["TimeShift"],
-            "TimeShift": ["Pitch", "PitchDrum"],
+            "Pitch": {"Velocity"},
+            "PitchDrum": {"Velocity"},
+            "Velocity": {"Duration"},
+            "Duration": {"TimeShift"},
+            "TimeShift": {"Pitch", "PitchDrum"},
         }
         if self.config.use_programs:
-            dic["Program"] = ["Pitch", "PitchDrum"]
-            dic["TimeShift"] = ["Program"]
+            dic["Program"] = {"Pitch", "PitchDrum"}
+            dic["TimeShift"] = {"Program"}
         return dic

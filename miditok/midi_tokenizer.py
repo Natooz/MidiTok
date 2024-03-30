@@ -272,7 +272,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         return self._bpe_model.get_vocab()
 
     @property
-    def special_tokens(self) -> list[str]:
+    def special_tokens(self) -> set[str]:
         r"""
         Return the special tokens in the vocabulary.
 
@@ -1681,11 +1681,11 @@ class MIDITokenizer(ABC, HFHubMixin):
             self._vocab_base = [{} for _ in range(len(vocab))]
             self.__vocab_base_inv = [{} for _ in range(len(vocab))]
             for vid in range(len(vocab)):
-                vocab[vid] = self.special_tokens + vocab[vid]
+                vocab[vid] = list(self.special_tokens) + vocab[vid]
                 for tok in vocab[vid]:
                     self.add_to_vocab(tok, vid)
         else:
-            vocab = self.special_tokens + vocab
+            vocab = list(self.special_tokens) + vocab
             for tok in vocab:
                 self.add_to_vocab(tok)
 
@@ -1896,7 +1896,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         return token.split("_")[0]
 
     @abstractmethod
-    def _create_token_types_graph(self) -> dict[str, list[str]]:
+    def _create_token_types_graph(self) -> dict[str, set[str]]:
         r"""
         Create a dictionary describing the possible token type successions.
 
@@ -1916,19 +1916,19 @@ class MIDITokenizer(ABC, HFHubMixin):
         (End of Sequence) tokens: No token type can precede a BOS token, and EOS token
         cannot precede any other token.
         """
-        original_token_types = list(self.tokens_types_graph.keys())
+        original_token_types = set(self.tokens_types_graph.keys())
         for special_token in self.config.special_tokens:
             special_token_type = special_token.split("_")[0]
             if special_token_type == EOS_TOKEN_NAME:
-                self.tokens_types_graph[EOS_TOKEN_NAME] = []
+                self.tokens_types_graph[EOS_TOKEN_NAME] = set()
             else:
                 self.tokens_types_graph[special_token_type] = (
-                    original_token_types + list(self.config.special_tokens)
+                    original_token_types | self.config.special_tokens
                 )
 
             if special_token_type != BOS_TOKEN_NAME:
                 for token_type in original_token_types:
-                    self.tokens_types_graph[token_type].append(special_token_type)
+                    self.tokens_types_graph[token_type].add(special_token_type)
 
     def _create_durations_tuples(self) -> list[tuple[int, int, int]]:
         r"""

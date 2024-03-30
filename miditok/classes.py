@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import warnings
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from math import log2
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -147,31 +147,48 @@ class TokSequence:
         )
         raise ValueError(msg)
 
-    def __getitem__(self, idx: int) -> int | str | Event:
+    def __getitem__(self, val: int | slice) -> int | str | Event | TokSequence:
         """
-        Return the ``idx``th element of the sequence.
+        Return the ``idx``th element or slice of the sequence.
 
-        It checks by order: ids, tokens, events, bytes.
+        If an integer is providing, it checks by order: ids, tokens, events, bytes.
 
-        :param idx: index of the element to retrieve.
+        :param val: index of the element to retrieve.
         :return: ``idx``th element.
         """
+        if isinstance(val, slice):
+            return self.__slice(val)
+
         if self.ids is not None:
-            return self.ids[idx]
+            return self.ids[val]
         if self.tokens is not None:
-            return self.tokens[idx]
+            return self.tokens[val]
         if self.events is not None:
-            return self.events[idx]
+            return self.events[val]
         if self.bytes is not None:
-            return self.bytes[idx]
+            return self.bytes[val]
         if self._ids_no_bpe is not None:
-            return self._ids_no_bpe[idx]
+            return self._ids_no_bpe[val]
 
         msg = (
             "This TokSequence seems to not be initialized, all its attributes "
             "are None."
         )
         raise ValueError(msg)
+
+    def __slice(self, sli: slice) -> TokSequence:
+        """
+        Slice the ``TokSequence``.
+
+        :param sli: slice object.
+        :return: the slice of the self ``TokSequence``.
+        """
+        seq = replace(self)
+        attributes = ["tokens", "ids", "bytes", "events", "_ids_no_bpe"]
+        for attr in attributes:
+            if getattr(self, attr):
+                setattr(seq, attr, getattr(self, attr)[sli])
+        return seq
 
     def __eq__(self, other: TokSequence) -> bool:
         r"""
@@ -194,6 +211,42 @@ class TokSequence:
                 one_common_attr = True
 
         return one_common_attr and all(eq)
+
+    def __add__(self, other: TokSequence) -> TokSequence:
+        """
+        Concatenate two ``TokSequence`` objects.
+
+        The `ìds``, ``tokens``, ``events`` and ``bytes`` will be concatenated.
+
+        :param other: other ``TokSequence``.
+        :return: the concatenation of the two sequences.
+        """
+        seq = replace(self)
+        seq += other
+        return seq
+
+    def __iadd__(self, other: TokSequence) -> TokSequence:
+        """
+        Concatenate the self ``TokSequence`` to another one.
+
+        The `ìds``, ``tokens``, ``events`` and ``bytes`` will be concatenated.
+
+        :param other: other ``TokSequence``.
+        :return: self.
+        """
+        if not isinstance(other, TokSequence):
+            msg = (
+                "Addition to a `TokSequence` object can only be performed with other"
+                f"`TokSequence` objects. Received: {other.__class__.__name__}"
+            )
+            raise ValueError(msg)
+        attributes = ["tokens", "ids", "bytes", "events", "_ids_no_bpe"]
+        for attr in attributes:
+            self_attr, other_attr = getattr(self, attr), getattr(other, attr)
+            if self_attr is not None and other_attr is not None:
+                setattr(self, attr, self_attr + other_attr)
+
+        return self
 
 
 class TokenizerConfig:
@@ -449,7 +502,7 @@ class TokenizerConfig:
         self.pitch_range: tuple[int, int] = pitch_range
         self.beat_res: dict[tuple[int, int], int] = beat_res
         self.num_velocities: int = num_velocities
-        self.special_tokens: list[str] = []
+        self.special_tokens: set[str] = set()
         for special_token in special_tokens:
             parts = special_token.split("_")
             if len(parts) == 1:
@@ -462,7 +515,7 @@ class TokenizerConfig:
                     f" {'_'.join(parts)}.",
                     stacklevel=2,
                 )
-            self.special_tokens.append("_".join(parts))
+            self.special_tokens.add("_".join(parts))
         self.remove_duplicated_notes = remove_duplicated_notes
 
         # Additional token types params, enabling additional token types
@@ -653,6 +706,14 @@ class TokenizerConfig:
         }
 
         return cls.from_dict(dict_config)
+
+    def copy(self) -> TokenizerConfig:
+        """
+        Copy the ``TokSequence``.
+
+        :return: a copy of the ``TokSequence``.
+        """
+        return deepcopy(self)
 
     def __eq__(self, other: TokenizerConfig) -> bool:
         """

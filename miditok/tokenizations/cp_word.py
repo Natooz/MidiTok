@@ -674,42 +674,42 @@ class CPWord(MIDITokenizer):
 
         return vocab
 
-    def _create_token_types_graph(self) -> dict[str, list[str]]:
+    def _create_token_types_graph(self) -> dict[str, set[str]]:
         r"""
         Return a graph/dictionary of the possible token types successions.
 
         :return: the token types transitions dictionary.
         """
         dic = {
-            "Bar": ["Position", "Bar"],
-            "Position": ["Pitch"],
-            "Pitch": ["Pitch", "Bar", "Position"],
+            "Bar": {"Position", "Bar"},
+            "Position": {"Pitch"},
+            "Pitch": {"Pitch", "Bar", "Position"},
         }
 
         if self.config.use_chords:
-            dic["Rest"] = ["Rest", "Position"]
-            dic["Pitch"] += ["Rest"]
+            dic["Rest"] = {"Rest", "Position"}
+            dic["Pitch"] |= ["Rest"]
 
         if self.config.use_rests:
-            dic["Rest"] = ["Rest", "Position", "Bar"]
-            dic["Pitch"] += ["Rest"]
+            dic["Rest"] = {"Rest", "Position", "Bar"}
+            dic["Pitch"] |= {"Rest"}
 
         if self.config.use_tempos:
             # Because a tempo change can happen at any moment
-            dic["Position"] += ["Position", "Bar"]
+            dic["Position"] |= {"Position", "Bar"}
             if self.config.use_rests:
-                dic["Position"].append("Rest")
-                dic["Rest"].append("Position")
+                dic["Position"].add("Rest")
+                dic["Rest"].add("Position")
 
         for key in dic:
-            dic[key].append("Ignore")
-        dic["Ignore"] = list(dic.keys())
+            dic[key].add("Ignore")
+        dic["Ignore"] = set(dic.keys())
 
         if self.config.use_pitchdrum_tokens:
             dic["PitchDrum"] = dic["Pitch"]
             for key, values in dic.items():
                 if "Pitch" in values:
-                    dic[key].append("PitchDrum")
+                    dic[key].add("PitchDrum")
 
         return dic
 

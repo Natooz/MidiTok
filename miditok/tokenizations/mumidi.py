@@ -425,23 +425,23 @@ class MuMIDI(MIDITokenizer):
 
         return vocab
 
-    def _create_token_types_graph(self) -> dict[str, list[str]]:
+    def _create_token_types_graph(self) -> dict[str, set[str]]:
         r"""
         Return a graph/dictionary of the possible token types successions.
 
         :return: the token types transitions dictionary.
         """
         dic = {
-            "Bar": ["Bar", "Position"],
-            "Position": ["Program"],
-            "Program": ["Pitch", "PitchDrum"],
-            "Pitch": ["Pitch", "Program", "Bar", "Position"],
-            "PitchDrum": ["PitchDrum", "Program", "Bar", "Position"],
+            "Bar": {"Bar", "Position"},
+            "Position": {"Program"},
+            "Program": {"Pitch", "PitchDrum"},
+            "Pitch": {"Pitch", "Program", "Bar", "Position"},
+            "PitchDrum": {"PitchDrum", "Program", "Bar", "Position"},
         }
 
         if self.config.use_chords:
-            dic["Program"] += ["Chord"]
-            dic["Chord"] = ["Pitch"]
+            dic["Program"] |= {"Chord"}
+            dic["Chord"] = {"Pitch"}
 
         return dic
 

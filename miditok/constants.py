@@ -7,14 +7,14 @@ CURRENT_TOKENIZERS_VERSION = version("tokenizers")
 CURRENT_SYMUSIC_VERSION = version("symusic")
 
 MIDI_FILES_EXTENSIONS = {".mid", ".midi", ".MID", ".MIDI"}
-MIDI_LOADING_EXCEPTION = (
+MIDI_LOADING_EXCEPTION = {
     RuntimeError,
     ValueError,
     OSError,
     FileNotFoundError,
     IOError,
     EOFError,
-)
+}
 DEFAULT_TOKENIZER_FILE_NAME = "tokenizer.json"
 
 # Starting id of chr() method for BPE, as the 5 (0 to 4 included) firsts are ignored by
@@ -113,7 +113,7 @@ REMOVE_DUPLICATED_NOTES = False
 
 
 # Tokenizers specific parameters
-MMM_DENSITY_BINS_MAX = (10, 20)
+MMM_COMPATIBLE_TOKENIZERS = {"TSD", "REMI", "MIDILike"}
 
 # Defaults values when writing new MIDI files
 TEMPO = 120

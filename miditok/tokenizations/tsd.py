@@ -351,152 +351,155 @@ class TSD(MIDITokenizer):
 
         return vocab
 
-    def _create_token_types_graph(self) -> dict[str, list[str]]:
+    def _create_token_types_graph(self) -> dict[str, set[str]]:
         r"""
         Return a graph/dictionary of the possible token types successions.
 
         :return: the token types transitions dictionary.
         """
-        dic = {}
+        dic: dict[str, set[str]] = {}
 
         if self.config.use_programs:
             first_note_token_type = (
                 "Pitch" if self.config.program_changes else "Program"
             )
-            dic["Program"] = ["Pitch"]
+            dic["Program"] = {"Pitch"}
         else:
             first_note_token_type = "Pitch"
-        dic["Pitch"] = ["Velocity"]
-        dic["Velocity"] = ["Duration"]
-        dic["Duration"] = [first_note_token_type, "TimeShift"]
-        dic["TimeShift"] = [first_note_token_type, "TimeShift"]
+        dic["Pitch"] = {"Velocity"}
+        dic["Velocity"] = {"Duration"}
+        dic["Duration"] = {first_note_token_type, "TimeShift"}
+        dic["TimeShift"] = {first_note_token_type, "TimeShift"}
         if self.config.use_pitch_intervals:
             for token_type in ("PitchIntervalTime", "PitchIntervalChord"):
-                dic[token_type] = ["Velocity"]
-                if self.config.use_programs:
-                    dic["Program"].append(token_type)
+                dic[token_type] = {"Velocity"}
+                if (
+                    self.config.use_programs
+                    and self.config.one_token_stream_for_programs
+                ):
+                    dic["Program"].add(token_type)
                 else:
-                    dic["Duration"].append(token_type)
-                    dic["TimeShift"].append(token_type)
+                    dic["Duration"].add(token_type)
+                    dic["TimeShift"].add(token_type)
         if self.config.program_changes:
-            dic["Duration"].append("Program")
+            dic["Duration"].add("Program")
 
         if self.config.use_chords:
-            dic["Chord"] = [first_note_token_type]
-            dic["TimeShift"] += ["Chord"]
+            dic["Chord"] = {first_note_token_type}
+            dic["TimeShift"] |= {"Chord"}
             if self.config.use_programs:
-                dic["Program"].append("Chord")
+                dic["Program"].add("Chord")
             if self.config.use_pitch_intervals:
-                dic["Chord"] += ["PitchIntervalTime", "PitchIntervalChord"]
+                dic["Chord"] |= {"PitchIntervalTime", "PitchIntervalChord"}
 
         if self.config.use_tempos:
-            dic["TimeShift"] += ["Tempo"]
-            dic["Tempo"] = [first_note_token_type, "TimeShift"]
+            dic["TimeShift"] |= {"Tempo"}
+            dic["Tempo"] = {first_note_token_type, "TimeShift"}
             if self.config.use_chords:
-                dic["Tempo"] += ["Chord"]
+                dic["Tempo"] |= {"Chord"}
             if self.config.use_rests:
-                dic["Tempo"].append("Rest")  # only for first token
+                dic["Tempo"].add("Rest")  # only for first token
             if self.config.use_pitch_intervals:
-                dic["Tempo"] += ["PitchIntervalTime", "PitchIntervalChord"]
+                dic["Tempo"] |= {"PitchIntervalTime", "PitchIntervalChord"}
 
         if self.config.use_time_signatures:
-            dic["TimeShift"] += ["TimeSig"]
-            dic["TimeSig"] = [first_note_token_type, "TimeShift"]
+            dic["TimeShift"] |= {"TimeSig"}
+            dic["TimeSig"] = {first_note_token_type, "TimeShift"}
             if self.config.use_chords:
-                dic["TimeSig"] += ["Chord"]
+                dic["TimeSig"] |= {"Chord"}
             if self.config.use_rests:
-                dic["TimeSig"].append("Rest")  # only for first token
+                dic["TimeSig"].add("Rest")  # only for first token
             if self.config.use_tempos:
-                dic["TimeSig"].append("Tempo")
+                dic["TimeSig"].add("Tempo")
             if self.config.use_pitch_intervals:
-                dic["TimeSig"] += ["PitchIntervalTime", "PitchIntervalChord"]
+                dic["TimeSig"] |= {"PitchIntervalTime", "PitchIntervalChord"}
 
         if self.config.use_sustain_pedals:
-            dic["TimeShift"].append("Pedal")
+            dic["TimeShift"].add("Pedal")
             if self.config.sustain_pedal_duration:
-                dic["Pedal"] = ["Duration"]
-                dic["Duration"].append("Pedal")
+                dic["Pedal"] = {"Duration"}
+                dic["Duration"].add("Pedal")
             else:
-                dic["PedalOff"] = [
+                dic["PedalOff"] = {
                     "Pedal",
                     "PedalOff",
                     first_note_token_type,
                     "TimeShift",
-                ]
-                dic["Pedal"] = ["Pedal", first_note_token_type, "TimeShift"]
-                dic["TimeShift"].append("PedalOff")
+                }
+                dic["Pedal"] = {"Pedal", first_note_token_type, "TimeShift"}
+                dic["TimeShift"].add("PedalOff")
             if self.config.use_chords:
-                dic["Pedal"].append("Chord")
+                dic["Pedal"].add("Chord")
                 if not self.config.sustain_pedal_duration:
-                    dic["PedalOff"].append("Chord")
-                    dic["Chord"].append("PedalOff")
+                    dic["PedalOff"].add("Chord")
+                    dic["Chord"].add("PedalOff")
             if self.config.use_rests:
-                dic["Pedal"].append("Rest")
+                dic["Pedal"].add("Rest")
                 if not self.config.sustain_pedal_duration:
-                    dic["PedalOff"].append("Rest")
+                    dic["PedalOff"].add("Rest")
             if self.config.use_tempos:
-                dic["Tempo"].append("Pedal")
+                dic["Tempo"].add("Pedal")
                 if not self.config.sustain_pedal_duration:
-                    dic["Tempo"].append("PedalOff")
+                    dic["Tempo"].add("PedalOff")
             if self.config.use_time_signatures:
-                dic["TimeSig"].append("Pedal")
+                dic["TimeSig"].add("Pedal")
                 if not self.config.sustain_pedal_duration:
-                    dic["TimeSig"].append("PedalOff")
+                    dic["TimeSig"].add("PedalOff")
             if self.config.use_pitch_intervals:
                 if self.config.sustain_pedal_duration:
-                    dic["Duration"] += ["PitchIntervalTime", "PitchIntervalChord"]
+                    dic["Duration"] |= {"PitchIntervalTime", "PitchIntervalChord"}
                 else:
-                    dic["Pedal"] += ["PitchIntervalTime", "PitchIntervalChord"]
-                    dic["PedalOff"] += ["PitchIntervalTime", "PitchIntervalChord"]
+                    dic["Pedal"] |= {"PitchIntervalTime", "PitchIntervalChord"}
+                    dic["PedalOff"] |= {"PitchIntervalTime", "PitchIntervalChord"}
 
         if self.config.use_pitch_bends:
             # As a Program token will precede PitchBend otherwise
             # Else no need to add Program as its already in
-            dic["PitchBend"] = [first_note_token_type, "TimeShift"]
+            dic["PitchBend"] = {first_note_token_type, "TimeShift"}
             if self.config.use_programs and not self.config.program_changes:
-                dic["Program"].append("PitchBend")
+                dic["Program"].add("PitchBend")
             else:
-                dic["TimeShift"].append("PitchBend")
+                dic["TimeShift"].add("PitchBend")
                 if self.config.use_tempos:
-                    dic["Tempo"].append("PitchBend")
+                    dic["Tempo"].add("PitchBend")
                 if self.config.use_time_signatures:
-                    dic["TimeSig"].append("PitchBend")
+                    dic["TimeSig"].add("PitchBend")
                 if self.config.use_sustain_pedals:
-                    dic["Pedal"].append("PitchBend")
+                    dic["Pedal"].add("PitchBend")
                     if self.config.sustain_pedal_duration:
-                        dic["Duration"].append("PitchBend")
+                        dic["Duration"].add("PitchBend")
                     else:
-                        dic["PedalOff"].append("PitchBend")
+                        dic["PedalOff"].add("PitchBend")
             if self.config.use_chords:
-                dic["PitchBend"].append("Chord")
+                dic["PitchBend"].add("Chord")
             if self.config.use_rests:
-                dic["PitchBend"].append("Rest")
+                dic["PitchBend"].add("Rest")
 
         if self.config.use_rests:
-            dic["Rest"] = ["Rest", first_note_token_type, "TimeShift"]
-            dic["Duration"].append("Rest")
+            dic["Rest"] = {"Rest", first_note_token_type, "TimeShift"}
+            dic["Duration"].add("Rest")
             if self.config.use_chords:
-                dic["Rest"] += ["Chord"]
+                dic["Rest"] |= {"Chord"}
             if self.config.use_tempos:
-                dic["Rest"].append("Tempo")
+                dic["Rest"].add("Tempo")
             if self.config.use_time_signatures:
-                dic["Rest"].append("TimeSig")
+                dic["Rest"].add("TimeSig")
             if self.config.use_sustain_pedals:
-                dic["Rest"].append("Pedal")
+                dic["Rest"].add("Pedal")
                 if self.config.sustain_pedal_duration:
-                    dic["Duration"].append("Rest")
+                    dic["Duration"].add("Rest")
                 else:
-                    dic["Rest"].append("PedalOff")
-                    dic["PedalOff"].append("Rest")
+                    dic["Rest"].add("PedalOff")
+                    dic["PedalOff"].add("Rest")
             if self.config.use_pitch_bends:
-                dic["Rest"].append("PitchBend")
+                dic["Rest"].add("PitchBend")
             if self.config.use_pitch_intervals:
-                dic["Rest"] += ["PitchIntervalTime", "PitchIntervalChord"]
+                dic["Rest"] |= {"PitchIntervalTime", "PitchIntervalChord"}
         else:
-            dic["TimeShift"].append("TimeShift")
+            dic["TimeShift"].add("TimeShift")
 
         if self.config.program_changes:
-            for token_type in [
+            for token_type in {
                 "TimeShift",
                 "Rest",
                 "PitchBend",
@@ -505,15 +508,15 @@ class TSD(MIDITokenizer):
                 "Tempo",
                 "TimeSig",
                 "Chord",
-            ]:
+            }:
                 if token_type in dic:
-                    dic["Program"].append(token_type)
-                    dic[token_type].append("Program")
+                    dic["Program"].add(token_type)
+                    dic[token_type].add("Program")
 
         if self.config.use_pitchdrum_tokens:
             dic["PitchDrum"] = dic["Pitch"]
             for key, values in dic.items():
                 if "Pitch" in values:
-                    dic[key].append("PitchDrum")
+                    dic[key].add("PitchDrum")
 
         return dic
