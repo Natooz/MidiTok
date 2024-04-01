@@ -106,7 +106,7 @@ class MMM(MIDITokenizer):
         self.one_token_stream = True
 
         # Concatenate the sequences
-        seq = TokSequence([], [], "", [])
+        seq = TokSequence([], [], events=[])
         for track_seq in sequences:
             seq += track_seq
 

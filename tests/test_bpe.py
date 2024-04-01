@@ -37,9 +37,11 @@ default_params.update(
 
 
 @pytest.mark.parametrize("tokenization", TOKENIZATIONS_BPE)
+@pytest.mark.parametrize("start_from_empty_voc", [False, True])
 def test_bpe_conversion(
     tokenization: str,
     tmp_path: Path,
+    start_from_empty_voc: bool,
     midi_paths: Sequence[str | Path] | None = None,
     seed: int = SEED,
 ):
@@ -66,7 +68,7 @@ def test_bpe_conversion(
     tokenizer.learn_bpe(
         vocab_size=len(tokenizer) + 400,
         files_paths=midi_paths,
-        start_from_empty_voc=True,
+        start_from_empty_voc=start_from_empty_voc,
     )
     tokenizer.save_params(tmp_path / "bpe_config.txt")
 
