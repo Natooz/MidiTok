@@ -626,8 +626,7 @@ class TokenizerConfig:
             configuration object.
         :returns: The ``TokenizerConfig`` object instantiated from those parameters.
         """
-        input_dict.update(**input_dict["additional_params"])
-        input_dict.pop("additional_params")
+        input_dict.update(**input_dict.pop("additional_params"))
         for key in IGNORED_CONFIG_KEY_DICT:
             if key in input_dict:
                 input_dict.pop(key)
@@ -649,7 +648,7 @@ class TokenizerConfig:
 
     def __serialize_dict(self, dict_: dict) -> None:
         r"""
-        Convert numpy arrays to lists recursively within a dictionary.
+        Recursively convert non-json-serializable values of a dict to lists.
 
         :param dict_: dictionary to serialize
         """
@@ -658,8 +657,10 @@ class TokenizerConfig:
                 self.__serialize_dict(dict_[key])
             elif isinstance(dict_[key], ndarray):
                 dict_[key] = dict_[key].tolist()
+            elif isinstance(dict_[key], set):
+                dict_[key] = list(dict_[key])
 
-    def save_to_json(self, out_path: str | Path) -> None:
+    def save_to_json(self, out_path: Path) -> None:
         r"""
         Save a tokenizer configuration object to the `out_path` path.
 
@@ -682,7 +683,7 @@ class TokenizerConfig:
             json.dump(dict_config, outfile, indent=4)
 
     @classmethod
-    def load_from_json(cls, config_file_path: str | Path) -> TokenizerConfig:
+    def load_from_json(cls, config_file_path: Path) -> TokenizerConfig:
         r"""
         Load a tokenizer configuration from the `config_path` path.
 

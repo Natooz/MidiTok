@@ -30,6 +30,7 @@ default_params.update(
         "use_time_signatures": True,
         "use_sustain_pedals": True,
         "use_pitch_bends": True,
+        "base_tokenizer": "TSD",
     }
 )
 tokenizations_no_one_stream = [

@@ -688,7 +688,7 @@ class CPWord(MIDITokenizer):
 
         if self.config.use_chords:
             dic["Rest"] = {"Rest", "Position"}
-            dic["Pitch"] |= ["Rest"]
+            dic["Pitch"] |= {"Rest"}
 
         if self.config.use_rests:
             dic["Rest"] = {"Rest", "Position", "Bar"}

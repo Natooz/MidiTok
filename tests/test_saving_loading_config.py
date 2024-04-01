@@ -23,6 +23,7 @@ ADDITIONAL_TOKENS_TEST = {
     "beat_res_rest": {(0, 16): 4},
     "num_tempos": 32,
     "tempo_range": (40, 250),
+    "base_tokenizer": "TSD",
 }
 
 TOK_PARAMS_MULTITRACK = []
@@ -36,6 +37,8 @@ tokenizations_non_one_stream = [
 ]
 for tokenization_ in ALL_TOKENIZATIONS:
     params_ = {"use_programs": True}
+    if tokenization_ == "MMM":
+        params_["base_tokenizer"] = "TSD"
     TOK_PARAMS_MULTITRACK.append((tokenization_, params_))
 
     if tokenization_ in tokenizations_non_one_stream:
