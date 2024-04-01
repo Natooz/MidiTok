@@ -59,7 +59,7 @@ class MMM(MIDITokenizer):
         # Add Track_Start and Track_End tokens to config
         for token in ("Track_Start", "Track_End"):
             if token not in self.config.special_tokens:
-                self.config.special_tokens.add(token)
+                self.config.special_tokens.append(token)
 
         # Create base tokenizer
         # TODO Bar_end for REMI
@@ -67,7 +67,6 @@ class MMM(MIDITokenizer):
         base_tokenizer_config.one_token_stream_for_programs = False
         self.base_tokenizer = getattr(miditok, tokenizer_name)(base_tokenizer_config)
         self.base_tokenizer.config.use_programs = True
-        self._create_base_vocabulary()
         self._note_on_off = self.base_tokenizer._note_on_off
 
     def _add_time_events(self, events: list[Event], time_division: int) -> list[Event]:
@@ -164,8 +163,12 @@ class MMM(MIDITokenizer):
         :return: the vocabulary as a list of string.
         """
         # `_tweak_config_before_creating_voc` already called, this method returns the
-        # vocab of the base_tokenizer.
-        return list(self.base_tokenizer.vocab.keys())
+        # vocab of the base_tokenizer, without the special tokens as they will be
+        # re-added by the `__create_vocabulary` method.
+        base_voc = list(self.base_tokenizer.vocab.keys())
+        for special_token in self.config.special_tokens:
+            base_voc.remove(special_token)
+        return base_voc
 
     def _create_token_types_graph(self) -> dict[str, set[str]]:
         r"""

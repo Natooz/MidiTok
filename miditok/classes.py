@@ -502,7 +502,7 @@ class TokenizerConfig:
         self.pitch_range: tuple[int, int] = pitch_range
         self.beat_res: dict[tuple[int, int], int] = beat_res
         self.num_velocities: int = num_velocities
-        self.special_tokens: set[str] = set()
+        self.special_tokens: list[str] = []
         for special_token in special_tokens:
             parts = special_token.split("_")
             if len(parts) == 1:
@@ -515,7 +515,15 @@ class TokenizerConfig:
                     f" {'_'.join(parts)}.",
                     stacklevel=2,
                 )
-            self.special_tokens.add("_".join(parts))
+            token = "_".join(parts)
+            if token not in self.special_tokens:
+                self.special_tokens.append(token)
+            else:
+                warnings.warn(
+                    f"The special token {token} is present twice in your configuration."
+                    f" Skipping its duplicated occurrence.",
+                    stacklevel=2,
+                )
         self.remove_duplicated_notes = remove_duplicated_notes
 
         # Additional token types params, enabling additional token types
@@ -657,8 +665,6 @@ class TokenizerConfig:
                 self.__serialize_dict(dict_[key])
             elif isinstance(dict_[key], ndarray):
                 dict_[key] = dict_[key].tolist()
-            elif isinstance(dict_[key], set):
-                dict_[key] = list(dict_[key])
 
     def save_to_json(self, out_path: Path) -> None:
         r"""

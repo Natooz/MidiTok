@@ -272,7 +272,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         return self._bpe_model.get_vocab()
 
     @property
-    def special_tokens(self) -> set[str]:
+    def special_tokens(self) -> list[str]:
         r"""
         Return the special tokens in the vocabulary.
 
@@ -281,7 +281,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         return self.config.special_tokens
 
     @property
-    def special_tokens_ids(self) -> Sequence[int]:
+    def special_tokens_ids(self) -> list[int]:
         r"""
         Return the ids of the special tokens in the vocabulary.
 
@@ -1682,11 +1682,11 @@ class MIDITokenizer(ABC, HFHubMixin):
             self._vocab_base = [{} for _ in range(len(vocab))]
             self.__vocab_base_inv = [{} for _ in range(len(vocab))]
             for vid in range(len(vocab)):
-                vocab[vid] = list(self.special_tokens) + vocab[vid]
+                vocab[vid] = self.special_tokens + vocab[vid]
                 for tok in vocab[vid]:
                     self.add_to_vocab(tok, vid)
         else:
-            vocab = list(self.special_tokens) + vocab
+            vocab = self.special_tokens + vocab
             for tok in vocab:
                 self.add_to_vocab(tok)
 
@@ -1924,7 +1924,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 self.tokens_types_graph[EOS_TOKEN_NAME] = set()
             else:
                 self.tokens_types_graph[special_token_type] = (
-                    original_token_types | self.config.special_tokens
+                    original_token_types | set(self.config.special_tokens)
                 )
 
             if special_token_type != BOS_TOKEN_NAME:
@@ -2370,7 +2370,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         special_tokens_bytes = []
         if len(self.config.special_tokens) > 0:
             special_tokens_bytes = self._ids_to_bytes(
-                self._tokens_to_ids(list(self.config.special_tokens))
+                self._tokens_to_ids(self.config.special_tokens)
             )
         trainer = BpeTrainer(
             vocab_size=vocab_size,
