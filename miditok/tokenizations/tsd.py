@@ -165,7 +165,12 @@ class TSD(MIDITokenizer):
                     name="Drums" if prog == -1 else MIDI_INSTRUMENTS[prog]["name"],
                 )
 
-        current_instrument = None  # only use in when one_token_stream is False
+        def is_track_empty(track: Track) -> bool:
+            return (
+                len(track.notes) == len(track.controls) == len(track.pitch_bends) == 0
+            )
+
+        current_track = None  # only use in when one_token_stream is False
         for si, seq in enumerate(tokens):
             # Set tracking variables
             current_tick = 0
@@ -181,7 +186,7 @@ class TSD(MIDITokenizer):
                 is_drum = False
                 if programs is not None:
                     current_program, is_drum = programs[si]
-                current_instrument = Track(
+                current_track = Track(
                     program=current_program,
                     is_drum=is_drum,
                     name="Drums"
@@ -232,7 +237,7 @@ class TSD(MIDITokenizer):
                                 check_inst(current_program)
                                 tracks[current_program].notes.append(new_note)
                             else:
-                                current_instrument.notes.append(new_note)
+                                current_track.notes.append(new_note)
                             previous_note_end = max(
                                 previous_note_end, current_tick + dur
                             )
@@ -243,6 +248,12 @@ class TSD(MIDITokenizer):
                         pass
                 elif tok_type == "Program":
                     current_program = int(tok_val)
+                    if not self.one_token_stream and self.config.program_changes:
+                        if current_program != -1:
+                            current_track.program = current_program
+                        else:
+                            current_track.program = 0
+                            current_track.is_drum = True
                 elif tok_type == "Tempo" and si == 0:
                     tempo_changes.append(Tempo(current_tick, float(tok_val)))
                 elif tok_type == "TimeSig":
@@ -268,7 +279,7 @@ class TSD(MIDITokenizer):
                                 check_inst(pedal_prog)
                                 tracks[pedal_prog].pedals.append(new_pedal)
                             else:
-                                current_instrument.pedals.append(new_pedal)
+                                current_track.pedals.append(new_pedal)
                     elif pedal_prog not in active_pedals:
                         active_pedals[pedal_prog] = current_tick
                 elif tok_type == "PedalOff":
@@ -289,7 +300,7 @@ class TSD(MIDITokenizer):
                                 )
                             )
                         else:
-                            current_instrument.pedals.append(new_pedal)
+                            current_track.pedals.append(new_pedal)
                         del active_pedals[pedal_prog]
                 elif tok_type == "PitchBend":
                     new_pitch_bend = PitchBend(current_tick, int(tok_val))
@@ -297,7 +308,7 @@ class TSD(MIDITokenizer):
                         check_inst(current_program)
                         tracks[current_program].pitch_bends.append(new_pitch_bend)
                     else:
-                        current_instrument.pitch_bends.append(new_pitch_bend)
+                        current_track.pitch_bends.append(new_pitch_bend)
 
                 if tok_type in [
                     "Program",
@@ -311,8 +322,8 @@ class TSD(MIDITokenizer):
                     previous_note_end = max(previous_note_end, current_tick)
 
             # Add current_inst to midi and handle notes still active
-            if not self.one_token_stream:
-                midi.tracks.append(current_instrument)
+            if not self.one_token_stream and not is_track_empty(current_track):
+                midi.tracks.append(current_track)
 
         # create MidiFile
         if self.one_token_stream:

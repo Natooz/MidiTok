@@ -259,9 +259,14 @@ class Structured(MIDITokenizer):
                     name="Drums" if prog == -1 else MIDI_INSTRUMENTS[prog]["name"],
                 )
 
+        def is_track_empty(track: Track) -> bool:
+            return (
+                len(track.notes) == len(track.controls) == len(track.pitch_bends) == 0
+            )
+
         current_tick = 0
         current_program = 0
-        current_instrument = None
+        current_track = None
         ticks_per_beat = midi.ticks_per_quarter
         for si, seq in enumerate(tokens):
             # Set track / sequence program if needed
@@ -270,7 +275,7 @@ class Structured(MIDITokenizer):
                 is_drum = False
                 if programs is not None:
                     current_program, is_drum = programs[si]
-                current_instrument = Track(
+                current_track = Track(
                     program=current_program,
                     is_drum=is_drum,
                     name="Drums"
@@ -299,7 +304,7 @@ class Structured(MIDITokenizer):
                                 check_inst(current_program)
                                 instruments[current_program].notes.append(new_note)
                             else:
-                                current_instrument.notes.append(new_note)
+                                current_track.notes.append(new_note)
                     except IndexError:
                         # A well constituted sequence should not raise an exception,
                         # however with generated sequences this can happen, or if the
@@ -309,8 +314,8 @@ class Structured(MIDITokenizer):
                     current_program = int(token_val)
 
             # Add current_inst to midi and handle notes still active
-            if not self.one_token_stream:
-                midi.tracks.append(current_instrument)
+            if not self.one_token_stream and not is_track_empty(current_track):
+                midi.tracks.append(current_track)
 
         # create MidiFile
         if self.one_token_stream:

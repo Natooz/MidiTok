@@ -964,8 +964,9 @@ class MIDITokenizer(ABC, HFHubMixin):
                 if self.config.program_changes:
                     # ProgramNoteOff desc to make sure it appears before Pedals and
                     # everything else
+                    program = track.program if not track.is_drum else -1
                     track_events.insert(
-                        0, Event("Program", track.program, 0, desc="ProgramNoteOff")
+                        0, Event("Program", program, 0, desc="ProgramNoteOff")
                     )
                 all_events[ti] += track_events
                 self._sort_events(all_events[ti])
@@ -992,7 +993,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         return tok_sequence
 
     def _sort_events(self, events: list[Event]) -> None:
-        # Can be overridden by subclasses if required (MMM)
+        # Can be overridden by subclasses if required (MIDILike)
         events.sort(key=lambda e: e.time)
 
     def _create_track_events(
@@ -2369,7 +2370,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         special_tokens_bytes = []
         if len(self.config.special_tokens) > 0:
             special_tokens_bytes = self._ids_to_bytes(
-                self._tokens_to_ids(self.config.special_tokens)
+                self._tokens_to_ids(list(self.config.special_tokens))
             )
         trainer = BpeTrainer(
             vocab_size=vocab_size,

@@ -31,6 +31,7 @@ default_params.update(
         "use_rests": True,
         "use_tempos": True,
         "use_time_signatures": True,
+        "base_tokenizer": "TSD",
     }
 )
 

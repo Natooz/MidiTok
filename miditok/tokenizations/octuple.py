@@ -225,10 +225,15 @@ class Octuple(MIDITokenizer):
                     name="Drums" if prog == -1 else MIDI_INSTRUMENTS[prog]["name"],
                 )
 
+        def is_track_empty(track: Track) -> bool:
+            return (
+                len(track.notes) == len(track.controls) == len(track.pitch_bends) == 0
+            )
+
         bar_at_last_ts_change = 0
         tick_at_last_ts_change = 0
         current_program = 0
-        current_instrument = None
+        current_track = None
         for si, seq in enumerate(tokens):
             # First look for the first time signature if needed
             if si == 0 and self.config.use_time_signatures:
@@ -249,7 +254,7 @@ class Octuple(MIDITokenizer):
                 is_drum = False
                 if programs is not None:
                     current_program, is_drum = programs[si]
-                current_instrument = Track(
+                current_track = Track(
                     program=current_program,
                     is_drum=is_drum,
                     name="Drums"
@@ -323,7 +328,7 @@ class Octuple(MIDITokenizer):
                     check_inst(current_program)
                     tracks[current_program].notes.append(new_note)
                 else:
-                    current_instrument.notes.append(new_note)
+                    current_track.notes.append(new_note)
 
                 # Tempo, adds a TempoChange if necessary
                 if (
@@ -338,8 +343,8 @@ class Octuple(MIDITokenizer):
                         tempo_changes.append(Tempo(current_tick, tempo))
 
             # Add current_inst to midi and handle notes still active
-            if not self.one_token_stream:
-                midi.tracks.append(current_instrument)
+            if not self.one_token_stream and not is_track_empty(current_track):
+                midi.tracks.append(current_track)
 
         # Delete mocked
         # And handle first tempo (tick 0) here instead of super

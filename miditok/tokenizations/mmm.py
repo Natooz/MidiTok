@@ -62,7 +62,6 @@ class MMM(MIDITokenizer):
                 self.config.special_tokens.add(token)
 
         # Create base tokenizer
-        # TODO handle when loading/saving tokenizer
         # TODO Bar_end for REMI
         base_tokenizer_config = self.config.copy()
         base_tokenizer_config.one_token_stream_for_programs = False
@@ -84,7 +83,7 @@ class MMM(MIDITokenizer):
             tokenized.
         :return: the same events, with time events inserted.
         """
-        if len(events) < 3:  # empty list
+        if len(events) < 2:  # empty list
             track_events = events.copy()
         else:
             track_events = self.base_tokenizer._add_time_events(events, time_division)
@@ -114,6 +113,9 @@ class MMM(MIDITokenizer):
 
         return seq
 
+    def _sort_events(self, events: list[Event]) -> None:
+        self.base_tokenizer._sort_events(events)
+
     def _tokens_to_midi(
         self,
         tokens: TokSequence,
@@ -134,7 +136,7 @@ class MMM(MIDITokenizer):
         tokseqs = []
         i = 0
         while i < len(tokens):
-            if tokens.tokens[i] != "Track_Start":  # TODO program?
+            if tokens.tokens[i] != "Track_Start":
                 i += 1
                 continue
 
@@ -171,12 +173,7 @@ class MMM(MIDITokenizer):
 
         :return: the token types transitions dictionary.
         """
-        graph = self.base_tokenizer.tokens_types_graph.copy()
-        base_tokenizer_name = self.base_tokenizer.__class__.__name__
-        if base_tokenizer_name == "REMI":
-            graph["Program"].add("Bar")  # TODO remove?
-
-        return graph
+        return self.base_tokenizer.tokens_types_graph.copy()
 
     def _tokens_errors(self, tokens: list[str]) -> int:
         """

@@ -423,11 +423,16 @@ class CPWord(MIDITokenizer):
                     name="Drums" if prog == -1 else MIDI_INSTRUMENTS[prog]["name"],
                 )
 
+        def is_track_empty(track: Track) -> bool:
+            return (
+                len(track.notes) == len(track.controls) == len(track.pitch_bends) == 0
+            )
+
         current_tick = tick_at_last_ts_change = tick_at_current_bar = 0
         current_bar = -1
         bar_at_last_ts_change = 0
         current_program = 0
-        current_instrument = None
+        current_track = None
         previous_note_end = 0
         for si, seq in enumerate(tokens):
             # First look for the first time signature if needed
@@ -466,7 +471,7 @@ class CPWord(MIDITokenizer):
                 is_drum = False
                 if programs is not None:
                     current_program, is_drum = programs[si]
-                current_instrument = Track(
+                current_track = Track(
                     program=current_program,
                     is_drum=is_drum,
                     name="Drums"
@@ -496,7 +501,7 @@ class CPWord(MIDITokenizer):
                         check_inst(current_program)
                         tracks[current_program].notes.append(new_note)
                     else:
-                        current_instrument.notes.append(new_note)
+                        current_track.notes.append(new_note)
                     previous_note_end = max(previous_note_end, current_tick + duration)
 
                 elif token_family == "Metric":
@@ -577,8 +582,8 @@ class CPWord(MIDITokenizer):
                     previous_note_end = max(previous_note_end, current_tick)
 
             # Add current_inst to midi and handle notes still active
-            if not self.one_token_stream:
-                midi.tracks.append(current_instrument)
+            if not self.one_token_stream and not is_track_empty(current_track):
+                midi.tracks.append(current_track)
 
         # Delete mocked
         # And handle first tempo (tick 0) here instead of super
