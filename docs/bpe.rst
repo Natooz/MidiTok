@@ -36,10 +36,10 @@ BPE example
 
 ..  code-block:: python
 
-    from miditok import REMI, TokSequence
+    from miditok import REMI, TokenizerConfig, TokSequence
     from copy import deepcopy
 
-    tokenizer = REMI()  # using defaults parameters (constants.py)
+    tokenizer = REMI(TokenizerConfig(use_programs=True))
     paths_midis = list(Path("path", "to", "midis").glob('**/*.mid'))
 
     # Learns the vocabulary with BPE
@@ -48,12 +48,10 @@ BPE example
         files_paths=paths_midis,
     )
 
-    # Opens tokens, apply BPE on them, and decode BPE back
-    tokens = tokenizer.load_tokens(tokens_no_bpe_paths[0])
-    tokens = TokSequence(ids=tokens)
-    tokens_with_bpe = tokenizer.apply_bpe(deepcopy(tokens))  # copy as the method is inplace
-    tokens_no_bpe = tokenizer.decode_bpe(deepcopy(tokens_with_bpe))
-
+    # Tokenize a MIDI file
+    tokens = tokenizer(paths_midis[0])
+    # Decode BPE
+    tokens_no_bpe = tokenizer.decode_bpe(deepcopy(tok_seq))
 
 Methods
 ------------------------
