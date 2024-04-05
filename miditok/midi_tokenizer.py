@@ -2654,7 +2654,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
             # Good token type
             if event_type in self.tokens_types_graph[previous_type]:
-                if event_type == "Bar":  # reset
+                if token == "Bar_None":  # reset
                     current_pos = -1
                     current_pitches = {p: [] for p in self.config.programs}
                 elif event_type in ["TimeShift", "Time-Shift", "Rest"]:

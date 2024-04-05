@@ -62,7 +62,6 @@ class MMM(MIDITokenizer):
                 self.config.special_tokens.append(token)
 
         # Create base tokenizer
-        # TODO Bar_end for REMI
         base_tokenizer_config = self.config.copy()
         base_tokenizer_config.one_token_stream_for_programs = False
         self.base_tokenizer = getattr(miditok, tokenizer_name)(base_tokenizer_config)

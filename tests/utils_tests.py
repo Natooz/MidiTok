@@ -64,6 +64,7 @@ TOKENIZER_CONFIG_KWARGS = {
     "chord_unknown": (3, 6),
     "delete_equal_successive_time_sig_changes": True,
     "delete_equal_successive_tempo_changes": True,
+    "use_bar_end_tokens": True,
 }
 
 

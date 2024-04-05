@@ -114,6 +114,7 @@ REMOVE_DUPLICATED_NOTES = False
 
 # Tokenizers specific parameters
 MMM_COMPATIBLE_TOKENIZERS = {"TSD", "REMI", "MIDILike"}
+USE_BAR_END_TOKENS = False  # REMI
 
 # Defaults values when writing new MIDI files
 TEMPO = 120

@@ -15,7 +15,7 @@ from symusic import (
 )
 
 from miditok.classes import Event, TokenizerConfig, TokSequence
-from miditok.constants import MIDI_INSTRUMENTS, TIME_SIGNATURE
+from miditok.constants import MIDI_INSTRUMENTS, TIME_SIGNATURE, USE_BAR_END_TOKENS
 from miditok.midi_tokenizer import MIDITokenizer
 from miditok.utils import compute_ticks_per_bar, compute_ticks_per_beat
 
@@ -68,8 +68,6 @@ class REMI(MIDITokenizer):
             and tokenizer_config is not None
             and "max_bar_embedding" not in tokenizer_config.additional_params
         ):
-            # If used, this attribute might increase if the tokenizer encounter longer
-            # MIDIs
             tokenizer_config.additional_params["max_bar_embedding"] = max_bar_embedding
         super().__init__(tokenizer_config, params)
 
@@ -77,9 +75,9 @@ class REMI(MIDITokenizer):
         # In case the tokenizer has been created without specifying any config or
         # params file path
         if "max_bar_embedding" not in self.config.additional_params:
-            # If used, this attribute might increase over tokenizations, if the
-            # tokenizer encounter longer MIDIs
             self.config.additional_params["max_bar_embedding"] = None
+        if "use_bar_end_tokens" not in self.config.additional_params:
+            self.config.additional_params["use_bar_end_tokens"] = USE_BAR_END_TOKENS
 
     def _add_time_events(self, events: list[Event], time_division: int) -> list[Event]:
         r"""
@@ -181,6 +179,15 @@ class REMI(MIDITokenizer):
                                 desc=0,
                             )
                         )
+                        if self.config.additional_params["use_bar_end_tokens"]:
+                            all_events.append(
+                                Event(
+                                    type_="Bar",
+                                    value="End",
+                                    time=(current_bar + i + 2) * ticks_per_bar,
+                                    desc=0,
+                                )
+                            )
                         # Add a TimeSignature token, except for the last new Bar token
                         # if the current event is a TS
                         if self.config.use_time_signatures and not (
@@ -352,7 +359,7 @@ class REMI(MIDITokenizer):
             # Decode tokens
             for ti, token in enumerate(seq):
                 tok_type, tok_val = token.split("_")
-                if tok_type == "Bar":
+                if token == "Bar_None":
                     current_bar += 1
                     if current_bar > 0:
                         current_tick = tick_at_current_bar + ticks_per_bar
@@ -534,6 +541,8 @@ class REMI(MIDITokenizer):
             ]
         else:
             vocab += ["Bar_None"]
+        if self.config.additional_params["use_bar_end_tokens"]:
+            vocab.append("Bar_End")
 
         # NoteOn/NoteOff/Velocity
         self._add_note_tokens_to_vocab_list(vocab)
@@ -603,6 +612,8 @@ class REMI(MIDITokenizer):
 
         if self.config.use_time_signatures:
             dic["Bar"] = {"TimeSig"}
+            if self.config.additional_params["use_bar_end_tokens"]:
+                dic["Bar"].add("Bar")
             dic["TimeSig"] = {first_note_token_type, "Position", "Bar"}
             if self.config.use_chords:
                 dic["TimeSig"] |= {"Chord"}
