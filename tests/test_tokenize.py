@@ -23,6 +23,8 @@ from .utils_tests import (
     tokenize_and_check_equals,
 )
 
+MMM_BASE_TOKENIZATIONS = ("TSD", "REMI", "MIDILike")
+
 # Removing "hard" MIDIs from the list
 MIDI_PATHS_ONE_TRACK = [
     p for p in MIDI_PATHS_ONE_TRACK if p not in MIDI_PATHS_ONE_TRACK_HARD
@@ -54,8 +56,15 @@ for tokenization_ in ALL_TOKENIZATIONS:
             "remove_duplicated_notes": True,
         }
     )
-    adjust_tok_params_for_tests(tokenization_, params_)
-    TOK_PARAMS_ONE_TRACK.append((tokenization_, params_))
+    if tokenization_ == "MMM":
+        for tokenization__ in MMM_BASE_TOKENIZATIONS:
+            params__ = params_.copy()
+            params__["base_tokenizer"] = tokenization__
+            adjust_tok_params_for_tests(tokenization_, params__)
+            TOK_PARAMS_ONE_TRACK.append((tokenization_, params__))
+    else:
+        adjust_tok_params_for_tests(tokenization_, params_)
+        TOK_PARAMS_ONE_TRACK.append((tokenization_, params_))
 
 _all_add_tokens = [
     "use_rests",
@@ -89,7 +98,13 @@ for tokenization_ in ALL_TOKENIZATIONS:
         params_ = deepcopy(default_params)
         for param, bin_val in zip(add_tokens, bin_combination):
             params_[param] = bool(int(bin_val))
-        TOK_PARAMS_ONE_TRACK_HARD.append((tokenization_, params_))
+        if tokenization_ == "MMM":
+            for tokenization__ in MMM_BASE_TOKENIZATIONS:
+                params__ = params_.copy()
+                params__["base_tokenizer"] = tokenization__
+                TOK_PARAMS_ONE_TRACK_HARD.append((tokenization_, params__))
+        else:
+            TOK_PARAMS_ONE_TRACK_HARD.append((tokenization_, params_))
 
 # Make final adjustments
 for tpi in range(len(TOK_PARAMS_ONE_TRACK_HARD) - 1, -1, -1):
@@ -140,8 +155,15 @@ tokenizations_non_one_stream = [
 tokenizations_program_change = ["TSD", "REMI", "MIDILike"]
 for tokenization_ in ALL_TOKENIZATIONS:
     params_ = deepcopy(default_params)
-    adjust_tok_params_for_tests(tokenization_, params_)
-    TOK_PARAMS_MULTITRACK.append((tokenization_, params_))
+    if tokenization_ == "MMM":
+        for tokenization__ in MMM_BASE_TOKENIZATIONS:
+            params__ = params_.copy()
+            params__["base_tokenizer"] = tokenization__
+            adjust_tok_params_for_tests(tokenization_, params__)
+            TOK_PARAMS_MULTITRACK.append((tokenization_, params__))
+    else:
+        adjust_tok_params_for_tests(tokenization_, params_)
+        TOK_PARAMS_MULTITRACK.append((tokenization_, params_))
 
     if tokenization_ in tokenizations_non_one_stream:
         params_tmp = deepcopy(params_)

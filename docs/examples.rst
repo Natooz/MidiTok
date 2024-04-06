@@ -74,18 +74,17 @@ Creates a Dataset and a collator to be used with a PyTorch DataLoader to train a
 ..  code-block:: python
 
     from miditok import REMI
-    from miditok.pytorch_data import DatasetTok, DataCollator
+    from miditok.pytorch_data import DatasetMIDI, DataCollator
 
     midi_paths = list(Path("path", "to", "dataset").glob("**/*.mid"))
-    dataset = DatasetTok(
+    dataset = DatasetMIDI(
         files_paths=midi_paths,
-        min_seq_len=100,
+        tokenizer,
         max_seq_len=1024,
-        tokenizer=tokenizer,
+        bos_token_id=tokenizer["PAD_None"],
+        eos_token_id=tokenizer["BOS_None"],
     )
-    collator = DataCollator(
-        tokenizer["PAD_None"], tokenizer["BOS_None"], tokenizer["EOS_None"]
-    )
+    collator = DataCollator(tokenizer["PAD_None"])
     from torch.utils.data import DataLoader
     data_loader = DataLoader(dataset=dataset, collate_fn=collator)
 

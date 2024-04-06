@@ -423,11 +423,16 @@ class CPWord(MIDITokenizer):
                     name="Drums" if prog == -1 else MIDI_INSTRUMENTS[prog]["name"],
                 )
 
+        def is_track_empty(track: Track) -> bool:
+            return (
+                len(track.notes) == len(track.controls) == len(track.pitch_bends) == 0
+            )
+
         current_tick = tick_at_last_ts_change = tick_at_current_bar = 0
         current_bar = -1
         bar_at_last_ts_change = 0
         current_program = 0
-        current_instrument = None
+        current_track = None
         previous_note_end = 0
         for si, seq in enumerate(tokens):
             # First look for the first time signature if needed
@@ -466,7 +471,7 @@ class CPWord(MIDITokenizer):
                 is_drum = False
                 if programs is not None:
                     current_program, is_drum = programs[si]
-                current_instrument = Track(
+                current_track = Track(
                     program=current_program,
                     is_drum=is_drum,
                     name="Drums"
@@ -496,7 +501,7 @@ class CPWord(MIDITokenizer):
                         check_inst(current_program)
                         tracks[current_program].notes.append(new_note)
                     else:
-                        current_instrument.notes.append(new_note)
+                        current_track.notes.append(new_note)
                     previous_note_end = max(previous_note_end, current_tick + duration)
 
                 elif token_family == "Metric":
@@ -577,8 +582,8 @@ class CPWord(MIDITokenizer):
                     previous_note_end = max(previous_note_end, current_tick)
 
             # Add current_inst to midi and handle notes still active
-            if not self.one_token_stream:
-                midi.tracks.append(current_instrument)
+            if not self.one_token_stream and not is_track_empty(current_track):
+                midi.tracks.append(current_track)
 
         # Delete mocked
         # And handle first tempo (tick 0) here instead of super
@@ -674,42 +679,42 @@ class CPWord(MIDITokenizer):
 
         return vocab
 
-    def _create_token_types_graph(self) -> dict[str, list[str]]:
+    def _create_token_types_graph(self) -> dict[str, set[str]]:
         r"""
         Return a graph/dictionary of the possible token types successions.
 
         :return: the token types transitions dictionary.
         """
         dic = {
-            "Bar": ["Position", "Bar"],
-            "Position": ["Pitch"],
-            "Pitch": ["Pitch", "Bar", "Position"],
+            "Bar": {"Position", "Bar"},
+            "Position": {"Pitch"},
+            "Pitch": {"Pitch", "Bar", "Position"},
         }
 
         if self.config.use_chords:
-            dic["Rest"] = ["Rest", "Position"]
-            dic["Pitch"] += ["Rest"]
+            dic["Rest"] = {"Rest", "Position"}
+            dic["Pitch"] |= {"Rest"}
 
         if self.config.use_rests:
-            dic["Rest"] = ["Rest", "Position", "Bar"]
-            dic["Pitch"] += ["Rest"]
+            dic["Rest"] = {"Rest", "Position", "Bar"}
+            dic["Pitch"] |= {"Rest"}
 
         if self.config.use_tempos:
             # Because a tempo change can happen at any moment
-            dic["Position"] += ["Position", "Bar"]
+            dic["Position"] |= {"Position", "Bar"}
             if self.config.use_rests:
-                dic["Position"].append("Rest")
-                dic["Rest"].append("Position")
+                dic["Position"].add("Rest")
+                dic["Rest"].add("Position")
 
         for key in dic:
-            dic[key].append("Ignore")
-        dic["Ignore"] = list(dic.keys())
+            dic[key].add("Ignore")
+        dic["Ignore"] = set(dic.keys())
 
         if self.config.use_pitchdrum_tokens:
             dic["PitchDrum"] = dic["Pitch"]
             for key, values in dic.items():
                 if "Pitch" in values:
-                    dic[key].append("PitchDrum")
+                    dic[key].add("PitchDrum")
 
         return dic
 

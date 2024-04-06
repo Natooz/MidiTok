@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import warnings
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from math import log2
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -147,31 +147,48 @@ class TokSequence:
         )
         raise ValueError(msg)
 
-    def __getitem__(self, idx: int) -> int | str | Event:
+    def __getitem__(self, val: int | slice) -> int | str | Event | TokSequence:
         """
-        Return the ``idx``th element of the sequence.
+        Return the ``idx``th element or slice of the sequence.
 
-        It checks by order: ids, tokens, events, bytes.
+        If an integer is providing, it checks by order: ids, tokens, events, bytes.
 
-        :param idx: index of the element to retrieve.
+        :param val: index of the element to retrieve.
         :return: ``idx``th element.
         """
+        if isinstance(val, slice):
+            return self.__slice(val)
+
         if self.ids is not None:
-            return self.ids[idx]
+            return self.ids[val]
         if self.tokens is not None:
-            return self.tokens[idx]
+            return self.tokens[val]
         if self.events is not None:
-            return self.events[idx]
+            return self.events[val]
         if self.bytes is not None:
-            return self.bytes[idx]
+            return self.bytes[val]
         if self._ids_no_bpe is not None:
-            return self._ids_no_bpe[idx]
+            return self._ids_no_bpe[val]
 
         msg = (
             "This TokSequence seems to not be initialized, all its attributes "
             "are None."
         )
         raise ValueError(msg)
+
+    def __slice(self, sli: slice) -> TokSequence:
+        """
+        Slice the ``TokSequence``.
+
+        :param sli: slice object.
+        :return: the slice of the self ``TokSequence``.
+        """
+        seq = replace(self)
+        attributes = ["tokens", "ids", "bytes", "events", "_ids_no_bpe"]
+        for attr in attributes:
+            if getattr(self, attr):
+                setattr(seq, attr, getattr(self, attr)[sli])
+        return seq
 
     def __eq__(self, other: TokSequence) -> bool:
         r"""
@@ -194,6 +211,42 @@ class TokSequence:
                 one_common_attr = True
 
         return one_common_attr and all(eq)
+
+    def __add__(self, other: TokSequence) -> TokSequence:
+        """
+        Concatenate two ``TokSequence`` objects.
+
+        The `ìds``, ``tokens``, ``events`` and ``bytes`` will be concatenated.
+
+        :param other: other ``TokSequence``.
+        :return: the concatenation of the two sequences.
+        """
+        seq = replace(self)
+        seq += other
+        return seq
+
+    def __iadd__(self, other: TokSequence) -> TokSequence:
+        """
+        Concatenate the self ``TokSequence`` to another one.
+
+        The `ìds``, ``tokens``, ``events`` and ``bytes`` will be concatenated.
+
+        :param other: other ``TokSequence``.
+        :return: self.
+        """
+        if not isinstance(other, TokSequence):
+            msg = (
+                "Addition to a `TokSequence` object can only be performed with other"
+                f"`TokSequence` objects. Received: {other.__class__.__name__}"
+            )
+            raise ValueError(msg)
+        attributes = ["tokens", "ids", "bytes", "events", "_ids_no_bpe"]
+        for attr in attributes:
+            self_attr, other_attr = getattr(self, attr), getattr(other, attr)
+            if self_attr is not None and other_attr is not None:
+                setattr(self, attr, self_attr + other_attr)
+
+        return self
 
 
 class TokenizerConfig:
@@ -462,7 +515,15 @@ class TokenizerConfig:
                     f" {'_'.join(parts)}.",
                     stacklevel=2,
                 )
-            self.special_tokens.append("_".join(parts))
+            token = "_".join(parts)
+            if token not in self.special_tokens:
+                self.special_tokens.append(token)
+            else:
+                warnings.warn(
+                    f"The special token {token} is present twice in your configuration."
+                    f" Skipping its duplicated occurrence.",
+                    stacklevel=2,
+                )
         self.remove_duplicated_notes = remove_duplicated_notes
 
         # Additional token types params, enabling additional token types
@@ -573,8 +634,7 @@ class TokenizerConfig:
             configuration object.
         :returns: The ``TokenizerConfig`` object instantiated from those parameters.
         """
-        input_dict.update(**input_dict["additional_params"])
-        input_dict.pop("additional_params")
+        input_dict.update(**input_dict.pop("additional_params"))
         for key in IGNORED_CONFIG_KEY_DICT:
             if key in input_dict:
                 input_dict.pop(key)
@@ -596,7 +656,7 @@ class TokenizerConfig:
 
     def __serialize_dict(self, dict_: dict) -> None:
         r"""
-        Convert numpy arrays to lists recursively within a dictionary.
+        Recursively convert non-json-serializable values of a dict to lists.
 
         :param dict_: dictionary to serialize
         """
@@ -606,7 +666,7 @@ class TokenizerConfig:
             elif isinstance(dict_[key], ndarray):
                 dict_[key] = dict_[key].tolist()
 
-    def save_to_json(self, out_path: str | Path) -> None:
+    def save_to_json(self, out_path: Path) -> None:
         r"""
         Save a tokenizer configuration object to the `out_path` path.
 
@@ -629,7 +689,7 @@ class TokenizerConfig:
             json.dump(dict_config, outfile, indent=4)
 
     @classmethod
-    def load_from_json(cls, config_file_path: str | Path) -> TokenizerConfig:
+    def load_from_json(cls, config_file_path: Path) -> TokenizerConfig:
         r"""
         Load a tokenizer configuration from the `config_path` path.
 
@@ -653,6 +713,14 @@ class TokenizerConfig:
         }
 
         return cls.from_dict(dict_config)
+
+    def copy(self) -> TokenizerConfig:
+        """
+        Copy the ``TokSequence``.
+
+        :return: a copy of the ``TokSequence``.
+        """
+        return deepcopy(self)
 
     def __eq__(self, other: TokenizerConfig) -> bool:
         """

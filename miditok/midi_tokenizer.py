@@ -281,7 +281,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         return self.config.special_tokens
 
     @property
-    def special_tokens_ids(self) -> Sequence[int]:
+    def special_tokens_ids(self) -> list[int]:
         r"""
         Return the ids of the special tokens in the vocabulary.
 
@@ -964,8 +964,9 @@ class MIDITokenizer(ABC, HFHubMixin):
                 if self.config.program_changes:
                     # ProgramNoteOff desc to make sure it appears before Pedals and
                     # everything else
+                    program = track.program if not track.is_drum else -1
                     track_events.insert(
-                        0, Event("Program", track.program, 0, desc="ProgramNoteOff")
+                        0, Event("Program", program, 0, desc="ProgramNoteOff")
                     )
                 all_events[ti] += track_events
                 self._sort_events(all_events[ti])
@@ -992,7 +993,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         return tok_sequence
 
     def _sort_events(self, events: list[Event]) -> None:
-        # Can be overridden by subclasses if required (MMM)
+        # Can be overridden by subclasses if required (MIDILike)
         events.sort(key=lambda e: e.time)
 
     def _create_track_events(
@@ -1896,7 +1897,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         return token.split("_")[0]
 
     @abstractmethod
-    def _create_token_types_graph(self) -> dict[str, list[str]]:
+    def _create_token_types_graph(self) -> dict[str, set[str]]:
         r"""
         Create a dictionary describing the possible token type successions.
 
@@ -1916,19 +1917,19 @@ class MIDITokenizer(ABC, HFHubMixin):
         (End of Sequence) tokens: No token type can precede a BOS token, and EOS token
         cannot precede any other token.
         """
-        original_token_types = list(self.tokens_types_graph.keys())
+        original_token_types = set(self.tokens_types_graph.keys())
         for special_token in self.config.special_tokens:
             special_token_type = special_token.split("_")[0]
             if special_token_type == EOS_TOKEN_NAME:
-                self.tokens_types_graph[EOS_TOKEN_NAME] = []
+                self.tokens_types_graph[EOS_TOKEN_NAME] = set()
             else:
                 self.tokens_types_graph[special_token_type] = (
-                    original_token_types + list(self.config.special_tokens)
+                    original_token_types | set(self.config.special_tokens)
                 )
 
             if special_token_type != BOS_TOKEN_NAME:
                 for token_type in original_token_types:
-                    self.tokens_types_graph[token_type].append(special_token_type)
+                    self.tokens_types_graph[token_type].add(special_token_type)
 
     def _create_durations_tuples(self) -> list[tuple[int, int, int]]:
         r"""
@@ -2653,7 +2654,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
             # Good token type
             if event_type in self.tokens_types_graph[previous_type]:
-                if event_type == "Bar":  # reset
+                if token == "Bar_None":  # reset
                     current_pos = -1
                     current_pitches = {p: [] for p in self.config.programs}
                 elif event_type in ["TimeShift", "Time-Shift", "Rest"]:

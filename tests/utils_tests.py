@@ -64,6 +64,7 @@ TOKENIZER_CONFIG_KWARGS = {
     "chord_unknown": (3, 6),
     "delete_equal_successive_time_sig_changes": True,
     "delete_equal_successive_tempo_changes": True,
+    "use_bar_end_tokens": True,
 }
 
 
@@ -238,8 +239,13 @@ def midis_notes_equals(
     :param midi2: second MIDI.
     :return: list of errors.
     """
+    if len(midi1.tracks) != len(midi2.tracks):
+        return [(0, "num tracks", [])]
     errors = []
     for track1, track2 in zip(midi1.tracks, midi2.tracks):
+        if track1.program != track2.program or track1.is_drum != track2.is_drum:
+            errors.append((0, "program", []))
+            continue
         track_errors = tracks_notes_equals(track1, track2)
         if len(track_errors) > 0:
             errors.append((track1.program, track1.name, track_errors))

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "miditok"
-version = "3.0.2"
+version = "3.0.3"
 description = "MIDI / symbolic music tokenizers for Deep Learning models."
 readme = "README.md"
 license = "MIT"
@@ -38,7 +38,7 @@ classifiers = [
 ]
 dependencies = [
     "numpy>=1.19",
-    "symusic>=0.3.2",
+    "symusic>=0.4.3",
     "tqdm",
     "tokenizers>=0.13.0",
     "huggingface_hub>=0.16.4",
