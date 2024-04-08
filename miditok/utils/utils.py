@@ -970,7 +970,7 @@ def get_deepest_common_subdir(paths: Sequence[Path]) -> Path:
     :param paths: paths to analyze.
     :return: path of the deepest common subdirectory from the paths
     """
-    all_parts = [Path(path).parent.parts for path in paths]
+    all_parts = [path.resolve().parent.parts for path in paths]
     max_depth = max(len(parts) for parts in all_parts)
     root_parts = []
     for depth in range(max_depth):

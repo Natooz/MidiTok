@@ -2515,7 +2515,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             some MIDI content is incorrect or need your attention. (default: ``True``)
         """
         self._verbose = verbose
-        out_dir = Path(out_dir)
+        out_dir = Path(out_dir).resolve()
         out_dir.mkdir(parents=True, exist_ok=True)
 
         # User gave a path to a directory, we'll scan it to find MIDI files
@@ -2535,7 +2535,10 @@ class MIDITokenizer(ABC, HFHubMixin):
         if save_programs is None:
             save_programs = not self.config.use_programs
 
-        desc = f'Tokenizing MIDIs ({"/".join(list(out_dir.parts[-2:]))})'
+        # Tokenizing
+        # Note: tests with multiprocessing show significant slower runtime with 4
+        # workers.
+        desc = f"Tokenizing MIDIs ({'/'.join(list(out_dir.parts[-2:]))})"
         for midi_path in tqdm(midi_paths, desc=desc):
             # Some MIDIs can contain errors, if so the loop continues
             midi_path = Path(midi_path)
@@ -2556,7 +2559,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             tokens = self.midi_to_tokens(midi)
 
             # Set output file path
-            out_path = out_dir / midi_path.parent.relative_to(root_dir)
+            out_path = out_dir / midi_path.resolve().parent.relative_to(root_dir)
             out_path.mkdir(parents=True, exist_ok=True)
             out_path /= f"{midi_path.stem}.json"
 
