@@ -4,6 +4,7 @@ from __future__ import annotations
 import warnings
 from copy import copy
 from math import ceil
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -960,3 +961,20 @@ def concat_midis(midis: Sequence[Score], end_ticks: Sequence[int]) -> Score:
             midi_concat.tracks[ti].pedals.extend(track.pedals)
 
     return midi_concat
+
+
+def get_deepest_common_subdir(paths: Sequence[Path]) -> Path:
+    """
+    Return the path of the deepest common subdirectory from several paths.
+
+    :param paths: paths to analyze.
+    :return: path of the deepest common subdirectory from the paths
+    """
+    all_parts = [Path(path).parent.parts for path in paths]
+    max_depth = max(len(parts) for parts in all_parts)
+    root_parts = []
+    for depth in range(max_depth):
+        if len({parts[depth] for parts in all_parts}) > 1:
+            break
+        root_parts.append(all_parts[0][depth])
+    return Path(*root_parts)

@@ -17,6 +17,7 @@ from miditok.utils import (
     get_num_notes_per_bar,
     split_midi_per_tracks,
 )
+from miditok.utils.utils import get_deepest_common_subdir
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -87,14 +88,7 @@ def split_midis_for_training(
         )
 
     # Determine the deepest common subdirectory to replicate file tree
-    all_parts = [path.parent.parts for path in files_paths]
-    max_depth = max(len(parts) for parts in all_parts)
-    root_parts = []
-    for depth in range(max_depth):
-        if len({parts[depth] for parts in all_parts}) > 1:
-            break
-        root_parts.append(all_parts[0][depth])
-    root_dir = Path(*root_parts)
+    root_dir = get_deepest_common_subdir(files_paths)
 
     # Splitting MIDIs
     new_files_paths = []

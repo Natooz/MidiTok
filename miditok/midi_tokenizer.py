@@ -67,7 +67,12 @@ from .utils import (
     merge_same_program_tracks,
     remove_duplicated_notes,
 )
-from .utils.utils import miditoolkit_to_symusic, np_get_closest, tempo_qpm_to_mspq
+from .utils.utils import (
+    get_deepest_common_subdir,
+    miditoolkit_to_symusic,
+    np_get_closest,
+    tempo_qpm_to_mspq,
+)
 
 
 class MIDITokenizer(ABC, HFHubMixin):
@@ -2501,11 +2506,11 @@ class MIDITokenizer(ABC, HFHubMixin):
             requirements (e.g. time signature, minimum/maximum length, instruments...).
             (default: ``None``)
         :param save_programs: will save the programs of the tracks of the MIDI as an
-            entry in the Json file. That this option is probably unnecessary when using
-            a multitrack tokenizer (`config.use_programs`), as the program information
-            is present within the tokens, and that the tracks having the same programs
-            are likely to have been merged. (default: ``False`` if
-            ``config.use_programs``, else ``True``)
+            entry in the Json file. This option is probably unnecessary when using a
+            multitrack tokenizer (`config.use_programs`), as the program information is
+            present within the tokens, and that the tracks having the same programs are
+            likely to have been merged. (default: ``False`` if ``config.use_programs``,
+            else ``True``)
         :param verbose: will throw warnings of errors when loading MIDI files, or if
             some MIDI content is incorrect or need your attention. (default: ``True``)
         """
@@ -2525,14 +2530,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             ]
         # User gave a list of paths, we need to find the root / deepest common subdir
         else:
-            all_parts = [Path(path).parent.parts for path in midi_paths]
-            max_depth = max(len(parts) for parts in all_parts)
-            root_parts = []
-            for depth in range(max_depth):
-                if len({parts[depth] for parts in all_parts}) > 1:
-                    break
-                root_parts.append(all_parts[0][depth])
-            root_dir = Path(*root_parts)
+            root_dir = get_deepest_common_subdir(midi_paths)
 
         if save_programs is None:
             save_programs = not self.config.use_programs
