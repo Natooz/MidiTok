@@ -55,7 +55,7 @@ def benchmark_tokenize():
                     midi = Score(midi_path)
                     # midi = MidiFile(midi_path)
                     t0 = time()
-                    tokenizer.midi_to_tokens(midi)
+                    tokenizer.encode(midi)
                     times.append(time() - t0)
                 except:  # noqa: E722, S112
                     continue

@@ -1313,7 +1313,15 @@ class MIDITokenizer(ABC, HFHubMixin):
         """
         raise NotImplementedError
 
-    def midi_to_tokens(
+    def midi_to_tokens(self, *args, **kwargs) -> Score | list[Score]:  # noqa: D102, ANN002
+        warnings.warn(
+            "miditok: The `midi_to_tokens` method had been renamed `encode`. It is now "
+            "depreciated and will be removed in future updates.",
+            stacklevel=2,
+        )
+        return self.encode(*args, **kwargs)
+
+    def encode(
         self,
         midi: Score,
         apply_bpe: bool = True,
@@ -1576,7 +1584,15 @@ class MIDITokenizer(ABC, HFHubMixin):
                 self.decode_bpe(tokseq)
             self.complete_sequence(tokseq)
 
-    def tokens_to_midi(
+    def tokens_to_midi(self, *args, **kwargs) -> Score:  # noqa: D102, ANN002
+        warnings.warn(
+            "miditok: The `tokens_to_midi` method had been renamed `decode`. It is now "
+            "depreciated and will be removed in future updates.",
+            stacklevel=2,
+        )
+        return self.decode(*args, **kwargs)
+
+    def decode(
         self,
         tokens: TokSequence | list[TokSequence] | list[int | list[int]] | np.ndarray,
         programs: list[tuple[int, bool]] | None = None,
@@ -1647,7 +1663,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         r"""
         Convert tokens (:class:`miditok.TokSequence`) into a MIDI.
 
-        This is an internal method called by ``self.tokens_to_midi``, intended to be
+        This is an internal method called by ``self.decode``, intended to be
         implemented by classes inheriting :class:`miditok.MidiTokenizer`.
 
         :param tokens: tokens to convert. Can be either a list of
@@ -2556,7 +2572,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 continue
 
             # Tokenizing the MIDI
-            tokens = self.midi_to_tokens(midi)
+            tokens = self.encode(midi)
 
             # Set output file path
             out_path = out_dir / midi_path.resolve().parent.relative_to(root_dir)
@@ -3053,9 +3069,9 @@ class MIDITokenizer(ABC, HFHubMixin):
         Calling a tokenizer allows to directly convert a MIDI to tokens or vice-versa.
         The method automatically detects MIDI and token objects, as well as paths and
         can directly load MIDI or token json files before converting them. This will
-        call the :py:func:`miditok.MIDITokenizer.midi_to_tokens` if you provide a MIDI
+        call the :py:func:`miditok.MIDITokenizer.encode` if you provide a MIDI
         object or path to a MIDI file, or the
-        :py:func:`miditok.MIDITokenizer.tokens_to_midi` method otherwise.
+        :py:func:`miditok.MIDITokenizer.decode` method otherwise.
 
         :param obj: a `symusic.Score` object, a sequence of tokens, or a path to
             a MIDI or tokens json file.
@@ -3063,17 +3079,17 @@ class MIDITokenizer(ABC, HFHubMixin):
         """
         # Tokenize MIDI
         if isinstance(obj, ScoreTick):
-            return self.midi_to_tokens(obj, *args, **kwargs)
+            return self.encode(obj, *args, **kwargs)
 
         # Loads a file (.mid or .json)
         if isinstance(obj, (str, Path)):
             path = Path(obj)
             if path.suffix in MIDI_FILES_EXTENSIONS:
                 midi = Score(obj)
-                return self.midi_to_tokens(midi, *args, **kwargs)
+                return self.encode(midi, *args, **kwargs)
 
             tokens = self.load_tokens(path)
-            return self.tokens_to_midi(tokens["ids"], *args, **kwargs)
+            return self.decode(tokens["ids"], *args, **kwargs)
 
         # Depreciated miditoolkit object
         if MidiFile is not None and isinstance(obj, MidiFile):
@@ -3083,10 +3099,10 @@ class MIDITokenizer(ABC, HFHubMixin):
                 "be converted on the fly, however please consider using symusic.",
                 stacklevel=2,
             )
-            return self.midi_to_tokens(miditoolkit_to_symusic(obj), *args, **kwargs)
+            return self.encode(miditoolkit_to_symusic(obj), *args, **kwargs)
 
         # Consider it tokens --> converts to MIDI
-        return self.tokens_to_midi(obj, *args, **kwargs)
+        return self.decode(obj, *args, **kwargs)
 
     def __len__(self) -> int:
         r"""

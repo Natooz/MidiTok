@@ -201,7 +201,7 @@ class DatasetMIDI(_DatasetABC):
 
     def _tokenize_midi(self, midi: Score) -> TokSequence | list[TokSequence]:
         # Tokenize it
-        tokseq = self.tokenizer.midi_to_tokens(midi)
+        tokseq = self.tokenizer.encode(midi)
 
         # If tokenizing on the fly a multi-stream tokenizer, only keeps the first track
         if not self.pre_tokenize and not self.tokenizer.one_token_stream:

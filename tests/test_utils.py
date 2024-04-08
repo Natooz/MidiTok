@@ -192,7 +192,7 @@ def test_num_pos():
     midi = Score(MIDI_PATHS_ONE_TRACK[0])
     del_invalid_time_sig(midi.time_signatures, tokenizer.time_signatures)
     _ = num_bar_pos(
-        tokenizer.midi_to_tokens(midi)[0].ids,
+        tokenizer.encode(midi)[0].ids,
         tokenizer["Bar_None"],
         tokenizer.token_ids_of_type("Position"),
     )
