@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 
 import miditok
 
-from .utils_tests import MIDI_PATHS_MULTITRACK
+from .utils_tests import MIDI_PATHS_CORRUPTED, MIDI_PATHS_MULTITRACK
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -19,14 +19,14 @@ if TYPE_CHECKING:
 
     from symusic import Score
 
-    from miditok import TokSequence
+
+def get_labels_seq_len(midi: Score, tokseq: miditok.TokSequence, _: Path) -> int:
+    if isinstance(tokseq, miditok.TokSequence):
+        return len(tokseq) // len(midi.tracks)
+    return len(tokseq[0]) // len(midi.tracks)
 
 
-def get_labels_seq_len(midi: Score, tokseq: TokSequence, _: Path) -> int:
-    return len(tokseq) // len(midi.tracks)
-
-
-def get_labels_seq(midi: Score, tokseq: TokSequence, _: Path) -> list[int]:
+def get_labels_seq(midi: Score, tokseq: miditok.TokSequence, _: Path) -> list[int]:
     if isinstance(tokseq, list):
         return tokseq[0].ids[: -len(midi.tracks)]
     if len(tokseq) > len(midi.tracks):
@@ -50,7 +50,7 @@ def test_dataset_midi(
     pre_tokenize: bool,
     func_labels: Callable,
     num_overlap_bars: int,
-    midi_paths: Sequence[Path] = MIDI_PATHS_MULTITRACK,
+    midi_paths: Sequence[Path] = MIDI_PATHS_MULTITRACK + MIDI_PATHS_CORRUPTED,
     max_seq_len: int = 1000,
 ):
     config = miditok.TokenizerConfig(use_programs=one_token_stream)

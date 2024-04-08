@@ -11,7 +11,7 @@ from symusic import Score, TextMeta
 from torch import LongTensor
 from tqdm import tqdm
 
-from miditok.constants import MAX_NUM_FILES_NUM_TOKENS_PER_NOTE
+from miditok.constants import MAX_NUM_FILES_NUM_TOKENS_PER_NOTE, MIDI_LOADING_EXCEPTION
 from miditok.utils import (
     get_bars_ticks,
     get_num_notes_per_bar,
@@ -98,7 +98,10 @@ def split_midis_for_training(
         miniters=int(len(files_paths) / 20),
         maxinterval=480,
     ):
-        midis = [Score(file_path)]
+        try:
+            midis = [Score(file_path)]
+        except MIDI_LOADING_EXCEPTION:
+            continue
 
         # Separate track first if needed
         tracks_separated = False
@@ -279,7 +282,10 @@ def get_average_num_tokens_per_note(
     """
     num_tokens_per_note = []
     for file_path in files_paths:
-        midi = Score(file_path)
+        try:
+            midi = Score(file_path)
+        except MIDI_LOADING_EXCEPTION:
+            continue
         tok_seq = tokenizer(midi)
         if tokenizer.one_token_stream:
             num_notes = midi.note_num()

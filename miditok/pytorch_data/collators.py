@@ -68,11 +68,19 @@ class DataCollator:
 
         # Figure out inputs
         if self.inputs_kwarg_name in batch[0]:
-            x = [seq[self.inputs_kwarg_name] for seq in batch]
+            x = [
+                seq[self.inputs_kwarg_name]
+                for seq in batch
+                if seq[self.inputs_kwarg_name] is not None
+            ]
 
         # Figure out labels
         if self.labels_kwarg_name in batch[0]:
-            y = [seq[self.labels_kwarg_name] for seq in batch]
+            y = [
+                seq[self.labels_kwarg_name]
+                for seq in batch
+                if seq[self.labels_kwarg_name] is not None
+            ]
         elif self.copy_inputs_as_labels:
             y = deepcopy(x)
 
