@@ -59,7 +59,7 @@ tokenizer = REMI(config)
 
 # Train the tokenizer with Byte Pair Encoding (BPE)
 midi_paths = list(Path("path", "to", "midis").glob("**/*.mid"))
-tokenizer.learn_bpe(vocab_size=30000, files_paths=midi_paths)
+tokenizer.train(vocab_size=30000, files_paths=midi_paths)
 tokenizer.save_params(Path("path", "to", "save", "tokenizer.json"))
 # And pushing it to the Hugging Face hub (you can download it back with .from_pretrained)
 tokenizer.push_to_hub("username/model-name", private=True, token="your_hf_token")

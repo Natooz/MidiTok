@@ -89,7 +89,7 @@ def bpe_benchmark(data_path: str | Path | PurePath = "./tests/Maestro") -> None:
 
         # Fast BPE learning
         t0 = time()
-        tokenizer.learn_bpe(
+        tokenizer.train(
             vocab_size=vocab_size,
             files_paths=list(
                 Path("tests", "test_results", f"{tokenization}_maestro").glob(

@@ -110,7 +110,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         self._vocab_bpe_bytes_to_tokens = {}
         self.has_bpe = False
         # Fast BPE tokenizer backed with 🤗tokenizers
-        self._bpe_model = None
+        self._model = None
         # Used in _notes_to_events, especially MIDILike
         self._note_on_off = False
         # Determines how the tokenizer will handle multiple tracks: either each track
@@ -248,7 +248,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             tokens;
         * ``._vocab_bpe_bytes_to_tokens`` : Dict[str: List[str]] byte(s) -> token(s)
             used to decode BPE;
-        * ``._bpe_model.get_vocab()`` : Dict[str: int] byte -> id - bpe model
+        * ``._model.get_vocab()`` : Dict[str: int] byte -> id - bpe model
             vocabulary, based on unique bytes.
 
         Before training the tokenizer with BPE, bytes are obtained by running
@@ -274,7 +274,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         """
         if not self.has_bpe:
             return None
-        return self._bpe_model.get_vocab()
+        return self._model.get_vocab()
 
     @property
     def special_tokens(self) -> list[str]:
@@ -1835,7 +1835,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         token: str | Event,
         vocab_idx: int | None = None,
         byte_: str | None = None,
-        add_to_bpe_model: bool = False,
+        add_to_model: bool = False,
     ) -> None:
         r"""
         Add an event to the vocabulary. Its id will be the length of the vocab.
@@ -1847,7 +1847,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         :param byte_: unique byte associated to the token. This is used when building
             the vocabulary with fast BPE. If None is given, it will default to
             ``chr(id_ + CHR_ID_START)`` . (default: ``None``)
-        :param add_to_bpe_model: the token will be added to the bpe_model vocabulary
+        :param add_to_model: the token will be added to the model vocabulary
             too. (default: ``None``)
         """
         token_str = token if isinstance(token, str) else str(token)
@@ -1858,7 +1858,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 len(self.__vocab_base_inv[vocab_idx])
             ] = token_str
         else:
-            id_ = len(self._bpe_model.get_vocab()) if self.has_bpe else len(self.vocab)
+            id_ = len(self._model.get_vocab()) if self.has_bpe else len(self.vocab)
             self._vocab_base[token_str] = id_
             self.__vocab_base_inv[len(self.__vocab_base_inv)] = token_str
 
@@ -1869,8 +1869,8 @@ class MIDITokenizer(ABC, HFHubMixin):
                 id_
             ] = byte_  # these vocabs are created at init, when the
             self._vocab_base_byte_to_token[byte_] = token
-            if self._bpe_model is not None and add_to_bpe_model:
-                self._bpe_model.add_tokens([byte_])
+            if self._model is not None and add_to_model:
+                self._model.add_tokens([byte_])
 
     def _create_chords_tokens(self) -> list[str]:
         """
@@ -2297,7 +2297,15 @@ class MIDITokenizer(ABC, HFHubMixin):
                     return True
         return False
 
-    def learn_bpe(
+    def learn_bpe(self, *args, **kwargs) -> Score:  # noqa: D102, ANN002
+        warnings.warn(
+            "miditok: The `learn_bpe` method had been renamed `train`. It is now "
+            "depreciated and will be removed in future updates.",
+            stacklevel=2,
+        )
+        return self.train(*args, **kwargs)
+
+    def train(  # TODO handle different models than BPE
         self,
         vocab_size: int,
         iterator: Iterable | None = None,
@@ -2345,7 +2353,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             warnings.warn(
                 "This tokenizer is based on multiple vocabularies/embedding pooling."
                 "It is therefore not compatible with Byte Pair Encoding (BPE). Skipping"
-                "this method call (learn_bpe).",
+                "tokenizer training.",
                 stacklevel=2,
             )
             return
@@ -2369,14 +2377,14 @@ class MIDITokenizer(ABC, HFHubMixin):
             iterator = BPEIterator(self, files_paths)
 
         # Create new tokenizer model
-        if self._bpe_model is None or start_from_empty_voc:
+        if self._model is None or start_from_empty_voc:
             num_bytes = (
                 len(self.config.special_tokens)
                 if start_from_empty_voc
                 else len(self._vocab_base)
             )
             voc_start = {chr(i + CHR_ID_START): i for i in range(num_bytes)}
-            self._bpe_model = TokenizerFast(
+            self._model = TokenizerFast(
                 BPE(
                     vocab=voc_start,
                     merges=[],
@@ -2399,9 +2407,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             show_progress=True,
             **kwargs,
         )
-        self._bpe_model.train_from_iterator(
-            iterator, length=len(iterator), trainer=trainer
-        )
+        self._model.train_from_iterator(iterator, length=len(iterator), trainer=trainer)
 
         # Update other vocabs accordingly
         if start_from_empty_voc:
@@ -2411,7 +2417,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             # tokenizer.get_vocab(), as simply not present in training samples. We must
             # get rid of them from the base vocabulary
             new_vocab = dict(
-                sorted(self._bpe_model.get_vocab().items(), key=lambda item: item[1])
+                sorted(self._model.get_vocab().items(), key=lambda item: item[1])
             )
             byte_to_token_old = deepcopy(self._vocab_base_byte_to_token)
 
@@ -2427,13 +2433,13 @@ class MIDITokenizer(ABC, HFHubMixin):
                         byte_
                     ]  # get the original token associated to the byte
                     self.add_to_vocab(
-                        token, byte_=byte_, add_to_bpe_model=False
+                        token, byte_=byte_, add_to_model=False
                     )  # adds it to _vocab_base
 
         # Update __vocab_bpe_bytes_to_tokens for faster decoding
         self._vocab_bpe_bytes_to_tokens = {
             k: [self._vocab_base_byte_to_token[b] for b in k]
-            for k in self._bpe_model.get_vocab()
+            for k in self._model.get_vocab()
         }
 
         self.has_bpe = True
@@ -2449,7 +2455,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         if isinstance(seq, list):
             for seq_ in seq:
                 self.complete_sequence(seq_, complete_bytes=True)
-            encoded_tokens = self._bpe_model.encode_batch(
+            encoded_tokens = self._model.encode_batch(
                 [[t.bytes] for t in seq], is_pretokenized=True
             )
             for seq_, bpe_tokens in zip(seq, encoded_tokens):
@@ -2458,7 +2464,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         else:
             self.complete_sequence(seq, complete_bytes=True)
-            encoded_tokens = self._bpe_model.encode([seq.bytes], is_pretokenized=True)
+            encoded_tokens = self._model.encode([seq.bytes], is_pretokenized=True)
             seq.ids = encoded_tokens.ids
             seq.ids_bpe_encoded = True
 
@@ -2476,7 +2482,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             [self.decode_bpe(seq_) for seq_ in seq]
 
         elif isinstance(seq, TokSequence) and seq.ids_bpe_encoded:
-            encoded_bytes = [self._bpe_model.id_to_token(id_) for id_ in seq.ids]
+            encoded_bytes = [self._model.id_to_token(id_) for id_ in seq.ids]
             decoded_tokens = [
                 self._vocab_bpe_bytes_to_tokens[byte_] for byte_ in encoded_bytes
             ]
@@ -2855,7 +2861,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             additional_attributes = {}
         if self.has_bpe:  # saves whole vocab if BPE
             additional_attributes["_vocab_base"] = self._vocab_base
-            additional_attributes["_bpe_model"] = self._bpe_model.to_str()
+            additional_attributes["_model"] = self._model.to_str()
             additional_attributes[
                 "_vocab_base_byte_to_token"
             ] = self._vocab_base_byte_to_token
@@ -2970,9 +2976,9 @@ class MIDITokenizer(ABC, HFHubMixin):
                 self._vocab_base = value
                 self.__vocab_base_inv = {v: k for k, v in value.items()}
                 continue
-            if key == "_bpe_model":
+            if key == "_model":
                 # using 🤗tokenizers builtin method
-                self._bpe_model = TokenizerFast.from_str(value)
+                self._model = TokenizerFast.from_str(value)
                 continue
             if key == "_vocab_base_byte_to_token":
                 self._vocab_base_byte_to_token = value
@@ -2982,7 +2988,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 }
                 self._vocab_bpe_bytes_to_tokens = {
                     k: [self._vocab_base_byte_to_token[b] for b in k]
-                    for k in self._bpe_model.get_vocab()
+                    for k in self._model.get_vocab()
                 }
                 continue
             if key == "config":
@@ -3121,7 +3127,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         if self.is_multi_voc:
             return sum([len(v) for v in self.vocab])
         if self.has_bpe:
-            return len(self._bpe_model.get_vocab())
+            return len(self._model.get_vocab())
         return len(self.vocab)
 
     @property
@@ -3226,8 +3232,8 @@ class MIDITokenizer(ABC, HFHubMixin):
         if not isinstance(other, type(self)):
             return False
         bpe_voc_eq = True
-        if self._bpe_model is not None and other._bpe_model is not None:
-            bpe_voc_eq = self._bpe_model.get_vocab() == other._bpe_model.get_vocab()
+        if self._model is not None and other._model is not None:
+            bpe_voc_eq = self._model.get_vocab() == other._model.get_vocab()
         return (
             self._vocab_base == other._vocab_base
             and bpe_voc_eq

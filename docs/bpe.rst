@@ -23,7 +23,7 @@ A token learned with BPE will be represented by the succession of the unique cha
 
 * ``vocab``: the base vocabulary, binding token descriptions to their ids;
 * ``vocab_bpe``: the vocabulary with BPE applied, binding byte forms to their integer id;
-* ``_vocab_base``: a copy of the initial base vocabulary, this attribute is used in case the initial base vocab is overriden by :py:func:`miditok.MIDITokenizer.learn_bpe` with the ``start_from_empty_voc`` option;
+* ``_vocab_base``: a copy of the initial base vocabulary, this attribute is used in case the initial base vocab is overriden by :py:func:`miditok.MIDITokenizer.train` with the ``start_from_empty_voc`` option;
 * ``_vocab_base``:
 * ``_vocab_base_byte_to_token``: biding the base token byte forms to their string forms;
 * ``_vocab_base_id_to_byte``: biding the base token ids (integers) to their byte forms;
@@ -43,7 +43,7 @@ BPE example
     paths_midis = list(Path("path", "to", "midis").glob('**/*.mid'))
 
     # Learns the vocabulary with BPE
-    tokenizer.learn_bpe(
+    tokenizer.train(
         vocab_size=500,
         files_paths=paths_midis,
     )
@@ -56,11 +56,11 @@ BPE example
 Methods
 ------------------------
 
-To use BPE, you must first train your tokenizer from data (:py:func:`miditok.MIDITokenizer.learn_bpe`), then BPE will be automatically applied when tokenizing any MIDI file.
+To use BPE, you must first train your tokenizer from data (:py:func:`miditok.MIDITokenizer.train`), then BPE will be automatically applied when tokenizing any MIDI file.
 
 **Tokenizers can be saved and loaded** (:ref:`Save / Load tokenizer`).
 
-.. autofunction:: miditok.MIDITokenizer.learn_bpe
+.. autofunction:: miditok.MIDITokenizer.train
     :noindex:
 
 .. autofunction:: miditok.MIDITokenizer.apply_bpe
