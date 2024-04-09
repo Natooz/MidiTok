@@ -32,6 +32,7 @@ from miditok.utils import (
 )
 
 from .utils_tests import (
+    MIDI_PATHS_CORRUPTED,
     MIDI_PATHS_MULTITRACK,
     MIDI_PATHS_ONE_TRACK,
     TEST_LOG_DIR,
@@ -350,3 +351,8 @@ def test_split_midi_per_tracks(midi_path: Path):
 
     # Assert the merges MIDI is identical to the original one
     assert midi == midi_merged
+
+
+def test_filter_dataset():
+    files_paths = MIDI_PATHS_MULTITRACK + MIDI_PATHS_CORRUPTED
+    assert miditok.utils.filter_dataset(files_paths) == MIDI_PATHS_MULTITRACK

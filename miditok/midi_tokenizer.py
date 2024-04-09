@@ -3085,6 +3085,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         if isinstance(obj, (str, Path)):
             path = Path(obj)
             if path.suffix in MIDI_FILES_EXTENSIONS:
+                # No handling of errors of file read here
                 midi = Score(obj)
                 return self.encode(midi, *args, **kwargs)
 
