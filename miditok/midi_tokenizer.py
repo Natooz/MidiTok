@@ -2493,7 +2493,16 @@ class MIDITokenizer(ABC, HFHubMixin):
             seq.ids = self._tokens_to_ids(decoded_tokens)
             seq.ids_bpe_encoded = False
 
-    def tokenize_midi_dataset(
+    def tokenize_midi_dataset(self, *args, **kwargs) -> Score | list[Score]:  # noqa: D102, ANN002
+        warnings.warn(
+            "miditok: The `tokenize_midi_dataset` method had been renamed "
+            "`tokenize_dataset`. It is now depreciated and will be removed in future "
+            "updates.",
+            stacklevel=2,
+        )
+        return self.tokenize_dataset(*args, **kwargs)
+
+    def tokenize_dataset(
         self,
         midi_paths: str | Path | Sequence[str | Path],
         out_dir: str | Path,
