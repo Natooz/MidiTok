@@ -127,7 +127,7 @@ We also perform data augmentation on the pitch, velocity and duration dimension.
         duration_offsets=[-0.5, 1],
         out_path=midi_aug_path,
     )
-    tokenizer.tokenize_midi_dataset(        # 2 velocity and 1 duration values
+    tokenizer.tokenize_dataset(        # 2 velocity and 1 duration values
         data_path,
         Path("path", "to", "tokens"),
         midi_valid,

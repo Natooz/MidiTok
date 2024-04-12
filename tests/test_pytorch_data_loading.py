@@ -122,7 +122,7 @@ def test_dataset_json(tmp_path: Path, midi_path: Sequence[Path] | None = None):
     config = miditok.TokenizerConfig(use_programs=True)
     tokenizer = miditok.TSD(config)
     if not tokens_dir_path.is_dir():
-        tokenizer.tokenize_midi_dataset(midi_path, tokens_dir_path)
+        tokenizer.tokenize_dataset(midi_path, tokens_dir_path)
 
     tokens_split_dir_path = tmp_path / "multitrack_tokens_dataset_json_split"
     miditok.pytorch_data.split_dataset_to_subsequences(
