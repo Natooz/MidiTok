@@ -40,7 +40,7 @@ Example
     hf_token = "your_hf_token"  # to create on huggingface.co
 
     # Train the tokenizer with BPE
-    tokenizer.learn_bpe(
+    tokenizer.train(
         vocab_size=30000,
         files_paths=list(Path("path", "to", "midis").glob("**/*.mid")),
     )

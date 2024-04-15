@@ -393,7 +393,7 @@ class CPWord(MIDITokenizer):
         r"""
         Convert tokens (:class:`miditok.TokSequence`) into a MIDI.
 
-        This is an internal method called by ``self.tokens_to_midi``, intended to be
+        This is an internal method called by ``self.decode``, intended to be
         implemented by classes inheriting :class:`miditok.MidiTokenizer`.
 
         :param tokens: tokens to convert. Can be either a list of

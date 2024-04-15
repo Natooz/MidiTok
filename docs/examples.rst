@@ -63,7 +63,7 @@ BPE allows to reduce the lengths of the sequences of tokens, in turn model effic
     midi_paths = list(Path("path", "to", "dataset").glob("**/*.mid"))
 
     # Builds the vocabulary with BPE
-    tokenizer.learn_bpe(vocab_size=30000, files_paths=midi_paths)
+    tokenizer.train(vocab_size=30000, files_paths=midi_paths)
 
 
 Creates a Dataset and collator for training
@@ -127,7 +127,7 @@ We also perform data augmentation on the pitch, velocity and duration dimension.
         duration_offsets=[-0.5, 1],
         out_path=midi_aug_path,
     )
-    tokenizer.tokenize_midi_dataset(        # 2 velocity and 1 duration values
+    tokenizer.tokenize_dataset(        # 2 velocity and 1 duration values
         data_path,
         Path("path", "to", "tokens"),
         midi_valid,

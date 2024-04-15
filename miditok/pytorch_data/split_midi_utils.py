@@ -11,12 +11,13 @@ from symusic import Score, TextMeta
 from torch import LongTensor
 from tqdm import tqdm
 
-from miditok.constants import MAX_NUM_FILES_NUM_TOKENS_PER_NOTE
+from miditok.constants import MAX_NUM_FILES_NUM_TOKENS_PER_NOTE, MIDI_LOADING_EXCEPTION
 from miditok.utils import (
     get_bars_ticks,
     get_num_notes_per_bar,
     split_midi_per_tracks,
 )
+from miditok.utils.utils import get_deepest_common_subdir
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -87,14 +88,7 @@ def split_midis_for_training(
         )
 
     # Determine the deepest common subdirectory to replicate file tree
-    all_parts = [path.parent.parts for path in files_paths]
-    max_depth = max(len(parts) for parts in all_parts)
-    root_parts = []
-    for depth in range(max_depth):
-        if len({parts[depth] for parts in all_parts}) > 1:
-            break
-        root_parts.append(all_parts[0][depth])
-    root_dir = Path(*root_parts)
+    root_dir = get_deepest_common_subdir(files_paths)
 
     # Splitting MIDIs
     new_files_paths = []
@@ -104,7 +98,10 @@ def split_midis_for_training(
         miniters=int(len(files_paths) / 20),
         maxinterval=480,
     ):
-        midis = [Score(file_path)]
+        try:
+            midis = [Score(file_path)]
+        except MIDI_LOADING_EXCEPTION:
+            continue
 
         # Separate track first if needed
         tracks_separated = False
@@ -285,7 +282,10 @@ def get_average_num_tokens_per_note(
     """
     num_tokens_per_note = []
     for file_path in files_paths:
-        midi = Score(file_path)
+        try:
+            midi = Score(file_path)
+        except MIDI_LOADING_EXCEPTION:
+            continue
         tok_seq = tokenizer(midi)
         if tokenizer.one_token_stream:
             num_notes = midi.note_num()

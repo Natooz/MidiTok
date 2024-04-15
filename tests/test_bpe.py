@@ -65,7 +65,7 @@ def test_bpe_conversion(
     tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
         tokenizer_config=miditok.TokenizerConfig(**params_)
     )
-    tokenizer.learn_bpe(
+    tokenizer.train(
         vocab_size=len(tokenizer) + 400,
         files_paths=midi_paths,
         start_from_empty_voc=start_from_empty_voc,

@@ -10,6 +10,8 @@ from torch import LongTensor
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
+from miditok.constants import MIDI_LOADING_EXCEPTION
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
     from pathlib import Path
@@ -94,6 +96,12 @@ class DatasetMIDI(_DatasetABC):
     Additionally, you can use the ``func_to_get_labels`` argument to provide a method
     allowing to use labels (one label per file).
 
+    **Handling of corrupted MIDIs:**
+    Some MIDI files may be corrupted, as for example containing unexpected values.
+    In such cases, if the ``DatasetMIDI`` pre-tokenizes, it will simply ignore these
+    files. Otherwise, the ``DatasetMIDI`` will return dictionaries with ``None`` values
+    when iterated.
+
     :param files_paths: paths to MIDI files to load.
     :param tokenizer: tokenizer.
     :param max_seq_len: maximum sequence length (in num of tokens)
@@ -151,7 +159,10 @@ class DatasetMIDI(_DatasetABC):
                 miniters=int(len(self.files_paths) / 20),
                 maxinterval=480,
             ):
-                midi = Score(file_path)
+                try:
+                    midi = Score(file_path)
+                except MIDI_LOADING_EXCEPTION:
+                    continue
                 tokseq = self._tokenize_midi(midi)
                 if tokenizer.one_token_stream:
                     tokseq = [tokseq]
@@ -168,7 +179,8 @@ class DatasetMIDI(_DatasetABC):
         Return the ``idx`` elements of the dataset.
 
         If the dataset is pre-tokenized, the method will return the token ids.
-        Otherwise, it will tokenize the ``idx``th MIDI file on the fly.
+        Otherwise, it will tokenize the ``idx``th MIDI file on the fly. If the MIDI to
+        load is corrupted, the method will return an dictionary with ``None`` values.
 
         :param idx: idx of the file/sample.
         :return: the token ids, with optionally the associated label.
@@ -183,25 +195,34 @@ class DatasetMIDI(_DatasetABC):
 
         # Tokenize on the fly
         else:
-            midi = Score(self.files_paths[idx])
-            tokseq = self._tokenize_midi(midi)
-            # If not one_token_stream, we only take the first track/sequence
-            token_ids = tokseq.ids if self.tokenizer.one_token_stream else tokseq[0].ids
-            if self.func_to_get_labels is not None:
-                # tokseq can be given as a list of TokSequence to get the labels
-                labels = self.func_to_get_labels(midi, tokseq, self.files_paths[idx])
-                if not isinstance(labels, LongTensor):
-                    labels = LongTensor(labels)
+            try:
+                midi = Score(self.files_paths[idx])
+                tseq = self._tokenize_midi(midi)
+                # If not one_token_stream, we only take the first track/sequence
+                token_ids = tseq.ids if self.tokenizer.one_token_stream else tseq[0].ids
+                if self.func_to_get_labels is not None:
+                    # tokseq can be given as a list of TokSequence to get the labels
+                    labels = self.func_to_get_labels(midi, tseq, self.files_paths[idx])
+                    if not isinstance(labels, LongTensor):
+                        labels = LongTensor(
+                            [labels] if isinstance(labels, int) else labels
+                        )
+            except MIDI_LOADING_EXCEPTION:
+                token_ids = None
 
-        item = {self.sample_key_name: LongTensor(token_ids)}
-        if labels is not None:
+        item = {
+            self.sample_key_name: LongTensor(token_ids)
+            if token_ids is not None
+            else None
+        }
+        if self.func_to_get_labels is not None:
             item[self.labels_key_name] = labels
 
         return item
 
     def _tokenize_midi(self, midi: Score) -> TokSequence | list[TokSequence]:
         # Tokenize it
-        tokseq = self.tokenizer.midi_to_tokens(midi)
+        tokseq = self.tokenizer.encode(midi)
 
         # If tokenizing on the fly a multi-stream tokenizer, only keeps the first track
         if not self.pre_tokenize and not self.tokenizer.one_token_stream:

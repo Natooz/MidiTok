@@ -56,7 +56,7 @@ class Structured(MIDITokenizer):
         :return: sequence of corresponding ``Event``s.
         """
         # Make sure the notes are sorted first by their onset (start) times, second by
-        # pitch: notes.sort(key=lambda x: (x.start, x.pitch)) done in midi_to_tokens
+        # pitch: notes.sort(key=lambda x: (x.start, x.pitch)) done in preprocess_midi
         program = track.program if not track.is_drum else -1
         events = []
 
@@ -232,7 +232,7 @@ class Structured(MIDITokenizer):
         r"""
         Convert tokens (:class:`miditok.TokSequence`) into a MIDI.
 
-        This is an internal method called by ``self.tokens_to_midi``, intended to be
+        This is an internal method called by ``self.decode``, intended to be
         implemented by classes inheriting :class:`miditok.MidiTokenizer`.
 
         :param tokens: tokens to convert. Can be either a list of

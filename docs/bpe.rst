@@ -5,7 +5,7 @@ Byte Pair Encoding (BPE)
 What is BPE
 ------------------------
 
-`BPE <https://www.derczynski.com/papers/archive/BPE_Gage.pdf>`_ is a compression technique that replaces the most recurrent byte (tokens in our case) successions of a corpus, by newly created ones.
+`BPE <https://en.wikipedia.org/wiki/Byte_pair_encoding>`_ is a compression technique that replaces the most recurrent byte (tokens in our case) successions of a corpus, by newly created ones.
 For instance, in the character sequence ``aabaabaacaa``, the sub-sequence ``aa`` occurs three times and is the most recurrent one. Learning and applying BPE on this sequence would replace ``aa`` with a new symbol, e.g., `d`, resulting in a compressed sequence ``dbdbdcd``. The latter can be reduced again by replacing the ``db`` subsequence, giving ``eedcd``. The vocabulary, which initially contained three characters (``a``, ``b`` and ``c``) now also contains ``d`` and ``e``. In practice BPE is learned on a corpus until the vocabulary reaches a target size.
 
 Today in the NLP field, BPE is used with almost all tokenizations to build their vocabulary, as `it allows to encode rare words and segmenting unknown or composed words as sequences of sub-word units <https://aclanthology.org/P16-1162/>`_. The base initial vocabulary is the set of all the unique characters present in the data, which compose the words that are automatically learned as tokens by the BPE algorithm.
@@ -23,7 +23,7 @@ A token learned with BPE will be represented by the succession of the unique cha
 
 * ``vocab``: the base vocabulary, binding token descriptions to their ids;
 * ``vocab_bpe``: the vocabulary with BPE applied, binding byte forms to their integer id;
-* ``_vocab_base``: a copy of the initial base vocabulary, this attribute is used in case the initial base vocab is overriden by :py:func:`miditok.MIDITokenizer.learn_bpe` with the ``start_from_empty_voc`` option;
+* ``_vocab_base``: a copy of the initial base vocabulary, this attribute is used in case the initial base vocab is overriden by :py:func:`miditok.MIDITokenizer.train` with the ``start_from_empty_voc`` option;
 * ``_vocab_base``:
 * ``_vocab_base_byte_to_token``: biding the base token byte forms to their string forms;
 * ``_vocab_base_id_to_byte``: biding the base token ids (integers) to their byte forms;
@@ -43,7 +43,7 @@ BPE example
     paths_midis = list(Path("path", "to", "midis").glob('**/*.mid'))
 
     # Learns the vocabulary with BPE
-    tokenizer.learn_bpe(
+    tokenizer.train(
         vocab_size=500,
         files_paths=paths_midis,
     )
@@ -56,11 +56,11 @@ BPE example
 Methods
 ------------------------
 
-To use BPE, you must first train your tokenizer from data (:py:func:`miditok.MIDITokenizer.learn_bpe`), then BPE will be automatically applied when tokenizing any MIDI file.
+To use BPE, you must first train your tokenizer from data (:py:func:`miditok.MIDITokenizer.train`), then BPE will be automatically applied when tokenizing any MIDI file.
 
 **Tokenizers can be saved and loaded** (:ref:`Save / Load tokenizer`).
 
-.. autofunction:: miditok.MIDITokenizer.learn_bpe
+.. autofunction:: miditok.MIDITokenizer.train
     :noindex:
 
 .. autofunction:: miditok.MIDITokenizer.apply_bpe

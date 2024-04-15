@@ -4,6 +4,7 @@ from __future__ import annotations
 import warnings
 from copy import copy
 from math import ceil
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -25,13 +26,14 @@ from miditok.constants import (
     DRUM_PITCH_RANGE,
     INSTRUMENT_CLASSES,
     MIDI_INSTRUMENTS,
+    MIDI_LOADING_EXCEPTION,
     PITCH_CLASSES,
     TIME_SIGNATURE,
     UNKNOWN_CHORD_PREFIX,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
 
     from miditoolkit import MidiFile
     from symusic.core import TrackTickList
@@ -960,3 +962,54 @@ def concat_midis(midis: Sequence[Score], end_ticks: Sequence[int]) -> Score:
             midi_concat.tracks[ti].pedals.extend(track.pedals)
 
     return midi_concat
+
+
+def get_deepest_common_subdir(paths: Sequence[Path]) -> Path:
+    """
+    Return the path of the deepest common subdirectory from several paths.
+
+    :param paths: paths to analyze.
+    :return: path of the deepest common subdirectory from the paths
+    """
+    all_parts = [path.resolve().parent.parts for path in paths]
+    max_depth = max(len(parts) for parts in all_parts)
+    root_parts = []
+    for depth in range(max_depth):
+        if len({parts[depth] for parts in all_parts}) > 1:
+            break
+        root_parts.append(all_parts[0][depth])
+    return Path(*root_parts)
+
+
+def filter_dataset(
+    files_paths: Sequence[Path],
+    valid_fn: Callable[[Score, Path], bool] | None = None,
+    delete_invalid_files: bool = False,
+) -> list[Path]:
+    """
+    Filter a list of paths to only retain valid files.
+
+    This method ise useful in order to filter corrupted files that cannot be loaded, or
+    that do not satisfy user-specified conditions thanks to the ``validation_fn``.
+
+    :param files_paths: paths to the files to filter.
+    :param valid_fn: an optional validation function. It must take a ``Score`` and a
+        ``Path`` arguments and return a boolean. (default: ``None``)
+    :param delete_invalid_files: if ``True``, will delete inplace the files on the file
+        system. (default: ``False``)
+    :return: the list of paths to the files satisfying your conditions.
+    """
+    paths_valid = []
+    for path in files_paths:
+        try:
+            file = Score(path)
+        except MIDI_LOADING_EXCEPTION:
+            if delete_invalid_files:
+                path.unlink()
+            continue
+        if valid_fn is not None and not valid_fn(file, path):
+            if delete_invalid_files:
+                path.unlink()
+            continue
+        paths_valid.append(path)
+    return paths_valid

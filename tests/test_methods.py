@@ -49,7 +49,7 @@ def test_tokenize_datasets_file_tree(
 
     # Check the file tree is copied
     tokenizer = miditok.TSD(miditok.TokenizerConfig())
-    tokenizer.tokenize_midi_dataset(midi_paths, tmp_path, overwrite_mode=True)
+    tokenizer.tokenize_dataset(midi_paths, tmp_path, overwrite_mode=True)
     json_paths = list(tmp_path.glob("**/*.json"))
     json_paths.sort(key=lambda x: x.stem)
     midi_paths.sort(key=lambda x: x.stem)
@@ -62,7 +62,7 @@ def test_tokenize_datasets_file_tree(
         )
 
     # Just make sure the non-overwrite mode doesn't crash
-    tokenizer.tokenize_midi_dataset(midi_paths, tmp_path, overwrite_mode=False)
+    tokenizer.tokenize_dataset(midi_paths, tmp_path, overwrite_mode=False)
 
 
 def are_notes_equals(note1, note2) -> bool:  # noqa:ANN001
