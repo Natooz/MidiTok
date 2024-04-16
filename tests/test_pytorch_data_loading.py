@@ -105,7 +105,7 @@ def test_dataset_midi(
 
     # Test with DataLoader and collator
     collator = miditok.pytorch_data.DataCollator(
-        tokenizer["PAD_None"],
+        tokenizer.pad_token_id,
         pad_on_left=True,
     )
     _ = collator(batch)

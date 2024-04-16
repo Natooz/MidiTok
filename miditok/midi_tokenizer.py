@@ -9,6 +9,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable, Sequence
 from copy import deepcopy
 from pathlib import Path
+from typing import Literal
 
 import numpy as np
 from huggingface_hub import ModelHubMixin as HFHubMixin
@@ -36,12 +37,13 @@ try:
     from miditoolkit import MidiFile
 except ImportError:
     MidiFile = None
-from tokenizers import Tokenizer as TokenizerFast
-from tokenizers.models import BPE
-from tokenizers.trainers import BpeTrainer
+from tokenizers import AddedToken, pre_tokenizers
+from tokenizers import Tokenizer as _HFTokenizer
+from tokenizers import models as _tok_models
+from tokenizers import trainers as _tok_trainers
 from tqdm import tqdm
 
-from .bpe_iterator import BPEIterator
+from .bpe_iterator import TokTrainingIterator
 from .classes import Event, TokenizerConfig, TokSequence
 from .constants import (
     BOS_TOKEN_NAME,
@@ -50,6 +52,7 @@ from .constants import (
     CURRENT_SYMUSIC_VERSION,
     CURRENT_TOKENIZERS_VERSION,
     DEFAULT_TOKENIZER_FILE_NAME,
+    DEFAULT_TRAINING_MODEL_NAME,
     EOS_TOKEN_NAME,
     MIDI_FILES_EXTENSIONS,
     MIDI_LOADING_EXCEPTION,
@@ -108,7 +111,6 @@ class MIDITokenizer(ABC, HFHubMixin):
         self._vocab_base_byte_to_token = {}
         # byte(s) -> token(s), for faster BPE decoding
         self._vocab_bpe_bytes_to_tokens = {}
-        self.has_bpe = False
         # Fast BPE tokenizer backed with 🤗tokenizers
         self._model = None
         # Used in _notes_to_events, especially MIDILike
@@ -230,6 +232,15 @@ class MIDITokenizer(ABC, HFHubMixin):
         pass
 
     @property
+    def pad_token_id(self) -> int:
+        """
+        Return the id of the padding token (`PAD_None`). It is usually 0.
+
+        :return: id of the padding token (`PAD_None`).
+        """
+        return self._vocab_base["PAD_None"]
+
+    @property
     def vocab(
         self,
     ) -> dict[str, int] | list[dict[str, int]]:  # token (str) to its id (int)
@@ -272,7 +283,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         :return: the BPE model's vocabulary.
         """
-        if not self.has_bpe:
+        if not self.is_trained:
             return None
         return self._model.get_vocab()
 
@@ -293,6 +304,16 @@ class MIDITokenizer(ABC, HFHubMixin):
         :return: ids of the special tokens of the tokenizer
         """
         return [self[token] for token in self.special_tokens]
+
+    @property
+    def is_trained(self) -> bool:
+        """
+        Indicate if the tokenizer is trained (``True``).
+
+        :return: a boolean, equal to ``True`` if the tokenizer is trained, ``False``
+            otherwise.
+        """
+        return self._model is not None
 
     def _min_rest(self, ticks_per_beat: int) -> int:
         """
@@ -1345,7 +1366,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         # Tokenize it
         tokens = self._midi_to_tokens(midi)
-        if apply_bpe and self.has_bpe:
+        if apply_bpe and self.is_trained:
             self.apply_bpe(tokens)
 
         return tokens
@@ -1375,7 +1396,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         if seq.ids is None:
             seq.ids = self._tokens_to_ids(seq.tokens)
 
-        if complete_bytes and self.has_bpe and seq.bytes is None:
+        if complete_bytes and self.is_trained and seq.bytes is None:
             seq.bytes = self._ids_to_bytes(seq.ids, as_one_str=True)
 
     def _tokens_to_ids(
@@ -1466,6 +1487,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             (default: ``False``)
         :return: the tokens converted into strings of unique bytes.
         """
+        # self._model.decode(ids) TODO test with this --> BPE ids
         if len(ids) == 0:
             return ""
         if isinstance(ids[0], list):
@@ -1556,12 +1578,12 @@ class MIDITokenizer(ABC, HFHubMixin):
             for obj in arg[1]:
                 kwarg = {arg[0]: obj}
                 seq.append(TokSequence(**kwarg))
-                if self.has_bpe and seq[-1].ids is not None:
+                if self.is_trained and seq[-1].ids is not None:
                     seq[-1].ids_bpe_encoded = self._are_ids_bpe_encoded(seq[-1].ids)
         else:  # 1 subscript, one_token_stream and no multi-voc
             kwarg = {arg[0]: arg[1]}
             seq = TokSequence(**kwarg)
-            if self.has_bpe:
+            if self.is_trained:
                 seq.ids_bpe_encoded = self._are_ids_bpe_encoded(seq.ids)
 
         return seq
@@ -1858,7 +1880,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 len(self.__vocab_base_inv[vocab_idx])
             ] = token_str
         else:
-            id_ = len(self._model.get_vocab()) if self.has_bpe else len(self.vocab)
+            id_ = len(self._model.get_vocab()) if self.is_trained else len(self.vocab)
             self._vocab_base[token_str] = id_
             self.__vocab_base_inv[len(self.__vocab_base_inv)] = token_str
 
@@ -2305,46 +2327,49 @@ class MIDITokenizer(ABC, HFHubMixin):
         )
         return self.train(*args, **kwargs)
 
-    def train(  # TODO handle different models than BPE
+    def train(
         self,
         vocab_size: int,
+        model: Literal["BPE", "Unigram"] | _tok_models.Model | None = None,
         iterator: Iterable | None = None,
-        files_paths: list[Path | str] | None = None,
-        start_from_empty_voc: bool = False,
+        files_paths: Sequence[Path] | None = None,
         **kwargs,
     ) -> None:
         r"""
-        Construct the vocabulary from BPE backed by the 🤗tokenizers library.
+        Train the tokenizer to build its vocabulary with BPE or Unigram.
 
         The data used for training can either be given through the ``iterator``
         argument as an iterable object yielding strings, or by ``files_paths`` as a
         list of paths to MIDI files that will be tokenized.
         You can read the Hugging Face `🤗tokenizers documentation
-        <https://huggingface.co/docs/tokenizers/training_from_memory>`_,
-        `🤗tokenizers API documentation <https://huggingface.co/docs/tokenizers/python/v0.9.4/api/reference.html#>`_
-        and `🤗tokenizers course <https://huggingface.co/course/chapter6/2?fw=pt>`_
-        for more details about the ``iterator`` and input type.
+        <https://huggingface.co/docs/tokenizers/index>`_, and `🤗tokenizers course
+        <https://huggingface.co/course/chapter6/2?fw=pt>`_ for more details about the
+        ``iterator`` and input type.
+        # TODO pre-tokenize on beats, or bars (spaces to delimit them)
+
+        **The Hugging Face Unigram model training `is not 100% deterministic`
+        <https://github.com/huggingface/tokenizers/issues/668>_. As such and if you are
+        using it, you should train your tokenizer only once before using it to save
+        tokenized MIDIs or train a model. Otherwise some token ids might be swapped,
+        resulting in incoherent encodings-decodings.**
 
         **The training progress bar will not appear with non-proper terminals.**
         (cf `GitHub issue <https://github.com/huggingface/tokenizers/issues/157>`_ )
 
         :param vocab_size: size of the vocabulary to learn / build.
+        :param model: backbone model to use to train the tokenizer. MidiTok relies on
+            the Hugging Face tokenizers library, and supports the ``BPE`` and
+            ``Unigram`` models. This argument can be either a string indicating the
+            model to use, an already initialized model, or ``None`` if you want to
+            retrain a tokenizer already trained. (default: ``None``, default to
+            ``BPE`` if the tokenizer is not already trained, keeps the same model
+            otherwise)
         :param iterator: an iterable object yielding the training data, as lists of
             string. It can be a list or a Generator. This iterator will be passed to
             the BPE model for training. It musts implement the ``__len__`` method. If
             None is given, you must use the ``tokens_paths`` argument. (default: None)
         :param files_paths: paths of the files to load and use. They can be either MIDI
             or tokens (json) files. (default: None)
-        :param start_from_empty_voc: the training will start from an empty base
-            vocabulary. The tokenizer will then have a base vocabulary only based on
-            the unique bytes present in the training data. If you set this argument to
-            True, you should use the tokenizer only with the training data, as new data
-            might contain "unknown" tokens missing from the vocabulary. Comparing this
-            to text, setting this argument to True would create a tokenizer that will
-            only know the characters present in the training data, and would not be
-            compatible/know other characters. This argument can allow to optimize the
-            vocabulary size. If you are unsure about this, leave it to False.
-            (default: False)
         :param kwargs: any additional argument to pass to the trainer. See the
             `tokenizers docs <https://huggingface.co/docs/tokenizers/api/trainers>`_
             for more details.
@@ -2374,75 +2399,175 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         # If no iterator, loads tokens / samples to analyze
         if iterator is None:
-            iterator = BPEIterator(self, files_paths)
+            iterator = TokTrainingIterator(self, files_paths)
 
-        # Create new tokenizer model
-        if self._model is None or start_from_empty_voc:
-            num_bytes = (
-                len(self.config.special_tokens)
-                if start_from_empty_voc
-                else len(self._vocab_base)
+        # Define model variable
+        # Keep current model if `arg` is None
+        retraining = False
+        if self._model is not None and model is None:
+            tokenizer = self.__reload_hf_tokenizer(self._model)
+            retraining = True
+        # User provided a HF model
+        elif isinstance(model, _tok_models.Model):
+            tokenizer = _HFTokenizer(model)
+        # User provided a str class model
+        elif isinstance(model, str) or model is None:
+            if model is None:  # default
+                model = DEFAULT_TRAINING_MODEL_NAME
+            model_kwargs = {}
+            if model == "BPE":
+                model_kwargs["merges"] = []
+                model_kwargs["continuing_subword_prefix"] = ""
+                model_kwargs["end_of_word_suffix"] = ""
+            if model == "Unigram":  # list[tuple[str, float]]
+                voc_start = []  # starts from empty voc
+            else:
+                voc_start = {
+                    chr(i + CHR_ID_START): i for i in range(len(self._vocab_base))
+                }
+            tokenizer = _HFTokenizer(
+                getattr(_tok_models, model)(vocab=voc_start, **model_kwargs)
             )
-            voc_start = {chr(i + CHR_ID_START): i for i in range(num_bytes)}
-            self._model = TokenizerFast(
-                BPE(
-                    vocab=voc_start,
-                    merges=[],
-                    dropout=None,
-                    continuing_subword_prefix="",
-                    end_of_word_suffix="",
-                    fuse_unk=False,
-                )
+        else:
+            msg = (
+                "miditok - tokenizer.train: the `model` argument must be a str specify "
+                "the model to use (`'BPE'`, `'Unigram'`), an already initialized model "
+                "or a `None` to either resume training or default to "
+                f"{DEFAULT_TRAINING_MODEL_NAME}."
             )
+            raise ValueError(msg)
+
+        # Converts model to json
+        tokenizer_json = json.loads(tokenizer.to_str())
+        # Remove added tokens for now (uses IDs of tokens)
+        added_tokens = tokenizer_json.pop("added_tokens")
+        # Remove post processor for now (uses IDs of tokens)
+        post_processor = tokenizer_json.pop("post_processor")
+        model_name = tokenizer_json["model"]["type"]
+        if retraining and model_name == "Unigram":
+            warnings.warn(
+                "miditok - tokenizer.train: You are retraining a tokenizer with "
+                "Unigram. The Hugging Face Unigram model training is not 100% "
+                "deterministic. As such and if you are using it, you should train your "
+                "tokenizer only once before using it to save tokenized MIDIs or train "
+                "a model. Otherwise some token ids might be swapped, resulting in "
+                "incoherent encodings-decodings.",
+                stacklevel=2,
+            )
+
+        # Get the special tokens from the current tokenizer if none are specified.
+        special_tokens, special_tokens_str = [], []
+        for added_token in added_tokens:
+            special = added_token.pop("special", None)
+            _ = added_token.pop("id", None)
+            if model_name != "Unigram" and not special:
+                continue
+            special_tokens.append(AddedToken(**added_token))
+            special_tokens_str.append(added_token["content"])
+        # Make sure all the special tokens of the tokenizer are referenced
+        for special_token_byte in self._ids_to_bytes(self.special_tokens_ids):
+            if special_token_byte not in special_tokens_str:
+                special_tokens.append(AddedToken(special_token_byte))
+
+        # Trainer needs to know the end of word / continuing subword thingies in BPE
+        if model_name == "BPE":
+            if (
+                "continuing_subword_prefix" not in kwargs
+                and tokenizer_json["model"]["continuing_subword_prefix"] is not None
+            ):
+                kwargs["continuing_subword_prefix"] = tokenizer_json["model"][
+                    "continuing_subword_prefix"
+                ]
+            if (
+                "end_of_word_suffix" not in kwargs
+                and tokenizer_json["model"]["end_of_word_suffix"] is not None
+            ):
+                kwargs["end_of_word_suffix"] = tokenizer_json["model"][
+                    "end_of_word_suffix"
+                ]
+        elif model_name == "Unigram" and tokenizer_json["model"]["unk_id"] is not None:
+            unk_id = tokenizer_json["model"]["unk_id"]
+            kwargs["unk_token"] = tokenizer_json["model"]["vocab"][unk_id][0]
+        if (
+            tokenizer_json["pre_tokenizer"] is not None
+            and tokenizer_json["pre_tokenizer"]["type"] == "ByteLevel"
+        ):
+            kwargs["initial_alphabet"] = pre_tokenizers.ByteLevel.alphabet()
+
+        # Fix the vocabulary size if MMM + Unigram - miditok v3.0.3 - tokenizers v0.15.2
+        # For an unknown reason, the final vocabulary size of the tokenizer will equal
+        # to vocab_size - 2. MMM uses `Track_Start` and `Track_End` special tokens to
+        # delimit tracks. When special tokens are present in the training data, the
+        # unigram model will discard them and result in lower size vocabulary.
+        if model_name == "Unigram" and self.__class__.__name__ == "MMM":
+            vocab_size += 2
 
         # Trains the tokenizer
-        special_tokens_bytes = []
-        if len(self.config.special_tokens) > 0:
-            special_tokens_bytes = self._ids_to_bytes(
-                self._tokens_to_ids(self.config.special_tokens)
-            )
-        trainer = BpeTrainer(
+        name_trainer = f"{'Bpe' if model_name == 'BPE' else model_name}Trainer"
+        trainer = getattr(_tok_trainers, name_trainer)(
             vocab_size=vocab_size,
-            special_tokens=special_tokens_bytes,
+            special_tokens=special_tokens,
             show_progress=True,
             **kwargs,
         )
-        self._model.train_from_iterator(iterator, length=len(iterator), trainer=trainer)
+        tokenizer.train_from_iterator(iterator, length=len(iterator), trainer=trainer)
 
-        # Update other vocabs accordingly
-        if start_from_empty_voc:
-            # If we do not give an existing vocabulary to the tokenizer, 🤗tokenizers
-            # first fill its vocabulary with all bytes present in the training samples,
-            # sorted by byte / char index. Some bytes / tokens might be missing from
-            # tokenizer.get_vocab(), as simply not present in training samples. We must
-            # get rid of them from the base vocabulary
-            new_vocab = dict(
-                sorted(self._model.get_vocab().items(), key=lambda item: item[1])
-            )
-            byte_to_token_old = deepcopy(self._vocab_base_byte_to_token)
+        # Add post-processor
+        if post_processor is not None:
+            trained_tokenizer_json = json.loads(tokenizer.to_str())
+            # Almost done, we just have to adjust the token IDs in the post processor
+            if "special_tokens" in post_processor:
+                for key in post_processor["special_tokens"]:
+                    tokens = post_processor["special_tokens"][key]["tokens"]
+                    post_processor["special_tokens"][key]["tokens"] = tokens
+                    post_processor["special_tokens"][key]["ids"] = [
+                        tokenizer.token_to_id(token) for token in tokens
+                    ]
 
-            # Rebuild base vocabularies dicts
-            self._vocab_base = {}  # token -> id
-            self.__vocab_base_inv = {}  # id -> token
-            self._vocab_base_byte_to_token = {}  # for all basic tokens
-            self._vocab_base_id_to_byte = {}
-            # dict is ordered so id val is incremented each time, from 0
-            for byte_ in new_vocab:
-                if byte_ in byte_to_token_old:
-                    token = byte_to_token_old[
-                        byte_
-                    ]  # get the original token associated to the byte
-                    self.add_to_vocab(
-                        token, byte_=byte_, add_to_model=False
-                    )  # adds it to _vocab_base
+            for special_token in ["cls", "sep"]:
+                if special_token in post_processor:
+                    token, _ = post_processor[special_token]
+                    token_id = tokenizer.token_to_id(token)
+                    post_processor[special_token] = [token, token_id]
+
+            trained_tokenizer_json["post_processor"] = post_processor
+            tokenizer = _HFTokenizer.from_str(json.dumps(trained_tokenizer_json))
 
         # Update __vocab_bpe_bytes_to_tokens for faster decoding
         self._vocab_bpe_bytes_to_tokens = {
             k: [self._vocab_base_byte_to_token[b] for b in k]
-            for k in self._model.get_vocab()
+            for k in tokenizer.get_vocab()
         }
 
-        self.has_bpe = True
+        self._model = tokenizer
+
+    @staticmethod
+    def __reload_hf_tokenizer(tokenizer: _HFTokenizer) -> _HFTokenizer:
+        # Converts model to json
+        tokenizer_json = json.loads(tokenizer.to_str())
+
+        # Remove vocab
+        # Apr 16th 2024 - MidiTok v3.0.3: when resuming training, we restart all over
+        # from a clean vocabulary. As tokenizers v0.15.2, resuming a training does
+        # not further reduce/compress the sequences even with a larger vocabulary.
+        if tokenizer_json["model"]["type"] == "BPE":
+            tokenizer_json["model"]["vocab"] = {}
+            tokenizer_json["model"]["merges"] = []
+        elif tokenizer_json["model"]["type"] == "Unigram":
+            tokenizer_json["model"]["vocab"] = []
+            if tokenizer_json["model"]["unk_id"] is not None:
+                unk_id = tokenizer_json["model"]["unk_id"]
+                unk_token = tokenizer_json["model"]["vocab"][unk_id][0]
+                tokenizer_json["model"]["unk_id"] = 0
+                tokenizer_json["model"]["vocab"] = [[unk_token, 0.0]]
+        else:
+            msg = (
+                "This method does not support this type of tokenizer (found "
+                f"{tokenizer_json['model']['type']}) only BPE or Unigram."
+            )
+            raise ValueError(msg)
+
+        return _HFTokenizer.from_str(json.dumps(tokenizer_json))
 
     def apply_bpe(self, seq: TokSequence | list[TokSequence]) -> None:
         """
@@ -2637,7 +2762,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             return 0
 
         num_tok_predicted = len(tokens)  # used to norm the score
-        if self.has_bpe:
+        if self.is_trained:
             self.decode_bpe(tokens)
         self.complete_sequence(tokens)
 
@@ -2868,7 +2993,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         """
         if additional_attributes is None:
             additional_attributes = {}
-        if self.has_bpe:  # saves whole vocab if BPE
+        if self.is_trained:  # saves whole vocab if BPE
             additional_attributes["_vocab_base"] = self._vocab_base
             additional_attributes["_model"] = self._model.to_str()
             additional_attributes[
@@ -2883,7 +3008,6 @@ class MIDITokenizer(ABC, HFHubMixin):
         params = {
             "config": dict_config,
             "one_token_stream": self.one_token_stream,
-            "has_bpe": self.has_bpe,
             "tokenization": self.__class__.__name__,
             "miditok_version": CURRENT_MIDITOK_VERSION,
             "symusic_version": CURRENT_SYMUSIC_VERSION,
@@ -2987,7 +3111,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 continue
             if key == "_model":
                 # using 🤗tokenizers builtin method
-                self._model = TokenizerFast.from_str(value)
+                self._model = _HFTokenizer.from_str(value)
                 continue
             if key == "_vocab_base_byte_to_token":
                 self._vocab_base_byte_to_token = value
@@ -3039,6 +3163,10 @@ class MIDITokenizer(ABC, HFHubMixin):
             if key == "unique_track":
                 # For config files <= v2.1.1 before the attribute is renamed
                 self.one_token_stream = value
+                continue
+            if key == "has_bpe":
+                # For config files < v3.0.3 before the attribute becomes a property
+                continue
 
             setattr(self, key, value)
 
@@ -3135,7 +3263,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         """
         if self.is_multi_voc:
             return sum([len(v) for v in self.vocab])
-        if self.has_bpe:
+        if self.is_trained:
             return len(self._model.get_vocab())
         return len(self.vocab)
 
@@ -3171,7 +3299,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             out_str += f"({', '.join(tmp)})"
 
         # BPE
-        if self.has_bpe:
+        if self.is_trained:
             out_str += ", with BPE"
         else:
             out_str += ", without BPE"
@@ -3240,12 +3368,12 @@ class MIDITokenizer(ABC, HFHubMixin):
         """
         if not isinstance(other, type(self)):
             return False
-        bpe_voc_eq = True
-        if self._model is not None and other._model is not None:
-            bpe_voc_eq = self._model.get_vocab() == other._model.get_vocab()
+        vocab_trained_eq = self.is_trained == other.is_trained
+        if self.is_trained and other.is_trained:
+            vocab_trained_eq = self._model.get_vocab() == other._model.get_vocab()
         return (
             self._vocab_base == other._vocab_base
-            and bpe_voc_eq
+            and vocab_trained_eq
             and self._vocab_base_byte_to_token == other._vocab_base_byte_to_token
             and self.config == other.config
         )

@@ -63,7 +63,7 @@ Here is a complete example showing how to use this module to train any model.
         bos_token_id=tokenizer["BOS_None"],
         eos_token_id=tokenizer["EOS_None"],
     )
-    collator = DataCollator(tokenizer["PAD_None"])
+    collator = DataCollator(tokenizer.pad_token_id)
     dataloader = DataLoader(dataset, batch_size=64, collate_fn=collator)
 
     # Iterate over the dataloader to train a model

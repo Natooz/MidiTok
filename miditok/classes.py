@@ -25,6 +25,7 @@ from .constants import (
     DELETE_EQUAL_SUCCESSIVE_TIME_SIG_CHANGES,
     DRUM_PITCH_RANGE,
     LOG_TEMPOS,
+    MANDATORY_SPECIAL_TOKENS,
     MAX_PITCH_INTERVAL,
     NUM_TEMPOS,
     NUM_VELOCITIES,
@@ -275,11 +276,13 @@ class TokenizerConfig:
         of velocity values. The velocities of the MIDIs resolution will be downsampled
         to ``num_velocities`` values, equally separated between 0 and 127.
         (default: ``32``)
-    :param special_tokens: list of special tokens. This must be given as a list of
-        strings, that should represent either the token type alone (e.g. ``PAD``) or
-        the token type and its value separated by an underscore (e.g. ``Genre_rock``).
-        If two or more underscores are given, all but the last one will be replaced
-        with dashes (-). (default: ``["PAD", "BOS", "EOS", "MASK"]``\)
+    :param special_tokens: list of special tokens. The "PAD" token is required and
+        will be included in the vocabulary anyway if you did not include it in
+        ``special_tokens``. This must be given as a list of strings, that should
+        represent either the token type alone (e.g. ``PAD``) or the token type and its
+        value separated by an underscore (e.g. ``Genre_rock``). If two or more
+        underscores are given, all but the last one will be replaced with dashes (-).
+        (default: ``["PAD", "BOS", "EOS", "MASK"]``\)
     :param use_chords: will use ``Chord`` tokens, if the tokenizer is compatible. A
         ``Chord`` token indicates the presence of a chord at a certain time step.
         MidiTok uses a chord detection method based on onset times and duration. This
@@ -502,7 +505,14 @@ class TokenizerConfig:
         self.pitch_range: tuple[int, int] = pitch_range
         self.beat_res: dict[tuple[int, int], int] = beat_res
         self.num_velocities: int = num_velocities
+        self.remove_duplicated_notes = remove_duplicated_notes
         self.special_tokens: list[str] = []
+
+        # Special tokens
+        special_tokens = list(special_tokens)
+        for special_token in MANDATORY_SPECIAL_TOKENS:
+            if special_token not in special_tokens:
+                special_tokens.append(special_token)
         for special_token in special_tokens:
             parts = special_token.split("_")
             if len(parts) == 1:
@@ -524,7 +534,6 @@ class TokenizerConfig:
                     f" Skipping its duplicated occurrence.",
                     stacklevel=2,
                 )
-        self.remove_duplicated_notes = remove_duplicated_notes
 
         # Additional token types params, enabling additional token types
         self.use_chords: bool = use_chords

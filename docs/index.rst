@@ -49,7 +49,7 @@ Contents
    bases
    examples
    tokenizations
-   bpe
+   train
    hf_hub
    pytorch_data
    data_augmentation

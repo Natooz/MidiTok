@@ -14,12 +14,12 @@ if TYPE_CHECKING:
     from .midi_tokenizer import MIDITokenizer
 
 
-class BPEIterator:
+class TokTrainingIterator:
     r"""
-    An iterable class to be used when training a tokenizer with BPE.
+    An iterable class to be used when training a tokenizer.
 
     It loads MIDI files and tokenize them on the fly, to be used with the Hugging Face
-    tokenizers library to build a vocabulary with BPE.
+    tokenizers library to build a vocabulary with BPE, Unigram or other models.
 
     :param tokenizer: tokenizer to use for training.
     :param files_paths: sequence of paths of files to load for training.
@@ -42,7 +42,8 @@ class BPEIterator:
                 midi = Score(path)
             except MIDI_LOADING_EXCEPTION:
                 return []
-            token_ids = self.tokenizer(midi)
+            # Need to specify `apply_bpe=False` as it might be already pretrained
+            token_ids = self.tokenizer(midi, apply_bpe=False)
             if self.tokenizer.one_token_stream:
                 token_ids = token_ids.ids
             else:
@@ -74,7 +75,7 @@ class BPEIterator:
         """
         return self.load_file(self.files_paths[idx])
 
-    def __iter__(self) -> BPEIterator:  # noqa:D105
+    def __iter__(self) -> TokTrainingIterator:  # noqa:D105
         return self
 
     def __next__(self) -> list[str]:  # noqa:D105
