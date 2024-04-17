@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import replace
 from time import time
 from typing import TYPE_CHECKING
 
@@ -46,7 +47,7 @@ for tokenization_ in TOKENIZATIONS_TRAIN:
 
 @pytest.mark.parametrize("tok_params_set", TOK_PARAMS_TRAINING)
 @pytest.mark.parametrize("model", TRAINING_MODELS)
-def test_bpe_conversion(
+def test_tokenizer_training_and_encoding_decoding(
     tok_params_set: tuple[str, dict[str, Any]],
     tmp_path: Path,
     model: Literal["BPE", "Unigram"],
@@ -99,7 +100,7 @@ def test_bpe_conversion(
     assert len(tokenizer2) == vocab_size + NUM_ADDITIONAL_TOKENS_SECOND_TRAINING
     # Vocabs may have swapped ids orders for Unigram as the training is not 100%
     # deterministic.
-    if model == "BPE":
+    if model in ["BPE", "WordPiece"]:
         assert (
             tokenizer2 == tokenizer1
         ), "tokenizer 1-shot not equal to tokenizer 2-shots"
@@ -124,7 +125,7 @@ def test_bpe_conversion(
     )
 
     # Unbatched encoding-decoding
-    func_check = _check_bpe if model == "BPE" else _check_unigram
+    func_check = _check_seq_len if model == "Unigram" else _check_equal_seq
     at_least_one_error = False
     tok_time = 0
     samples_og = []  # used for batched
@@ -135,17 +136,17 @@ def test_bpe_conversion(
             tokens_original = tokens_original[0]
         samples_og.append(tokens_original)
 
-        # Encode the tokens
-        tokens1_encoded = deepcopy(tokens_original)
-        tokens2_encoded = deepcopy(tokens_original)
+        # Encode the token ids
+        tokens1_encoded = replace(tokens_original)
+        tokens2_encoded = replace(tokens_original)
         t0 = time()
         tokenizer1.encode_token_ids(tokens1_encoded)
         tok_time += time() - t0
         tokenizer2.encode_token_ids(tokens2_encoded)
 
-        # Decode the tokens
-        tokens1_decoded = deepcopy(tokens1_encoded)
-        tokens2_decoded = deepcopy(tokens2_encoded)
+        # Decode the token ids
+        tokens1_decoded = replace(tokens1_encoded)
+        tokens2_decoded = replace(tokens2_encoded)
         tokenizer1.decode_token_ids(tokens1_decoded)
         tokenizer2.decode_token_ids(tokens2_decoded)
 
@@ -169,15 +170,15 @@ def test_bpe_conversion(
     assert not at_least_one_error
 
     # Batched encoding-decoding
-    samples1_encoded = deepcopy(samples_og)
-    samples2_encoded = deepcopy(samples_og)
+    samples1_encoded = [replace(s) for s in samples_og]
+    samples2_encoded = [replace(s) for s in samples_og]
     t0 = time()
     tokenizer1.encode_token_ids(samples1_encoded)
     tok_time = time() - t0
     tokenizer2.encode_token_ids(samples2_encoded)
 
-    samples1_decoded = deepcopy(samples1_encoded)
-    samples2_decoded = deepcopy(samples2_encoded)
+    samples1_decoded = [replace(s) for s in samples1_encoded]
+    samples2_decoded = [replace(s) for s in samples2_encoded]
     tokenizer1.decode_token_ids(samples1_decoded)
     tokenizer2.decode_token_ids(samples2_decoded)
 
@@ -209,7 +210,7 @@ def test_bpe_conversion(
     assert not at_least_one_error
 
 
-def _check_bpe(
+def _check_equal_seq(
     seq_og: miditok.TokSequence,
     seq1_encoded: miditok.TokSequence,
     seq2_encoded: miditok.TokSequence,
@@ -234,7 +235,7 @@ def _check_bpe(
     return no_error
 
 
-def _check_unigram(
+def _check_seq_len(
     seq_og: miditok.TokSequence,
     seq1_encoded: miditok.TokSequence,
     seq2_encoded: miditok.TokSequence,

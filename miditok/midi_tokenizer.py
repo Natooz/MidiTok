@@ -2385,6 +2385,18 @@ class MIDITokenizer(ABC, HFHubMixin):
             `tokenizers docs <https://huggingface.co/docs/tokenizers/api/trainers>`_
             for more details.
         """
+        # WordPiece is not supported yet. A WordPiece model has a
+        # `max_input_chars_per_word` attribute (default to 100) which replaces any word
+        # (sequence of chars/bytes) with the `unk_token` token. As we use the model with
+        # long "words" (>10k bytes), we need to increase this limit, which ends up in
+        # overly long encoding times (several seconds for a single sequence of a few
+        # thousands bytes and <10k bytes).
+        # https://discuss.huggingface.co/t/help-with-tokenizer-word-length-limit/44364/2
+        # The tests still passes (encoding-decoding...), but this limitation makes the
+        # method worthless.
+        # TODO: see if ByteLevel can address this
+        # https://github.com/huggingface/tokenizers/issues/761
+
         if self.is_multi_voc:
             warnings.warn(
                 "This tokenizer is based on multiple vocabularies/embedding pooling."
@@ -2413,7 +2425,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         if iterator is None:
             iterator = TokTrainingIterator(self, files_paths)
 
-        # Define model variable
+        # Define the model
         # Keep current model if `arg` is None
         retraining = False
         if self._model is not None and model is None:
@@ -2426,20 +2438,24 @@ class MIDITokenizer(ABC, HFHubMixin):
         elif isinstance(model, str) or model is None:
             if model is None:  # default
                 model = DEFAULT_TRAINING_MODEL_NAME
-            model_kwargs = {}
-            if model == "BPE":
-                model_kwargs["merges"] = []
-                model_kwargs["continuing_subword_prefix"] = ""
-                model_kwargs["end_of_word_suffix"] = ""
             if model == "Unigram":  # list[tuple[str, float]]
                 voc_start = []  # starts from empty voc
             else:
                 voc_start = {
                     chr(i + CHR_ID_START): i for i in range(len(self._vocab_base))
                 }
-            tokenizer = _HFTokenizer(
-                getattr(_tok_models, model)(vocab=voc_start, **model_kwargs)
-            )
+            model_kwargs = {"vocab": voc_start}
+            if model == "BPE":
+                model_kwargs["merges"] = []
+                model_kwargs["continuing_subword_prefix"] = ""
+                model_kwargs["end_of_word_suffix"] = ""
+            """elif model == "WordPiece":
+                model_kwargs["unk_token"] = chr(self.pad_token_id + CHR_ID_START)
+                model_kwargs["continuing_subword_prefix"] = ""
+                model_kwargs["max_input_chars_per_word"] = (
+                    WORDPIECE_MAX_INPUT_CHARS_PER_WORD
+                )"""
+            tokenizer = _HFTokenizer(getattr(_tok_models, model)(**model_kwargs))
         else:
             msg = (
                 "miditok - tokenizer.train: the `model` argument must be a str specify "
@@ -2573,6 +2589,8 @@ class MIDITokenizer(ABC, HFHubMixin):
                 unk_token = tokenizer_json["model"]["vocab"][unk_id][0]
                 tokenizer_json["model"]["unk_id"] = 0
                 tokenizer_json["model"]["vocab"] = [[unk_token, 0.0]]
+        # elif tokenizer_json["model"]["type"] in ["WordLevel", "WordPiece"]:
+        #    tokenizer_json["model"]["vocab"] = {}
         else:
             msg = (
                 "This method does not support this type of tokenizer (found "
