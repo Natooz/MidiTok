@@ -105,7 +105,7 @@ def test_bpe_conversion(
         ), "tokenizer 1-shot not equal to tokenizer 2-shots"
 
     # Checks tokens <--> ids <--> bytes conversions with one test case
-    tokens = tokenizer1(files_paths[0], apply_bpe=False)
+    tokens = tokenizer1(files_paths[0], encode_ids=False)
     if not tokenizer1.one_token_stream:
         tokens = tokens[0]
     tokenizer1.complete_sequence(tokens, complete_bytes=True)  # not done by default
@@ -128,9 +128,9 @@ def test_bpe_conversion(
     at_least_one_error = False
     tok_time = 0
     samples_og = []  # used for batched
-    for file_path in tqdm(files_paths, desc="Testing BPE unbatched"):
-        # Tokenize file without BPE first
-        tokens_original = tokenizer1(file_path, apply_bpe=False)
+    for file_path in tqdm(files_paths, desc="Testing encoding-decoding unbatched"):
+        # Tokenize file without encoding ids first
+        tokens_original = tokenizer1(file_path, encode_ids=False)
         if not tokenizer1.one_token_stream:
             tokens_original = tokens_original[0]
         samples_og.append(tokens_original)
@@ -139,15 +139,15 @@ def test_bpe_conversion(
         tokens1_encoded = deepcopy(tokens_original)
         tokens2_encoded = deepcopy(tokens_original)
         t0 = time()
-        tokenizer1.apply_bpe(tokens1_encoded)
+        tokenizer1.encode_token_ids(tokens1_encoded)
         tok_time += time() - t0
-        tokenizer2.apply_bpe(tokens2_encoded)
+        tokenizer2.encode_token_ids(tokens2_encoded)
 
         # Decode the tokens
         tokens1_decoded = deepcopy(tokens1_encoded)
         tokens2_decoded = deepcopy(tokens2_encoded)
-        tokenizer1.decode_bpe(tokens1_decoded)
-        tokenizer2.decode_bpe(tokens2_decoded)
+        tokenizer1.decode_token_ids(tokens1_decoded)
+        tokenizer2.decode_token_ids(tokens2_decoded)
 
         # Check everything went good
         at_least_one_error = (
@@ -163,7 +163,7 @@ def test_bpe_conversion(
             or at_least_one_error
         )
     print(
-        f"BPE encoding time un-batched: {tok_time:.2f} (mean:"
+        f"Encoding-decoding time un-batched: {tok_time:.2f} (mean:"
         f"{tok_time / len(files_paths):.4f})"
     )
     assert not at_least_one_error
@@ -172,14 +172,14 @@ def test_bpe_conversion(
     samples1_encoded = deepcopy(samples_og)
     samples2_encoded = deepcopy(samples_og)
     t0 = time()
-    tokenizer1.apply_bpe(samples1_encoded)
+    tokenizer1.encode_token_ids(samples1_encoded)
     tok_time = time() - t0
-    tokenizer2.apply_bpe(samples2_encoded)
+    tokenizer2.encode_token_ids(samples2_encoded)
 
     samples1_decoded = deepcopy(samples1_encoded)
     samples2_decoded = deepcopy(samples2_encoded)
-    tokenizer1.decode_bpe(samples1_decoded)
-    tokenizer2.decode_bpe(samples2_decoded)
+    tokenizer1.decode_token_ids(samples1_decoded)
+    tokenizer2.decode_token_ids(samples2_decoded)
 
     for seq_og, seq1_enc, seq2_enc, seq1_dec, seq2_dec, file_path in zip(
         samples_og,
@@ -203,7 +203,7 @@ def test_bpe_conversion(
         )
 
     print(
-        f"BPE encoding time batched: {tok_time:.2f} (mean:"
+        f"Encoding-decoding time batched: {tok_time:.2f} (mean:"
         f"{tok_time / len(files_paths):.4f})"
     )
     assert not at_least_one_error

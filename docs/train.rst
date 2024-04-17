@@ -63,8 +63,8 @@ To use BPE, you must first train your tokenizer from data (:py:func:`miditok.MID
 .. autofunction:: miditok.MIDITokenizer.train
     :noindex:
 
-.. autofunction:: miditok.MIDITokenizer.apply_bpe
+.. autofunction:: miditok.MIDITokenizer.encode_ids
     :noindex:
 
-.. autofunction:: miditok.MIDITokenizer.decode_bpe
+.. autofunction:: miditok.MIDITokenizer.decode_ids
     :noindex:

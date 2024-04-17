@@ -43,7 +43,6 @@ from tokenizers import models as _tok_models
 from tokenizers import trainers as _tok_trainers
 from tqdm import tqdm
 
-from .bpe_iterator import TokTrainingIterator
 from .classes import Event, TokenizerConfig, TokSequence
 from .constants import (
     BOS_TOKEN_NAME,
@@ -61,6 +60,7 @@ from .constants import (
     TIME_SIGNATURE,
     UNKNOWN_CHORD_PREFIX,
 )
+from .tokenizer_training_iterator import TokTrainingIterator
 from .utils import (
     compute_ticks_per_bar,
     convert_ids_tensors_to_list,
@@ -105,14 +105,15 @@ class MIDITokenizer(ABC, HFHubMixin):
         self._vocab_base = {}
         # the other way, to decode id (int) -> token (str)
         self.__vocab_base_inv = {}
-        # id (int) -> byte (str), as this might not be chr(id) after BPE training
+        # id (int) -> byte (str), as this might not be chr(id) after tokenizer training
         self._vocab_base_id_to_byte = {}
         # byte (str) -> token (str), for basic tokens
         self._vocab_base_byte_to_token = {}
-        # byte(s) -> token(s), for faster BPE decoding
-        self._vocab_bpe_bytes_to_tokens = {}
-        # Fast BPE tokenizer backed with 🤗tokenizers
+        # byte(s) -> token(s), for faster BPE/Unigram decoding
+        self._vocab_learned_bytes_to_tokens = {}
+        # Fast tokenizer model backed with 🤗tokenizers
         self._model = None
+        self._model_name = None
         # Used in _notes_to_events, especially MIDILike
         self._note_on_off = False
         # Determines how the tokenizer will handle multiple tracks: either each track
@@ -214,9 +215,9 @@ class MIDITokenizer(ABC, HFHubMixin):
             self.pitch_bends = self.__create_pitch_bends()
 
         # Vocabulary and token types graph
-        if (
-            len(self.vocab) == 0
-        ):  # in case it was not already loaded by load_params, such as with BPE
+        # The vocabulary might have already been created if the tokenizer is being
+        # loaded.
+        if len(self.vocab) == 0:
             self.__create_vocabulary()
         self.tokens_types_graph = self._create_token_types_graph()
         self._add_special_tokens_to_types_graph()
@@ -238,7 +239,11 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         :return: id of the padding token (`PAD_None`).
         """
-        return self._vocab_base["PAD_None"]
+        return (
+            self._vocab_base["PAD_None"]
+            if not self.is_multi_voc
+            else self._vocab_base[0]["PAD_None"]
+        )
 
     @property
     def vocab(
@@ -257,21 +262,23 @@ class MIDITokenizer(ABC, HFHubMixin):
             associated unique bytes;
         * ``._vocab_base_byte_to_token`` : Dict[str: str] - similar as above but for
             tokens;
-        * ``._vocab_bpe_bytes_to_tokens`` : Dict[str: List[str]] byte(s) -> token(s)
-            used to decode BPE;
-        * ``._model.get_vocab()`` : Dict[str: int] byte -> id - bpe model
+        * ``._vocab_learned_bytes_to_tokens`` : Dict[str: List[str]] byte(s) -> token(s)
+            used to decode BPE/Unigram token ids;
+        * ``._model.get_vocab()`` : Dict[str: int] byte -> id - BPE/Unigram model
             vocabulary, based on unique bytes.
 
-        Before training the tokenizer with BPE, bytes are obtained by running
-        ``chr(id)`` . After training, if we did start from an empty vocabulary, some
-        base tokens might be removed from ``._vocab_base`` , if they were never found
-        in the training samples. The base vocabulary being changed, ``chr(id)`` would
-        then bind to incorrect bytes (on which byte succession would not have been
-        learned). We register the original id/token/byte association in
-        ``._vocab_base_id_to_byte`` and ``._vocab_base_byte_to_token`` .
+        Before training the tokenizer, bytes are obtained by running ``chr(id)`` .
+        After training, if we did start from an empty vocabulary, some base tokens might
+        be removed from ``._vocab_base`` , if they were never found in the training
+        samples. The base vocabulary being changed, ``chr(id)`` would then bind to
+        incorrect bytes (on which byte succession would not have been learned). We
+        register the original id/token/byte association in ``._vocab_base_id_to_byte``
+        and ``._vocab_base_byte_to_token`` .
 
         :return: the base vocabulary.
         """
+        """if not self.is_trained:
+            return self._model.get_vocab()"""  # TODO edit this?
         return self._vocab_base
 
     @property
@@ -1345,7 +1352,7 @@ class MIDITokenizer(ABC, HFHubMixin):
     def encode(
         self,
         midi: Score,
-        apply_bpe: bool = True,
+        encode_ids: bool = True,
     ) -> TokSequence | list[TokSequence]:
         r"""
         Tokenize a MIDI file.
@@ -1356,8 +1363,9 @@ class MIDITokenizer(ABC, HFHubMixin):
         **override the** protected ``_midi_to_tokens`` **method**.
 
         :param midi: the MIDI object to convert.
-        :param apply_bpe: will apply BPE if the tokenizer's vocabulary was trained
-            with. (default: ``True``)
+        :param encode_ids: the backbone model (BPE, Unigram) will encode the tokens and
+            compress the sequence. Can only be used if the tokenizer has been trained.
+            (default: ``True``)
         :return: a :class:`miditok.TokSequence` if ``tokenizer.one_token_stream`` is
             ``True``, else a list of :class:`miditok.TokSequence` objects.
         """
@@ -1366,8 +1374,8 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         # Tokenize it
         tokens = self._midi_to_tokens(midi)
-        if apply_bpe and self.is_trained:
-            self.apply_bpe(tokens)
+        if encode_ids and self.is_trained:
+            self.encode_token_ids(tokens)
 
         return tokens
 
@@ -1379,12 +1387,12 @@ class MIDITokenizer(ABC, HFHubMixin):
         initialized (i.e. ``None``). This method will initialize them from the present
         ones. The ``events`` attribute will not be filled as it is only intended for
         debug purpose. The ``bytes`` attribute will be created if ``complete_bytes`` is
-        provided as ``True`` and if the tokenizer is trained with BPE.
+        provided as ``True`` and if the tokenizer has been trained.
 
         :param seq: input :class:`miditok.TokSequence`, must have at least one
             attribute defined.
         :param complete_bytes: will complete the bytes form of each token. This is only
-            applicable if the tokenizer is trained with BPE.
+            applicable if the tokenizer has been trained.
         """
         if seq.tokens is None:
             if seq.events is not None:
@@ -1424,8 +1432,9 @@ class MIDITokenizer(ABC, HFHubMixin):
         r"""
         Convert a sequence of ids (int) to their tokens format (str or Event).
 
-        **This method will not work with ids encoded with BPE. You will need to decode
-        them first (:py:meth:`miditok.MIDITokenizer.decode_bpe`)**.
+        **This method will not work with ids encoded with the tokenizer's model. You
+        will need to decode them first (
+        :py:meth:`miditok.MIDITokenizer.decode_token_ids`)**.
 
         :param ids: sequence of ids (int) to convert.
         :param as_str: return the tokens as string objects, otherwise Event objects
@@ -1479,15 +1488,15 @@ class MIDITokenizer(ABC, HFHubMixin):
         Convert a list of ids into their bytes format.
 
         It can be returned either as a list of bytes or as a unique string of bytes.
-        **This method will not work with ids encoded with BPE. You will need to decode
-        them first (:py:meth:`miditok.MIDITokenizer.decode_bpe`)**.
+        **This method will not work with ids encoded with the tokenizer's model. You
+        will need to decode them first (
+        :py:meth:`miditok.MIDITokenizer.decode_token_ids`)**.
 
         :param ids: token ids (int) to convert.
         :param as_one_str: will return the bytes all concatenated into one string.
             (default: ``False``)
         :return: the tokens converted into strings of unique bytes.
         """
-        # self._model.decode(ids) TODO test with this --> BPE ids
         if len(ids) == 0:
             return ""
         if isinstance(ids[0], list):
@@ -1513,7 +1522,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         tokens = []
         for byte_ in bytes_:
-            token_str = self._vocab_bpe_bytes_to_tokens[byte_]
+            token_str = self._vocab_learned_bytes_to_tokens[byte_]
             tokens.append(token_str if as_str else Event(*token_str.split("_")))
         return [tok for toks in tokens for tok in toks]  # flatten
 
@@ -1579,31 +1588,31 @@ class MIDITokenizer(ABC, HFHubMixin):
                 kwarg = {arg[0]: obj}
                 seq.append(TokSequence(**kwarg))
                 if self.is_trained and seq[-1].ids is not None:
-                    seq[-1].ids_bpe_encoded = self._are_ids_bpe_encoded(seq[-1].ids)
+                    seq[-1].are_ids_encoded = self._are_ids_encoded(seq[-1].ids)
         else:  # 1 subscript, one_token_stream and no multi-voc
             kwarg = {arg[0]: arg[1]}
             seq = TokSequence(**kwarg)
             if self.is_trained:
-                seq.ids_bpe_encoded = self._are_ids_bpe_encoded(seq.ids)
+                seq.are_ids_encoded = self._are_ids_encoded(seq.ids)
 
         return seq
 
-    def _are_ids_bpe_encoded(self, ids: list[int] | np.ndarray) -> bool:
+    def _are_ids_encoded(self, ids: list[int] | np.ndarray) -> bool:
         r"""
-        Tells if a sequence of token ids are encoded with BPE.
+        Tells if a sequence of token ids are encoded with a model (BPE, Unigram).
 
         This is performed by checking if any id has a value superior or equal to the
         length of the base vocabulary.
 
         :param ids: ids to check.
-        :return: boolean, ``True`` if ids are encoded with BPE, ``False`` otherwise.
+        :return: boolean, ``True`` if ids are encoded by a model, ``False`` otherwise.
         """
         return np.any(np.array(ids) >= len(self.vocab))
 
     def _preprocess_tokseq_before_decoding(self, tokseq: TokSequence) -> None:
         if tokseq.tokens is None:
-            if tokseq.ids_bpe_encoded:
-                self.decode_bpe(tokseq)
+            if tokseq.are_ids_encoded:
+                self.decode_token_ids(tokseq)
             self.complete_sequence(tokseq)
 
     def tokens_to_midi(self, *args, **kwargs) -> Score:  # noqa: D102, ANN002
@@ -1866,9 +1875,10 @@ class MIDITokenizer(ABC, HFHubMixin):
             e.g. Pitch_80, or an Event.
         :param vocab_idx: idx of the vocabulary (in case of embedding pooling).
             (default: ``None``)
-        :param byte_: unique byte associated to the token. This is used when building
-            the vocabulary with fast BPE. If None is given, it will default to
-            ``chr(id_ + CHR_ID_START)`` . (default: ``None``)
+        :param byte_: unique byte associated to the token. The associated byte of a
+            token is used to encode-decode ids with the tokenize's model (BPE, Unigram).
+            If None is given, it will default to ``chr(id_ + CHR_ID_START)`` .
+            (default: ``None``)
         :param add_to_model: the token will be added to the model vocabulary
             too. (default: ``None``)
         """
@@ -1884,7 +1894,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             self._vocab_base[token_str] = id_
             self.__vocab_base_inv[len(self.__vocab_base_inv)] = token_str
 
-            # For BPE
+            # Byte
             if byte_ is None:
                 byte_ = chr(id_ + CHR_ID_START)
             self._vocab_base_id_to_byte[
@@ -2346,6 +2356,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         <https://huggingface.co/course/chapter6/2?fw=pt>`_ for more details about the
         ``iterator`` and input type.
         # TODO pre-tokenize on beats, or bars (spaces to delimit them)
+        # TODO try to support WordPiece
 
         **The Hugging Face Unigram model training `is not 100% deterministic`
         <https://github.com/huggingface/tokenizers/issues/668>_. As such and if you are
@@ -2366,7 +2377,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             otherwise)
         :param iterator: an iterable object yielding the training data, as lists of
             string. It can be a list or a Generator. This iterator will be passed to
-            the BPE model for training. It musts implement the ``__len__`` method. If
+            the model for training. It musts implement the ``__len__`` method. If
             None is given, you must use the ``tokens_paths`` argument. (default: None)
         :param files_paths: paths of the files to load and use. They can be either MIDI
             or tokens (json) files. (default: None)
@@ -2377,22 +2388,23 @@ class MIDITokenizer(ABC, HFHubMixin):
         if self.is_multi_voc:
             warnings.warn(
                 "This tokenizer is based on multiple vocabularies/embedding pooling."
-                "It is therefore not compatible with Byte Pair Encoding (BPE). Skipping"
-                "tokenizer training.",
+                "It therefore cannot be trained. Skipping `tokenizer.train` function"
+                "call.",
                 stacklevel=2,
             )
             return
         if iterator is None and files_paths is None:
             msg = (
                 "You must give an iterator or a list of paths to tokens to train the"
-                "tokenizer with BPE."
+                "tokenizer."
             )
             raise ValueError(msg)
 
-        if vocab_size <= len(self.vocab):
+        if vocab_size <= len(self._vocab_base):
             warnings.warn(
-                f"vocab_size ({vocab_size}) need to be higher than the size of the"
-                f"current vocabulary ({len(self.vocab)}). Skipping BPE training.",
+                f"miditok - tokenizer.train: `vocab_size` ({vocab_size}) need to be "
+                f"higher than the number of base tokens ({len(self._vocab_base)}). "
+                f"Skipping tokenizer training.",
                 stacklevel=2,
             )
             return
@@ -2533,13 +2545,14 @@ class MIDITokenizer(ABC, HFHubMixin):
             trained_tokenizer_json["post_processor"] = post_processor
             tokenizer = _HFTokenizer.from_str(json.dumps(trained_tokenizer_json))
 
-        # Update __vocab_bpe_bytes_to_tokens for faster decoding
-        self._vocab_bpe_bytes_to_tokens = {
+        # Update _vocab_learned_bytes_to_tokens for faster decoding
+        self._vocab_learned_bytes_to_tokens = {
             k: [self._vocab_base_byte_to_token[b] for b in k]
             for k in tokenizer.get_vocab()
         }
 
         self._model = tokenizer
+        self._model_name = model_name
 
     @staticmethod
     def __reload_hf_tokenizer(tokenizer: _HFTokenizer) -> _HFTokenizer:
@@ -2569,13 +2582,24 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         return _HFTokenizer.from_str(json.dumps(tokenizer_json))
 
-    def apply_bpe(self, seq: TokSequence | list[TokSequence]) -> None:
+    def apply_bpe(self, *args, **kwargs) -> Score:  # noqa: D102, ANN002
+        warnings.warn(
+            "miditok: The `apply_bpe` method had been renamed `encode_token_ids`. It is"
+            " now depreciated and will be removed in future updates.",
+            stacklevel=2,
+        )
+        return self.encode_token_ids(*args, **kwargs)
+
+    def encode_token_ids(self, seq: TokSequence | list[TokSequence]) -> None:
         """
-        Apply Byte Pair Encoding (BPE) to a TokSequence, or list of TokSequences.
+        Encode a :class:`miditok.TokSequence` with the backbone model (BPE, Unigram).
 
-        If a list is given, BPE will be applied by batch on all sequences at the time.
+        The method works inplace and only alters the sequence's ``.ids``.
+        The method also works with lists of :class:`miditok.TokSequence`.
+        If a list is given, the model will encode all sequences in one batch to speed up
+        the operation.
 
-        :param seq: Sequence(s) to apply BPE.
+        :param seq: :class:`miditok.TokSequence` to encode ids.
         """
         if isinstance(seq, list):
             for seq_ in seq:
@@ -2583,40 +2607,49 @@ class MIDITokenizer(ABC, HFHubMixin):
             encoded_tokens = self._model.encode_batch(
                 [[t.bytes] for t in seq], is_pretokenized=True
             )
-            for seq_, bpe_tokens in zip(seq, encoded_tokens):
-                seq_.ids = bpe_tokens.ids
-                seq_.ids_bpe_encoded = True
+            for seq_, ids_encoded in zip(seq, encoded_tokens):
+                seq_.ids = ids_encoded.ids
+                seq_.are_ids_encoded = True
 
         else:
             self.complete_sequence(seq, complete_bytes=True)
             encoded_tokens = self._model.encode([seq.bytes], is_pretokenized=True)
             seq.ids = encoded_tokens.ids
-            seq.ids_bpe_encoded = True
+            seq.are_ids_encoded = True
 
-    def decode_bpe(self, seq: TokSequence | list[TokSequence]) -> None:
+    def decode_bpe(self, *args, **kwargs) -> Score:  # noqa: D102, ANN002
+        warnings.warn(
+            "miditok: The `decode_bpe` method had been renamed `decode_token_ids`. It "
+            "is now depreciated and will be removed in future updates.",
+            stacklevel=2,
+        )
+        return self.decode_token_ids(*args, **kwargs)
+
+    def decode_token_ids(self, seq: TokSequence | list[TokSequence]) -> None:
         r"""
-        Decode (inplace) the BPE of the ids of a :class:`miditok.TokSequence`.
+        Decode the ids of a :class:`miditok.TokSequence` with the model (BPE, Unigram).
 
-        This method only modifies the ``.ids`` attribute of the input sequence(s) only
+        This method only modifies the ``.ids`` attribute of the input sequence(s)
         and does not complete it. This method can be used recursively on lists of
         :class:`miditok.TokSequence`.
 
         :param seq: token sequence to decompose.
         """
+        # self._model.decode(ids) TODO test with this
         if isinstance(seq, list):
-            [self.decode_bpe(seq_) for seq_ in seq]
+            [self.decode_token_ids(seq_) for seq_ in seq]
 
-        elif isinstance(seq, TokSequence) and seq.ids_bpe_encoded:
+        elif isinstance(seq, TokSequence) and seq.are_ids_encoded:
             encoded_bytes = [self._model.id_to_token(id_) for id_ in seq.ids]
             decoded_tokens = [
-                self._vocab_bpe_bytes_to_tokens[byte_] for byte_ in encoded_bytes
+                self._vocab_learned_bytes_to_tokens[byte_] for byte_ in encoded_bytes
             ]
             decoded_tokens = [
                 item for sublist in decoded_tokens for item in sublist
             ]  # flatten
             seq.tokens = decoded_tokens
             seq.ids = self._tokens_to_ids(decoded_tokens)
-            seq.ids_bpe_encoded = False
+            seq.are_ids_encoded = False
 
     def tokenize_midi_dataset(self, *args, **kwargs) -> Score | list[Score]:  # noqa: D102, ANN002
         warnings.warn(
@@ -2763,7 +2796,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         num_tok_predicted = len(tokens)  # used to norm the score
         if self.is_trained:
-            self.decode_bpe(tokens)
+            self.decode_token_ids(tokens)
         self.complete_sequence(tokens)
 
         # Compute number of errors and norm by number of tokens predicted
@@ -2882,27 +2915,27 @@ class MIDITokenizer(ABC, HFHubMixin):
         :param kwargs: any additional information to save within the JSON file.
         """
         ids = []
-        ids_bpe_encoded = None
+        ids_encoded = None
 
         if isinstance(tokens, TokSequence):
             if tokens.ids is None:
                 self.complete_sequence(tokens)
-            ids_bpe_encoded = tokens.ids_bpe_encoded
+            ids_encoded = tokens.are_ids_encoded
             ids = tokens.ids
         elif isinstance(tokens, list) and len(tokens) == 0:
             pass
         elif isinstance(tokens[0], TokSequence):
-            ids_bpe_encoded = []
+            ids_encoded = []
             for seq in tokens:
                 if seq.ids is None:
                     self.complete_sequence(seq)
-                ids_bpe_encoded.append(seq.ids_bpe_encoded)
+                ids_encoded.append(seq.are_ids_encoded)
                 ids.append(seq.ids)
         else:
             ids = convert_ids_tensors_to_list(tokens)
 
-        if "ids_bpe_encoded" not in kwargs and ids_bpe_encoded is not None:
-            kwargs["ids_bpe_encoded"] = ids_bpe_encoded
+        if "ids_encoded" not in kwargs and ids_encoded is not None:
+            kwargs["ids_encoded"] = ids_encoded
 
         with Path(path).open("w") as outfile:
             dic = {"ids": ids, **kwargs}
@@ -2993,7 +3026,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         """
         if additional_attributes is None:
             additional_attributes = {}
-        if self.is_trained:  # saves whole vocab if BPE
+        if self.is_trained:  # saves whole vocab if trained
             additional_attributes["_vocab_base"] = self._vocab_base
             additional_attributes["_model"] = self._model.to_str()
             additional_attributes[
@@ -3119,7 +3152,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 self._vocab_base_id_to_byte = {
                     i: token_to_byte[tok] for tok, i in self._vocab_base.items()
                 }
-                self._vocab_bpe_bytes_to_tokens = {
+                self._vocab_learned_bytes_to_tokens = {
                     k: [self._vocab_base_byte_to_token[b] for b in k]
                     for k in self._model.get_vocab()
                 }
@@ -3253,8 +3286,8 @@ class MIDITokenizer(ABC, HFHubMixin):
         Return the length of the vocabulary.
 
         If the tokenizer uses embedding pooling/have multiple vocabularies, it will
-        return the **sum** of their lengths. If the vocabulary was learned with fast
-        BPE, it will return the length of the BPE vocabulary, i.e. the proper number of
+        return the **sum** of their lengths. If the tokenizer has been trained, this
+        method returns the length of its model's vocabulary, i.e. the proper number of
         possible token ids. Otherwise, it will return the length of the base
         vocabulary. Use the :py:func:`miditok.MIDITokenizer.len` property
         (``tokenizer.len``) to get the list of lengths.
@@ -3298,11 +3331,11 @@ class MIDITokenizer(ABC, HFHubMixin):
         if len(tmp) > 0:
             out_str += f"({', '.join(tmp)})"
 
-        # BPE
+        # Trained
         if self.is_trained:
-            out_str += ", with BPE"
+            out_str += f", with {self._model_name}"
         else:
-            out_str += ", without BPE"
+            out_str += ", not trained"
         return out_str
 
     def __getitem__(

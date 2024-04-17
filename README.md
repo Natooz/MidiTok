@@ -14,7 +14,7 @@ Python package to tokenize MIDI music files, presented at the ISMIR 2021 LBDs.
 [![Code style](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 
 MidiTok can tokenize MIDI files, i.e. convert them into sequences of tokens ready to be fed to models such as Transformer, for any generation, transcription or MIR task.
-MidiTok features most known [MIDI tokenizations](https://miditok.readthedocs.io/en/latest/tokenizations.html) (e.g. [REMI](https://arxiv.org/abs/2002.00212), [Compound Word](https://arxiv.org/abs/2101.02402)...), and is built around the idea that they all share common parameters and methods. It supports [Byte Pair Encoding (BPE)](https://arxiv.org/abs/2301.11975) and data augmentation.
+MidiTok features most known [MIDI tokenizations](https://miditok.readthedocs.io/en/latest/tokenizations.html) (e.g. [REMI](https://arxiv.org/abs/2002.00212), [Compound Word](https://arxiv.org/abs/2101.02402)...), and is built around the idea that they all share common parameters and methods. Tokenizers can be trained with [Byte Pair Encoding (BPE)](https://aclanthology.org/2023.emnlp-main.123/) and [Unigram](https://aclanthology.org/P18-1007/), and it offers data augmentation methods.
 
 MidiTok is integrated with the Hugging Face Hub 🤗! Don't hesitate to share your models to the community!
 
@@ -25,7 +25,7 @@ MidiTok is integrated with the Hugging Face Hub 🤗! Don't hesitate to share yo
 ```shell
 pip install miditok
 ```
-MidiTok uses [Symusic](https://github.com/Yikai-Liao/symusic) to read and write MIDI files, and BPE is backed by [Hugging Face 🤗tokenizers](https://github.com/huggingface/tokenizers) for super-fast encoding.
+MidiTok uses [Symusic](https://github.com/Yikai-Liao/symusic) to read and write MIDI files, and BPE/Unigram is backed by [Hugging Face 🤗tokenizers](https://github.com/huggingface/tokenizers) for super-fast encoding.
 
 ## Usage example
 

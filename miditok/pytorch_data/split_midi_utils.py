@@ -274,7 +274,7 @@ def get_average_num_tokens_per_note(
     """
     Return the average number of tokens per note (tpn) for a list of MIDIs.
 
-    With BPE, the average tpn is likely to be very low.
+    With a trained tokenizer, the average tpn is likely to be very low.
 
     :param tokenizer: tokenizer.
     :param files_paths: list of MIDI file paths.

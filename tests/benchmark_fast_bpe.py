@@ -112,7 +112,7 @@ def bpe_benchmark(data_path: str | Path | PurePath = "./tests/Maestro") -> None:
             ):
                 tokens_bpe = deepcopy(data[i : i + batch_size])
                 t0 = time()
-                tokenizer.apply_bpe(tokens_bpe)
+                tokenizer.encode_token_ids(tokens_bpe)
                 tok_times.append((time() - t0) / len(tokens_bpe))  # mean per batch
             mean_time = sum(tok_times) / len(tok_times)
             row[2 + b] = f"{mean_time:.3f}"

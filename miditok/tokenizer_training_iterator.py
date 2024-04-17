@@ -42,8 +42,8 @@ class TokTrainingIterator:
                 midi = Score(path)
             except MIDI_LOADING_EXCEPTION:
                 return []
-            # Need to specify `apply_bpe=False` as it might be already pretrained
-            token_ids = self.tokenizer(midi, apply_bpe=False)
+            # Need to specify `encode_ids=False` as it might be already pretrained
+            token_ids = self.tokenizer(midi, encode_ids=False)
             if self.tokenizer.one_token_stream:
                 token_ids = token_ids.ids
             else:

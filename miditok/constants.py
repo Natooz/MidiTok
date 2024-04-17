@@ -17,9 +17,9 @@ MIDI_LOADING_EXCEPTION = (
 )
 DEFAULT_TOKENIZER_FILE_NAME = "tokenizer.json"
 
-# Starting id of chr() method for BPE, as the 5 (0 to 4 included) firsts are ignored by
-# 🤗tokenizers. We also skip the 32nd (0x20) (space) as it causes issues when loading a
-# BPE model with spaces in merged.
+# Starting id of chr() method for bytes equivalent of tokens.
+# The  first 5 (0 to 4 included) are ignored by 🤗tokenizers. We also skip the 32nd
+# (0x20) (space) as it is used to split sequences of characters into words.
 # Issue for reference: https://github.com/huggingface/tokenizers/issues/566
 # List of unicode characters: https://www.fileformat.info/info/charset/UTF-8/list.htm
 CHR_ID_START = 33

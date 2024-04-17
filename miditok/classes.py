@@ -110,20 +110,20 @@ class TokSequence:
     * events (list of Event): Event objects that can carry time or other information
     useful for debugging;
     * bytes (str): ids are converted into unique bytes, all joined together in a single
-    string. This is used by MidiTok internally for BPE.
+    string. This is used internally by MidiTok for the tokenizer's model (BPE, Unigram).
 
     Bytes are used internally by MidiTok for Byte Pair Encoding.
-    The ``ids_are_bpe_encoded`` attribute tells if ``ids`` is encoded with BPE.
+    The ``are_ids_encoded`` attribute tells if ``ids`` is encoded.
 
     :py:meth:`miditok.MIDITokenizer.complete_sequence`
     """
 
     tokens: list[str | list[str]] = None
-    ids: list[int | list[int]] = None  # BPE can be applied on ids
+    ids: list[int | list[int]] = None  # can be encoded with BPE/Unigram
     bytes: str = None  # noqa: A003
     events: list[Event | list[Event]] = None
-    ids_bpe_encoded: bool = False
-    _ids_no_bpe: list[int | list[int]] = None
+    are_ids_encoded: bool = False
+    _ids_decoded: list[int | list[int]] = None
 
     def __len__(self) -> int:
         """
@@ -139,8 +139,8 @@ class TokSequence:
             return len(self.events)
         if self.bytes is not None:
             return len(self.bytes)
-        if self._ids_no_bpe is not None:
-            return len(self._ids_no_bpe)
+        if self._ids_decoded is not None:
+            return len(self._ids_decoded)
 
         msg = (
             "This TokSequence seems to not be initialized, all its attributes "
@@ -168,8 +168,8 @@ class TokSequence:
             return self.events[val]
         if self.bytes is not None:
             return self.bytes[val]
-        if self._ids_no_bpe is not None:
-            return self._ids_no_bpe[val]
+        if self._ids_decoded is not None:
+            return self._ids_decoded[val]
 
         msg = (
             "This TokSequence seems to not be initialized, all its attributes "
@@ -185,7 +185,7 @@ class TokSequence:
         :return: the slice of the self ``TokSequence``.
         """
         seq = replace(self)
-        attributes = ["tokens", "ids", "bytes", "events", "_ids_no_bpe"]
+        attributes = ["tokens", "ids", "bytes", "events", "_ids_decoded"]
         for attr in attributes:
             if getattr(self, attr):
                 setattr(seq, attr, getattr(self, attr)[sli])
@@ -241,7 +241,7 @@ class TokSequence:
                 f"`TokSequence` objects. Received: {other.__class__.__name__}"
             )
             raise ValueError(msg)
-        attributes = ["tokens", "ids", "bytes", "events", "_ids_no_bpe"]
+        attributes = ["tokens", "ids", "bytes", "events", "_ids_decoded"]
         for attr in attributes:
             self_attr, other_attr = getattr(self, attr), getattr(other, attr)
             if self_attr is not None and other_attr is not None:
