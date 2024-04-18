@@ -166,46 +166,45 @@ class REMI(MIDITokenizer):
                     + (event.time - tick_at_last_ts_change) // ticks_per_bar
                     - current_bar
                 )
-                if num_new_bars >= 1:
-                    for i in range(num_new_bars):
-                        all_events.append(
-                            Event(
-                                type_="Bar",
-                                value=str(current_bar + i + 1)
-                                if self.config.additional_params["max_bar_embedding"]
-                                is not None
-                                else "None",
-                                time=(current_bar + i + 1) * ticks_per_bar,
-                                desc=0,
-                            )
-                        )
-                        if self.config.additional_params["use_bar_end_tokens"]:
-                            all_events.append(
-                                Event(
-                                    type_="Bar",
-                                    value="End",
-                                    time=(current_bar + i + 2) * ticks_per_bar,
-                                    desc=0,
-                                )
-                            )
-                        # Add a TimeSignature token, except for the last new Bar token
-                        # if the current event is a TS
-                        if self.config.use_time_signatures and not (
-                            event.type_ == "TimeSig" and i + 1 == num_new_bars
-                        ):
-                            all_events.append(
-                                Event(
-                                    type_="TimeSig",
-                                    value=f"{current_time_sig[0]}/{current_time_sig[1]}",
-                                    time=(current_bar + i + 1) * ticks_per_bar,
-                                    desc=0,
-                                )
-                            )
-                    current_bar += num_new_bars
+                for i in range(num_new_bars):
+                    current_bar += 1
                     tick_at_current_bar = (
                         tick_at_last_ts_change
                         + (current_bar - bar_at_last_ts_change) * ticks_per_bar
                     )
+                    if self.config.additional_params["use_bar_end_tokens"]:
+                        all_events.append(
+                            Event(
+                                type_="Bar",
+                                value="End",
+                                time=tick_at_current_bar - 1,
+                                desc=0,
+                            )
+                        )
+                    all_events.append(
+                        Event(
+                            type_="Bar",
+                            value=str(current_bar + i)
+                            if self.config.additional_params["max_bar_embedding"]
+                            is not None
+                            else "None",
+                            time=tick_at_current_bar,
+                            desc=0,
+                        )
+                    )
+                    # Add a TimeSignature token, except for the last new Bar token
+                    # if the current event is a TS
+                    if self.config.use_time_signatures and not (
+                        event.type_ == "TimeSig" and i + 1 == num_new_bars
+                    ):
+                        all_events.append(
+                            Event(
+                                type_="TimeSig",
+                                value=f"{current_time_sig[0]}/{current_time_sig[1]}",
+                                time=tick_at_current_bar,
+                                desc=0,
+                            )
+                        )
 
                 # Position
                 if event.type_ != "TimeSig":
