@@ -71,6 +71,7 @@ from .utils import (
     remove_duplicated_notes,
 )
 from .utils.utils import (
+    add_bar_beats_ticks_to_tokseq,
     get_deepest_common_subdir,
     miditoolkit_to_symusic,
     np_get_closest,
@@ -277,12 +278,10 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         :return: the base vocabulary.
         """
-        """if not self.is_trained:
-            return self._model.get_vocab()"""  # TODO edit this?
         return self._vocab_base
 
     @property
-    def vocab_bpe(self) -> None | dict[str, int]:  # byte (str) to its id (int)
+    def vocab_model(self) -> None | dict[str, int]:  # byte (str) to its id (int)
         r"""
         Return the vocabulary learnt with BPE.
 
@@ -293,6 +292,15 @@ class MIDITokenizer(ABC, HFHubMixin):
         if not self.is_trained:
             return None
         return self._model.get_vocab()
+
+    @property
+    def vocab_size(self) -> int:
+        """
+        Return the size of the vocabulary, by calling ``len(tokenizer)``.
+
+        :return: size of the vocabulary.
+        """
+        return len(self)
 
     @property
     def special_tokens(self) -> list[str]:
@@ -1374,6 +1382,10 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         # Tokenize it
         tokens = self._midi_to_tokens(midi)
+        # Add bar/beat ticks here to TokSeq as they need to be from preprocessed MIDI
+        add_bar_beats_ticks_to_tokseq(tokens, midi)
+
+        # Encode the ids if the tokenizer is trained
         if encode_ids and self.is_trained:
             self.encode_token_ids(tokens)
 
@@ -2355,8 +2367,6 @@ class MIDITokenizer(ABC, HFHubMixin):
         <https://huggingface.co/docs/tokenizers/index>`_, and `🤗tokenizers course
         <https://huggingface.co/course/chapter6/2?fw=pt>`_ for more details about the
         ``iterator`` and input type.
-        # TODO pre-tokenize on beats, or bars (spaces to delimit them)
-        # TODO try to support WordPiece
 
         **The Hugging Face Unigram model training `is not 100% deterministic`
         <https://github.com/huggingface/tokenizers/issues/668>_. As such and if you are
@@ -2394,7 +2404,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         # https://discuss.huggingface.co/t/help-with-tokenizer-word-length-limit/44364/2
         # The tests still passes (encoding-decoding...), but this limitation makes the
         # method worthless.
-        # TODO: see if ByteLevel can address this
+        # TODO: use when splitting bars/beats?
         # https://github.com/huggingface/tokenizers/issues/761
 
         if self.is_multi_voc:
@@ -2619,19 +2629,25 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         :param seq: :class:`miditok.TokSequence` to encode ids.
         """
+
+        def _split_seq_bytes(seq__: TokSequence) -> list[str]:
+            self.complete_sequence(seq__, complete_bytes=True)
+            if self.config.encode_ids_split == "bar":
+                return [subseq.bytes for subseq in seq__.split_per_bars()]
+            if self.config.encode_ids_split == "beat":
+                return [subseq.bytes for subseq in seq__.split_per_beats()]
+            return [seq__.bytes]
+
+        # No recursivity as we can leverage batching here
         if isinstance(seq, list):
-            for seq_ in seq:
-                self.complete_sequence(seq_, complete_bytes=True)
-            encoded_tokens = self._model.encode_batch(
-                [[t.bytes] for t in seq], is_pretokenized=True
-            )
+            all_bytes = [_split_seq_bytes(seq_) for seq_ in seq]
+            encoded_tokens = self._model.encode_batch(all_bytes, is_pretokenized=True)
             for seq_, ids_encoded in zip(seq, encoded_tokens):
                 seq_.ids = ids_encoded.ids
                 seq_.are_ids_encoded = True
-
         else:
-            self.complete_sequence(seq, complete_bytes=True)
-            encoded_tokens = self._model.encode([seq.bytes], is_pretokenized=True)
+            all_bytes = _split_seq_bytes(seq)
+            encoded_tokens = self._model.encode(all_bytes, is_pretokenized=True)
             seq.ids = encoded_tokens.ids
             seq.are_ids_encoded = True
 
@@ -2653,7 +2669,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         :param seq: token sequence to decompose.
         """
-        # self._model.decode(ids) TODO test with this
+        # This method directly convert encoded ids to base tokens
         if isinstance(seq, list):
             [self.decode_token_ids(seq_) for seq_ in seq]
 

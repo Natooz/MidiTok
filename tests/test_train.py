@@ -47,10 +47,16 @@ for tokenization_ in TOKENIZATIONS_TRAIN:
 
 @pytest.mark.parametrize("tok_params_set", TOK_PARAMS_TRAINING)
 @pytest.mark.parametrize("model", TRAINING_MODELS)
+@pytest.mark.parametrize(
+    "encode_ids_split",
+    ["no", "bar", "beat"],
+    ids=["no_split", "bar_split", "beat_split"],
+)
 def test_tokenizer_training_and_encoding_decoding(
     tok_params_set: tuple[str, dict[str, Any]],
     tmp_path: Path,
     model: Literal["BPE", "Unigram"],
+    encode_ids_split: Literal["bar", "beat", "no"],
     files_paths: Sequence[Path] = MIDI_PATHS_ONE_TRACK,
     vocab_size: int = VOCAB_SIZE,
 ):
@@ -61,14 +67,16 @@ def test_tokenizer_training_and_encoding_decoding(
 
     :param tok_params_set: tokenizer and its parameters to run.
     :param files_paths: list of paths of MIDI files to use for the tests.
+    :param encode_ids_split: type of token ids split before encoding/training.
     """
     # Creates tokenizers
     tokenization, params = tok_params_set
+    params["encode_ids_split"] = encode_ids_split
     tokenizer1: miditok.MIDITokenizer = getattr(miditok, tokenization)(
-        tokenizer_config=miditok.TokenizerConfig(**params_)
+        tokenizer_config=miditok.TokenizerConfig(**params)
     )
     tokenizer2: miditok.MIDITokenizer = getattr(miditok, tokenization)(
-        tokenizer_config=miditok.TokenizerConfig(**params_)
+        tokenizer_config=miditok.TokenizerConfig(**params)
     )
 
     # Trains them
@@ -128,7 +136,7 @@ def test_tokenizer_training_and_encoding_decoding(
     func_check = _check_seq_len if model == "Unigram" else _check_equal_seq
     at_least_one_error = False
     tok_time = 0
-    samples_og = []  # used for batched
+    samples_og, seq_len_reductions = [], []  # sample_og used for batched
     for file_path in tqdm(files_paths, desc="Testing encoding-decoding unbatched"):
         # Tokenize file without encoding ids first
         tokens_original = tokenizer1(file_path, encode_ids=False)
@@ -143,6 +151,7 @@ def test_tokenizer_training_and_encoding_decoding(
         tokenizer1.encode_token_ids(tokens1_encoded)
         tok_time += time() - t0
         tokenizer2.encode_token_ids(tokens2_encoded)
+        seq_len_reductions.append(1 - len(tokens1_encoded) / len(tokens_original))
 
         # Decode the token ids
         tokens1_decoded = replace(tokens1_encoded)
@@ -165,7 +174,9 @@ def test_tokenizer_training_and_encoding_decoding(
         )
     print(
         f"Encoding-decoding time un-batched: {tok_time:.2f} (mean:"
-        f"{tok_time / len(files_paths):.4f})"
+        f"{tok_time / len(files_paths):.4f})\n"
+        f"Mean sequence length reduction: "
+        f"{sum(seq_len_reductions) / len(seq_len_reductions):.2f}"
     )
     assert not at_least_one_error
 

@@ -5,7 +5,8 @@ from typing import TYPE_CHECKING
 
 from symusic import Score
 
-from .constants import MIDI_FILES_EXTENSIONS, MIDI_LOADING_EXCEPTION
+from .classes import TokSequence
+from .constants import MIDI_LOADING_EXCEPTION
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -25,7 +26,11 @@ class TokTrainingIterator:
     :param files_paths: sequence of paths of files to load for training.
     """
 
-    def __init__(self, tokenizer: MIDITokenizer, files_paths: Sequence[Path]) -> None:
+    def __init__(
+        self,
+        tokenizer: MIDITokenizer,
+        files_paths: Sequence[Path],
+    ) -> None:
         self.tokenizer = tokenizer
         self.files_paths = files_paths
         self.__iter_count = 0
@@ -37,23 +42,34 @@ class TokTrainingIterator:
         :param path: path to the file to load.
         :return: the byte representation of the file.
         """
-        if path.suffix in MIDI_FILES_EXTENSIONS:
-            try:
-                midi = Score(path)
-            except MIDI_LOADING_EXCEPTION:
-                return []
-            # Need to specify `encode_ids=False` as it might be already pretrained
-            token_ids = self.tokenizer(midi, encode_ids=False)
-            if self.tokenizer.one_token_stream:
-                token_ids = token_ids.ids
-            else:
-                token_ids = [seq.ids for seq in token_ids]
-        else:
-            token_ids = self.tokenizer.load_tokens(path)["ids"]
+        # Load and tokenize file
+        try:
+            midi = Score(path)
+        except MIDI_LOADING_EXCEPTION:
+            return []
+        # Need to specify `encode_ids=False` as it might be already pretrained
+        tokseq = self.tokenizer(midi, encode_ids=False)
 
-        # list of str (bytes)
+        # Split ids if requested
+        if self.tokenizer.config.encode_ids_split in ["bar", "beat"]:
+            if isinstance(tokseq, TokSequence):
+                tokseq = [tokseq]
+
+            new_seqs = []
+            for seq in tokseq:
+                if self.tokenizer.config.encode_ids_split == "bar":
+                    new_seqs += seq.split_per_bars()
+                else:
+                    new_seqs += seq.split_per_beats()
+            tokseq = [seq for seq in new_seqs if len(seq) > 0]
+
+        # Convert ids to bytes for training
+        if isinstance(tokseq, TokSequence):
+            token_ids = tokseq.ids
+        else:
+            token_ids = [seq.ids for seq in tokseq]
         bytes_ = self.tokenizer._ids_to_bytes(token_ids, as_one_str=True)
-        if self.tokenizer.one_token_stream:
+        if isinstance(bytes_, str):
             bytes_ = [bytes_]
 
         return bytes_

@@ -1,6 +1,13 @@
 """Test methods."""
 
-from miditok import TokSequence
+from collections.abc import Callable
+from pathlib import Path
+
+import pytest
+
+from miditok import TSD, TokenizerConfig, TokSequence
+
+from .utils_tests import MIDI_PATHS_MULTITRACK
 
 
 def test_tokseq_concat():
@@ -38,3 +45,23 @@ def test_tokseq_slice_and_concat():
 
     tokseq_concat = subseq1 + subseq2
     assert tokseq == tokseq_concat
+
+
+@pytest.mark.parametrize("midi_path", MIDI_PATHS_MULTITRACK)
+def test_split_tokseq_per_bars_beats(midi_path: Path, tokenization: Callable = TSD):
+    tokenizer = tokenization(TokenizerConfig(use_programs=True))
+    tokseq = tokenizer(midi_path)
+
+    # Split per bars
+    seqs = tokseq.split_per_bars()
+    concat_seq = seqs.pop(0)
+    for seq in seqs:
+        concat_seq += seq
+    assert concat_seq == tokseq
+
+    # Split per beats
+    seqs = tokseq.split_per_beats()
+    concat_seq = seqs.pop(0)
+    for seq in seqs:
+        concat_seq += seq
+    assert concat_seq == tokseq

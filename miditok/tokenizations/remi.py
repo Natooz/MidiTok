@@ -172,7 +172,10 @@ class REMI(MIDITokenizer):
                         tick_at_last_ts_change
                         + (current_bar - bar_at_last_ts_change) * ticks_per_bar
                     )
-                    if self.config.additional_params["use_bar_end_tokens"]:
+                    if (
+                        self.config.additional_params["use_bar_end_tokens"]
+                        and current_bar > 0
+                    ):
                         all_events.append(
                             Event(
                                 type_="Bar",

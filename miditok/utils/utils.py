@@ -21,7 +21,7 @@ from symusic import (
 )
 from symusic.core import NoteTickList
 
-from miditok.classes import Event
+from miditok.classes import Event, TokSequence
 from miditok.constants import (
     DRUM_PITCH_RANGE,
     INSTRUMENT_CLASSES,
@@ -727,6 +727,36 @@ def get_beats_ticks(midi: Score) -> list[int]:
         current_time_sig = time_signature
 
     return beat_ticks
+
+
+def add_bar_beats_ticks_to_tokseq(
+    tokseq: TokSequence | list[TokSequence],
+    midi: Score | None = None,
+    bar_ticks: list[int] | None = None,
+    beat_ticks: list[int] | None = None,
+) -> None:
+    """
+    Add the ticks of the bars and beats of a MIDI to a :class:`miditok.TokSequence`.
+
+    :param tokseq: :class:`miditok.TokSequence` to add ticks attributes to.
+    :param midi: Score object to add ticks from.
+    :param bar_ticks: ticks of the bars of the ``midi``. Only used for recursivity.
+    :param beat_ticks: ticks of the beats of the ``midi``. Only used for recursivity.
+    """
+    if bar_ticks is None:
+        bar_ticks = get_bars_ticks(midi)
+    if beat_ticks is None:
+        beat_ticks = get_beats_ticks(midi)
+
+    # Recursively adds bars/beats ticks
+    if isinstance(tokseq, list):
+        for seq in tokseq:
+            add_bar_beats_ticks_to_tokseq(
+                seq, bar_ticks=bar_ticks, beat_ticks=beat_ticks
+            )
+    else:
+        tokseq._ticks_bars = bar_ticks
+        tokseq._ticks_beats = beat_ticks
 
 
 def get_num_notes_per_bar(

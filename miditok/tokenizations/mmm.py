@@ -26,6 +26,7 @@ class MMM(MIDITokenizer):
     instead of the ``NoteOff`` strategy of the `original paper <https://arxiv.org/abs/2008.06048>`_.
     The reason being that ``NoteOff`` tokens perform poorer for generation with causal
     models.
+    TODO make BPE training on separate track sequences without TrackStart/End tokens
 
     **Add a** ``density_bins_max`` **entry in the config, mapping to a tuple specifying
     the number of density bins, and the maximum density in notes per beat to consider.
