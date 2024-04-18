@@ -416,20 +416,29 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         # Preprocess track events
         for t in range(len(midi.tracks) - 1, -1, -1):
-            if len(midi.tracks[t].notes) == 0:
+            # Delete track only there is nothing inside being used
+            if (
+                len(midi.tracks[t].notes) == 0
+                and (
+                    not self.config.use_pitch_bends
+                    or len(midi.tracks[t].pitch_bends) == 0
+                )
+                and (
+                    not self.config.use_sustain_pedals
+                    or len(midi.tracks[t].pedals) == 0
+                )
+            ):
                 del midi.tracks[t]
                 continue
-            # Preprocesses notes
-            midi.tracks[t].notes = self._preprocess_notes(
-                midi.tracks[t].notes,
-                midi.tracks[t].is_drum,
-                tpq_resampling_factors,
-                ticks_per_beat,
-            )
 
-            if len(midi.tracks[t].notes) == 0:
-                del midi.tracks[t]
-                continue
+            # Preprocesses notes
+            if len(midi.tracks[t].notes) > 0:
+                midi.tracks[t].notes = self._preprocess_notes(
+                    midi.tracks[t].notes,
+                    midi.tracks[t].is_drum,
+                    tpq_resampling_factors,
+                    ticks_per_beat,
+                )
 
             # Resample pitch bend values
             if self.config.use_pitch_bends and len(midi.tracks[t].pitch_bends) > 0:
@@ -442,6 +451,21 @@ class MIDITokenizer(ABC, HFHubMixin):
                 midi.tracks[t].pedals = self._preprocess_pedals(
                     midi.tracks[t].pedals, tpq_resampling_factors, ticks_per_beat
                 )
+
+            # Delete track only there is nothing inside being used
+            if (
+                len(midi.tracks[t].notes) == 0
+                and (
+                    not self.config.use_pitch_bends
+                    or len(midi.tracks[t].pitch_bends) == 0
+                )
+                and (
+                    not self.config.use_sustain_pedals
+                    or len(midi.tracks[t].pedals) == 0
+                )
+            ):
+                del midi.tracks[t]
+                continue
 
         # Process tempo changes
         if self.config.use_tempos:
@@ -531,6 +555,8 @@ class MIDITokenizer(ABC, HFHubMixin):
             mask[idx_out_of_pitch_range] = False
             for key in note_soa:
                 note_soa[key] = note_soa[key][mask]
+        if len(note_soa["time"]) == 0:
+            return NoteTickList()
 
         # Compute new velocities
         note_soa["velocity"] = np_get_closest(
@@ -937,12 +963,13 @@ class MIDITokenizer(ABC, HFHubMixin):
         """
         # Batch by tpb section
         dur_idx_first = 0
+        tick_last_event = notes_pedals_soa["time"][-1]
         for tpb_idx, (last_tick_tpb, tpb) in enumerate(ticks_per_beat):
             # Get idx of the concerned notes.
             # There shouldn't be equal successive tpb values in ticks_per_beat.
             # If last tpb --> set last note to max_tick to avoid iterating notes
-            if tpb_idx + 1 == len(ticks_per_beat):
-                dur_idx_last = len(notes_pedals_soa["duration"])
+            if tpb_idx + 1 == len(ticks_per_beat) or last_tick_tpb >= tick_last_event:
+                dur_idx_last = None
             else:
                 dur_idx_last = dur_idx_first + np.argmax(
                     notes_pedals_soa["time"][dur_idx_first:] >= last_tick_tpb
@@ -952,6 +979,8 @@ class MIDITokenizer(ABC, HFHubMixin):
                 notes_pedals_soa["duration"][dur_idx_first:dur_idx_last],
             )
             dur_idx_first = dur_idx_last
+            if dur_idx_last is None:
+                break
 
     def _midi_to_tokens(self, midi: Score) -> TokSequence | list[TokSequence]:
         r"""
