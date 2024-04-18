@@ -37,7 +37,7 @@ try:
     from miditoolkit import MidiFile
 except ImportError:
     MidiFile = None
-from tokenizers import AddedToken, pre_tokenizers
+from tokenizers import AddedToken
 from tokenizers import Tokenizer as _HFTokenizer
 from tokenizers import models as _tok_models
 from tokenizers import trainers as _tok_trainers
@@ -59,6 +59,8 @@ from .constants import (
     TEMPO,
     TIME_SIGNATURE,
     UNKNOWN_CHORD_PREFIX,
+    WORDPIECE_MAX_INPUT_CHARS_PER_WORD_BAR,
+    WORDPIECE_MAX_INPUT_CHARS_PER_WORD_BEAT,
 )
 from .tokenizer_training_iterator import TokTrainingIterator
 from .utils import (
@@ -2352,7 +2354,7 @@ class MIDITokenizer(ABC, HFHubMixin):
     def train(
         self,
         vocab_size: int,
-        model: Literal["BPE", "Unigram"] | _tok_models.Model | None = None,
+        model: Literal["BPE", "Unigram", "WordPiece"] | _tok_models.Model | None = None,
         iterator: Iterable | None = None,
         files_paths: Sequence[Path] | None = None,
         **kwargs,
@@ -2384,7 +2386,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             model to use, an already initialized model, or ``None`` if you want to
             retrain a tokenizer already trained. (default: ``None``, default to
             ``BPE`` if the tokenizer is not already trained, keeps the same model
-            otherwise)
+            otherwise) TODO allows to provide Tokenizer object directly?
         :param iterator: an iterable object yielding the training data, as lists of
             string. It can be a list or a Generator. This iterator will be passed to
             the model for training. It musts implement the ``__len__`` method. If
@@ -2404,9 +2406,9 @@ class MIDITokenizer(ABC, HFHubMixin):
         # https://discuss.huggingface.co/t/help-with-tokenizer-word-length-limit/44364/2
         # The tests still passes (encoding-decoding...), but this limitation makes the
         # method worthless.
-        # TODO: use when splitting bars/beats?
         # https://github.com/huggingface/tokenizers/issues/761
 
+        # Checks the arguments/config are compatible for training
         if self.is_multi_voc:
             warnings.warn(
                 "This tokenizer is based on multiple vocabularies/embedding pooling."
@@ -2421,7 +2423,6 @@ class MIDITokenizer(ABC, HFHubMixin):
                 "tokenizer."
             )
             raise ValueError(msg)
-
         if vocab_size <= len(self._vocab_base):
             warnings.warn(
                 f"miditok - tokenizer.train: `vocab_size` ({vocab_size}) need to be "
@@ -2459,12 +2460,17 @@ class MIDITokenizer(ABC, HFHubMixin):
                 model_kwargs["merges"] = []
                 model_kwargs["continuing_subword_prefix"] = ""
                 model_kwargs["end_of_word_suffix"] = ""
-            """elif model == "WordPiece":
-                model_kwargs["unk_token"] = chr(self.pad_token_id + CHR_ID_START)
+            elif model == "WordPiece":
+                model_kwargs["unk_token"] = kwargs.pop(
+                    "unk_token", chr(self.pad_token_id + CHR_ID_START)
+                )
                 model_kwargs["continuing_subword_prefix"] = ""
-                model_kwargs["max_input_chars_per_word"] = (
-                    WORDPIECE_MAX_INPUT_CHARS_PER_WORD
-                )"""
+                model_kwargs["max_input_chars_per_word"] = kwargs.pop(
+                    "max_input_chars_per_word",
+                    WORDPIECE_MAX_INPUT_CHARS_PER_WORD_BAR
+                    if self.config.encode_ids_split == "bar"
+                    else WORDPIECE_MAX_INPUT_CHARS_PER_WORD_BEAT,
+                )
             tokenizer = _HFTokenizer(getattr(_tok_models, model)(**model_kwargs))
         else:
             msg = (
@@ -2482,6 +2488,8 @@ class MIDITokenizer(ABC, HFHubMixin):
         # Remove post processor for now (uses IDs of tokens)
         post_processor = tokenizer_json.pop("post_processor")
         model_name = tokenizer_json["model"]["type"]
+
+        # Warnings
         if retraining and model_name == "Unigram":
             warnings.warn(
                 "miditok - tokenizer.train: You are retraining a tokenizer with "
@@ -2490,6 +2498,23 @@ class MIDITokenizer(ABC, HFHubMixin):
                 "tokenizer only once before using it to save tokenized MIDIs or train "
                 "a model. Otherwise some token ids might be swapped, resulting in "
                 "incoherent encodings-decodings.",
+                stacklevel=2,
+            )
+        if (
+            model == "WordPiece" or isinstance(model, _tok_models.WordPiece)
+        ) and self.config.encode_ids_split == "no":
+            warnings.warn(
+                "miditok - tokenizer.train: you are training a WordPiece tokenizer "
+                "without splitting the token ids per bars or beats. It is recommended "
+                "do so, as the tokenizer will either 1) replace ids sequences longer "
+                "than its `max_input_chars_per_word` attribute ("
+                f"{tokenizer_json['model']['max_input_chars_per_word']}) with its "
+                f"`unk_token` attribute {tokenizer_json['model']['unk_token']}) thus "
+                "not guaranteeing keeping data integrity when encoding token ids, "
+                "unless you 2) set a large enough `max_input_chars_per_word` attribute "
+                "being greater than the maximum base tokens sequence length of your "
+                "data, which is likely to hurt performances and result in larger"
+                "encoding-decoding time.",
                 stacklevel=2,
             )
 
@@ -2508,7 +2533,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 special_tokens.append(AddedToken(special_token_byte))
 
         # Trainer needs to know the end of word / continuing subword thingies in BPE
-        if model_name == "BPE":
+        if model_name in ["BPE", "WordPiece"]:
             if (
                 "continuing_subword_prefix" not in kwargs
                 and tokenizer_json["model"]["continuing_subword_prefix"] is not None
@@ -2517,7 +2542,8 @@ class MIDITokenizer(ABC, HFHubMixin):
                     "continuing_subword_prefix"
                 ]
             if (
-                "end_of_word_suffix" not in kwargs
+                model_name == "BPE"
+                and "end_of_word_suffix" not in kwargs
                 and tokenizer_json["model"]["end_of_word_suffix"] is not None
             ):
                 kwargs["end_of_word_suffix"] = tokenizer_json["model"][
@@ -2526,11 +2552,6 @@ class MIDITokenizer(ABC, HFHubMixin):
         elif model_name == "Unigram" and tokenizer_json["model"]["unk_id"] is not None:
             unk_id = tokenizer_json["model"]["unk_id"]
             kwargs["unk_token"] = tokenizer_json["model"]["vocab"][unk_id][0]
-        if (
-            tokenizer_json["pre_tokenizer"] is not None
-            and tokenizer_json["pre_tokenizer"]["type"] == "ByteLevel"
-        ):
-            kwargs["initial_alphabet"] = pre_tokenizers.ByteLevel.alphabet()
 
         # Fix the vocabulary size if MMM + Unigram - miditok v3.0.3 - tokenizers v0.15.2
         # For an unknown reason, the final vocabulary size of the tokenizer will equal
@@ -2599,8 +2620,8 @@ class MIDITokenizer(ABC, HFHubMixin):
                 unk_token = tokenizer_json["model"]["vocab"][unk_id][0]
                 tokenizer_json["model"]["unk_id"] = 0
                 tokenizer_json["model"]["vocab"] = [[unk_token, 0.0]]
-        # elif tokenizer_json["model"]["type"] in ["WordLevel", "WordPiece"]:
-        #    tokenizer_json["model"]["vocab"] = {}
+        elif tokenizer_json["model"]["type"] in ["WordLevel", "WordPiece"]:
+            tokenizer_json["model"]["vocab"] = {}
         else:
             msg = (
                 "This method does not support this type of tokenizer (found "
@@ -3367,7 +3388,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         # Trained
         if self.is_trained:
-            out_str += f", with {self._model_name}"
+            out_str += f", trained with {self._model_name}"
         else:
             out_str += ", not trained"
         return out_str

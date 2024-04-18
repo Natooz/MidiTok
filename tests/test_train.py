@@ -28,6 +28,8 @@ if TYPE_CHECKING:
 
 VOCAB_SIZE = 2000
 NUM_ADDITIONAL_TOKENS_SECOND_TRAINING = 400
+WORDPIECE_MAX_INPUT_CHARS_PER_WORD_BAR = 500  # higher than default MidiTok values
+WORDPIECE_MAX_INPUT_CHARS_PER_WORD_BEAT = 150
 default_params = deepcopy(TOKENIZER_CONFIG_KWARGS)
 default_params.update(
     {
@@ -55,7 +57,7 @@ for tokenization_ in TOKENIZATIONS_TRAIN:
 def test_tokenizer_training_and_encoding_decoding(
     tok_params_set: tuple[str, dict[str, Any]],
     tmp_path: Path,
-    model: Literal["BPE", "Unigram"],
+    model: Literal["BPE", "Unigram", "WordPiece"],
     encode_ids_split: Literal["bar", "beat", "no"],
     files_paths: Sequence[Path] = MIDI_PATHS_ONE_TRACK,
     vocab_size: int = VOCAB_SIZE,
@@ -69,6 +71,9 @@ def test_tokenizer_training_and_encoding_decoding(
     :param files_paths: list of paths of MIDI files to use for the tests.
     :param encode_ids_split: type of token ids split before encoding/training.
     """
+    if encode_ids_split == "no" and model == "WordPiece":
+        pytest.skip(f"Skipping training with {model} and {encode_ids_split} split")
+
     # Creates tokenizers
     tokenization, params = tok_params_set
     params["encode_ids_split"] = encode_ids_split
@@ -80,12 +85,23 @@ def test_tokenizer_training_and_encoding_decoding(
     )
 
     # Trains them
+    training_kwargs = {}
+    if model == "WordPiece":
+        training_kwargs["max_input_chars_per_word"] = (
+            WORDPIECE_MAX_INPUT_CHARS_PER_WORD_BAR
+            if encode_ids_split == "bar"
+            else WORDPIECE_MAX_INPUT_CHARS_PER_WORD_BEAT
+        )
+
     tokenizer1.train(
         vocab_size=vocab_size + NUM_ADDITIONAL_TOKENS_SECOND_TRAINING,
         model=model,
         files_paths=files_paths,
+        **training_kwargs,
     )
-    tokenizer2.train(vocab_size=vocab_size, model=model, files_paths=files_paths)
+    tokenizer2.train(
+        vocab_size=vocab_size, model=model, files_paths=files_paths, **training_kwargs
+    )
     tokenizer2.save_params(tmp_path)
     tokenizer2 = getattr(miditok, tokenization)(
         params=tmp_path / DEFAULT_TOKENIZER_FILE_NAME
@@ -255,8 +271,7 @@ def _check_seq_len(
     tokenization: str,
     file_name: str,
 ) -> bool:
-    # For unigram we just check lengths
-
+    # just check sequence lengths
     no_error = True
     if len(seq1_encoded.ids) != len(seq2_encoded.ids):
         print(
