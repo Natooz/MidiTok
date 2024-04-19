@@ -112,7 +112,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         self._vocab_base_id_to_byte = {}
         # byte (str) -> token (str), for basic tokens
         self._vocab_base_byte_to_token = {}
-        # byte(s) -> token(s), for faster BPE/Unigram decoding
+        # byte(s) -> token(s), for faster BPE/Unigram/WordPiece decoding
         self._vocab_learned_bytes_to_tokens = {}
         # Fast tokenizer model backed with 🤗tokenizers
         self._model = None
@@ -266,9 +266,9 @@ class MIDITokenizer(ABC, HFHubMixin):
         * ``._vocab_base_byte_to_token`` : Dict[str: str] - similar as above but for
             tokens;
         * ``._vocab_learned_bytes_to_tokens`` : Dict[str: List[str]] byte(s) -> token(s)
-            used to decode BPE/Unigram token ids;
-        * ``._model.get_vocab()`` : Dict[str: int] byte -> id - BPE/Unigram model
-            vocabulary, based on unique bytes.
+            used to decode BPE/Unigram/WordPiece token ids;
+        * ``._model.get_vocab()`` : Dict[str: int] byte -> id - BPE/Unigram/WordPiece
+            model vocabulary, based on unique bytes.
 
         Before training the tokenizer, bytes are obtained by running ``chr(id)`` .
         After training, if we did start from an empty vocabulary, some base tokens might
@@ -968,7 +968,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             # Get idx of the concerned notes.
             # There shouldn't be equal successive tpb values in ticks_per_beat.
             # If last tpb --> set last note to max_tick to avoid iterating notes
-            if tpb_idx + 1 == len(ticks_per_beat) or last_tick_tpb >= tick_last_event:
+            if tpb_idx + 1 == len(ticks_per_beat) or last_tick_tpb > tick_last_event:
                 dur_idx_last = None
             else:
                 dur_idx_last = dur_idx_first + np.argmax(
@@ -1402,9 +1402,9 @@ class MIDITokenizer(ABC, HFHubMixin):
         **override the** protected ``_midi_to_tokens`` **method**.
 
         :param midi: the MIDI object to convert.
-        :param encode_ids: the backbone model (BPE, Unigram) will encode the tokens and
-            compress the sequence. Can only be used if the tokenizer has been trained.
-            (default: ``True``)
+        :param encode_ids: the backbone model (BPE, Unigram, WordPiece) will encode the
+            tokens and compress the sequence. Can only be used if the tokenizer has been
+            trained. (default: ``True``)
         :return: a :class:`miditok.TokSequence` if ``tokenizer.one_token_stream`` is
             ``True``, else a list of :class:`miditok.TokSequence` objects.
         """
@@ -1642,7 +1642,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     def _are_ids_encoded(self, ids: list[int] | np.ndarray) -> bool:
         r"""
-        Tells if a sequence of token ids are encoded with a model (BPE, Unigram).
+        Indicate if token ids are encoded with a model (BPE, Unigram, WordPiece).
 
         This is performed by checking if any id has a value superior or equal to the
         length of the base vocabulary.
@@ -1919,9 +1919,9 @@ class MIDITokenizer(ABC, HFHubMixin):
         :param vocab_idx: idx of the vocabulary (in case of embedding pooling).
             (default: ``None``)
         :param byte_: unique byte associated to the token. The associated byte of a
-            token is used to encode-decode ids with the tokenize's model (BPE, Unigram).
-            If None is given, it will default to ``chr(id_ + CHR_ID_START)`` .
-            (default: ``None``)
+            token is used to encode-decode ids with the tokenize's model (BPE, Unigram,
+            WordPiece). If None is given, it will default to ``chr(id_ + CHR_ID_START)``
+            . (default: ``None``)
         :param add_to_model: the token will be added to the model vocabulary
             too. (default: ``None``)
         """
@@ -2389,7 +2389,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         **kwargs,
     ) -> None:
         r"""
-        Train the tokenizer to build its vocabulary with BPE or Unigram.
+        Train the tokenizer to build its vocabulary with BPE, Unigram or WordPiece.
 
         The data used for training can either be given through the ``iterator``
         argument as an iterable object yielding strings, or by ``files_paths`` as a
@@ -2399,7 +2399,27 @@ class MIDITokenizer(ABC, HFHubMixin):
         <https://huggingface.co/course/chapter6/2?fw=pt>`_ for more details about the
         ``iterator`` and input type.
 
-        **The Hugging Face Unigram model training `is not 100% deterministic`
+        **A few considerations must be noted:**
+
+        **1. The WordPiece model has a ``max_input_chars_per_word`` attribute, which
+        controls the maximum number of "base tokens" a sequence of ids can contain until
+        it discards and replaces it with a predefined "unknown" token (``unk_token``
+        model attribute). This means that, depending on the base sequence lengths of
+        your files, the tokenizer will likely discard them. This can be addressed by
+        either: 1) splitting the token sequence per bars or beats before encoding ids
+        (highly recommended) into smaller subsequences whose lengths will likely be
+        lower to the model's ``max_input_chars_per_word`` attribute; 2) set the model's
+        ``max_input_chars_per_word`` attribute to a value higher than most of the
+        sequences of ids encoded by the WordPiece model.
+        A high ``max_input_chars_per_word`` value will however drastically increase the
+        encoding and decoding times, reducing its interest. The default values set by
+        MidiTok are ``400`` when splitting ids in bar subsequences and ``100`` when
+        splitting ids in beat subsequences.
+        The ``max_input_chars_per_word`` and ``unk_token`` model attributes can be set
+        by referencing them in the keyword arguments of this method (``kwargs``).
+        **
+
+        **2. The Hugging Face Unigram model training `is not 100% deterministic`
         <https://github.com/huggingface/tokenizers/issues/668>_. As such and if you are
         using it, you should train your tokenizer only once before using it to save
         tokenized MIDIs or train a model. Otherwise some token ids might be swapped,
@@ -2410,9 +2430,9 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         :param vocab_size: size of the vocabulary to learn / build.
         :param model: backbone model to use to train the tokenizer. MidiTok relies on
-            the Hugging Face tokenizers library, and supports the ``BPE`` and
-            ``Unigram`` models. This argument can be either a string indicating the
-            model to use, an already initialized model, or ``None`` if you want to
+            the Hugging Face tokenizers library, and supports the ``BPE``, ``Unigram``
+            and ``WordPiece`` models. This argument can be either a string indicating
+            the model to use, an already initialized model, or ``None`` if you want to
             retrain a tokenizer already trained. (default: ``None``, default to
             ``BPE`` if the tokenizer is not already trained, keeps the same model
             otherwise) TODO allows to provide Tokenizer object directly?
@@ -2422,21 +2442,10 @@ class MIDITokenizer(ABC, HFHubMixin):
             None is given, you must use the ``tokens_paths`` argument. (default: None)
         :param files_paths: paths of the files to load and use. They can be either MIDI
             or tokens (json) files. (default: None)
-        :param kwargs: any additional argument to pass to the trainer. See the
+        :param kwargs: any additional argument to pass to the trainer or model. See the
             `tokenizers docs <https://huggingface.co/docs/tokenizers/api/trainers>`_
             for more details.
         """
-        # WordPiece is not supported yet. A WordPiece model has a
-        # `max_input_chars_per_word` attribute (default to 100) which replaces any word
-        # (sequence of chars/bytes) with the `unk_token` token. As we use the model with
-        # long "words" (>10k bytes), we need to increase this limit, which ends up in
-        # overly long encoding times (several seconds for a single sequence of a few
-        # thousands bytes and <10k bytes).
-        # https://discuss.huggingface.co/t/help-with-tokenizer-word-length-limit/44364/2
-        # The tests still passes (encoding-decoding...), but this limitation makes the
-        # method worthless.
-        # https://github.com/huggingface/tokenizers/issues/761
-
         # Checks the arguments/config are compatible for training
         if self.is_multi_voc:
             warnings.warn(
@@ -2504,8 +2513,8 @@ class MIDITokenizer(ABC, HFHubMixin):
         else:
             msg = (
                 "miditok - tokenizer.train: the `model` argument must be a str specify "
-                "the model to use (`'BPE'`, `'Unigram'`), an already initialized model "
-                "or a `None` to either resume training or default to "
+                "the model to use (`'BPE'`, `'Unigram'`, `'WordPiece'`), an already"
+                "initialized model or a `None` to either resume training or default to "
                 f"{DEFAULT_TRAINING_MODEL_NAME}."
             )
             raise ValueError(msg)
@@ -2582,7 +2591,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             unk_id = tokenizer_json["model"]["unk_id"]
             kwargs["unk_token"] = tokenizer_json["model"]["vocab"][unk_id][0]
 
-        # Fix the vocabulary size if MMM + Unigram - miditok v3.0.3 - tokenizers v0.15.2
+        # Fix the vocabulary size if MMM + Unigram - miditok v3.0.3 - tokenizers v0.19
         # For an unknown reason, the final vocabulary size of the tokenizer will equal
         # to vocab_size - 2. MMM uses `Track_Start` and `Track_End` special tokens to
         # delimit tracks. When special tokens are present in the training data, the
@@ -2649,12 +2658,12 @@ class MIDITokenizer(ABC, HFHubMixin):
                 unk_token = tokenizer_json["model"]["vocab"][unk_id][0]
                 tokenizer_json["model"]["unk_id"] = 0
                 tokenizer_json["model"]["vocab"] = [[unk_token, 0.0]]
-        elif tokenizer_json["model"]["type"] in ["WordLevel", "WordPiece"]:
+        elif tokenizer_json["model"]["type"] == "WordPiece":
             tokenizer_json["model"]["vocab"] = {}
         else:
             msg = (
                 "This method does not support this type of tokenizer (found "
-                f"{tokenizer_json['model']['type']}) only BPE or Unigram."
+                f"{tokenizer_json['model']['type']}) only BPE, Unigram or WordPiece."
             )
             raise ValueError(msg)
 
@@ -2670,7 +2679,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     def encode_token_ids(self, seq: TokSequence | list[TokSequence]) -> None:
         """
-        Encode a :class:`miditok.TokSequence` with the backbone model (BPE, Unigram).
+        Encode a :class:`miditok.TokSequence` with BPE, Unigram or WordPiece.
 
         The method works inplace and only alters the sequence's ``.ids``.
         The method also works with lists of :class:`miditok.TokSequence`.
@@ -2711,7 +2720,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     def decode_token_ids(self, seq: TokSequence | list[TokSequence]) -> None:
         r"""
-        Decode the ids of a :class:`miditok.TokSequence` with the model (BPE, Unigram).
+        Decode the ids of a :class:`miditok.TokSequence` with BPE, Unigram or WordPiece.
 
         This method only modifies the ``.ids`` attribute of the input sequence(s)
         and does not complete it. This method can be used recursively on lists of

@@ -111,7 +111,8 @@ class TokSequence:
     * events (list of Event): Event objects that can carry time or other information
     useful for debugging;
     * bytes (str): ids are converted into unique bytes, all joined together in a single
-    string. This is used internally by MidiTok for the tokenizer's model (BPE, Unigram).
+    string. This is used internally by MidiTok for the tokenizer's model (BPE, Unigram,
+    WordPiece).
 
     Bytes are used internally by MidiTok for Byte Pair Encoding.
     The ``are_ids_encoded`` attribute tells if ``ids`` is encoded.
@@ -121,7 +122,7 @@ class TokSequence:
     """
 
     tokens: list[str | list[str]] = None
-    ids: list[int | list[int]] = None  # can be encoded with BPE/Unigram
+    ids: list[int | list[int]] = None  # can be encoded with BPE/Unigram/WordPiece
     bytes: str = None  # noqa: A003
     events: list[Event | list[Event]] = None
     are_ids_encoded: bool = False

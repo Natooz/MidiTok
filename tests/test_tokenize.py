@@ -231,8 +231,18 @@ def _test_tokenize(
     assert not has_errors
 
 
+def _id_tok(tok_params_set: tuple[str, dict]) -> str:
+    """
+    Return the "id" of a tokenizer params set.
+
+    :param tok_params_set: tokenizer params set.
+    :return: id
+    """
+    return tok_params_set[0]
+
+
 @pytest.mark.parametrize("midi_path", MIDI_PATHS_ONE_TRACK)
-@pytest.mark.parametrize("tok_params_set", TOK_PARAMS_ONE_TRACK)
+@pytest.mark.parametrize("tok_params_set", TOK_PARAMS_ONE_TRACK, ids=_id_tok)
 def test_one_track_midi_to_tokens_to_midi(
     midi_path: str | Path,
     tok_params_set: tuple[str, dict[str, Any]],
@@ -242,7 +252,7 @@ def test_one_track_midi_to_tokens_to_midi(
 
 
 @pytest.mark.parametrize("midi_path", MIDI_PATHS_ONE_TRACK_HARD)
-@pytest.mark.parametrize("tok_params_set", TOK_PARAMS_ONE_TRACK_HARD)
+@pytest.mark.parametrize("tok_params_set", TOK_PARAMS_ONE_TRACK_HARD, ids=_id_tok)
 def test_one_track_midi_to_tokens_to_midi_hard(
     midi_path: str | Path,
     tok_params_set: tuple[str, dict[str, Any]],
@@ -252,7 +262,7 @@ def test_one_track_midi_to_tokens_to_midi_hard(
 
 
 @pytest.mark.parametrize("midi_path", MIDI_PATHS_MULTITRACK)
-@pytest.mark.parametrize("tok_params_set", TOK_PARAMS_MULTITRACK)
+@pytest.mark.parametrize("tok_params_set", TOK_PARAMS_MULTITRACK, ids=_id_tok)
 def test_multitrack_midi_to_tokens_to_midi(
     midi_path: str | Path,
     tok_params_set: tuple[str, dict[str, Any]],
