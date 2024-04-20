@@ -6,8 +6,10 @@ A freshly created tokenizer can already serialize MIDI or abc files into token s
 
 A just created tokenizer will have a vocabulary containing basic tokens representing single attributes of notes, pedals, tempos etc. **Training a tokenizer consists in populating the vocabulary with new tokens representing successions of these basic tokens**, that will be fetched from a training corpus.
 
+All tokenizers can be trained, except if they use embedding pooling (``is_multi_voc``)!
 
-Why training
+
+Why training a tokenizer
 ------------------------
 
 If you serialize music files only with these basic tokens, you will encounter two major limitations: your model will not learn meaningful embeddings, and your token sequences will be very large thus hurting the model's efficiency (training/inference speed).
@@ -34,24 +36,21 @@ Training a tokenizer to learn new tokens that represent combinations of basic to
 Basic and learned tokens
 ------------------------
 
-In the case of symbolic music we will consider the tokens of a tokenizer without BPE as the **base vocabulary**, which can be seen as the equivalent of the characters (or bytes) for text. To compute BPE, MidiTok is backed by the Hugging Face `🤗tokenizers <https://github.com/huggingface/tokenizers>`_ Rust library allowing super-fast training and encoding. Thus, internally we represent base tokens (from base vocab) as characters (bytes). Essentially, a token will have three unique (non-shared by others) forms:
+A tokenizer features an **base vocabulary**, which contains the tokens representing each note attributes, tempos, times etc. This base vocabulary is created from the values you set in the tokenizer's config (e.g. list of pitches, velocities...). They can be seen as the equivalent of the characters (or bytes) for text, and the base vocabulary to the initial alphabet.
+
+To train a tokenizer, MidiTok is backed by the Hugging Face `🤗tokenizers <https://github.com/huggingface/tokenizers>`_ Rust library allowing super-fast training and encoding. Thus, internally MidiTok represents basic tokens (from the base vocab) as characters (bytes). Essentially, a token will have three unique forms:
 
 * The text describing the token itself, e.g. ``Pitch_58``, ``Position_4`` ...;
-* An id as an integer, that will be fed to the model, e.g. ``65``;
-* A byte form as a character or succession of characters, e.g. ``a`` or any `unicode character <https://en.wikipedia.org/wiki/List_of_Unicode_characters>`_ starting from the 33rd one (0x21).
+* An id as an integer, that will be fed to the model, e.g. ``65``. It corresponds to the index of the token in the vocabulary;
+* A byte form, as a character or succession of characters, e.g. ``a`` or any `unicode character <https://en.wikipedia.org/wiki/List_of_Unicode_characters>`_ starting from the 33rd one (0x21).
 
-A token learned with BPE will be represented by the succession of the unique characters of the base tokens it represent. You can access to several vocabularies to get the equivalents forms of tokens:
+A learned token will be represented by the succession of the unique characters of the base tokens it represent. You can access to several vocabularies to get the equivalents forms of tokens:
 
-* ``vocab``: the base vocabulary, binding token descriptions to their ids;
-* ``vocab_bpe``: the vocabulary with BPE applied, binding byte forms to their integer id;
-* ``_vocab_base``: a copy of the initial base vocabulary, this attribute is used in case the initial base vocab is overriden by :py:func:`miditok.MIDITokenizer.train` with the ``start_from_empty_voc`` option;
-* ``_vocab_base``:
-* ``_vocab_base_byte_to_token``: biding the base token byte forms to their string forms;
-* ``_vocab_base_id_to_byte``: biding the base token ids (integers) to their byte forms;
-* ``_vocab_bpe_bytes_to_tokens``: biding the byte forms of the complete vocab to their string forms, as a list of string;
-
-For symbolic music, BPE `has been showned to improve the performances of Transformers models while helping them to learn more isotropic embedding representations <https://aclanthology.org/2023.emnlp-main.123/>`_. BPE can be applied on top of any tokenization, as long as it is not based on embedding pooling! (``is_multi_voc``)
-
+* ``vocab``: the base vocabulary, mapping token descriptions to their ids;
+* ``vocab_model``: the vocabulary with learned tokens, mapping byte forms to their integer id;
+* ``_vocab_base_byte_to_token``: mapping the base token byte forms to their string forms;
+* ``_vocab_base_id_to_byte``: mapping the base token ids (integers) to their byte forms;
+* ``_vocab_bpe_bytes_to_tokens``: mapping the byte forms of the complete vocab to their string forms, as a list of string;
 
 
 Tokenizer models
@@ -68,6 +67,7 @@ Today in the NLP field, BPE is used with almost all tokenizations to build their
 Unigram
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
+
 WordPiece
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -75,7 +75,7 @@ WordPiece
 Splitting the ids
 ------------------------
 
-
+Similar to the "pre-tokenization" part from the `Hugging Face documentation <https://huggingface.co/docs/tokenizers/v0.13.4.rc2/en/components#pretokenizers>`_
 
 Code example
 ------------------------
@@ -91,7 +91,7 @@ Code example
     # Learns the vocabulary with BPE
     # Ids are split per bars by default
     tokenizer.train(
-        vocab_size=500,
+        vocab_size=30000,
         model="BPE",
         files_paths=paths_midis,
     )

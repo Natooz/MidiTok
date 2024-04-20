@@ -2416,8 +2416,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         MidiTok are ``400`` when splitting ids in bar subsequences and ``100`` when
         splitting ids in beat subsequences.
         The ``max_input_chars_per_word`` and ``unk_token`` model attributes can be set
-        by referencing them in the keyword arguments of this method (``kwargs``).
-        **
+        by referencing them in the keyword arguments of this method (``kwargs``).**
 
         **2. The Hugging Face Unigram model training `is not 100% deterministic`
         <https://github.com/huggingface/tokenizers/issues/668>_. As such and if you are
@@ -2435,7 +2434,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             the model to use, an already initialized model, or ``None`` if you want to
             retrain a tokenizer already trained. (default: ``None``, default to
             ``BPE`` if the tokenizer is not already trained, keeps the same model
-            otherwise) TODO allows to provide Tokenizer object directly?
+            otherwise)
         :param iterator: an iterable object yielding the training data, as lists of
             string. It can be a list or a Generator. This iterator will be passed to
             the model for training. It musts implement the ``__len__`` method. If
@@ -2475,7 +2474,13 @@ class MIDITokenizer(ABC, HFHubMixin):
             iterator = TokTrainingIterator(self, files_paths)
 
         # Define the model
-        # Keep current model if `arg` is None
+        # A `tokenizers.Tokenizer` can feature: a normalizer, pre-tokenizer, model,
+        # post-processor and decoder. We (in MidiTok) are only interested in the
+        # model part, as other components will only perform operations on bytes and are
+        # only relevant for text. MidiTok already "normalize" (preprocess music file),
+        # pre-tokenize (split on bars/beats), and decoding is done differently for each
+        # music tokenization.
+        # Keep current model if `arg` is None:
         retraining = False
         if self._model is not None and model is None:
             tokenizer = self.__reload_hf_tokenizer(self._model)
