@@ -59,23 +59,55 @@ Tokenizer models
 Byte Pair Encoding (BPE)
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-`BPE <https://en.wikipedia.org/wiki/Byte_pair_encoding>`_ is a compression technique that replaces the most recurrent byte (tokens in our case) successions of a corpus, by newly created ones.
-For instance, in the character sequence ``aabaabaacaa``, the sub-sequence ``aa`` occurs three times and is the most recurrent one. Learning and applying BPE on this sequence would replace ``aa`` with a new symbol, e.g., `d`, resulting in a compressed sequence ``dbdbdcd``. The latter can be reduced again by replacing the ``db`` subsequence, giving ``eedcd``. The vocabulary, which initially contained three characters (``a``, ``b`` and ``c``) now also contains ``d`` and ``e``. In practice BPE is learned on a corpus until the vocabulary reaches a target size.
+`BPE <https://en.wikipedia.org/wiki/Byte_pair_encoding>`_ is a compression technique that replaces the most recurrent token successions of a corpus, by newly created ones. It works by counting all the successions of pairs of tokens, and at each training step merging the one with the highest count into a newly learned token.
+
+For instance, in the character sequence ``aabaabaacaa``, the sub-sequence ``aa`` occurs three times and is the most recurrent one. Learning BPE on this sequence would replace ``aa`` with a new symbol, e.g., `d`, resulting in a compressed sequence ``dbdbdcd``. The latter can be reduced again by replacing the ``db`` subsequence, giving ``eedcd``. The vocabulary, which initially contained three characters (``a``, ``b`` and ``c``) now also contains ``d`` and ``e``. In practice BPE is learned on a corpus until the vocabulary reaches a target size.
 
 Today in the NLP field, BPE is used with almost all tokenizations to build their vocabulary, as `it allows to encode rare words and segmenting unknown or composed words as sequences of sub-word units <https://aclanthology.org/P16-1162/>`_. The base initial vocabulary is the set of all the unique characters present in the data, which compose the words that are automatically learned as tokens by the BPE algorithm.
 
 Unigram
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
+The `Unigram <https://aclanthology.org/P18-1007/>`_ algorithm serves the same purpose than BPE, but works in the other direction: it starts from a large vocabulary of token successions and removes the tokens until it reaches the desired size, while keeping the most relevant tokens.
+
+At each training step, Unigram computes a loss over the training data and current vocabulary. For each token in the vocabulary, Unigram computes how much removing it would increase the loss. The tokens that increase the loss the least have the lowest impact on the overall data representation, and can be considered less important, and Unigram will remove them until the vocabulary reaches the desired size.
+
+Note that the loss is computed over the whole training data and current vocabulary. This step is computationally expensive. Hence removing a single token per training step would require a significant amount of time. In practice, `n` percents of the vocabulary is removed at each step, with `n` being a hyperparameter to set.
+
+Note that Unigram is not a deterministic algorithm: training a tokenizer twice with the same data and training parameter will likely result in similar vocabularies, but a few differences.
+You can read more details on the loss computation in the `documentation of the tokenizers library <https://huggingface.co/learn/nlp-course/en/chapter6/7>`_.
+
+The Unigram model supports the additional training arguments that can be provided as keyword arguments to the :py:func:`miditok.MIDITokenizer.train` method:
+
+* ``shrinking_factor``: shrinking factor to used to reduce the vocabulary at each training step (default: 0.75);
+* ``max_piece_length``: maximum length a token can reach (default in MidiTok: 32);
+* ``n_sub_iterations``: number of Expectation-Maximization algorithm iterations performed before pruning the vocabulary (default: 2).
+
+Unigram is also implemented in the `SentencePiece <https://aclanthology.org/D18-2012/>`_ library.
+
 
 WordPiece
 ~~~~~~~~~~~~~~~~~~~~~~~~
+
+`WordPiece <https://arxiv.org/abs/1609.08144>`_ is a subword-based algorithm similar to BPE.
+
+It counts the successions of tokens in the data, but instead of merging the pair with the highest count, WordPiece merges the one with the highest score computed as: :math:`\mathrm{score}_{ij} = \frac{ \mathrm{freq}_{ij} }{\mathrm{freq}_{i} \times \mathrm{freq}_{j}}` for two symbols :math:`i` and :math:`j`.
+
+Dividing the frequency of the succession of two symbols by the product of their frequency in the data allows to merge pairs where one token is less frequent. The most frequent pair will hence not necessarily be merged. Doing so, WordPiece tries to learn tokens while evaluating their impact.
+
+Another key difference with BPE is on the training procedure: WordPiece starts by computing all the pairs in the data, and then counts their frequencies. It will learn long words first, and splitting them in multiple subtokens when they do not exist in the vocabulary.
+
+As a result, WordPiece features a ``max_input_chars_per_word`` attribute limiting the length of the "words", base tokens successions in MidiTok's case, it can process. Token successions with a length exceeding this parameter will be replaced by a ``unk_token`` token (MidiTok uses the padding token by default). You can set the ``max_input_chars_per_word`` in the keyword arguments of the :py:func:`miditok.MIDITokenizer.train` method, but the highest this parameter is, the slower the encoding-decoding will be. The number of base tokens for a music file is likely to go in the tens of thousands. As a result, **WordPiece should exclusively be used while splitting the token ids per bars or beats** in order to make sure that the lengths of the token successions remain below this limit.
 
 
 Splitting the ids
 ------------------------
 
-Similar to the "pre-tokenization" part from the `Hugging Face documentation <https://huggingface.co/docs/tokenizers/v0.13.4.rc2/en/components#pretokenizers>`_
+In MidiTok, we represent base tokens as bytes in order to use the Hugging Face `tokenizers <https://github.com/huggingface/tokenizers>`_ Rust library. The length of the token sequence of a music file can easily reach tens of thousands of tokens, depending on its number of tracks, notes in each track, and length in bars. As a result, if we convert this sequence in its byte form, we end with a one single very long word (one character per base token).
+Using this single word to train the tokenizer is feasible (except for WordPiece), and doing so the tokenizer will learn new tokens representing successions of base tokens that can span across several bars and beats, and optimizes the sequence length reduction the most. However, learning tokens that can represent events starting and ending anywhere cannot ensure us to have tokens with musically relevant information. It could be seen as training a text tokenizer without splitting the text into words, thus learning tokens that also contain spaces between words or subwords.
+
+MidiTok allows to split the token sequence into subsequences of bytes for each bar or beat, that will be treated separately by the tokenizer's model. This can be set by the ```` attribute of the tokenizer's configuration (:class:`miditok.classes.TokenizerConfig`). Doing so, the learned tokens will not span across different bars or beats. The splitting step is also performed before encoding token ids after that the training is done.
+It is similar to the "pre-tokenization" step in the `Hugging Face tokenizers library <https://huggingface.co/docs/tokenizers/v0.13.4.rc2/en/components#pretokenizers>`_ which consists in splitting the input text into distinct words at spaces.
 
 Code example
 ------------------------

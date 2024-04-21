@@ -58,6 +58,7 @@ from .constants import (
     PITCH_CLASSES,
     TEMPO,
     TIME_SIGNATURE,
+    UNIGRAM_MAX_PIECE_LENGTH,
     UNKNOWN_CHORD_PREFIX,
     WORDPIECE_MAX_INPUT_CHARS_PER_WORD_BAR,
     WORDPIECE_MAX_INPUT_CHARS_PER_WORD_BEAT,
@@ -2473,6 +2474,11 @@ class MIDITokenizer(ABC, HFHubMixin):
         if iterator is None:
             iterator = TokTrainingIterator(self, files_paths)
 
+        # Define the initial alphabet
+        initial_alphabet = {
+            chr(i + CHR_ID_START): i for i in range(len(self._vocab_base))
+        }
+
         # Define the model
         # A `tokenizers.Tokenizer` can feature: a normalizer, pre-tokenizer, model,
         # post-processor and decoder. We (in MidiTok) are only interested in the
@@ -2492,13 +2498,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         elif isinstance(model, str) or model is None:
             if model is None:  # default
                 model = DEFAULT_TRAINING_MODEL_NAME
-            if model == "Unigram":  # list[tuple[str, float]]
-                voc_start = []  # starts from empty voc
-            else:
-                voc_start = {
-                    chr(i + CHR_ID_START): i for i in range(len(self._vocab_base))
-                }
-            model_kwargs = {"vocab": voc_start}
+            model_kwargs = {"vocab": [] if model == "Unigram" else initial_alphabet}
             if model == "BPE":
                 model_kwargs["merges"] = []
                 model_kwargs["continuing_subword_prefix"] = ""
@@ -2518,7 +2518,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         else:
             msg = (
                 "miditok - tokenizer.train: the `model` argument must be a str specify "
-                "the model to use (`'BPE'`, `'Unigram'`, `'WordPiece'`), an already"
+                "the model to use ('BPE', 'Unigram', 'WordPiece'), an already"
                 "initialized model or a `None` to either resume training or default to "
                 f"{DEFAULT_TRAINING_MODEL_NAME}."
             )
@@ -2528,8 +2528,6 @@ class MIDITokenizer(ABC, HFHubMixin):
         tokenizer_json = json.loads(tokenizer.to_str())
         # Remove added tokens for now (uses IDs of tokens)
         added_tokens = tokenizer_json.pop("added_tokens")
-        # Remove post processor for now (uses IDs of tokens)
-        post_processor = tokenizer_json.pop("post_processor")
         model_name = tokenizer_json["model"]["type"]
 
         # Warnings
@@ -2593,6 +2591,8 @@ class MIDITokenizer(ABC, HFHubMixin):
                     "end_of_word_suffix"
                 ]
         elif model_name == "Unigram" and tokenizer_json["model"]["unk_id"] is not None:
+            if "max_piece_length" not in kwargs:
+                kwargs["max_piece_length"] = UNIGRAM_MAX_PIECE_LENGTH
             unk_id = tokenizer_json["model"]["unk_id"]
             kwargs["unk_token"] = tokenizer_json["model"]["vocab"][unk_id][0]
 
@@ -2608,32 +2608,12 @@ class MIDITokenizer(ABC, HFHubMixin):
         name_trainer = f"{'Bpe' if model_name == 'BPE' else model_name}Trainer"
         trainer = getattr(_tok_trainers, name_trainer)(
             vocab_size=vocab_size,
-            special_tokens=special_tokens,
             show_progress=True,
+            special_tokens=special_tokens,
+            # initial_alphabet=list(initial_alphabet.keys()),
             **kwargs,
         )
         tokenizer.train_from_iterator(iterator, length=len(iterator), trainer=trainer)
-
-        # Add post-processor
-        if post_processor is not None:
-            trained_tokenizer_json = json.loads(tokenizer.to_str())
-            # Almost done, we just have to adjust the token IDs in the post processor
-            if "special_tokens" in post_processor:
-                for key in post_processor["special_tokens"]:
-                    tokens = post_processor["special_tokens"][key]["tokens"]
-                    post_processor["special_tokens"][key]["tokens"] = tokens
-                    post_processor["special_tokens"][key]["ids"] = [
-                        tokenizer.token_to_id(token) for token in tokens
-                    ]
-
-            for special_token in ["cls", "sep"]:
-                if special_token in post_processor:
-                    token, _ = post_processor[special_token]
-                    token_id = tokenizer.token_to_id(token)
-                    post_processor[special_token] = [token, token_id]
-
-            trained_tokenizer_json["post_processor"] = post_processor
-            tokenizer = _HFTokenizer.from_str(json.dumps(trained_tokenizer_json))
 
         # Update _vocab_learned_bytes_to_tokens for faster decoding
         self._vocab_learned_bytes_to_tokens = {
