@@ -9,7 +9,7 @@ import pytest
 
 import miditok
 
-from .utils_tests import ALL_TOKENIZATIONS, MIDI_PATHS_MULTITRACK
+from .utils_tests import ALL_TOKENIZATIONS, MAX_BAR_EMBEDDING, MIDI_PATHS_MULTITRACK
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -39,6 +39,8 @@ for tokenization_ in ALL_TOKENIZATIONS:
     params_ = {"use_programs": True}
     if tokenization_ == "MMM":
         params_["base_tokenizer"] = "TSD"
+    elif tokenization_ in ["Octuple", "MuMIDI"]:
+        params_["max_bar_embedding"] = MAX_BAR_EMBEDDING
     TOK_PARAMS_MULTITRACK.append((tokenization_, params_))
 
     if tokenization_ in tokenizations_non_one_stream:

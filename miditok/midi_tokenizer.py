@@ -59,6 +59,7 @@ from .constants import (
     TEMPO,
     TIME_SIGNATURE,
     UNIGRAM_MAX_PIECE_LENGTH,
+    UNIGRAM_SPECIAL_TOKEN_SUFFIX,
     UNKNOWN_CHORD_PREFIX,
     WORDPIECE_MAX_INPUT_CHARS_PER_WORD_BAR,
     WORDPIECE_MAX_INPUT_CHARS_PER_WORD_BEAT,
@@ -1780,9 +1781,10 @@ class MIDITokenizer(ABC, HFHubMixin):
             for vid in range(len(vocab)):
                 vocab[vid] = self.special_tokens + vocab[vid]
                 for tok in vocab[vid]:
-                    self.add_to_vocab(tok, vid)
+                    self.add_to_vocab(tok, vocab_idx=vid)
         else:
-            vocab = self.special_tokens + vocab
+            for tok in self.special_tokens:
+                self.add_to_vocab(tok, special_token=True)
             for tok in vocab:
                 self.add_to_vocab(tok)
 
@@ -1908,6 +1910,7 @@ class MIDITokenizer(ABC, HFHubMixin):
     def add_to_vocab(
         self,
         token: str | Event,
+        special_token: bool = False,
         vocab_idx: int | None = None,
         byte_: str | None = None,
         add_to_model: bool = False,
@@ -1917,16 +1920,33 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         :param token: token to add, as a formatted string of the form "Type_Value",
             e.g. Pitch_80, or an Event.
+        :param special_token: whether the token is special. (default: ``False``)
         :param vocab_idx: idx of the vocabulary (in case of embedding pooling).
             (default: ``None``)
         :param byte_: unique byte associated to the token. The associated byte of a
-            token is used to encode-decode ids with the tokenize's model (BPE, Unigram,
+            token is used to encode-decode ids with the tokenizer's model (BPE, Unigram,
             WordPiece). If None is given, it will default to ``chr(id_ + CHR_ID_START)``
             . (default: ``None``)
         :param add_to_model: the token will be added to the model vocabulary
             too. (default: ``None``)
         """
         token_str = token if isinstance(token, str) else str(token)
+
+        if special_token:
+            parts = token_str.split("_")
+            if len(parts) == 1:
+                parts.append("None")
+            elif len(parts) > 2:
+                parts = ["-".join(parts[:-1]), parts[-1]]
+            token = "_".join(parts)
+            if token not in self.config.special_tokens:
+                self.config.special_tokens.append(token)
+            else:
+                warnings.warn(
+                    f"The special token {token} is already present in the tokenizer's "
+                    f"vocabulary.",
+                    stacklevel=2,
+                )
 
         if vocab_idx is not None:
             self._vocab_base[vocab_idx][token_str] = len(self._vocab_base[vocab_idx])
@@ -1941,9 +1961,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             # Byte
             if byte_ is None:
                 byte_ = chr(id_ + CHR_ID_START)
-            self._vocab_base_id_to_byte[
-                id_
-            ] = byte_  # these vocabs are created at init, when the
+            self._vocab_base_id_to_byte[id_] = byte_
             self._vocab_base_byte_to_token[byte_] = token
             if self._model is not None and add_to_model:
                 self._model.add_tokens([byte_])
@@ -2476,7 +2494,9 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         # Define the initial alphabet
         initial_alphabet = {
-            chr(i + CHR_ID_START): i for i in range(len(self._vocab_base))
+            chr(i + CHR_ID_START): i
+            for tok, i in self._vocab_base.items()
+            if len(tok) == 1  # to discard special tokens with Unigram
         }
 
         # Define the model
@@ -2564,13 +2584,36 @@ class MIDITokenizer(ABC, HFHubMixin):
         for added_token in added_tokens:
             special = added_token.pop("special", None)
             _ = added_token.pop("id", None)
-            if model_name != "Unigram" and not special:
+            if not special:
                 continue
             special_tokens.append(AddedToken(**added_token))
             special_tokens_str.append(added_token["content"])
         # Make sure all the special tokens of the tokenizer are referenced
-        for special_token_byte in self._ids_to_bytes(self.special_tokens_ids):
+        for token_id, token_str in zip(self.special_tokens_ids, self.special_tokens):
+            # For Unigram, we have to make an exception for special tokens. A special
+            # token cannot be just a character from the initial vocabulary. As such, we
+            # prepend and append a special character to the byte of each special token.
+            # Example: Pad_None = "!" becomes "!!!", BOS_None = "#" becomes "!#!"
+            # As a result, each special token will take two "slots" in the vocabulary:
+            # one for its distinct byte and one for its byte combination.
+            special_token_byte = self._vocab_base_id_to_byte[token_id]
+            if model_name == "Unigram" and not token_str.endswith(
+                UNIGRAM_SPECIAL_TOKEN_SUFFIX
+            ):
+                special_char = chr(CHR_ID_START)
+                special_token_byte = f"{special_char}{special_token_byte}{special_char}"
             if special_token_byte not in special_tokens_str:
+                if model_name == "Unigram":
+                    special_token_str = (
+                        f"{self.__vocab_base_inv[token_id]}"
+                        f"{UNIGRAM_SPECIAL_TOKEN_SUFFIX}"
+                    )
+                    if special_token_str not in self.vocab:
+                        self.add_to_vocab(
+                            special_token_str,
+                            special_token=True,
+                            byte_=special_token_byte,
+                        )
                 special_tokens.append(AddedToken(special_token_byte))
 
         # Trainer needs to know the end of word / continuing subword thingies in BPE
@@ -2596,21 +2639,13 @@ class MIDITokenizer(ABC, HFHubMixin):
             unk_id = tokenizer_json["model"]["unk_id"]
             kwargs["unk_token"] = tokenizer_json["model"]["vocab"][unk_id][0]
 
-        # Fix the vocabulary size if MMM + Unigram - miditok v3.0.3 - tokenizers v0.19
-        # For an unknown reason, the final vocabulary size of the tokenizer will equal
-        # to vocab_size - 2. MMM uses `Track_Start` and `Track_End` special tokens to
-        # delimit tracks. When special tokens are present in the training data, the
-        # unigram model will discard them and result in lower size vocabulary.
-        if model_name == "Unigram" and self.__class__.__name__ == "MMM":
-            vocab_size += 2
-
         # Trains the tokenizer
         name_trainer = f"{'Bpe' if model_name == 'BPE' else model_name}Trainer"
         trainer = getattr(_tok_trainers, name_trainer)(
             vocab_size=vocab_size,
             show_progress=True,
             special_tokens=special_tokens,
-            # initial_alphabet=list(initial_alphabet.keys()),
+            initial_alphabet=list(initial_alphabet.keys()),
             **kwargs,
         )
         tokenizer.train_from_iterator(iterator, length=len(iterator), trainer=trainer)
@@ -2631,7 +2666,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         # Remove vocab
         # Apr 16th 2024 - MidiTok v3.0.3: when resuming training, we restart all over
-        # from a clean vocabulary. As tokenizers v0.15.2, resuming a training does
+        # from a clean vocabulary. As tokenizers v0.19.0, resuming a training does
         # not further reduce/compress the sequences even with a larger vocabulary.
         if tokenizer_json["model"]["type"] == "BPE":
             tokenizer_json["model"]["vocab"] = {}

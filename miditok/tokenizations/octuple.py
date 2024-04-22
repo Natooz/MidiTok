@@ -180,11 +180,12 @@ class Octuple(MIDITokenizer):
         # Check bar embedding limit, update if needed
         num_bars = len(get_bars_ticks(midi))
         if self.config.additional_params["max_bar_embedding"] < num_bars:
-            for i in range(
-                self.config.additional_params["max_bar_embedding"], num_bars
-            ):
-                self.add_to_vocab(f"Bar_{i}", 4)
-            self.config.additional_params["max_bar_embedding"] = num_bars
+            msg = (
+                "miditok: Octuple cannot handle this MIDI file, as it contains "
+                f"{num_bars} whereas the limit of the tokenizer is "
+                f"{self.config.additional_params['max_bar_embedding']}"
+            )
+            raise ValueError(msg)
 
         return super()._midi_to_tokens(midi)
 

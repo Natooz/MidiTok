@@ -565,11 +565,7 @@ class TokenizerConfig:
 
         # Special tokens
         self.special_tokens: list[str] = []
-        special_tokens = list(special_tokens)
-        for special_token in MANDATORY_SPECIAL_TOKENS:
-            if special_token not in special_tokens:
-                special_tokens.append(special_token)
-        for special_token in special_tokens:
+        for special_token in list(special_tokens) + MANDATORY_SPECIAL_TOKENS:
             parts = special_token.split("_")
             if len(parts) == 1:
                 parts.append("None")

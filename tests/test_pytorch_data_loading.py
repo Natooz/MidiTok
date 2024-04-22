@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 
 import miditok
 
-from .utils_tests import MIDI_PATHS_CORRUPTED, MIDI_PATHS_MULTITRACK
+from .utils_tests import MAX_BAR_EMBEDDING, MIDI_PATHS_CORRUPTED, MIDI_PATHS_MULTITRACK
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -53,7 +53,9 @@ def test_dataset_midi(
     midi_paths: Sequence[Path] = MIDI_PATHS_MULTITRACK + MIDI_PATHS_CORRUPTED,
     max_seq_len: int = 1000,
 ):
-    config = miditok.TokenizerConfig(use_programs=one_token_stream)
+    config = miditok.TokenizerConfig(
+        use_programs=one_token_stream, max_bar_embedding=MAX_BAR_EMBEDDING
+    )
     tokenizer = tokenizer_cls(config)
 
     # Split MIDIs if requested

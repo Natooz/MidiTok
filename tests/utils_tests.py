@@ -68,6 +68,7 @@ TOKENIZER_CONFIG_KWARGS = {
     "delete_equal_successive_tempo_changes": True,
     "use_bar_end_tokens": True,
 }
+MAX_BAR_EMBEDDING = 2000
 
 
 def adjust_tok_params_for_tests(tokenization: str, params: dict[str, Any]) -> None:
@@ -86,9 +87,10 @@ def adjust_tok_params_for_tests(tokenization: str, params: dict[str, Any]) -> No
         params["beat_res"] = {(0, 512): 8}
     # We don't test time signatures with Octuple as it can lead to time shifts, as the
     # TS changes are only carried at the onset times of the notes.
-    elif tokenization == "Octuple":
-        params["max_bar_embedding"] = 300
-        params["use_time_signatures"] = False
+    elif tokenization in ["Octuple", "MuMIDI"]:
+        params["max_bar_embedding"] = MAX_BAR_EMBEDDING
+        if tokenization == "Octuple":
+            params["use_time_signatures"] = False
     # Rests and time sig can mess up with CPWord, when a Rest that is crossing new bar
     # is followed by a new TimeSig change, as TimeSig are carried with Bar tokens (and
     # there is None is this case).
