@@ -3390,7 +3390,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             return self.encode(miditoolkit_to_symusic(obj), *args, **kwargs)
 
         # Decode tokens
-        if isinstance(obj, (TokSequence, list[TokSequence])):
+        if isinstance(obj, (TokSequence, list)):
             return self.decode(obj, *args, **kwargs)
 
         # Tokenize `Score` or a music file
