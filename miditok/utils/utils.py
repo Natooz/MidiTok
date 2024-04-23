@@ -26,8 +26,8 @@ from miditok.constants import (
     DRUM_PITCH_RANGE,
     INSTRUMENT_CLASSES,
     MIDI_INSTRUMENTS,
-    MIDI_LOADING_EXCEPTION,
     PITCH_CLASSES,
+    SCORE_LOADING_EXCEPTION,
     TIME_SIGNATURE,
     UNKNOWN_CHORD_PREFIX,
 )
@@ -1033,7 +1033,7 @@ def filter_dataset(
     for path in files_paths:
         try:
             file = Score(path)
-        except MIDI_LOADING_EXCEPTION:
+        except SCORE_LOADING_EXCEPTION:
             if delete_invalid_files:
                 path.unlink()
             continue

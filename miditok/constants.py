@@ -7,7 +7,7 @@ CURRENT_TOKENIZERS_VERSION = version("tokenizers")
 CURRENT_SYMUSIC_VERSION = version("symusic")
 
 MIDI_FILES_EXTENSIONS = {".mid", ".midi", ".MID", ".MIDI"}
-MIDI_LOADING_EXCEPTION = (
+SCORE_LOADING_EXCEPTION = (
     RuntimeError,
     ValueError,
     OSError,

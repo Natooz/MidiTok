@@ -1,6 +1,6 @@
 # MidiTok
 
-Python package to tokenize MIDI music files, presented at the ISMIR 2021 LBDs.
+Python package to tokenize music files, introduced at the ISMIR 2021 LBDs.
 
 ![MidiTok Logo](docs/assets/logo.png?raw=true "")
 
@@ -13,8 +13,8 @@ Python package to tokenize MIDI music files, presented at the ISMIR 2021 LBDs.
 [![Downloads](https://static.pepy.tech/badge/miditok)](https://pepy.tech/project/MidiTok)
 [![Code style](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 
-MidiTok can tokenize MIDI files, i.e. convert them into sequences of tokens ready to be fed to models such as Transformer, for any generation, transcription or MIR task.
-MidiTok features most known [MIDI tokenizations](https://miditok.readthedocs.io/en/latest/tokenizations.html) (e.g. [REMI](https://arxiv.org/abs/2002.00212), [Compound Word](https://arxiv.org/abs/2101.02402)...), and is built around the idea that they all share common parameters and methods. Tokenizers can be trained with [Byte Pair Encoding (BPE)](https://aclanthology.org/2023.emnlp-main.123/) and [Unigram](https://aclanthology.org/P18-1007/), and it offers data augmentation methods.
+MidiTok can tokenize MIDI and abc files, i.e. convert them into sequences of tokens ready to be fed to models such as Transformer, for any generation, transcription or MIR task.
+MidiTok features most known [music tokenizations](https://miditok.readthedocs.io/en/latest/tokenizations.html) (e.g. [REMI](https://arxiv.org/abs/2002.00212), [Compound Word](https://arxiv.org/abs/2101.02402)...), and is built around the idea that they all share common parameters and methods. Tokenizers can be trained with [Byte Pair Encoding (BPE)](https://aclanthology.org/2023.emnlp-main.123/) and [Unigram](https://aclanthology.org/P18-1007/), and it offers data augmentation methods.
 
 MidiTok is integrated with the Hugging Face Hub 🤗! Don't hesitate to share your models to the community!
 
@@ -25,7 +25,7 @@ MidiTok is integrated with the Hugging Face Hub 🤗! Don't hesitate to share yo
 ```shell
 pip install miditok
 ```
-MidiTok uses [Symusic](https://github.com/Yikai-Liao/symusic) to read and write MIDI files, and BPE/Unigram is backed by [Hugging Face 🤗tokenizers](https://github.com/huggingface/tokenizers) for super-fast encoding.
+MidiTok uses [Symusic](https://github.com/Yikai-Liao/symusic) to read and write MIDI and abc files, and BPE/Unigram is backed by [Hugging Face 🤗tokenizers](https://github.com/huggingface/tokenizers) for superfast encoding.
 
 ## Usage example
 
@@ -45,7 +45,7 @@ tokens = tokenizer(midi)  # calling the tokenizer will automatically detect MIDI
 converted_back_midi = tokenizer(tokens)  # PyTorch / Tensorflow / Numpy tensors supported
 ```
 
-Here is a complete yet concise example of how you can use MidiTok to train any PyTorch model. And [here](colab-notebooks/Full_Example_HuggingFace_GPT2_Transformer.ipynb) is a simple notebook example showing how to use Hugging Face models to generate music, with MidiTok taking care of tokenizing MIDIs.
+Here is a complete yet concise example of how you can use MidiTok to train any PyTorch model. And [here](colab-notebooks/Full_Example_HuggingFace_GPT2_Transformer.ipynb) is a simple notebook example showing how to use Hugging Face models to generate music, with MidiTok taking care of tokenizing music files.
 
 ```python
 from miditok import REMI, TokenizerConfig
@@ -58,8 +58,8 @@ config = TokenizerConfig(num_velocities=16, use_chords=True, use_programs=True)
 tokenizer = REMI(config)
 
 # Train the tokenizer with Byte Pair Encoding (BPE)
-midi_paths = list(Path("path", "to", "midis").glob("**/*.mid"))
-tokenizer.train(vocab_size=30000, files_paths=midi_paths)
+files_paths = list(Path("path", "to", "midis").glob("**/*.mid"))
+tokenizer.train(vocab_size=30000, files_paths=files_paths)
 tokenizer.save_params(Path("path", "to", "save", "tokenizer.json"))
 # And pushing it to the Hugging Face hub (you can download it back with .from_pretrained)
 tokenizer.push_to_hub("username/model-name", private=True, token="your_hf_token")
@@ -67,7 +67,7 @@ tokenizer.push_to_hub("username/model-name", private=True, token="your_hf_token"
 # Split MIDIs into smaller chunks for training
 dataset_chunks_dir = Path("path", "to", "midi_chunks")
 split_midis_for_training(
-    files_paths=midi_paths,
+    files_paths=files_paths,
     tokenizer=tokenizer,
     save_dir=dataset_chunks_dir,
     max_seq_len=1024,

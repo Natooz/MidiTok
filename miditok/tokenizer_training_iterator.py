@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from symusic import Score
 
 from .classes import TokSequence
-from .constants import MIDI_LOADING_EXCEPTION
+from .constants import SCORE_LOADING_EXCEPTION
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -45,7 +45,7 @@ class TokTrainingIterator:
         # Load and tokenize file
         try:
             midi = Score(path)
-        except MIDI_LOADING_EXCEPTION:
+        except SCORE_LOADING_EXCEPTION:
             return []
         # Need to specify `encode_ids=False` as it might be already pretrained
         tokseq = self.tokenizer(midi, encode_ids=False)

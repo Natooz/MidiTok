@@ -15,7 +15,7 @@ from symusic import Score
 from tqdm import tqdm
 
 import miditok
-from miditok.constants import MIDI_LOADING_EXCEPTION
+from miditok.constants import SCORE_LOADING_EXCEPTION
 
 # Tokenizer
 TOKENIZER_PARAMS = {
@@ -108,7 +108,7 @@ def seq_len_splits(datasets_params: list[tuple[str, dict, str]]) -> None:
             ):
                 try:
                     file = Score(file_path)
-                except MIDI_LOADING_EXCEPTION:
+                except SCORE_LOADING_EXCEPTION:
                     continue
                 tokseqs = tokenizer(file)
                 if isinstance(tokseqs, miditok.TokSequence):
@@ -358,7 +358,7 @@ def wordpiece_max_chars(datasets_params: list[tuple[str, dict, str]]) -> None:
                 ):
                     try:
                         file = Score(file_path)
-                    except MIDI_LOADING_EXCEPTION:
+                    except SCORE_LOADING_EXCEPTION:
                         continue
                     tokseqs = tokenizer.encode(file, encode_ids=False)
                     if isinstance(tokseqs, miditok.TokSequence):

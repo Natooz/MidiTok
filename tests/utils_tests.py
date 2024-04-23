@@ -32,6 +32,7 @@ MIDI_PATHS_CORRUPTED = sorted((HERE / "MIDIs_corrupted").rglob("*.mid"))
 MIDI_PATHS_ALL = sorted(
     deepcopy(MIDI_PATHS_ONE_TRACK) + deepcopy(MIDI_PATHS_MULTITRACK)
 )
+ABC_PATHS = sorted((HERE / "abc_files").rglob("*.abc"))
 TEST_LOG_DIR = HERE / "test_logs"
 # MIDI files known to contain tricky contents (time sig, pedals...) and edge case
 # situations, likely to make some tests fail.

@@ -54,8 +54,8 @@ from .constants import (
     DEFAULT_TRAINING_MODEL_NAME,
     EOS_TOKEN_NAME,
     MIDI_FILES_EXTENSIONS,
-    MIDI_LOADING_EXCEPTION,
     PITCH_CLASSES,
+    SCORE_LOADING_EXCEPTION,
     TEMPO,
     TIME_SIGNATURE,
     UNIGRAM_MAX_PIECE_LENGTH,
@@ -1392,31 +1392,37 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     def encode(
         self,
-        midi: Score,
+        score: Score | Path,
         encode_ids: bool = True,
     ) -> TokSequence | list[TokSequence]:
         r"""
-        Tokenize a MIDI file.
+        Tokenize a music file (MIDI/abc).
 
+        You can provide a ``Path`` to the file to tokenize, or a ``symusic.Score``
+        object.
         This method returns a (list of) :class:`miditok.TokSequence`.
 
         If you are implementing your own tokenization by subclassing this class,
         **override the** protected ``_midi_to_tokens`` **method**.
 
-        :param midi: the MIDI object to convert.
+        :param score: the MIDI object to convert.
         :param encode_ids: the backbone model (BPE, Unigram, WordPiece) will encode the
             tokens and compress the sequence. Can only be used if the tokenizer has been
             trained. (default: ``True``)
         :return: a :class:`miditok.TokSequence` if ``tokenizer.one_token_stream`` is
             ``True``, else a list of :class:`miditok.TokSequence` objects.
         """
+        # Load the file if a path was given
+        if not isinstance(score, ScoreTick):
+            score = Score(score)
+
         # Preprocess the MIDI file
-        midi = self.preprocess_midi(midi)
+        score = self.preprocess_midi(score)
 
         # Tokenize it
-        tokens = self._midi_to_tokens(midi)
+        tokens = self._midi_to_tokens(score)
         # Add bar/beat ticks here to TokSeq as they need to be from preprocessed MIDI
-        add_bar_beats_ticks_to_tokseq(tokens, midi)
+        add_bar_beats_ticks_to_tokseq(tokens, score)
 
         # Encode the ids if the tokenizer is trained
         if encode_ids and self.is_trained:
@@ -2850,7 +2856,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 if self._verbose:
                     warnings.warn(f"File not found: {midi_path}", stacklevel=2)
                 continue
-            except MIDI_LOADING_EXCEPTION:
+            except SCORE_LOADING_EXCEPTION:
                 continue
 
             # Passing the MIDI to validation tests if given
@@ -3353,33 +3359,25 @@ class MIDITokenizer(ABC, HFHubMixin):
         **kwargs,
     ) -> TokSequence | list[TokSequence] | Score:
         r"""
-        Tokenize a MIDI file, or decode tokens into a MIDI.
+        Tokenize a music file (MIDI/abc), or decode tokens into a MIDI.
 
-        Calling a tokenizer allows to directly convert a MIDI to tokens or vice-versa.
-        The method automatically detects MIDI and token objects, as well as paths and
-        can directly load MIDI or token json files before converting them. This will
-        call the :py:func:`miditok.MIDITokenizer.encode` if you provide a MIDI
-        object or path to a MIDI file, or the
+        Calling a tokenizer allows to directly convert a music file (MIDI/abc) to tokens
+        or vice-versa. The method automatically detects ``symusic.Score`` and
+        :class:`miditok.TokSequence` objects, as well as paths to music or json files.
+        It will call the :py:func:`miditok.MIDITokenizer.encode` if you provide a
+        ``symusic.Score`` object or path to a music file, or the
         :py:func:`miditok.MIDITokenizer.decode` method otherwise.
 
-        :param obj: a `symusic.Score` object, a sequence of tokens, or a path to
-            a MIDI or tokens json file.
+        :param obj: a `symusic.Score` object, a :class:`miditok.TokSequence` object, or
+            a path to a music or tokens json file.
         :return: the converted object.
         """
-        # Tokenize MIDI
-        if isinstance(obj, ScoreTick):
-            return self.encode(obj, *args, **kwargs)
-
-        # Loads a file (.mid or .json)
+        # Load tokens (json file)
         if isinstance(obj, (str, Path)):
-            path = Path(obj)
-            if path.suffix in MIDI_FILES_EXTENSIONS:
-                # No handling of errors of file read here
-                midi = Score(obj)
-                return self.encode(midi, *args, **kwargs)
-
-            tokens = self.load_tokens(path)
-            return self.decode(tokens["ids"], *args, **kwargs)
+            obj = Path(obj)
+            if obj.suffix == "json":
+                tokens = self.load_tokens(obj)
+                return self.decode(tokens["ids"], *args, **kwargs)
 
         # Depreciated miditoolkit object
         if MidiFile is not None and isinstance(obj, MidiFile):
@@ -3391,8 +3389,12 @@ class MIDITokenizer(ABC, HFHubMixin):
             )
             return self.encode(miditoolkit_to_symusic(obj), *args, **kwargs)
 
-        # Consider it tokens --> converts to MIDI
-        return self.decode(obj, *args, **kwargs)
+        # Decode tokens
+        if isinstance(obj, (TokSequence, list[TokSequence])):
+            return self.decode(obj, *args, **kwargs)
+
+        # Tokenize `Score` or a music file
+        return self.encode(obj, *args, **kwargs)
 
     def __len__(self) -> int:
         r"""

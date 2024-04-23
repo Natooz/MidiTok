@@ -7,7 +7,6 @@ from __future__ import annotations
 import csv
 from importlib.metadata import version
 from pathlib import Path
-from platform import processor, system
 from time import time
 
 import numpy as np
@@ -29,21 +28,16 @@ TOKENIZER_CONFIG_KWARGS = {
 HERE = Path(__file__).parent
 TOKENIZATIONS = ["REMI", "TSD", "MIDILike", "Structured"]
 DATASETS = ["Maestro", "MMD", "POP909"]
-MAX_NUM_FILES = 500
+MAX_NUM_FILES = 1000
 
 
-def benchmark_preprocess():
+def benchmark_preprocess() -> None:
     r"""Read MIDI files and call `tokenizer.preprocess_midi` on them."""
-    print(f"CPU: {processor()}")
-    print(f"System: {system()}")
-    print(f"miditok: {version('miditok')}")
-    print(f"symusic: {version('symusic')}")
-
     results = []
     for dataset in DATASETS:
-        midi_paths = list((HERE.parent.parent / "data" / dataset).rglob("*.mid"))[
-            :MAX_NUM_FILES
-        ]
+        midi_paths = list(
+            (HERE.parent.parent.parent / "data" / dataset).rglob("*.mid")
+        )[:MAX_NUM_FILES]
 
         for tokenization in TOKENIZATIONS:
             tok_config = miditok.TokenizerConfig(**TOKENIZER_CONFIG_KWARGS)
@@ -64,7 +58,6 @@ def benchmark_preprocess():
             mean = np.mean(times)
             std = np.std(times)
             results.append(f"{mean:.2f} ± {std:.2f} ms")
-            print(f"{dataset} - {tokenization}: {results[-1]}")
 
     csv_file_path = HERE / "benchmark_preprocess.csv"
     write_header = not csv_file_path.is_file()
