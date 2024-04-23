@@ -105,11 +105,12 @@ class MuMIDI(MIDITokenizer):
         # Check bar embedding limit, update if needed
         num_bars = ceil(midi.end() / (midi.ticks_per_quarter * 4))
         if self.config.additional_params["max_bar_embedding"] < num_bars:
-            for i in range(
-                self.config.additional_params["max_bar_embedding"], num_bars
-            ):
-                self.add_to_vocab(f"BarPosEnc_{i}", 1)
-            self.config.additional_params["max_bar_embedding"] = num_bars
+            msg = (
+                "miditok: MuMIDI cannot handle this MIDI file, as it contains "
+                f"{num_bars} whereas the limit of the tokenizer is "
+                f"{self.config.additional_params['max_bar_embedding']}"
+            )
+            raise ValueError(msg)
 
         # Convert each track to tokens (except first pos to track time)
         if self.config.use_chords:

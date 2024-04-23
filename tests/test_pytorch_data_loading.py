@@ -11,7 +11,12 @@ from torch.utils.data import DataLoader
 
 import miditok
 
-from .utils_tests import MIDI_PATHS_CORRUPTED, MIDI_PATHS_MULTITRACK
+from .utils_tests import (
+    ABC_PATHS,
+    MAX_BAR_EMBEDDING,
+    MIDI_PATHS_CORRUPTED,
+    MIDI_PATHS_MULTITRACK,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -50,10 +55,14 @@ def test_dataset_midi(
     pre_tokenize: bool,
     func_labels: Callable,
     num_overlap_bars: int,
-    midi_paths: Sequence[Path] = MIDI_PATHS_MULTITRACK + MIDI_PATHS_CORRUPTED,
+    midi_paths: Sequence[Path] = MIDI_PATHS_MULTITRACK
+    + MIDI_PATHS_CORRUPTED
+    + ABC_PATHS,
     max_seq_len: int = 1000,
 ):
-    config = miditok.TokenizerConfig(use_programs=one_token_stream)
+    config = miditok.TokenizerConfig(
+        use_programs=one_token_stream, max_bar_embedding=MAX_BAR_EMBEDDING
+    )
     tokenizer = tokenizer_cls(config)
 
     # Split MIDIs if requested
@@ -105,7 +114,7 @@ def test_dataset_midi(
 
     # Test with DataLoader and collator
     collator = miditok.pytorch_data.DataCollator(
-        tokenizer["PAD_None"],
+        tokenizer.pad_token_id,
         pad_on_left=True,
     )
     _ = collator(batch)

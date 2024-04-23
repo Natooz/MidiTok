@@ -75,11 +75,8 @@ exclude_also = [
     "def __repr__",
 ]
 omit = [
-    # omit benchmark files
-    "tests/benchmark_fast_bpe.py",
-    "tests/benchmark_midi_read.py",
-    "tests/benchmark_preprocess.py",
-    "tests/benchmark_tokenize.py",
+    # files to omit to check
+    "benchmarks/*"
 ]
 
 [tool.ruff]

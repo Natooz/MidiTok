@@ -11,7 +11,7 @@ from symusic import Score, TextMeta
 from torch import LongTensor
 from tqdm import tqdm
 
-from miditok.constants import MAX_NUM_FILES_NUM_TOKENS_PER_NOTE, MIDI_LOADING_EXCEPTION
+from miditok.constants import MAX_NUM_FILES_NUM_TOKENS_PER_NOTE, SCORE_LOADING_EXCEPTION
 from miditok.utils import (
     get_bars_ticks,
     get_num_notes_per_bar,
@@ -100,7 +100,7 @@ def split_midis_for_training(
     ):
         try:
             midis = [Score(file_path)]
-        except MIDI_LOADING_EXCEPTION:
+        except SCORE_LOADING_EXCEPTION:
             continue
 
         # Separate track first if needed
@@ -274,7 +274,7 @@ def get_average_num_tokens_per_note(
     """
     Return the average number of tokens per note (tpn) for a list of MIDIs.
 
-    With BPE, the average tpn is likely to be very low.
+    With a trained tokenizer, the average tpn is likely to be very low.
 
     :param tokenizer: tokenizer.
     :param files_paths: list of MIDI file paths.
@@ -284,7 +284,7 @@ def get_average_num_tokens_per_note(
     for file_path in files_paths:
         try:
             midi = Score(file_path)
-        except MIDI_LOADING_EXCEPTION:
+        except SCORE_LOADING_EXCEPTION:
             continue
         tok_seq = tokenizer(midi)
         if tokenizer.one_token_stream:

@@ -81,10 +81,10 @@ Creates a Dataset and a collator to be used with a PyTorch DataLoader to train a
         files_paths=midi_paths,
         tokenizer,
         max_seq_len=1024,
-        bos_token_id=tokenizer["PAD_None"],
+        bos_token_id=tokenizer.pad_token_id,
         eos_token_id=tokenizer["BOS_None"],
     )
-    collator = DataCollator(tokenizer["PAD_None"])
+    collator = DataCollator(tokenizer.pad_token_id)
     from torch.utils.data import DataLoader
     data_loader = DataLoader(dataset=dataset, collate_fn=collator)
 

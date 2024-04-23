@@ -32,6 +32,7 @@ MIDI_PATHS_CORRUPTED = sorted((HERE / "MIDIs_corrupted").rglob("*.mid"))
 MIDI_PATHS_ALL = sorted(
     deepcopy(MIDI_PATHS_ONE_TRACK) + deepcopy(MIDI_PATHS_MULTITRACK)
 )
+ABC_PATHS = sorted((HERE / "abc_files").rglob("*.abc"))
 TEST_LOG_DIR = HERE / "test_logs"
 # MIDI files known to contain tricky contents (time sig, pedals...) and edge case
 # situations, likely to make some tests fail.
@@ -47,7 +48,8 @@ MIDI_PATHS_ONE_TRACK_HARD = [
 
 # TOKENIZATIONS
 ALL_TOKENIZATIONS = miditok.tokenizations.__all__
-TOKENIZATIONS_BPE = ["REMI", "MIDILike", "TSD", "MMM", "Structured"]
+TOKENIZATIONS_TRAIN = ["REMI", "TSD", "MMM"]
+TRAINING_MODELS = ["BPE", "Unigram", "WordPiece"]
 
 # TOK CONFIG PARAMS
 TIME_SIGNATURE_RANGE_TESTS = TIME_SIGNATURE_RANGE
@@ -67,6 +69,7 @@ TOKENIZER_CONFIG_KWARGS = {
     "delete_equal_successive_tempo_changes": True,
     "use_bar_end_tokens": True,
 }
+MAX_BAR_EMBEDDING = 2000
 
 
 def adjust_tok_params_for_tests(tokenization: str, params: dict[str, Any]) -> None:
@@ -85,9 +88,10 @@ def adjust_tok_params_for_tests(tokenization: str, params: dict[str, Any]) -> No
         params["beat_res"] = {(0, 512): 8}
     # We don't test time signatures with Octuple as it can lead to time shifts, as the
     # TS changes are only carried at the onset times of the notes.
-    elif tokenization == "Octuple":
-        params["max_bar_embedding"] = 300
-        params["use_time_signatures"] = False
+    elif tokenization in ["Octuple", "MuMIDI"]:
+        params["max_bar_embedding"] = MAX_BAR_EMBEDDING
+        if tokenization == "Octuple":
+            params["use_time_signatures"] = False
     # Rests and time sig can mess up with CPWord, when a Rest that is crossing new bar
     # is followed by a new TimeSig change, as TimeSig are carried with Bar tokens (and
     # there is None is this case).
@@ -210,7 +214,7 @@ def adapt_ref_midi_for_tests_assertion(
         miditok.utils.merge_same_program_tracks(new_midi.tracks)
 
     # Preprocess the MIDI: downsample it, remove notes outside of pitch range...
-    new_midi = tokenizer.preprocess_midi(new_midi)
+    new_midi = tokenizer.preprocess_score(new_midi)
 
     # For Octuple, as tempo is only carried at notes times, we need to adapt
     # their times for comparison. Set tempo changes at onset times of notes.

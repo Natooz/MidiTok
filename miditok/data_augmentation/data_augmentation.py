@@ -13,7 +13,7 @@ from tqdm import tqdm
 from miditok.constants import (
     MIDI_FILES_EXTENSIONS,
     MIDI_INSTRUMENTS,
-    MIDI_LOADING_EXCEPTION,
+    SCORE_LOADING_EXCEPTION,
 )
 
 
@@ -85,7 +85,7 @@ def augment_midi_dataset(
     for file_path in tqdm(files_paths, desc="Performing data augmentation"):
         try:
             midi = Score(file_path)
-        except MIDI_LOADING_EXCEPTION:
+        except SCORE_LOADING_EXCEPTION:
             continue
 
         augmented_midis = augment_midi_multiple_offsets(

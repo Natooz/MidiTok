@@ -10,9 +10,10 @@ import pytest
 from symusic import Score
 
 import miditok
-from miditok.constants import MIDI_LOADING_EXCEPTION
+from miditok.constants import SCORE_LOADING_EXCEPTION
 
 from .utils_tests import (
+    ABC_PATHS,
     ALL_TOKENIZATIONS,
     MIDI_PATHS_MULTITRACK,
     MIDI_PATHS_ONE_TRACK,
@@ -180,29 +181,29 @@ for tokenization_ in ALL_TOKENIZATIONS:
 
 
 def _test_tokenize(
-    midi_path: str | Path,
+    file_path: str | Path,
     tok_params_set: tuple[str, dict[str, Any]],
-    saving_erroneous_midis: bool = False,
-    save_failed_midi_as_one_midi: bool = True,
+    saving_erroneous_files: bool = False,
+    save_failed_file_as_one_file: bool = True,
 ) -> None:
     r"""
-    Tokenize a MIDI file, decode it back and make sure it is identical to the ogi.
+    Tokenize a music file, decode it back and make sure it is identical to the ogi.
 
-    The decoded MIDI should be identical to the original one after downsampling, and
-    potentially notes deduplication.
-
-    :param midi_path: path to the MIDI file to test.
+    The decoded music score should be identical to the original one after downsampling,
+    and potentially notes deduplication.
+    s
+    :param file_path: path to the music file to test.
     :param tok_params_set: tokenizer and its parameters to run.
-    :param saving_erroneous_midis: will save MIDIs decoded with errors, to be used to
-        debug.
-    :param save_failed_midi_as_one_midi: will save the MIDI with conversion errors as a
-        single MIDI, with all tracks appended altogether.
+    :param saving_erroneous_files: will save music scores decoded with errors, to be
+        used to debug.
+    :param save_failed_file_as_one_file: will save the music scores with conversion
+        errors as a single file, with all tracks appended altogether.
     """
-    # Reads the MIDI and add pedal messages to make sure there are some
+    # Reads the music file and add pedal messages to make sure there are some
     try:
-        midi = Score(Path(midi_path))
-    except MIDI_LOADING_EXCEPTION as e:
-        pytest.skip(f"Error when loading {midi_path.name}: {e}")
+        score = Score(Path(file_path))
+    except SCORE_LOADING_EXCEPTION as e:
+        pytest.skip(f"Error when loading {file_path.name}: {e}")
 
     # Creates the tokenizer
     tokenization, params = tok_params_set
@@ -211,51 +212,71 @@ def _test_tokenize(
     )
     str(tokenizer)  # shouldn't fail
 
-    # MIDI -> Tokens -> MIDI
-    midi_decoded, midi_ref, has_errors = tokenize_and_check_equals(
-        midi, tokenizer, midi_path.stem
+    # Score -> Tokens -> Score
+    score_decoded, score_ref, has_errors = tokenize_and_check_equals(
+        score, tokenizer, file_path.stem
     )
 
-    if has_errors and saving_erroneous_midis:
+    if has_errors and saving_erroneous_files:
         TEST_LOG_DIR.mkdir(exist_ok=True, parents=True)
-        if save_failed_midi_as_one_midi:
-            for i in range(len(midi_decoded.tracks) - 1, -1, -1):
-                midi_ref.tracks.insert(i + 1, midi_decoded.tracks[i])
-            midi_ref.markers.extend(midi_decoded.markers)
+        if save_failed_file_as_one_file:
+            for i in range(len(score_decoded.tracks) - 1, -1, -1):
+                score_ref.tracks.insert(i + 1, score_decoded.tracks[i])
+            score_ref.markers.extend(score_decoded.markers)
         else:
-            midi_decoded.dump_midi(
-                TEST_LOG_DIR / f"{midi_path.stem}_{tokenization}_decoded.mid"
+            score_decoded.dump_midi(
+                TEST_LOG_DIR / f"{file_path.stem}_{tokenization}_decoded.mid"
             )
-        midi_ref.dump_midi(TEST_LOG_DIR / f"{midi_path.stem}_{tokenization}.mid")
+        score_ref.dump_midi(TEST_LOG_DIR / f"{file_path.stem}_{tokenization}.mid")
 
     assert not has_errors
 
 
-@pytest.mark.parametrize("midi_path", MIDI_PATHS_ONE_TRACK)
-@pytest.mark.parametrize("tok_params_set", TOK_PARAMS_ONE_TRACK)
+def _id_tok(tok_params_set: tuple[str, dict]) -> str:
+    """
+    Return the "id" of a tokenizer params set.
+
+    :param tok_params_set: tokenizer params set.
+    :return: id
+    """
+    return tok_params_set[0]
+
+
+@pytest.mark.parametrize("file_path", MIDI_PATHS_ONE_TRACK)
+@pytest.mark.parametrize("tok_params_set", TOK_PARAMS_ONE_TRACK, ids=_id_tok)
 def test_one_track_midi_to_tokens_to_midi(
-    midi_path: str | Path,
+    file_path: str | Path,
     tok_params_set: tuple[str, dict[str, Any]],
-    saving_erroneous_midis: bool = True,
+    saving_erroneous_files: bool = True,
 ):
-    _test_tokenize(midi_path, tok_params_set, saving_erroneous_midis)
+    _test_tokenize(file_path, tok_params_set, saving_erroneous_files)
 
 
-@pytest.mark.parametrize("midi_path", MIDI_PATHS_ONE_TRACK_HARD)
-@pytest.mark.parametrize("tok_params_set", TOK_PARAMS_ONE_TRACK_HARD)
+@pytest.mark.parametrize("file_path", MIDI_PATHS_ONE_TRACK_HARD)
+@pytest.mark.parametrize("tok_params_set", TOK_PARAMS_ONE_TRACK_HARD, ids=_id_tok)
 def test_one_track_midi_to_tokens_to_midi_hard(
-    midi_path: str | Path,
+    file_path: str | Path,
     tok_params_set: tuple[str, dict[str, Any]],
-    saving_erroneous_midis: bool = True,
+    saving_erroneous_files: bool = True,
 ):
-    _test_tokenize(midi_path, tok_params_set, saving_erroneous_midis)
+    _test_tokenize(file_path, tok_params_set, saving_erroneous_files)
 
 
-@pytest.mark.parametrize("midi_path", MIDI_PATHS_MULTITRACK)
-@pytest.mark.parametrize("tok_params_set", TOK_PARAMS_MULTITRACK)
+@pytest.mark.parametrize("file_path", MIDI_PATHS_MULTITRACK)
+@pytest.mark.parametrize("tok_params_set", TOK_PARAMS_MULTITRACK, ids=_id_tok)
 def test_multitrack_midi_to_tokens_to_midi(
-    midi_path: str | Path,
+    file_path: str | Path,
     tok_params_set: tuple[str, dict[str, Any]],
-    saving_erroneous_midis: bool = False,
+    saving_erroneous_files: bool = False,
 ):
-    _test_tokenize(midi_path, tok_params_set, saving_erroneous_midis)
+    _test_tokenize(file_path, tok_params_set, saving_erroneous_files)
+
+
+@pytest.mark.parametrize("file_path", ABC_PATHS)
+@pytest.mark.parametrize("tok_params_set", TOK_PARAMS_ONE_TRACK, ids=_id_tok)
+def test_abc_to_tokens_to_abc(
+    file_path: str | Path,
+    tok_params_set: tuple[str, dict[str, Any]],
+    saving_erroneous_files: bool = True,
+):
+    _test_tokenize(file_path, tok_params_set, saving_erroneous_files)

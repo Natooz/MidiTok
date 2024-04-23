@@ -22,7 +22,7 @@ When training a model, you will likely want to limit the possible token sequence
 To handle such case, MidiTok provides the :py:func:`miditok.pytorch_data.split_midis_for_training` method to dynamically split MIDI files into chunks that should be tokenized in approximately the number of tokens you want.
 If you cannot fit most of your MIDIs into single usable token sequences, we recommend to split your dataset with this method.
 
-Code example
+Data loading example
 --------------------------
 
 MidiTok also provides an "all-in-one" data collator: :class:`miditok.pytorch_data.DataCollator` to be used with PyTorch a ``DataLoader`` in order to pad batches and create attention masks.
@@ -63,7 +63,7 @@ Here is a complete example showing how to use this module to train any model.
         bos_token_id=tokenizer["BOS_None"],
         eos_token_id=tokenizer["EOS_None"],
     )
-    collator = DataCollator(tokenizer["PAD_None"])
+    collator = DataCollator(tokenizer.pad_token_id)
     dataloader = DataLoader(dataset, batch_size=64, collate_fn=collator)
 
     # Iterate over the dataloader to train a model

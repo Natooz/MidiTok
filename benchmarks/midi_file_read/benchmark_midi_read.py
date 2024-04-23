@@ -5,9 +5,7 @@
 from __future__ import annotations
 
 import random
-from importlib.metadata import version
 from pathlib import Path
-from platform import processor, system
 from time import time
 
 import numpy as np
@@ -20,12 +18,18 @@ from tqdm import tqdm
 HERE = Path(__file__).parent
 DATASETS = ["Maestro", "MMD", "POP909"]
 LIBRARIES = ["Symusic", "MidiToolkit", "Pretty MIDI"]
-MAX_NUM_FILES = 500
+MAX_NUM_FILES = 1000
 
 
 def read_midi_files(
     midi_paths: list[Path]
 ) -> tuple[list[float], list[float], list[float]]:
+    """
+    Read a list of MIDI files and return their reading times.
+
+    :param midi_paths: paths to the midi files to read.
+    :return: times of files reads for symusic, miditoolkit and pretty_midi.
+    """
     times_mtk, times_sms, times_ptm = [], [], []
     for midi_path in tqdm(midi_paths, desc="Loading MIDIs"):
         # We count times only if all libraries load the file without error
@@ -56,25 +60,21 @@ def read_midi_files(
 
 def benchmark_midi_parsing(
     seed: int = 777,
-):
+) -> None:
     r"""
     Measure the reading time of MIDI files with different libraries.
 
     :param seed: random seed
     """
     random.seed(seed)
-    print(f"CPU: {processor()}")
-    print(f"System: {system()}")
-    for library in ["symusic", "miditoolkit", "pretty_midi"]:
-        print(f"{library}: {version(library)}")
 
     df = DataFrame(index=LIBRARIES, columns=DATASETS)
 
     # Record times
     for dataset in DATASETS:
-        midi_paths = list((HERE.parent.parent / "data" / dataset).rglob("*.mid"))[
-            :MAX_NUM_FILES
-        ]
+        midi_paths = list(
+            (HERE.parent.parent.parent / "data" / dataset).rglob("*.mid")
+        )[:MAX_NUM_FILES]
         all_times = read_midi_files(midi_paths)
         for library, times in zip(LIBRARIES, all_times):
             times_ = np.array(times)
@@ -87,9 +87,9 @@ def benchmark_midi_parsing(
                 library, dataset
             ] = f"{np.mean(times_):.2f} ± {np.std(times_):.2f} {unit}"
 
-    print(df)
-    df.to_csv(HERE / "benchmark_midi_read.csv")
-    df.to_markdown(HERE / "benchmark_midi_read.md")
+    df.to_csv(HERE / "midi_read.csv")
+    df.to_markdown(HERE / "midi_read.md")
+    df.to_latex(HERE / "midi_read.txt")
 
 
 if __name__ == "__main__":

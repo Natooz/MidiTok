@@ -10,7 +10,7 @@ from torch import LongTensor
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
-from miditok.constants import MIDI_LOADING_EXCEPTION
+from miditok.constants import SCORE_LOADING_EXCEPTION
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -161,7 +161,7 @@ class DatasetMIDI(_DatasetABC):
             ):
                 try:
                     midi = Score(file_path)
-                except MIDI_LOADING_EXCEPTION:
+                except SCORE_LOADING_EXCEPTION:
                     continue
                 tokseq = self._tokenize_midi(midi)
                 if tokenizer.one_token_stream:
@@ -207,7 +207,7 @@ class DatasetMIDI(_DatasetABC):
                         labels = LongTensor(
                             [labels] if isinstance(labels, int) else labels
                         )
-            except MIDI_LOADING_EXCEPTION:
+            except SCORE_LOADING_EXCEPTION:
                 token_ids = None
 
         item = {

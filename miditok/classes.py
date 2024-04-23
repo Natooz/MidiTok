@@ -8,7 +8,7 @@ from copy import deepcopy
 from dataclasses import dataclass, replace
 from math import log2
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from numpy import ndarray
 
@@ -24,7 +24,9 @@ from .constants import (
     DELETE_EQUAL_SUCCESSIVE_TEMPO_CHANGES,
     DELETE_EQUAL_SUCCESSIVE_TIME_SIG_CHANGES,
     DRUM_PITCH_RANGE,
+    ENCODE_IDS_SPLIT,
     LOG_TEMPOS,
+    MANDATORY_SPECIAL_TOKENS,
     MAX_PITCH_INTERVAL,
     NUM_TEMPOS,
     NUM_VELOCITIES,
@@ -109,20 +111,67 @@ class TokSequence:
     * events (list of Event): Event objects that can carry time or other information
     useful for debugging;
     * bytes (str): ids are converted into unique bytes, all joined together in a single
-    string. This is used by MidiTok internally for BPE.
+    string. This is used internally by MidiTok for the tokenizer's model (BPE, Unigram,
+    WordPiece).
 
     Bytes are used internally by MidiTok for Byte Pair Encoding.
-    The ``ids_are_bpe_encoded`` attribute tells if ``ids`` is encoded with BPE.
+    The ``are_ids_encoded`` attribute tells if ``ids`` is encoded.
 
-    :py:meth:`miditok.MIDITokenizer.complete_sequence`
+    :py:meth:`miditok.MIDITokenizer.complete_sequence` can be used to complete the
+    non-initialized attributes.
     """
 
     tokens: list[str | list[str]] = None
-    ids: list[int | list[int]] = None  # BPE can be applied on ids
+    ids: list[int | list[int]] = None  # can be encoded with BPE/Unigram/WordPiece
     bytes: str = None  # noqa: A003
     events: list[Event | list[Event]] = None
-    ids_bpe_encoded: bool = False
-    _ids_no_bpe: list[int | list[int]] = None
+    are_ids_encoded: bool = False
+    _ticks_bars: list[int] = None  # slice/add not handled
+    _ticks_beats: list[int] = None  # slice/add not handled
+    _ids_decoded: list[int | list[int]] = None
+
+    def split_per_bars(self) -> list[TokSequence]:
+        """
+        Split the sequence into subsequences corresponding to each bar.
+
+        The method can only be called from sequences properly tokenized, otherwise it
+        will throw an error.
+
+        :return: list of subsequences for each bar.
+        """
+        return self._split_per_ticks(self._ticks_bars)
+
+    def split_per_beats(self) -> list[TokSequence]:
+        """
+        Split the sequence into subsequences corresponding to each beat.
+
+        The method can only be called from sequences properly tokenized, otherwise it
+        will throw an error.
+
+        :return: list of subsequences for each beat.
+        """
+        return self._split_per_ticks(self._ticks_beats)
+
+    def _split_per_ticks(self, ticks: list[int]) -> list[TokSequence]:
+        idxs = [0]
+        ti_prev = 0
+        for bi in range(1, len(ticks)):
+            ti = ti_prev
+            while ti < len(self.events) and self.events[ti].time < ticks[bi]:
+                ti += 1
+            if ti == len(self.events):
+                break
+            idxs.append(ti)
+            ti_prev = ti
+
+        # Split the sequence
+        idxs.append(None)
+        subsequences = [self[idxs[i - 1] : idxs[i]] for i in range(1, len(idxs))]
+        # Remove their _ticks_bars and _ticks_beats
+        for subseq in subsequences:
+            subseq._ticks_bars = subseq._ticks_beats = None
+
+        return subsequences
 
     def __len__(self) -> int:
         """
@@ -138,8 +187,8 @@ class TokSequence:
             return len(self.events)
         if self.bytes is not None:
             return len(self.bytes)
-        if self._ids_no_bpe is not None:
-            return len(self._ids_no_bpe)
+        if self._ids_decoded is not None:
+            return len(self._ids_decoded)
 
         msg = (
             "This TokSequence seems to not be initialized, all its attributes "
@@ -167,8 +216,8 @@ class TokSequence:
             return self.events[val]
         if self.bytes is not None:
             return self.bytes[val]
-        if self._ids_no_bpe is not None:
-            return self._ids_no_bpe[val]
+        if self._ids_decoded is not None:
+            return self._ids_decoded[val]
 
         msg = (
             "This TokSequence seems to not be initialized, all its attributes "
@@ -184,7 +233,7 @@ class TokSequence:
         :return: the slice of the self ``TokSequence``.
         """
         seq = replace(self)
-        attributes = ["tokens", "ids", "bytes", "events", "_ids_no_bpe"]
+        attributes = ["tokens", "ids", "bytes", "events", "_ids_decoded"]
         for attr in attributes:
             if getattr(self, attr):
                 setattr(seq, attr, getattr(self, attr)[sli])
@@ -240,7 +289,7 @@ class TokSequence:
                 f"`TokSequence` objects. Received: {other.__class__.__name__}"
             )
             raise ValueError(msg)
-        attributes = ["tokens", "ids", "bytes", "events", "_ids_no_bpe"]
+        attributes = ["tokens", "ids", "bytes", "events", "_ids_decoded"]
         for attr in attributes:
             self_attr, other_attr = getattr(self, attr), getattr(other, attr)
             if self_attr is not None and other_attr is not None:
@@ -275,11 +324,19 @@ class TokenizerConfig:
         of velocity values. The velocities of the MIDIs resolution will be downsampled
         to ``num_velocities`` values, equally separated between 0 and 127.
         (default: ``32``)
-    :param special_tokens: list of special tokens. This must be given as a list of
-        strings, that should represent either the token type alone (e.g. ``PAD``) or
-        the token type and its value separated by an underscore (e.g. ``Genre_rock``).
-        If two or more underscores are given, all but the last one will be replaced
-        with dashes (-). (default: ``["PAD", "BOS", "EOS", "MASK"]``\)
+    :param special_tokens: list of special tokens. The "PAD" token is required and
+        will be included in the vocabulary anyway if you did not include it in
+        ``special_tokens``. This must be given as a list of strings, that should
+        represent either the token type alone (e.g. ``PAD``) or the token type and its
+        value separated by an underscore (e.g. ``Genre_rock``). If two or more
+        underscores are given, all but the last one will be replaced with dashes (-).
+        (default: ``["PAD", "BOS", "EOS", "MASK"]``\)
+    :param encode_ids_split: allows to split the token ids before encoding them with the
+        tokenizer's model (BPE, Unigram, WordPiece), similarly to how words are split
+        with spaces in text. Doing so, the tokenizer will learn tokens that represent
+        note/musical events successions only occurring within bars or beats. Possible
+        values for this argument are ``"bar"``, ``beat`` or ``no``. (default:
+        ``bar``)
     :param use_chords: will use ``Chord`` tokens, if the tokenizer is compatible. A
         ``Chord`` token indicates the presence of a chord at a certain time step.
         MidiTok uses a chord detection method based on onset times and duration. This
@@ -433,6 +490,7 @@ class TokenizerConfig:
         beat_res: dict[tuple[int, int], int] = BEAT_RES,
         num_velocities: int = NUM_VELOCITIES,
         special_tokens: Sequence[str] = SPECIAL_TOKENS,
+        encode_ids_split: Literal["bar", "beat", "no"] = ENCODE_IDS_SPLIT,
         use_chords: bool = USE_CHORDS,
         use_rests: bool = USE_RESTS,
         use_tempos: bool = USE_TEMPOS,
@@ -502,8 +560,12 @@ class TokenizerConfig:
         self.pitch_range: tuple[int, int] = pitch_range
         self.beat_res: dict[tuple[int, int], int] = beat_res
         self.num_velocities: int = num_velocities
+        self.remove_duplicated_notes = remove_duplicated_notes
+        self.encode_ids_split = encode_ids_split
+
+        # Special tokens
         self.special_tokens: list[str] = []
-        for special_token in special_tokens:
+        for special_token in list(special_tokens) + MANDATORY_SPECIAL_TOKENS:
             parts = special_token.split("_")
             if len(parts) == 1:
                 parts.append("None")
@@ -524,7 +586,6 @@ class TokenizerConfig:
                     f" Skipping its duplicated occurrence.",
                     stacklevel=2,
                 )
-        self.remove_duplicated_notes = remove_duplicated_notes
 
         # Additional token types params, enabling additional token types
         self.use_chords: bool = use_chords

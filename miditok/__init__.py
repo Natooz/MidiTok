@@ -18,6 +18,7 @@ from .tokenizations import (
     Octuple,
     Structured,
 )
+from .tokenizer_training_iterator import TokTrainingIterator
 from .utils import utils
 
 __all__ = [
@@ -25,6 +26,7 @@ __all__ = [
     "Event",
     "TokSequence",
     "TokenizerConfig",
+    "TokTrainingIterator",
     "MIDILike",
     "REMI",
     "TSD",
