@@ -76,6 +76,7 @@ exclude_also = [
 ]
 omit = [
     # files to omit to check
+    "benchmarks/*"
 ]
 
 [tool.ruff]
