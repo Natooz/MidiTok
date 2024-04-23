@@ -2429,7 +2429,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         **A few considerations must be noted:**
 
-        **1. The WordPiece model has a ``max_input_chars_per_word`` attribute, which
+        1. The WordPiece model has a ``max_input_chars_per_word`` attribute, which
         controls the maximum number of "base tokens" a sequence of ids can contain until
         it discards and replaces it with a predefined "unknown" token (``unk_token``
         model attribute). This means that, depending on the base sequence lengths of
@@ -2444,13 +2444,12 @@ class MIDITokenizer(ABC, HFHubMixin):
         MidiTok are ``400`` when splitting ids in bar subsequences and ``100`` when
         splitting ids in beat subsequences.
         The ``max_input_chars_per_word`` and ``unk_token`` model attributes can be set
-        by referencing them in the keyword arguments of this method (``kwargs``).**
-
-        **2. The Hugging Face Unigram model training `is not 100% deterministic`
+        by referencing them in the keyword arguments of this method (``kwargs``).
+        2. The Hugging Face Unigram model training `is not 100% deterministic`
         <https://github.com/huggingface/tokenizers/issues/668>_. As such and if you are
         using it, you should train your tokenizer only once before using it to save
         tokenized MIDIs or train a model. Otherwise some token ids might be swapped,
-        resulting in incoherent encodings-decodings.**
+        resulting in incoherent encodings-decodings.
 
         **The training progress bar will not appear with non-proper terminals.**
         (cf `GitHub issue <https://github.com/huggingface/tokenizers/issues/157>`_ )
