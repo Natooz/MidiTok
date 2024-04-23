@@ -2445,8 +2445,8 @@ class MIDITokenizer(ABC, HFHubMixin):
         splitting ids in beat subsequences.
         The ``max_input_chars_per_word`` and ``unk_token`` model attributes can be set
         by referencing them in the keyword arguments of this method (``kwargs``).
-        2. The Hugging Face Unigram model training `is not 100% deterministic`
-        <https://github.com/huggingface/tokenizers/issues/668>_. As such and if you are
+        2. The Hugging Face Unigram model training `is not 100% deterministic
+        <https://github.com/huggingface/tokenizers/issues/668>`_. As such and if you are
         using it, you should train your tokenizer only once before using it to save
         tokenized MIDIs or train a model. Otherwise some token ids might be swapped,
         resulting in incoherent encodings-decodings.

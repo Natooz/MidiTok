@@ -109,7 +109,7 @@ Using this single word to train the tokenizer is feasible (except for WordPiece)
 MidiTok allows to split the token sequence into subsequences of bytes for each bar or beat, that will be treated separately by the tokenizer's model. This can be set by the ```` attribute of the tokenizer's configuration (:class:`miditok.classes.TokenizerConfig`). Doing so, the learned tokens will not span across different bars or beats. The splitting step is also performed before encoding token ids after that the training is done.
 It is similar to the "pre-tokenization" step in the `Hugging Face tokenizers library <https://huggingface.co/docs/tokenizers/v0.13.4.rc2/en/components#pretokenizers>`_ which consists in splitting the input text into distinct words at spaces.
 
-Code example
+Training example
 ------------------------
 
 ..  code-block:: python
@@ -143,8 +143,8 @@ Trained tokenizers can be saved and loaded back (:ref:`Save / Load tokenizer`).
 .. autofunction:: miditok.MIDITokenizer.train
     :noindex:
 
-.. autofunction:: miditok.MIDITokenizer.encode_ids
+.. autofunction:: miditok.MIDITokenizer.encode_token_ids
     :noindex:
 
-.. autofunction:: miditok.MIDITokenizer.decode_ids
+.. autofunction:: miditok.MIDITokenizer.decode_token_ids
     :noindex:
