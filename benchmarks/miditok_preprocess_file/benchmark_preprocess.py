@@ -11,6 +11,7 @@ from time import time
 import numpy as np
 from pandas import DataFrame, read_csv
 from symusic import Score
+from tqdm import tqdm
 
 import miditok
 from benchmarks.utils import mean_std_str
@@ -60,7 +61,7 @@ def benchmark_preprocess() -> None:
             tokenizer = getattr(miditok, tokenization)(tok_config)
 
             times = []
-            for midi_path in files_paths:
+            for midi_path in tqdm(files_paths):
                 try:
                     midi = Score(midi_path)
                 except SCORE_LOADING_EXCEPTION:

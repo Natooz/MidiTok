@@ -4,15 +4,17 @@
 
 from __future__ import annotations
 
-import csv
-from importlib.metadata import version
 from pathlib import Path
 from time import time
 
 import numpy as np
+from pandas import DataFrame, read_csv
 from symusic import Score
+from tqdm import tqdm
 
 import miditok
+from benchmarks import mean_std_str
+from miditok.constants import SCORE_LOADING_EXCEPTION
 
 TOKENIZER_CONFIG_KWARGS = {
     "use_tempos": True,
@@ -33,44 +35,36 @@ MAX_NUM_FILES = 1000
 
 def benchmark_tokenize() -> None:
     r"""Read MIDI files and tokenize them."""
-    results = []
+    results_path = HERE / "tokenize.csv"
+    if results_path.is_file():
+        df = read_csv(results_path, index_col=0)
+    else:
+        df = DataFrame(index=TOKENIZATIONS, columns=DATASETS)
+
     for dataset in DATASETS:
         midi_paths = list(
             (HERE.parent.parent.parent / "data" / dataset).rglob("*.mid")
         )[:MAX_NUM_FILES]
-
         for tokenization in TOKENIZATIONS:
             tok_config = miditok.TokenizerConfig(**TOKENIZER_CONFIG_KWARGS)
             tokenizer = getattr(miditok, tokenization)(tok_config)
 
             times = []
-            for midi_path in midi_paths:
+            for midi_path in tqdm(midi_paths):
                 try:
                     midi = Score(midi_path)
-                    # midi = MidiFile(midi_path)
-                    t0 = time()
-                    tokenizer.encode(midi)
-                    times.append(time() - t0)
-                except:  # noqa: E722, S112
+                except SCORE_LOADING_EXCEPTION:
                     continue
+                t0 = time()
+                tokenizer.encode(midi)
+                times.append(time() - t0)
 
             times = np.array(times) * 1e3
-            mean = np.mean(times)
-            std = np.std(times)
-            results.append(f"{mean:.2f} ± {std:.2f} ms")
+            df.at[tokenization, dataset] = f"{mean_std_str(times, 2)} ms"
 
-    csv_file_path = HERE / "benchmark_tokenize.csv"
-    write_header = not csv_file_path.is_file()
-    with Path.open(csv_file_path, "a") as csvfile:
-        writer = csv.writer(csvfile)
-        if write_header:
-            header = ["MidiTok version"] + [
-                f"{dataset} - {tokenization}"
-                for dataset in DATASETS
-                for tokenization in TOKENIZATIONS
-            ]
-            writer.writerow(header)
-        writer.writerow([version("miditok"), *results])
+    df.to_csv(HERE / "tokenize.csv")
+    df.to_markdown(HERE / "tokenize.md")
+    df.to_latex(HERE / "tokenize.txt")
 
 
 if __name__ == "__main__":

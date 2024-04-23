@@ -374,6 +374,12 @@ class MIDITokenizer(ABC, HFHubMixin):
             max_midi_denom = max(ts.denominator for ts in midi.time_signatures)
             new_tpq = int(self.config.max_num_pos_per_beat * max_midi_denom / 4)
         else:
+            # In this case, we set the time signature as being only 4/4.
+            # This is required as we will add the ticks of the bars and beats to the
+            # TokSequence, to split it per bars/beats when encoding the ids.
+            midi.time_signatures = TimeSignatureTickList(
+                [TimeSignature(0, *TIME_SIGNATURE)]
+            )
             new_tpq = self.config.max_num_pos_per_beat
 
         # Resample time (not inplace)
@@ -1091,7 +1097,10 @@ class MIDITokenizer(ABC, HFHubMixin):
             *PitchInterval* or *Chord* tokens. (default: ``None``)
         :return: sequence of corresponding ``Event``s.
         """
-        program = track.program if not track.is_drum else -1
+        if self.config.use_programs:
+            program = track.program if not track.is_drum else -1
+        else:
+            program = 0
         events = []
         # max_time_interval is adjusted depending on the time signature denom / tpb
         max_time_interval = 0
@@ -1947,12 +1956,6 @@ class MIDITokenizer(ABC, HFHubMixin):
             token = "_".join(parts)
             if token not in self.config.special_tokens:
                 self.config.special_tokens.append(token)
-            else:
-                warnings.warn(
-                    f"The special token {token} is already present in the tokenizer's "
-                    f"vocabulary.",
-                    stacklevel=2,
-                )
 
         if vocab_idx is not None:
             self._vocab_base[vocab_idx][token_str] = len(self._vocab_base[vocab_idx])
