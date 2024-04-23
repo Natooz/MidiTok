@@ -347,17 +347,17 @@ class MIDITokenizer(ABC, HFHubMixin):
             return 0
         return int(self._tpb_to_rest_array[ticks_per_beat][0])
 
-    def preprocess_midi(self, midi: Score) -> Score:
+    def preprocess_score(self, midi: Score) -> Score:
         r"""
-        Pre-process a MIDI file to resample its time and events values.
+        Pre-process a ``symusic.Score`` object to resample its time and events values.
 
         This method is called before parsing a MIDI's contents for tokenization.
         Its notes attributes (times, pitches, velocities) will be downsampled and
         sorted, duplicated notes removed, as well as tempos. Empty tracks (with no
-        note) will be removed from the MIDI object. Notes with pitches
+        note) will be removed from the ``symusic.Score`` object. Notes with pitches
         outside ``self.config.pitch_range`` will be deleted.
 
-        :param midi: MIDI object to preprocess.
+        :param midi: ``symusic.Score`` object to preprocess.
         """
         # Filter time signatures.
         # We need to do this first to determine the MIDI's new time division.
@@ -1417,7 +1417,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             score = Score(score)
 
         # Preprocess the MIDI file
-        score = self.preprocess_midi(score)
+        score = self.preprocess_score(score)
 
         # Tokenize it
         tokens = self._midi_to_tokens(score)

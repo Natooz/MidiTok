@@ -4,15 +4,17 @@
 
 from __future__ import annotations
 
-import csv
 from importlib.metadata import version
 from pathlib import Path
 from time import time
 
 import numpy as np
+from pandas import DataFrame, read_csv
 from symusic import Score
 
 import miditok
+from benchmarks.utils import mean_std_str
+from miditok.constants import SCORE_LOADING_EXCEPTION
 
 TOKENIZER_CONFIG_KWARGS = {
     "use_tempos": True,
@@ -33,44 +35,46 @@ MAX_NUM_FILES = 1000
 
 def benchmark_preprocess() -> None:
     r"""Read MIDI files and call `tokenizer.preprocess_midi` on them."""
-    results = []
+    results_path = HERE / "preprocess.csv"
+    if results_path.is_file():
+        df = read_csv(results_path, index_col=0)
+    else:
+        columns = ["symusic version"] + [
+            f"{dataset} - {tokenization}"
+            for dataset in DATASETS
+            for tokenization in TOKENIZATIONS
+        ]
+        df = DataFrame(index=[], columns=columns)
+
+    # Add a row to the dataframe
+    index_name = f"miditok {version('miditok')}"
+    df.at[index_name, "symusic version"] = version("symusic")
+
     for dataset in DATASETS:
-        midi_paths = list(
+        files_paths = list(
             (HERE.parent.parent.parent / "data" / dataset).rglob("*.mid")
         )[:MAX_NUM_FILES]
-
         for tokenization in TOKENIZATIONS:
+            col_name = f"{dataset} - {tokenization}"
             tok_config = miditok.TokenizerConfig(**TOKENIZER_CONFIG_KWARGS)
             tokenizer = getattr(miditok, tokenization)(tok_config)
 
             times = []
-            for midi_path in midi_paths:
+            for midi_path in files_paths:
                 try:
                     midi = Score(midi_path)
-                    # midi = MidiFile(midi_path)
-                    t0 = time()
-                    tokenizer.preprocess_midi(midi)
-                    times.append(time() - t0)
-                except:  # noqa: E722, S112
+                except SCORE_LOADING_EXCEPTION:
                     continue
+                t0 = time()
+                tokenizer.preprocess_score(midi)
+                times.append(time() - t0)
 
             times = np.array(times) * 1e3
-            mean = np.mean(times)
-            std = np.std(times)
-            results.append(f"{mean:.2f} ± {std:.2f} ms")
+            df.at[index_name, col_name] = f"{mean_std_str(times, 2)} ms"
 
-    csv_file_path = HERE / "benchmark_preprocess.csv"
-    write_header = not csv_file_path.is_file()
-    with Path.open(csv_file_path, "a") as csvfile:
-        writer = csv.writer(csvfile)
-        if write_header:
-            header = ["MidiTok version"] + [
-                f"{dataset} - {tokenization}"
-                for dataset in DATASETS
-                for tokenization in TOKENIZATIONS
-            ]
-            writer.writerow(header)
-        writer.writerow([version("miditok"), *results])
+    df.to_csv(HERE / "preprocess.csv")
+    df.to_markdown(HERE / "preprocess.md")
+    df.to_latex(HERE / "preprocess.txt")
 
 
 if __name__ == "__main__":

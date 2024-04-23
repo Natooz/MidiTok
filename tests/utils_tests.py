@@ -214,7 +214,7 @@ def adapt_ref_midi_for_tests_assertion(
         miditok.utils.merge_same_program_tracks(new_midi.tracks)
 
     # Preprocess the MIDI: downsample it, remove notes outside of pitch range...
-    new_midi = tokenizer.preprocess_midi(new_midi)
+    new_midi = tokenizer.preprocess_score(new_midi)
 
     # For Octuple, as tempo is only carried at notes times, we need to adapt
     # their times for comparison. Set tempo changes at onset times of notes.

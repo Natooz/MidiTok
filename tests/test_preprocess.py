@@ -37,8 +37,8 @@ def test_preprocess(tokenization: str, midi_path: Path):
 
     # Preprocess original MIDI, and once again on the already preprocessed MIDI
     midi = Score(midi_path)
-    midi_processed1 = tokenizer.preprocess_midi(midi)
-    midi_processed2 = tokenizer.preprocess_midi(midi_processed1)
+    midi_processed1 = tokenizer.preprocess_score(midi)
+    midi_processed2 = tokenizer.preprocess_score(midi_processed1)
 
     # The second preprocess shouldn't do anything
     assert midi_processed1 == midi_processed2
