@@ -3354,7 +3354,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     def __call__(
         self,
-        obj: Score | TokSequence | list[TokSequence, int, list[int]],
+        obj: Score | TokSequence | list[TokSequence, int, list[int]] | np.ndarray,
         *args,  # noqa: ANN002
         **kwargs,
     ) -> TokSequence | list[TokSequence] | Score:
@@ -3372,12 +3372,19 @@ class MIDITokenizer(ABC, HFHubMixin):
             a path to a music or tokens json file.
         :return: the converted object.
         """
-        # Load tokens (json file)
+        # Tokenize `Score`
+        if isinstance(obj, Score):
+            return self.encode(obj, *args, **kwargs)
+
+        # Path provided: Encode/decode a file
         if isinstance(obj, (str, Path)):
             obj = Path(obj)
+            # tokens
             if obj.suffix == "json":
                 tokens = self.load_tokens(obj)
                 return self.decode(tokens["ids"], *args, **kwargs)
+            # music file
+            return self.encode(obj, *args, **kwargs)
 
         # Depreciated miditoolkit object
         if MidiFile is not None and isinstance(obj, MidiFile):
@@ -3389,12 +3396,8 @@ class MIDITokenizer(ABC, HFHubMixin):
             )
             return self.encode(miditoolkit_to_symusic(obj), *args, **kwargs)
 
-        # Decode tokens
-        if isinstance(obj, (TokSequence, list)):
-            return self.decode(obj, *args, **kwargs)
-
-        # Tokenize `Score` or a music file
-        return self.encode(obj, *args, **kwargs)
+        # Decode tokens, may be a TokSequence, numpy array or tensor
+        return self.decode(obj, *args, **kwargs)
 
     def __len__(self) -> int:
         r"""

@@ -16,7 +16,6 @@ from symusic import Score
 from tqdm import tqdm
 
 HERE = Path(__file__).parent
-RESULTS_PATH = HERE / "results"
 DATASETS = ["Maestro", "MMD", "POP909"]
 LIBRARIES = ["Symusic", "MidiToolkit", "Pretty MIDI"]
 MAX_NUM_FILES = 1000
@@ -90,7 +89,7 @@ def benchmark_midi_parsing(
 
     df.to_csv(HERE / "midi_read.csv")
     df.to_markdown(HERE / "midi_read.md")
-    df.to_latex(HERE / "midi_read.md")
+    df.to_latex(HERE / "midi_read.txt")
 
 
 if __name__ == "__main__":
