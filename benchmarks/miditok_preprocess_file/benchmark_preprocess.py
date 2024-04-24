@@ -35,7 +35,7 @@ MAX_NUM_FILES = 1000
 
 
 def benchmark_preprocess() -> None:
-    r"""Read MIDI files and call `tokenizer.preprocess_midi` on them."""
+    r"""Read MIDI files and call `tokenizer.preprocess_score` on them."""
     results_path = HERE / "preprocess.csv"
     if results_path.is_file():
         df = read_csv(results_path, index_col=0)

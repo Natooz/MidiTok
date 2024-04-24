@@ -45,6 +45,7 @@ from tqdm import tqdm
 
 from .classes import Event, TokenizerConfig, TokSequence
 from .constants import (
+    ABC_FILES_EXTENSIONS,
     BOS_TOKEN_NAME,
     CHR_ID_START,
     CURRENT_MIDITOK_VERSION,
@@ -53,9 +54,9 @@ from .constants import (
     DEFAULT_TOKENIZER_FILE_NAME,
     DEFAULT_TRAINING_MODEL_NAME,
     EOS_TOKEN_NAME,
-    MIDI_FILES_EXTENSIONS,
     PITCH_CLASSES,
     SCORE_LOADING_EXCEPTION,
+    SUPPORTED_MUSIC_FILE_EXTENSIONS,
     TEMPO,
     TIME_SIGNATURE,
     UNIGRAM_MAX_PIECE_LENGTH,
@@ -85,7 +86,7 @@ from .utils.utils import (
 
 class MIDITokenizer(ABC, HFHubMixin):
     r"""
-    MIDI tokenizer base class, acting as a common framework.
+    Base music tokenizer class, acting as a common framework.
 
     This is the base class of all tokenizers, containing the common methods and
     attributes. It serves as a framework, and implement most of the tokenization
@@ -158,14 +159,14 @@ class MIDITokenizer(ABC, HFHubMixin):
         # ticks/beat based on this base, i.e. `self.config.max_num_pos_per_beat`
         # multiplied by the factor between each note value and the maximum note value.
         self._tpb_per_ts = self.__create_tpb_per_ts()
-        # Default time division to use when decoding tokens to a MIDI.
+        # Default time division to use when decoding tokens to a ``symusic.Score``.
         # This is left as a class attribute and not a property as the config is not
         # intended to be modified after its creation. Ultimately, this could be
         # ensured by converting TokenizerConfig to a frozen dataclass.
         # It shouldn't be used in place of the real ticks/beat value, which depends on
         # the current time signature denominator. The only exception is for tokenizers
         # which does not support time signature, i.e. which only consider 4/4.
-        # During preprocessing, the MIDI will be resampled to a new time division equal
+        # During preprocessing, the Score will be resampled to a new time division equal
         # to the number of ticks per beat of the lowest time signature denominator it
         # contains. This is done in order to resample as much as possible while keeping
         # most of the accuracy. Some sections might need to be resampled again, when
@@ -339,7 +340,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         Return the minimum rest value in ticks, for a given ``ticks_per_beat``.
 
         :param ticks_per_beat: number of ticks in a beat. This depends on the current
-            time signature, and is equal to the MIDI's time division if the denominator
+            time signature, and is equal to the Score's time division if the denominator
             is 4 (quarter).
         :return: minimum rest in ticks.
         """
@@ -347,142 +348,142 @@ class MIDITokenizer(ABC, HFHubMixin):
             return 0
         return int(self._tpb_to_rest_array[ticks_per_beat][0])
 
-    def preprocess_score(self, midi: Score) -> Score:
+    def preprocess_score(self, score: Score) -> Score:
         r"""
         Pre-process a ``symusic.Score`` object to resample its time and events values.
 
-        This method is called before parsing a MIDI's contents for tokenization.
+        This method is called before parsing a Score's contents for tokenization.
         Its notes attributes (times, pitches, velocities) will be downsampled and
         sorted, duplicated notes removed, as well as tempos. Empty tracks (with no
         note) will be removed from the ``symusic.Score`` object. Notes with pitches
         outside ``self.config.pitch_range`` will be deleted.
 
-        :param midi: ``symusic.Score`` object to preprocess.
+        :param score: ``symusic.Score`` object to preprocess.
         """
         # Filter time signatures.
-        # We need to do this first to determine the MIDI's new time division.
+        # We need to do this first to determine the Score's new time division.
         if self.config.use_time_signatures:
-            self._filter_unsupported_time_signatures(midi.time_signatures)
+            self._filter_unsupported_time_signatures(score.time_signatures)
             # We mock the first with 0, even if there are already time signatures. This
-            # is required as if the MIDI only had */2 time signatures, we must make
+            # is required as if the Score only had */2 time signatures, we must make
             # sure the resampling tpq is calculated according to a maximum denom of 4
-            # if the beginning of the MIDI is mocked at 4/4.
-            if len(midi.time_signatures) == 0 or midi.time_signatures[0].time != 0:
-                midi.time_signatures.insert(0, TimeSignature(0, *TIME_SIGNATURE))
+            # if the beginning of the Score is mocked at 4/4.
+            if len(score.time_signatures) == 0 or score.time_signatures[0].time != 0:
+                score.time_signatures.insert(0, TimeSignature(0, *TIME_SIGNATURE))
             # The new time division is chosen depending on its highest time signature
             # denominator, and is equivalent to the highest possible tick/beat ratio.
-            max_midi_denom = max(ts.denominator for ts in midi.time_signatures)
-            new_tpq = int(self.config.max_num_pos_per_beat * max_midi_denom / 4)
+            max_ts_denom = max(ts.denominator for ts in score.time_signatures)
+            new_tpq = int(self.config.max_num_pos_per_beat * max_ts_denom / 4)
         else:
             # In this case, we set the time signature as being only 4/4.
             # This is required as we will add the ticks of the bars and beats to the
             # TokSequence, to split it per bars/beats when encoding the ids.
-            midi.time_signatures = TimeSignatureTickList(
+            score.time_signatures = TimeSignatureTickList(
                 [TimeSignature(0, *TIME_SIGNATURE)]
             )
             new_tpq = self.config.max_num_pos_per_beat
 
         # Resample time (not inplace)
-        if midi.ticks_per_quarter != new_tpq:
-            midi = midi.resample(new_tpq, min_dur=1)
+        if score.ticks_per_quarter != new_tpq:
+            score = score.resample(new_tpq, min_dur=1)
 
         # Merge instruments of the same program / inst before preprocessing them.
         # This allows to avoid potential duplicated notes in some multitrack settings
         # This can however mess up chord detections.
         if self.config.use_programs and self.one_token_stream:
-            merge_same_program_tracks(midi.tracks)
+            merge_same_program_tracks(score.tracks)
 
         # Process time signature changes
         # We need to do it before computing the ticks_per_beat sections
-        if self.config.use_time_signatures and len(midi.time_signatures) > 0:
+        if self.config.use_time_signatures and len(score.time_signatures) > 0:
             self._preprocess_time_signatures(
-                midi.time_signatures, midi.ticks_per_quarter
+                score.time_signatures, score.ticks_per_quarter
             )
 
         # Compute resampling ratios to update times of events when several time sig,
         # and ticks per beat ratios.
-        # Resampling factors are used to resample times of events when the MIDI has
+        # Resampling factors are used to resample times of events when the Score has
         # several different time signature denominators.
         # ticks_per_beat ratios are used to adjust durations values according to the
-        # the tokenizer's vocabulary, i.e. *Duration* tokens.
+        # tokenizer's vocabulary, i.e. *Duration* tokens.
         if not self._note_on_off or (
             self.config.use_sustain_pedals and self.config.sustain_pedal_duration
         ):
             if self.config.use_time_signatures:
-                ticks_per_beat = get_score_ticks_per_beat(midi)
+                ticks_per_beat = get_score_ticks_per_beat(score)
             else:
-                ticks_per_beat = np.array([[midi.end(), midi.ticks_per_quarter]])
+                ticks_per_beat = np.array([[score.end(), score.ticks_per_quarter]])
         else:
             ticks_per_beat = None
         if (
             self.config.use_time_signatures
-            and len({ts.denominator for ts in midi.time_signatures}) > 1
+            and len({ts.denominator for ts in score.time_signatures}) > 1
         ):
-            tpq_resampling_factors = self._get_midi_resampling_factor(midi)
+            tpq_resampling_factors = self._get_score_resampling_factor(score)
         else:
             tpq_resampling_factors = None
 
         # Preprocess track events
-        for t in range(len(midi.tracks) - 1, -1, -1):
+        for t in range(len(score.tracks) - 1, -1, -1):
             # Delete track only there is nothing inside being used
             if (
-                len(midi.tracks[t].notes) == 0
+                len(score.tracks[t].notes) == 0
                 and (
                     not self.config.use_pitch_bends
-                    or len(midi.tracks[t].pitch_bends) == 0
+                    or len(score.tracks[t].pitch_bends) == 0
                 )
                 and (
                     not self.config.use_sustain_pedals
-                    or len(midi.tracks[t].pedals) == 0
+                    or len(score.tracks[t].pedals) == 0
                 )
             ):
-                del midi.tracks[t]
+                del score.tracks[t]
                 continue
 
             # Preprocesses notes
-            if len(midi.tracks[t].notes) > 0:
-                midi.tracks[t].notes = self._preprocess_notes(
-                    midi.tracks[t].notes,
-                    midi.tracks[t].is_drum,
+            if len(score.tracks[t].notes) > 0:
+                score.tracks[t].notes = self._preprocess_notes(
+                    score.tracks[t].notes,
+                    score.tracks[t].is_drum,
                     tpq_resampling_factors,
                     ticks_per_beat,
                 )
 
             # Resample pitch bend values
-            if self.config.use_pitch_bends and len(midi.tracks[t].pitch_bends) > 0:
-                midi.tracks[t].pitch_bends = self._preprocess_pitch_bends(
-                    midi.tracks[t].pitch_bends, tpq_resampling_factors
+            if self.config.use_pitch_bends and len(score.tracks[t].pitch_bends) > 0:
+                score.tracks[t].pitch_bends = self._preprocess_pitch_bends(
+                    score.tracks[t].pitch_bends, tpq_resampling_factors
                 )
 
             # Resample pedals durations
-            if self.config.use_sustain_pedals and len(midi.tracks[t].pedals) > 0:
-                midi.tracks[t].pedals = self._preprocess_pedals(
-                    midi.tracks[t].pedals, tpq_resampling_factors, ticks_per_beat
+            if self.config.use_sustain_pedals and len(score.tracks[t].pedals) > 0:
+                score.tracks[t].pedals = self._preprocess_pedals(
+                    score.tracks[t].pedals, tpq_resampling_factors, ticks_per_beat
                 )
 
             # Delete track only there is nothing inside being used
             if (
-                len(midi.tracks[t].notes) == 0
+                len(score.tracks[t].notes) == 0
                 and (
                     not self.config.use_pitch_bends
-                    or len(midi.tracks[t].pitch_bends) == 0
+                    or len(score.tracks[t].pitch_bends) == 0
                 )
                 and (
                     not self.config.use_sustain_pedals
-                    or len(midi.tracks[t].pedals) == 0
+                    or len(score.tracks[t].pedals) == 0
                 )
             ):
-                del midi.tracks[t]
+                del score.tracks[t]
                 continue
 
         # Process tempo changes
         if self.config.use_tempos:
-            midi.tempos = self._preprocess_tempos(midi.tempos, tpq_resampling_factors)
+            score.tempos = self._preprocess_tempos(score.tempos, tpq_resampling_factors)
 
         # We do not change key signature changes, markers and lyrics here as they are
         # not used by MidiTok (yet)
 
-        return midi
+        return score
 
     def _filter_unsupported_time_signatures(
         self, time_signatures: TimeSignatureTickList
@@ -499,9 +500,9 @@ class MIDITokenizer(ABC, HFHubMixin):
             ) not in self.time_signatures:
                 if self._verbose:
                     warnings.warn(
-                        f"The MIDI contains a time signature ({time_signatures[i]}) "
+                        f"The file contains a time signature ({time_signatures[i]}) "
                         f"outside of those supported by the tokenizer ("
-                        f"{self.time_signatures}). You should either discard this MIDI"
+                        f"{self.time_signatures}). You should either discard this file"
                         f" or support this time signature, or alternatively deleting "
                         f"it however if you are using a beat-based tokenizer (REMI) "
                         f"the bars will be incorrectly detected.",
@@ -530,13 +531,13 @@ class MIDITokenizer(ABC, HFHubMixin):
             filtered differently.
         :param resampling_factors: sections of resampling factors, when we need to
             adjust the times of events to a specific ticks/beat value. This is required
-            when the MIDI has time signatures with different denominators. The factors
+            when the file has time signatures with different denominators. The factors
             are given as a numpy array of shape ``(N,2)``, for ``N`` changes of ticks
             per beat, and the second dimension representing the end tick of each
             section and the number of ticks per beat respectively. (default: ``None``)
         :param ticks_per_beat: array indicating the number of ticks per beat per time
             signature denominator section. The numbers of ticks per beat depend on the
-            time signatures of the MIDI being parsed. The array has a shape ``(N,2)``,
+            time signatures of the file being parsed. The array has a shape ``(N,2)``,
             for ``N`` changes of ticks per beat, and the second dimension representing
             the end tick of each section and the number of ticks per beat respectively.
             This argument is not required if
@@ -591,7 +592,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             self._adjust_offset_spanning_across_time_sig(note_soa, resampling_factors)
 
         # Symusic automatically sorts the notes by (time, duration, pitch) keys when
-        # reading a MIDI file. We hence don't need to sort the notes.
+        # reading a music file. We hence don't need to sort the notes.
         # However, when using `NoteOn`/`NoteOff`, we can encounter note order
         # alterations with the velocity values as they are not sorted on velocities and
         # that the tokens are decoded following a FIFO logic.
@@ -625,13 +626,13 @@ class MIDITokenizer(ABC, HFHubMixin):
         :param tempos: tempo changes to resample.
         :param resampling_factors: sections of resampling factors, when we need to
             adjust the times of events to a specific ticks/beat value. This is required
-            when the MIDI has time signatures with different denominators. The factors
+            when the file has time signatures with different denominators. The factors
             are given as a numpy array of shape ``(N,2)``, for ``N`` changes of ticks
             per beat, and the second dimension representing the end tick of each
             section and the number of ticks per beat respectively. (default: ``None``)
         """
         # If we delete the successive equal tempo changes, we need to sort them by time
-        # Fortunately, sorting is already performed by symusic when loading the MIDI.
+        # Fortunately, sorting is already performed by symusic when loading the file.
 
         # Use the default tempo if there is None (shouldn't happen)
         if len(tempos) == 0:
@@ -701,12 +702,12 @@ class MIDITokenizer(ABC, HFHubMixin):
         messages.
         If the ``delete_equal_successive_time_sig_changes`` parameter is set ``True``
         in the tokenizer's configuration, the time signatures must be sorted by time
-        before calling this method. This is done by symusic when loading a MIDI. If
-        this method is called for a MIDI created from another way, make sure they
-        are sorted: ``midi.time_signatures.sort()``.
+        before calling this method. This is done by symusic when loading a file. If
+        this method is called for a file created from another way, make sure they
+        are sorted: ``score.time_signatures.sort()``.
 
         :param time_sigs: time signature changes to quantize.
-        :param time_division: time division in ticks per quarter of the MIDI.
+        :param time_division: time division in ticks per quarter of the Score.
         """
 
         def are_ts_equals(ts1: TimeSignature, ts2: TimeSignature) -> bool:
@@ -776,7 +777,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         :param pitch_bends: pitch bend events.
         :param resampling_factors: sections of resampling factors, when we need to
             adjust the times of events to a specific ticks/beat value. This is required
-            when the MIDI has time signatures with different denominators. The factors
+            when the Score has time signatures with different denominators. The factors
             are given as a numpy array of shape ``(N,2)``, for ``N`` changes of ticks
             per beat, and the second dimension representing the end tick of each
             section and the number of ticks per beat respectively. (default: ``None``)
@@ -826,13 +827,13 @@ class MIDITokenizer(ABC, HFHubMixin):
         :param pedals: pedals to preprocess.
         :param resampling_factors: sections of resampling factors, when we need to
             adjust the times of events to a specific ticks/beat value. This is required
-            when the MIDI has time signatures with different denominators. The factors
+            when the Score has time signatures with different denominators. The factors
             are given as a numpy array of shape ``(N,2)``, for ``N`` changes of ticks
             per beat, and the second dimension representing the end tick of each
             section and the number of ticks per beat respectively. (default: ``None``)
         :param ticks_per_beat: array indicating the number of ticks per beat per
             portions. The numbers of ticks per beat depend on the time signatures of
-            the MIDI being parsed. The array has a shape ``(N,2)``, for ``N`` changes
+            the Score being parsed. The array has a shape ``(N,2)``, for ``N`` changes
             of ticks per beat, and the second dimension representing the end tick of
             each portion and the number of ticks per beat respectively. This argument
             is not required if ``tokenizer.config.sustain_pedal_duration`` is disabled.
@@ -965,7 +966,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         :param notes_pedals_soa: structure of arrays (soa) of notes or pedals.
         :param ticks_per_beat: array indicating the number of ticks per beat per
             portions. The numbers of ticks per beat depend on the time signatures of
-            the MIDI being parsed. The array has a shape ``(N,2)``, for ``N`` changes
+            the Score being parsed. The array has a shape ``(N,2)``, for ``N`` changes
             of ticks per beat, and the second dimension representing the end tick of
             each portion and the number of ticks per beat respectively.
         """
@@ -1013,7 +1014,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 all_events = [[] for _ in range(len(score.tracks))]
 
         # Global events (Tempo, TimeSignature)
-        global_events = self._create_midi_events(score)
+        global_events = self._create_global_events(score)
         if self.one_token_stream:
             all_events += global_events
         else:
@@ -1085,12 +1086,12 @@ class MIDITokenizer(ABC, HFHubMixin):
         Concerned events are: *Pitch*, *Velocity*, *Duration*, *NoteOn*, *NoteOff* and
         optionally *Chord*, *Pedal* and *PitchBend*.
         **If the tokenizer is using pitch intervals, the notes must be sorted by time
-        then pitch values. This is done in** ``preprocess_midi``.
+        then pitch values. This is done in** ``preprocess_score``.
 
         :param track: ``symusic.Track`` to extract events from.
         :param ticks_per_beat: array indicating the number of ticks per beat per
             section. The numbers of ticks per beat depend on the time signatures of
-            the MIDI being parsed. The array has a shape ``(N,2)``, for ``N`` changes
+            the Score being parsed. The array has a shape ``(N,2)``, for ``N`` changes
             of ticks per beat, and the second dimension representing the end tick of
             each portion and the number of ticks per beat respectively.
             This argument is not required if the tokenizer is not using *Duration*,
@@ -1341,12 +1342,12 @@ class MIDITokenizer(ABC, HFHubMixin):
         for idx, event in reversed(program_change_events):
             events.insert(idx, event)
 
-    def _create_midi_events(self, midi: Score) -> list[Event]:
+    def _create_global_events(self, score: Score) -> list[Event]:
         r"""
-        Create the *global* MIDI additional tokens: `Tempo` and `TimeSignature`.
+        Create the *global* music tokens: `Tempo` and `TimeSignature`.
 
-        :param midi: midi to extract the events from.
-        :return: list of Events.
+        :param score: ``symusic.Score`` to extract the events from.
+        :return: list of ``miditok.classes.Event``.
         """
         events = []
 
@@ -1358,7 +1359,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                     value=f"{time_sig.numerator}/{time_sig.denominator}",
                     time=time_sig.time,
                 )
-                for time_sig in midi.time_signatures
+                for time_sig in score.time_signatures
             ]
 
         # Adds tempo events if specified
@@ -1370,7 +1371,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                     time=tempo.time,
                     desc=tempo.tempo,
                 )
-                for tempo in midi.tempos
+                for tempo in score.tempos
             ]
 
         return events
@@ -1405,16 +1406,16 @@ class MIDITokenizer(ABC, HFHubMixin):
         encode_ids: bool = True,
     ) -> TokSequence | list[TokSequence]:
         r"""
-        Tokenize a music file (MIDI/abc).
+        Tokenize a music file (MIDI/abc), given as a ``symusic.Score`` or a file path.
 
         You can provide a ``Path`` to the file to tokenize, or a ``symusic.Score``
         object.
         This method returns a (list of) :class:`miditok.TokSequence`.
 
         If you are implementing your own tokenization by subclassing this class,
-        **override the** protected ``_midi_to_tokens`` **method**.
+        **override the protected** ``_score_to_tokens`` **method**.
 
-        :param score: the MIDI object to convert.
+        :param score: the ``symusic.Score`` object to convert.
         :param encode_ids: the backbone model (BPE, Unigram, WordPiece) will encode the
             tokens and compress the sequence. Can only be used if the tokenizer has been
             trained. (default: ``True``)
@@ -1425,12 +1426,12 @@ class MIDITokenizer(ABC, HFHubMixin):
         if not isinstance(score, ScoreTick):
             score = Score(score)
 
-        # Preprocess the MIDI file
+        # Preprocess the music file
         score = self.preprocess_score(score)
 
         # Tokenize it
         tokens = self._score_to_tokens(score)
-        # Add bar/beat ticks here to TokSeq as they need to be from preprocessed MIDI
+        # Add bar/beat ticks here to TokSeq as they need to be from preprocessed Score
         add_bar_beats_ticks_to_tokseq(tokens, score)
 
         # Encode the ids if the tokenizer is trained
@@ -1687,14 +1688,14 @@ class MIDITokenizer(ABC, HFHubMixin):
         self,
         tokens: TokSequence | list[TokSequence] | list[int | list[int]] | np.ndarray,
         programs: list[tuple[int, bool]] | None = None,
-        output_path: str | None = None,
+        output_path: str | Path | None = None,
     ) -> Score:
         r"""
-        Detokenize one or multiple sequences of tokens into a MIDI file.
+        Detokenize one or several sequences of tokens into a ``symusic.Score``.
 
         You can give the tokens sequences either as :class:`miditok.TokSequence`
         objects, lists of integers, numpy arrays or PyTorch/Jax/Tensorflow tensors.
-        The MIDI's time division will be the same as the tokenizer's:
+        The Score's time division will be the same as the tokenizer's:
         ``tokenizer.time_division``.
 
         :param tokens: tokens to convert. Can be either a list of
@@ -1705,7 +1706,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         :param programs: programs of the tracks. If none is given, will default to
             piano, program 0. (default: ``None``)
         :param output_path: path to save the file. (default: ``None``)
-        :return: the midi object (``symusic.Score``).
+        :return: the ``symusic.Score`` object.
         """
         if not isinstance(tokens, (TokSequence, list)) or (
             isinstance(tokens, list)
@@ -1720,13 +1721,13 @@ class MIDITokenizer(ABC, HFHubMixin):
             for seq in tokens:
                 self._preprocess_tokseq_before_decoding(seq)
 
-        midi = self._tokens_to_score(tokens, programs)
+        score = self._tokens_to_score(tokens, programs)
 
         # Create controls for pedals
-        # This is required so that they are saved when the MIDI is dumped, as symusic
+        # This is required so that they are saved when the Score is dumped, as symusic
         # will only write the control messages.
         if self.config.use_sustain_pedals:
-            for track in midi.tracks:
+            for track in score.tracks:
                 for pedal in track.pedals:
                     track.controls.append(ControlChange(pedal.time, 64, 127))
                     track.controls.append(ControlChange(pedal.end, 64, 0))
@@ -1734,16 +1735,20 @@ class MIDITokenizer(ABC, HFHubMixin):
                     track.controls.sort()
 
         # Set default tempo and time signatures at tick 0 if not present
-        if len(midi.tempos) == 0 or midi.tempos[0].time != 0:
-            midi.tempos.insert(0, Tempo(0, self.default_tempo))
-        if len(midi.time_signatures) == 0 or midi.time_signatures[0].time != 0:
-            midi.time_signatures.insert(0, TimeSignature(0, *TIME_SIGNATURE))
+        if len(score.tempos) == 0 or score.tempos[0].time != 0:
+            score.tempos.insert(0, Tempo(0, self.default_tempo))
+        if len(score.time_signatures) == 0 or score.time_signatures[0].time != 0:
+            score.time_signatures.insert(0, TimeSignature(0, *TIME_SIGNATURE))
 
-        # Write MIDI file
+        # Write file
         if output_path:
-            Path(output_path).mkdir(parents=True, exist_ok=True)
-            midi.dump_midi(output_path)
-        return midi
+            output_path = Path(output_path)
+            output_path.mkdir(parents=True, exist_ok=True)
+            if output_path.suffix in ABC_FILES_EXTENSIONS:
+                score.dump_abc(output_path)
+            else:
+                score.dump_midi(output_path)
+        return score
 
     @abstractmethod
     def _tokens_to_score(
@@ -2106,38 +2111,38 @@ class MIDITokenizer(ABC, HFHubMixin):
             for denom in self.config.time_signature_range
         }
 
-    def _get_midi_resampling_factor(self, midi: Score) -> np.ndarray:
+    def _get_score_resampling_factor(self, score: Score) -> np.ndarray:
         """
-        Compute the portions of numbers of ticks in a beat in a MIDI.
+        Compute the portions of numbers of ticks in a beat in a ``symusic.Score``.
 
         The method returns a numpy array of shape ``(N,2)``, for N ticks-per-beat
         changes, and the second dimension corresponding to the ending tick and the
         number of ticks per beat of the portion.
         **The time signatures must be sorted by time.**
 
-        :param midi: MIDI to analyze.
+        :param score: ``symusic.Score`` to analyze.
         :return: ticks per beat values as a numpy array.
         """
         resampling_factors = [
             [
-                midi.time_signatures[tsi + 1].time,
-                midi.ticks_per_quarter
+                score.time_signatures[tsi + 1].time,
+                score.ticks_per_quarter
                 // (
                     self.config.max_num_pos_per_beat
-                    * (midi.time_signatures[tsi].denominator / 4)
+                    * (score.time_signatures[tsi].denominator / 4)
                 ),
             ]
-            for tsi in range(len(midi.time_signatures) - 1)
+            for tsi in range(len(score.time_signatures) - 1)
         ]
 
-        # Handles the last one up to the max tick of the MIDI
+        # Handles the last one up to the max tick of the Score
         resampling_factors.append(
             [
-                midi.end() + 1,
-                midi.ticks_per_quarter
+                score.end() + 1,
+                score.ticks_per_quarter
                 // (
                     self.config.max_num_pos_per_beat
-                    * (midi.time_signatures[-1].denominator / 4)
+                    * (score.time_signatures[-1].denominator / 4)
                 ),
             ]
         )
@@ -2247,7 +2252,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         :param token_duration: Duration / TimeShift token value.
         :param ticks_per_beat: number of ticks in a beat. This depends on the current
-            time signature, and is equal to the MIDI's time division if the denominator
+            time signature, and is equal to the Score's time division if the denominator
             is 4 (quarter).
         :return: the duration / time-shift in ticks.
         """
@@ -2273,7 +2278,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         :param duration: duration in tick to convert.
         :param ticks_per_beat: number of ticks in a beat. This depends on the current
-            time signature, and is equal to the MIDI's time division if the denominator
+            time signature, and is equal to the Score's time division if the denominator
             is 4 (quarter).
         :param rest: the duration is a rest, hence the created tokens will be based on
             the ``self.rests`` values.
@@ -2384,15 +2389,15 @@ class MIDITokenizer(ABC, HFHubMixin):
         numerator, denominator = map(int, token_time_sig.split("/"))
         return numerator, denominator
 
-    def has_midi_time_signatures_not_in_vocab(self, midi: Score) -> bool:
+    def score_has_time_signatures_not_in_vocab(self, score: Score) -> bool:
         r"""
-        Check if a MIDI contains time signatures not supported by the tokenizer.
+        Check if a ``symusic.Score`` contains unsupported time signatures.
 
-        :param midi: MIDI file
-        :return: boolean indicating whether the MIDI can be processed by the tokenizer.
+        :param score: ``symusic.Score`` object.
+        :return: boolean indicating whether the score can be processed by the tokenizer.
         """
         if self.config.use_time_signatures:
-            for time_sig in midi.time_signatures:
+            for time_sig in score.time_signatures:
                 if (
                     time_sig.numerator,
                     time_sig.denominator,
@@ -2421,7 +2426,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         The data used for training can either be given through the ``iterator``
         argument as an iterable object yielding strings, or by ``files_paths`` as a
-        list of paths to MIDI files that will be tokenized.
+        list of paths to music files that will be tokenized.
         You can read the Hugging Face `🤗tokenizers documentation
         <https://huggingface.co/docs/tokenizers/index>`_, and `🤗tokenizers course
         <https://huggingface.co/course/chapter6/2?fw=pt>`_ for more details about the
@@ -2447,8 +2452,8 @@ class MIDITokenizer(ABC, HFHubMixin):
         by referencing them in the keyword arguments of this method (``kwargs``).
         2. The Hugging Face Unigram model training `is not 100% deterministic
         <https://github.com/huggingface/tokenizers/issues/668>`_. As such and if you are
-        using it, you should train your tokenizer only once before using it to save
-        tokenized MIDIs or train a model. Otherwise some token ids might be swapped,
+        using Unigram, you should train your tokenizer only once before using it to save
+        tokenized files or train a model. Otherwise, some token ids might be swapped,
         resulting in incoherent encodings-decodings.
 
         **The training progress bar will not appear with non-proper terminals.**
@@ -2466,8 +2471,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             string. It can be a list or a Generator. This iterator will be passed to
             the model for training. It musts implement the ``__len__`` method. If
             None is given, you must use the ``tokens_paths`` argument. (default: None)
-        :param files_paths: paths of the files to load and use. They can be either MIDI
-            or tokens (json) files. (default: None)
+        :param files_paths: paths of the music files to load and use. (default: None)
         :param kwargs: any additional argument to pass to the trainer or model. See the
             `tokenizers docs <https://huggingface.co/docs/tokenizers/api/trainers>`_
             for more details.
@@ -2564,7 +2568,7 @@ class MIDITokenizer(ABC, HFHubMixin):
                 "miditok - tokenizer.train: You are retraining a tokenizer with "
                 "Unigram. The Hugging Face Unigram model training is not 100% "
                 "deterministic. As such and if you are using it, you should train your "
-                "tokenizer only once before using it to save tokenized MIDIs or train "
+                "tokenizer only once before using it to save tokenized files or train "
                 "a model. Otherwise some token ids might be swapped, resulting in "
                 "incoherent encodings-decodings.",
                 stacklevel=2,
@@ -2783,7 +2787,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
     def tokenize_dataset(
         self,
-        midi_paths: str | Path | Sequence[str | Path],
+        files_paths: str | Path | Sequence[str | Path],
         out_dir: str | Path,
         overwrite_mode: bool = True,
         validation_fn: Callable[[Score], bool] | None = None,
@@ -2791,19 +2795,19 @@ class MIDITokenizer(ABC, HFHubMixin):
         verbose: bool = True,
     ) -> None:
         r"""
-        Tokenize a dataset or list of MIDI files and save them in Json files.
+        Tokenize a dataset or list of music files and save them in Json files.
 
         The resulting json files will have an ``ids`` entry containing the token ids.
         The format of the ids will correspond to the format of the tokenizer
         (``tokenizer.io_format``). Note that the file tree of the source files, up to
-        the deepest common root directory if `midi_paths` is given as a list of paths,
+        the deepest common root directory if `files_paths` is given as a list of paths,
         will be reproducing in ``out_dir``. The config of the tokenizer will be saved
         as a file named ``tokenizer_config_file_name`` (default: ``tokenizer.json``)
         in the ``out_dir`` directory.
 
-        :param midi_paths: paths of the MIDI files. It can also be a path to a
-            directory, in which case this method will recursively find the MIDI files
-            within (.mid, .midi extensions).
+        :param files_paths: paths of the music files (MIDI, abc). It can also be a path
+            to a directory, in which case this method will recursively find the MIDI and
+            abc files within (.mid, .midi and .abc extensions, case insensitive).
         :param out_dir: output directory to save the converted files.
         :param overwrite_mode: if True, will overwrite files if they already exist when
             trying to save the new ones created by the method. This is enabled by
@@ -2812,35 +2816,35 @@ class MIDITokenizer(ABC, HFHubMixin):
             saved in the same directory, with the same name with a number appended at
             the end. Both token files and tokenizer config are concerned.
             (default: ``True``)
-        :param validation_fn: a function checking if the MIDI is valid on your
-            requirements (e.g. time signature, minimum/maximum length, instruments...).
-            (default: ``None``)
-        :param save_programs: will save the programs of the tracks of the MIDI as an
+        :param validation_fn: a function checking if a music file is valid validates
+            your conditions (e.g. time signature, minimum/maximum length,
+            instruments...). (default: ``None``)
+        :param save_programs: will save the programs of the tracks of the files as an
             entry in the Json file. This option is probably unnecessary when using a
             multitrack tokenizer (`config.use_programs`), as the program information is
             present within the tokens, and that the tracks having the same programs are
             likely to have been merged. (default: ``False`` if ``config.use_programs``,
             else ``True``)
-        :param verbose: will throw warnings of errors when loading MIDI files, or if
-            some MIDI content is incorrect or need your attention. (default: ``True``)
+        :param verbose: will throw warnings of errors when loading files, or if
+            some files content is incorrect or need your attention. (default: ``True``)
         """
         self._verbose = verbose
         out_dir = Path(out_dir).resolve()
         out_dir.mkdir(parents=True, exist_ok=True)
 
-        # User gave a path to a directory, we'll scan it to find MIDI files
-        if not isinstance(midi_paths, Sequence):
-            if isinstance(midi_paths, str):
-                midi_paths = Path(midi_paths)
-            root_dir = midi_paths
-            midi_paths = [
+        # User gave a path to a directory, we'll scan it to find MIDI/abc files
+        if not isinstance(files_paths, Sequence):
+            if isinstance(files_paths, str):
+                files_paths = Path(files_paths)
+            root_dir = files_paths
+            files_paths = [
                 path
-                for path in midi_paths.glob("**/*")
-                if path.suffix in MIDI_FILES_EXTENSIONS
+                for path in files_paths.glob("**/*")
+                if path.suffix in SUPPORTED_MUSIC_FILE_EXTENSIONS
             ]
         # User gave a list of paths, we need to find the root / deepest common subdir
         else:
-            root_dir = get_deepest_common_subdir(midi_paths)
+            root_dir = get_deepest_common_subdir(files_paths)
 
         if save_programs is None:
             save_programs = not self.config.use_programs
@@ -2848,43 +2852,43 @@ class MIDITokenizer(ABC, HFHubMixin):
         # Tokenizing
         # Note: tests with multiprocessing show significant slower runtime with 4
         # workers.
-        desc = f"Tokenizing MIDIs ({'/'.join(list(out_dir.parts[-2:]))})"
-        for midi_path in tqdm(midi_paths, desc=desc):
-            # Some MIDIs can contain errors, if so the loop continues
-            midi_path = Path(midi_path)
+        desc = f"Tokenizing music files ({'/'.join(list(out_dir.parts[-2:]))})"
+        for file_path in tqdm(files_paths, desc=desc):
+            # Some files can contain errors, if so the loop continues
+            file_path = Path(file_path)
             try:
-                midi = Score(midi_path)
+                score = Score(file_path)
             except FileNotFoundError:
                 if self._verbose:
-                    warnings.warn(f"File not found: {midi_path}", stacklevel=2)
+                    warnings.warn(f"File not found: {file_path}", stacklevel=2)
                 continue
             except SCORE_LOADING_EXCEPTION:
                 continue
 
-            # Passing the MIDI to validation tests if given
-            if validation_fn is not None and not validation_fn(midi):
+            # Passing the Score to validation tests if given
+            if validation_fn is not None and not validation_fn(score):
                 continue
 
-            # Tokenizing the MIDI
-            tokens = self.encode(midi)
+            # Tokenizing the Score
+            tokens = self.encode(score)
 
             # Set output file path
-            out_path = out_dir / midi_path.resolve().parent.relative_to(root_dir)
+            out_path = out_dir / file_path.resolve().parent.relative_to(root_dir)
             out_path.mkdir(parents=True, exist_ok=True)
-            out_path /= f"{midi_path.stem}.json"
+            out_path /= f"{file_path.stem}.json"
 
             # If non-overwrite, set the new file name
             if not overwrite_mode and out_path.is_file():
                 i = 1
                 while out_path.is_file():
-                    out_path = out_path.parent / f"{midi_path.stem}_{i}.json"
+                    out_path = out_path.parent / f"{file_path.stem}_{i}.json"
                     i += 1
 
             # Save the tokens as JSON
             self.save_tokens(
                 tokens,
                 out_path,
-                get_score_programs(midi) if save_programs else None,
+                get_score_programs(score) if save_programs else None,
             )
 
         # Set it back to False
@@ -3361,7 +3365,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         **kwargs,
     ) -> TokSequence | list[TokSequence] | Score:
         r"""
-        Tokenize a music file (MIDI/abc), or decode tokens into a MIDI.
+        Tokenize a music file (MIDI/abc), or decode tokens into a ``symusic.Score``.
 
         Calling a tokenizer allows to directly convert a music file (MIDI/abc) to tokens
         or vice-versa. The method automatically detects ``symusic.Score`` and
@@ -3392,7 +3396,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         if MidiFile is not None and isinstance(obj, MidiFile):
             warnings.warn(
                 "You are using a depreciated `miditoolkit.MidiFile` object. MidiTok"
-                "is now (>v3.0.0) using symusic.Score as MIDI backend. Your MIDI will"
+                "is now (>v3.0.0) using symusic.Score as MIDI backend. Your file will"
                 "be converted on the fly, however please consider using symusic.",
                 stacklevel=2,
             )

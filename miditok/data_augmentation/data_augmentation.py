@@ -11,10 +11,10 @@ from symusic import Score
 from tqdm import tqdm
 
 from miditok.constants import (
-    ABC_FILES_EXTENSIONS,
     MIDI_FILES_EXTENSIONS,
     MIDI_INSTRUMENTS,
     SCORE_LOADING_EXCEPTION,
+    SUPPORTED_MUSIC_FILE_EXTENSIONS,
 )
 
 
@@ -81,7 +81,7 @@ def augment_dataset(
     files_paths = [
         path
         for path in data_path.glob("**/*")
-        if path.suffix in MIDI_FILES_EXTENSIONS + ABC_FILES_EXTENSIONS
+        if path.suffix in SUPPORTED_MUSIC_FILE_EXTENSIONS
     ]
 
     num_augmentations, num_tracks_augmented = 0, 0
