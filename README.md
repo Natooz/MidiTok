@@ -42,7 +42,7 @@ tokenizer = REMI(config)
 # Loads a midi, converts to tokens, and back to a MIDI
 midi = Score("path/to/your_midi.mid")
 tokens = tokenizer(midi)  # calling the tokenizer will automatically detect MIDIs, paths and tokens
-converted_back_midi = tokenizer(tokens)  # PyTorch / Tensorflow / Numpy tensors supported
+converted_back_midi = tokenizer(tokens)  # PyTorch, Tensorflow and Numpy tensors are supported
 ```
 
 Here is a complete yet concise example of how you can use MidiTok to train any PyTorch model. And [here](colab-notebooks/Full_Example_HuggingFace_GPT2_Transformer.ipynb) is a simple notebook example showing how to use Hugging Face models to generate music, with MidiTok taking care of tokenizing music files.
@@ -110,10 +110,10 @@ Contributions are gratefully welcomed, feel free to open an issue or send a PR i
 
 ### Todos
 
+* Support music-xml files;
 * `no_duration_drums` option, discarding duration tokens for drum notes;
-* Extend unimplemented additional tokens to all compatible tokenizations;
 * Control Change messages;
-* Speeding up the MIDI preprocess + global/track events parsing with Rust or C++ binding.
+* Speed-up global/track events parsing with Rust or C++ bindings.
 
 ## Citation
 

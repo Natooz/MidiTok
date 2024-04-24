@@ -68,7 +68,7 @@ def test_tokenizer_training_and_encoding_decoding(
     It also tests tokenizer saving-loading, and resuming training.
 
     :param tok_params_set: tokenizer and its parameters to run.
-    :param files_paths: list of paths of MIDI files to use for the tests.
+    :param files_paths: list of paths of music files to use for the tests.
     :param encode_ids_split: type of token ids split before encoding/training.
     """
     if encode_ids_split == "no" and model == "WordPiece":

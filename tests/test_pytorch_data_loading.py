@@ -25,17 +25,17 @@ if TYPE_CHECKING:
     from symusic import Score
 
 
-def get_labels_seq_len(midi: Score, tokseq: miditok.TokSequence, _: Path) -> int:
+def get_labels_seq_len(score: Score, tokseq: miditok.TokSequence, _: Path) -> int:
     if isinstance(tokseq, miditok.TokSequence):
-        return len(tokseq) // len(midi.tracks)
-    return len(tokseq[0]) // len(midi.tracks)
+        return len(tokseq) // len(score.tracks)
+    return len(tokseq[0]) // len(score.tracks)
 
 
-def get_labels_seq(midi: Score, tokseq: miditok.TokSequence, _: Path) -> list[int]:
+def get_labels_seq(score: Score, tokseq: miditok.TokSequence, _: Path) -> list[int]:
     if isinstance(tokseq, list):
-        return tokseq[0].ids[: -len(midi.tracks)]
-    if len(tokseq) > len(midi.tracks):
-        return tokseq.ids[: -len(midi.tracks)]
+        return tokseq[0].ids[: -len(score.tracks)]
+    if len(tokseq) > len(score.tracks):
+        return tokseq.ids[: -len(score.tracks)]
     return tokseq.ids
 
 
@@ -43,7 +43,7 @@ def get_labels_seq(midi: Score, tokseq: miditok.TokSequence, _: Path) -> list[in
     "tokenizer_cls", [miditok.TSD, miditok.Octuple], ids=["TSD", "Octuple"]
 )
 @pytest.mark.parametrize("one_token_stream", [True, False], ids=["1 strm", "n strm"])
-@pytest.mark.parametrize("split_midis", [True, False], ids=["split", "no split"])
+@pytest.mark.parametrize("split_files", [True, False], ids=["split", "no split"])
 @pytest.mark.parametrize("pre_tokenize", [True, False], ids=["pretok", "no pretok"])
 @pytest.mark.parametrize("func_labels", [get_labels_seq_len, get_labels_seq])
 @pytest.mark.parametrize("num_overlap_bars", [0, 1], ids=["no overlap", "overlap"])
@@ -51,11 +51,11 @@ def test_dataset_midi(
     tmp_path: Path,
     tokenizer_cls: Callable,
     one_token_stream: bool,
-    split_midis: bool,
+    split_files: bool,
     pre_tokenize: bool,
     func_labels: Callable,
     num_overlap_bars: int,
-    midi_paths: Sequence[Path] = MIDI_PATHS_MULTITRACK
+    files_paths: Sequence[Path] = MIDI_PATHS_MULTITRACK
     + MIDI_PATHS_CORRUPTED
     + ABC_PATHS,
     max_seq_len: int = 1000,
@@ -65,40 +65,40 @@ def test_dataset_midi(
     )
     tokenizer = tokenizer_cls(config)
 
-    # Split MIDIs if requested
+    # Split files if requested
     # We perform it twice as the second time, the method would return the same paths as
     # the ones created in the first call.
-    if split_midis:
+    if split_files:
         t0 = time()
-        midi_paths_split1 = miditok.pytorch_data.split_midis_for_training(
-            midi_paths,
+        file_paths_split1 = miditok.pytorch_data.split_midis_for_training(
+            files_paths,
             tokenizer,
             tmp_path,
             max_seq_len,
             num_overlap_bars=num_overlap_bars,
         )
         t1 = time() - t0
-        print(f"First MIDI split call: {t1:.2f} sec")
+        print(f"First Score split call: {t1:.2f} sec")
         t0 = time()
-        midi_paths_split2 = miditok.pytorch_data.split_midis_for_training(
-            midi_paths,
+        file_paths_split2 = miditok.pytorch_data.split_midis_for_training(
+            files_paths,
             tokenizer,
             tmp_path,
             max_seq_len,
             num_overlap_bars=num_overlap_bars,
         )
         t1 = time() - t0
-        print(f"Second MIDI split call: {t1:.2f} sec")
+        print(f"Second Score split call: {t1:.2f} sec")
 
-        midi_paths_split1.sort()
-        midi_paths_split2.sort()
-        assert midi_paths_split1 == midi_paths_split2
-        midi_paths = midi_paths_split1
+        file_paths_split1.sort()
+        file_paths_split2.sort()
+        assert file_paths_split1 == file_paths_split2
+        files_paths = file_paths_split1
 
     # Creating the Dataset, splitting MIDIs
     t0 = time()
     dataset = miditok.pytorch_data.DatasetMIDI(
-        midi_paths,
+        files_paths,
         tokenizer,
         max_seq_len,
         tokenizer["BOS_None"],
@@ -123,15 +123,15 @@ def test_dataset_midi(
         pass
 
 
-def test_dataset_json(tmp_path: Path, midi_path: Sequence[Path] | None = None):
-    if midi_path is None:
-        midi_path = MIDI_PATHS_MULTITRACK[:5]
+def test_dataset_json(tmp_path: Path, file_paths: Sequence[Path] | None = None):
+    if file_paths is None:
+        file_paths = MIDI_PATHS_MULTITRACK[:5]
     tokens_dir_path = tmp_path / "multitrack_tokens_dataset_json"
 
     config = miditok.TokenizerConfig(use_programs=True)
     tokenizer = miditok.TSD(config)
     if not tokens_dir_path.is_dir():
-        tokenizer.tokenize_dataset(midi_path, tokens_dir_path)
+        tokenizer.tokenize_dataset(file_paths, tokens_dir_path)
 
     tokens_split_dir_path = tmp_path / "multitrack_tokens_dataset_json_split"
     miditok.pytorch_data.split_dataset_to_subsequences(

@@ -17,12 +17,11 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-def test_augment_midi_dataset(
+def test_augment_dataset(
     tmp_path: Path,
     data_path: str | Path = HERE / "MIDIs_multitrack",
 ):
-    # We only test data augmentation on MIDIs with one tokenization, as tokenizers does
-    # not play here
+    # We only test data augmentation on MIDIs with one tokenization
 
     midi_aug_path = tmp_path / "Multitrack_MIDIs_aug"
     min_duration = 0.03125

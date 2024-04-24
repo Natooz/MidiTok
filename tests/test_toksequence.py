@@ -47,10 +47,10 @@ def test_tokseq_slice_and_concat():
     assert tokseq == tokseq_concat
 
 
-@pytest.mark.parametrize("midi_path", MIDI_PATHS_MULTITRACK)
-def test_split_tokseq_per_bars_beats(midi_path: Path, tokenization: Callable = TSD):
+@pytest.mark.parametrize("file_path", MIDI_PATHS_MULTITRACK)
+def test_split_tokseq_per_bars_beats(file_path: Path, tokenization: Callable = TSD):
     tokenizer = tokenization(TokenizerConfig(use_programs=True))
-    tokseq = tokenizer(midi_path)
+    tokseq = tokenizer(file_path)
 
     # Split per bars
     seqs = tokseq.split_per_bars()

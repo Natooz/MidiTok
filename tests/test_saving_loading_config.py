@@ -90,10 +90,10 @@ def test_saving_loading_tokenizer(tokenization: str, tmp_path: Path):
         assert tokenizer != tokenizer2
 
 
-@pytest.mark.parametrize("midi_path", MIDI_PATHS_MULTITRACK[:3])
+@pytest.mark.parametrize("file_path", MIDI_PATHS_MULTITRACK[:3])
 @pytest.mark.parametrize("tok_params_set", TOK_PARAMS_MULTITRACK)
 def test_multitrack_midi_to_tokens_to_midi(
-    midi_path: str | Path,
+    file_path: Path,
     tok_params_set: tuple[str, dict[str, Any]],
     tmp_path: Path,
 ):
@@ -104,7 +104,7 @@ def test_multitrack_midi_to_tokens_to_midi(
     )
 
     # Tokenize the file, save tokens and load them back
-    tokens = tokenizer(midi_path)
+    tokens = tokenizer(file_path)
     tokenizer.save_tokens(tokens, tmp_path / "tokens.json")
     tokens_loaded = tokenizer.load_tokens(tmp_path / "tokens.json")
 
