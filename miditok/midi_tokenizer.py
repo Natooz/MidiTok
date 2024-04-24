@@ -84,7 +84,7 @@ from .utils.utils import (
 )
 
 
-class MIDITokenizer(ABC, HFHubMixin):
+class MusicTokenizer(ABC, HFHubMixin):
     r"""
     Base music tokenizer class, acting as a common framework.
 
@@ -1495,7 +1495,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         **This method will not work with ids encoded with the tokenizer's model. You
         will need to decode them first (
-        :py:meth:`miditok.MIDITokenizer.decode_token_ids`)**.
+        :py:meth:`miditok.MusicTokenizer.decode_token_ids`)**.
 
         :param ids: sequence of ids (int) to convert.
         :param as_str: return the tokens as string objects, otherwise Event objects
@@ -1551,7 +1551,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         It can be returned either as a list of bytes or as a unique string of bytes.
         **This method will not work with ids encoded with the tokenizer's model. You
         will need to decode them first (
-        :py:meth:`miditok.MIDITokenizer.decode_token_ids`)**.
+        :py:meth:`miditok.MusicTokenizer.decode_token_ids`)**.
 
         :param ids: token ids (int) to convert.
         :param as_one_str: will return the bytes all concatenated into one string.
@@ -1777,10 +1777,10 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         Each token is given as the form ``"Type_Value"``, with its type and value
         separated with an underscore. Example: ``Pitch_58``.
-        The :class:`miditok.MIDITokenizer` main class will then create the "real"
+        The :class:`miditok.MusicTokenizer` main class will then create the "real"
         vocabulary as a dictionary. Special tokens have to be given when creating the
         tokenizer, and will be added to the vocabulary by
-        :class:`miditok.MIDITokenizer`.
+        :class:`miditok.MusicTokenizer`.
 
         :return: the vocabulary as a list of string.
         """
@@ -2936,7 +2936,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         number of tokens.
 
         This method is intended to be overridden by tokenizer classes. The
-        implementation in the ``MIDITokenizer`` class will check token types,
+        implementation in the ``MusicTokenizer`` class will check token types,
         duplicated notes and time errors. It works for ``REMI``, ``TSD`` and
         ``Structured``.
 
@@ -3193,7 +3193,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         local_files_only: bool,
         token: str | bool | None,
         **kwargs,
-    ) -> MIDITokenizer:
+    ) -> MusicTokenizer:
         # Called by `ModelHubMixin.from_pretrained`
         pretrained_path = Path(model_id)
         if pretrained_path.is_file():
@@ -3221,7 +3221,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         with Path(params_path).open() as file:
             tokenization = json.load(file)["tokenization"]
         cls_name = cls.__name__
-        if cls_name not in ["MIDITokenizer", tokenization]:
+        if cls_name not in ["MusicTokenizer", tokenization]:
             warnings.warn(
                 ".from_pretrained called with an invalid class name. The current class"
                 f"is {cls_name} whereas the config file comes from a {tokenization} "
@@ -3370,9 +3370,9 @@ class MIDITokenizer(ABC, HFHubMixin):
         Calling a tokenizer allows to directly convert a music file (MIDI/abc) to tokens
         or vice-versa. The method automatically detects ``symusic.Score`` and
         :class:`miditok.TokSequence` objects, as well as paths to music or json files.
-        It will call the :py:func:`miditok.MIDITokenizer.encode` if you provide a
+        It will call the :py:func:`miditok.MusicTokenizer.encode` if you provide a
         ``symusic.Score`` object or path to a music file, or the
-        :py:func:`miditok.MIDITokenizer.decode` method otherwise.
+        :py:func:`miditok.MusicTokenizer.decode` method otherwise.
 
         :param obj: a `symusic.Score` object, a :class:`miditok.TokSequence` object, or
             a path to a music or tokens json file.
@@ -3413,7 +3413,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         return the **sum** of their lengths. If the tokenizer has been trained, this
         method returns the length of its model's vocabulary, i.e. the proper number of
         possible token ids. Otherwise, it will return the length of the base
-        vocabulary. Use the :py:func:`miditok.MIDITokenizer.len` property
+        vocabulary. Use the :py:func:`miditok.MusicTokenizer.len` property
         (``tokenizer.len``) to get the list of lengths.
 
         :return: length of the vocabulary.
@@ -3431,7 +3431,7 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         If the tokenizer uses embedding pooling/have multiple vocabularies, it will
         return the **list** of their lengths. Use the
-        :py:func:`miditok.MIDITokenizer.__len__` magic method
+        :py:func:`miditok.MusicTokenizer.__len__` magic method
         (``len(tokenizer)``) to get the sum of the lengths.
 
         :return: length of the vocabulary.
@@ -3514,7 +3514,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             )
         return voc[item]
 
-    def __eq__(self, other: MIDITokenizer) -> bool:
+    def __eq__(self, other: MusicTokenizer) -> bool:
         r"""
         Check that two tokenizers are identical.
 

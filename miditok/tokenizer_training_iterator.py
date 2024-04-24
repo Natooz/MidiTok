@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
-    from .midi_tokenizer import MIDITokenizer
+    from .midi_tokenizer import MusicTokenizer
 
 
 class TokTrainingIterator:
@@ -29,7 +29,7 @@ class TokTrainingIterator:
 
     def __init__(
         self,
-        tokenizer: MIDITokenizer,
+        tokenizer: MusicTokenizer,
         files_paths: Sequence[Path],
     ) -> None:
         self.tokenizer = tokenizer

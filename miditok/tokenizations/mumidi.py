@@ -9,14 +9,14 @@ from symusic import Note, Score, Tempo, Track
 
 from miditok.classes import Event, TokSequence
 from miditok.constants import MIDI_INSTRUMENTS
-from miditok.midi_tokenizer import MIDITokenizer
+from miditok.midi_tokenizer import MusicTokenizer
 from miditok.utils import detect_chords, get_score_ticks_per_beat
 
 if TYPE_CHECKING:
     import numpy as np
 
 
-class MuMIDI(MIDITokenizer):
+class MuMIDI(MusicTokenizer):
     r"""
     MuMIDI tokenizer.
 
@@ -364,10 +364,10 @@ class MuMIDI(MIDITokenizer):
 
         Each token is given as the form ``"Type_Value"``, with its type and value
         separated with an underscore. Example: ``Pitch_58``.
-        The :class:`miditok.MIDITokenizer` main class will then create the "real"
+        The :class:`miditok.MusicTokenizer` main class will then create the "real"
         vocabulary as a dictionary. Special tokens have to be given when creating the
         tokenizer, and will be added to the vocabulary by
-        :class:`miditok.MIDITokenizer`.
+        :class:`miditok.MusicTokenizer`.
 
         For MUMIDI, token index 0 is used as a padding index for training.
         * 0: Pitch / PitchDrum / Position / Bar / Program / (Chord) / (Rest)
@@ -454,7 +454,7 @@ class MuMIDI(MIDITokenizer):
         number of tokens.
 
         This method is intended to be overridden by tokenizer classes. The
-        implementation in the ``MIDITokenizer`` class will check token types,
+        implementation in the ``MusicTokenizer`` class will check token types,
         duplicated notes and time errors. It works for ``REMI``, ``TSD`` and
         ``Structured``.
 

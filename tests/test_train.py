@@ -77,10 +77,10 @@ def test_tokenizer_training_and_encoding_decoding(
     # Creates tokenizers
     tokenization, params = tok_params_set
     params["encode_ids_split"] = encode_ids_split
-    tokenizer1: miditok.MIDITokenizer = getattr(miditok, tokenization)(
+    tokenizer1: miditok.MusicTokenizer = getattr(miditok, tokenization)(
         tokenizer_config=miditok.TokenizerConfig(**params)
     )
-    tokenizer2: miditok.MIDITokenizer = getattr(miditok, tokenization)(
+    tokenizer2: miditok.MusicTokenizer = getattr(miditok, tokenization)(
         tokenizer_config=miditok.TokenizerConfig(**params)
     )
 

@@ -117,7 +117,7 @@ class TokSequence:
     Bytes are used internally by MidiTok for Byte Pair Encoding.
     The ``are_ids_encoded`` attribute tells if ``ids`` is encoded.
 
-    :py:meth:`miditok.MIDITokenizer.complete_sequence` can be used to complete the
+    :py:meth:`miditok.MusicTokenizer.complete_sequence` can be used to complete the
     non-initialized attributes.
     """
 

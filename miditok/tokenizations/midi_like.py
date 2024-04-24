@@ -6,11 +6,11 @@ from symusic import Note, Pedal, PitchBend, Score, Tempo, TimeSignature, Track
 
 from miditok.classes import Event, TokSequence
 from miditok.constants import MIDI_INSTRUMENTS, TIME_SIGNATURE
-from miditok.midi_tokenizer import MIDITokenizer
+from miditok.midi_tokenizer import MusicTokenizer
 from miditok.utils import compute_ticks_per_beat
 
 
-class MIDILike(MIDITokenizer):
+class MIDILike(MusicTokenizer):
     r"""
     MIDI-Like tokenizer.
 
@@ -427,10 +427,10 @@ class MIDILike(MIDITokenizer):
 
         Each token is given as the form ``"Type_Value"``, with its type and value
         separated with an underscore. Example: ``Pitch_58``.
-        The :class:`miditok.MIDITokenizer` main class will then create the "real"
+        The :class:`miditok.MusicTokenizer` main class will then create the "real"
         vocabulary as a dictionary. Special tokens have to be given when creating the
         tokenizer, and will be added to the vocabulary by
-        :class:`miditok.MIDITokenizer`.
+        :class:`miditok.MusicTokenizer`.
 
         :return: the vocabulary as a list of string.
         """

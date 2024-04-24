@@ -76,12 +76,12 @@ def test_saving_loading_tokenizer(tokenization: str, tmp_path: Path):
     If all went well the reloaded tokenizer should be identical.
     """
     tokenizer_config = miditok.TokenizerConfig(**ADDITIONAL_TOKENS_TEST)
-    tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
+    tokenizer: miditok.MusicTokenizer = getattr(miditok, tokenization)(
         tokenizer_config=tokenizer_config
     )
     tokenizer.save_params(tmp_path / f"{tokenization}.txt")
 
-    tokenizer2: miditok.MIDITokenizer = getattr(miditok, tokenization)(
+    tokenizer2: miditok.MusicTokenizer = getattr(miditok, tokenization)(
         params=tmp_path / f"{tokenization}.txt"
     )
     assert tokenizer == tokenizer2
@@ -99,7 +99,7 @@ def test_multitrack_midi_to_tokens_to_midi(
 ):
     # Create tokenizer
     tokenization, params = tok_params_set
-    tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
+    tokenizer: miditok.MusicTokenizer = getattr(miditok, tokenization)(
         tokenizer_config=miditok.TokenizerConfig(**params)
     )
 

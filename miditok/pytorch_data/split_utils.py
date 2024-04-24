@@ -27,12 +27,12 @@ from miditok.utils.utils import get_deepest_common_subdir
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from miditok import MIDITokenizer
+    from miditok import MusicTokenizer
 
 
 def split_files_for_training(
     files_paths: Sequence[Path],
-    tokenizer: MIDITokenizer,
+    tokenizer: MusicTokenizer,
     save_dir: Path,
     max_seq_len: int,
     average_num_tokens_per_note: float | None = None,
@@ -280,7 +280,7 @@ def split_score_per_note_density(
 
 
 def get_average_num_tokens_per_note(
-    tokenizer: MIDITokenizer, files_paths: Sequence[Path]
+    tokenizer: MusicTokenizer, files_paths: Sequence[Path]
 ) -> float:
     """
     Return the average number of tokens per note (tpn) for a list of music files.

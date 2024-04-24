@@ -14,18 +14,18 @@ How MidiTok interoperates with the hub
 
 Internally, MidiTok relies on the ``huggingface_hub.ModelHubMixin`` component. It implements the same methods commonly used in the Hugging Face ecosystem. Note that:
 
-* :py:func:`miditok.MIDITokenizer.save_pretrained` is equivalent to calling :py:func:`miditok.MIDITokenizer.save_params`;
-* :py:func:`miditok.MIDITokenizer.from_pretrained` can be used to load tokenizers whether from the Hugging Face hub or from a file on your local filesystem;
-* for :py:func:`miditok.MIDITokenizer.save_pretrained` and :py:func:`miditok.MIDITokenizer.push_to_hub`, you can ignore the ``config`` argument which is meant to be used with models (not applicable for tokenizers);
-* you can give a ``filename`` keyword argument with the :py:func:`miditok.MIDITokenizer.save_pretrained` and :py:func:`miditok.MIDITokenizer.from_pretrained` methods to use a specific tokenizer configuration file name, otherwise the default one will be used (``tokenizer.json``).
+* :py:func:`miditok.MusicTokenizer.save_pretrained` is equivalent to calling :py:func:`miditok.MusicTokenizer.save_params`;
+* :py:func:`miditok.MusicTokenizer.from_pretrained` can be used to load tokenizers whether from the Hugging Face hub or from a file on your local filesystem;
+* for :py:func:`miditok.MusicTokenizer.save_pretrained` and :py:func:`miditok.MusicTokenizer.push_to_hub`, you can ignore the ``config`` argument which is meant to be used with models (not applicable for tokenizers);
+* you can give a ``filename`` keyword argument with the :py:func:`miditok.MusicTokenizer.save_pretrained` and :py:func:`miditok.MusicTokenizer.from_pretrained` methods to use a specific tokenizer configuration file name, otherwise the default one will be used (``tokenizer.json``).
 
-.. autofunction:: miditok.MIDITokenizer.from_pretrained
+.. autofunction:: miditok.MusicTokenizer.from_pretrained
     :noindex:
 
-.. autofunction:: miditok.MIDITokenizer.save_pretrained
+.. autofunction:: miditok.MusicTokenizer.save_pretrained
     :noindex:
 
-.. autofunction:: miditok.MIDITokenizer.push_to_hub
+.. autofunction:: miditok.MusicTokenizer.push_to_hub
     :noindex:
 
 Example

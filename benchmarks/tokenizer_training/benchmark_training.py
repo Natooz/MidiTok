@@ -75,7 +75,7 @@ def seq_len_splits(datasets_params: list[tuple[str, dict, str]]) -> None:
     for dataset, tok_params, col_name in datasets_params:
         files_paths = dataset_files_paths(dataset)
         for tokenization in TOKENIZATION:
-            tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
+            tokenizer: miditok.MusicTokenizer = getattr(miditok, tokenization)(
                 tokenizer_config=miditok.TokenizerConfig(**tok_params)
             )
 
@@ -145,7 +145,7 @@ def benchmark_training_time() -> None:
                     # Creates tokenizer
                     tok_params = TOKENIZER_PARAMS.copy()
                     tok_params["encode_ids_split"] = split
-                    tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
+                    tokenizer: miditok.MusicTokenizer = getattr(miditok, tokenization)(
                         tokenizer_config=miditok.TokenizerConfig(**TOKENIZER_PARAMS)
                     )
 
@@ -309,7 +309,7 @@ def wordpiece_max_chars(datasets_params: list[tuple[str, dict, str]]) -> None:
                 # Creates tokenizer
                 tok_params = TOKENIZER_PARAMS.copy()
                 tok_params["encode_ids_split"] = split
-                tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
+                tokenizer: miditok.MusicTokenizer = getattr(miditok, tokenization)(
                     tokenizer_config=miditok.TokenizerConfig(**tok_params)
                 )
 
@@ -399,7 +399,7 @@ if __name__ == "__main__":
     # benchmark_training_time()
 
     # Encoding-decoding time and sequence length reduction
-    benchmark_encoding_decoding_speed_seq_len_reduction()
+    # benchmark_encoding_decoding_speed_seq_len_reduction()
 
     # WordPiece max chars
     wordpiece_data = [

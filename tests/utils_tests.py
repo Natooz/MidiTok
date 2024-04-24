@@ -130,7 +130,7 @@ def sort_score(score: Score, sort_tracks: bool = True) -> None:
 
 
 def adapt_ref_score_before_tokenize(
-    score: Score, tokenizer: miditok.MIDITokenizer
+    score: Score, tokenizer: miditok.MusicTokenizer
 ) -> None:
     """
     Adapt (inplace) the contents of a Score before it is tokenized.
@@ -190,7 +190,7 @@ def adapt_ref_score_before_tokenize(
 
 
 def adapt_ref_score_for_tests_assertion(
-    score: Score, tokenizer: miditok.MIDITokenizer
+    score: Score, tokenizer: miditok.MusicTokenizer
 ) -> Score:
     """
     Adapt a reference raw/unprocessed Score for test assertions.
@@ -365,7 +365,7 @@ def check_scores_equals(
 
 def tokenize_and_check_equals(
     score: Score,
-    tokenizer: miditok.MIDITokenizer,
+    tokenizer: miditok.MusicTokenizer,
     file_name: str,
 ) -> tuple[Score, Score, bool]:
     tokenization = type(tokenizer).__name__

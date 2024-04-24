@@ -16,14 +16,14 @@ from symusic import (
 
 from miditok.classes import Event, TokenizerConfig, TokSequence
 from miditok.constants import MIDI_INSTRUMENTS, TIME_SIGNATURE, USE_BAR_END_TOKENS
-from miditok.midi_tokenizer import MIDITokenizer
+from miditok.midi_tokenizer import MusicTokenizer
 from miditok.utils import compute_ticks_per_bar, compute_ticks_per_beat
 
 if TYPE_CHECKING:
     from pathlib import Path
 
 
-class REMI(MIDITokenizer):
+class REMI(MusicTokenizer):
     r"""
     REMI (Revamped MIDI) tokenizer.
 
@@ -526,10 +526,10 @@ class REMI(MIDITokenizer):
 
         Each token is given as the form ``"Type_Value"``, with its type and value
         separated with an underscore. Example: ``Pitch_58``.
-        The :class:`miditok.MIDITokenizer` main class will then create the "real"
+        The :class:`miditok.MusicTokenizer` main class will then create the "real"
         vocabulary as a dictionary. Special tokens have to be given when creating the
         tokenizer, and will be added to the vocabulary by
-        :class:`miditok.MIDITokenizer`.
+        :class:`miditok.MusicTokenizer`.
 
         :return: the vocabulary as a list of string.
         """

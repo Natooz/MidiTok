@@ -207,7 +207,7 @@ def _test_tokenize(
 
     # Creates the tokenizer
     tokenization, params = tok_params_set
-    tokenizer: miditok.MIDITokenizer = getattr(miditok, tokenization)(
+    tokenizer: miditok.MusicTokenizer = getattr(miditok, tokenization)(
         tokenizer_config=miditok.TokenizerConfig(**params)
     )
     str(tokenizer)  # shouldn't fail

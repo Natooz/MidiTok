@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
     from pathlib import Path
 
-    from miditok import MIDITokenizer, TokSequence
+    from miditok import MusicTokenizer, TokSequence
 
 
 class _DatasetABC(Dataset, ABC):
@@ -125,7 +125,7 @@ class DatasetMIDI(_DatasetABC):
     def __init__(
         self,
         files_paths: Sequence[Path],
-        tokenizer: MIDITokenizer,
+        tokenizer: MusicTokenizer,
         max_seq_len: int,
         bos_token_id: int | None = None,
         eos_token_id: int | None = None,
