@@ -373,7 +373,7 @@ def wordpiece_max_chars(datasets_params: list[tuple[str, dict, str]]) -> None:
 
                 # Saves dataframes
                 df_enc.to_csv(df_file_path_enc)
-                df_enc.to_csv(df_file_path_dec)
+                df_dec.to_csv(df_file_path_dec)
                 df_train.to_csv(df_file_path_train)
 
     df_enc.to_markdown(RESULTS_PATH / "wordpiece_max_chars_enc_time.md")

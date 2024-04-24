@@ -12,10 +12,10 @@ from torch import LongTensor
 from tqdm import tqdm
 
 from miditok.constants import (
-    ABC_FILES_EXTENSIONS,
     MAX_NUM_FILES_NUM_TOKENS_PER_NOTE,
     MIDI_FILES_EXTENSIONS,
     SCORE_LOADING_EXCEPTION,
+    SUPPORTED_MUSIC_FILE_EXTENSIONS,
 )
 from miditok.utils import (
     get_bars_ticks,
@@ -85,10 +85,11 @@ def split_files_for_training(
             f" Skipping file splitting.",
             stacklevel=2,
         )
-        chunks_paths = []
-        for suffix in MIDI_FILES_EXTENSIONS | ABC_FILES_EXTENSIONS:
-            chunks_paths += list(save_dir.glob(f"**/*{suffix}"))
-        return chunks_paths
+        return [
+            path
+            for path in save_dir.glob("**/*")
+            if path.suffix in SUPPORTED_MUSIC_FILE_EXTENSIONS
+        ]
     if not average_num_tokens_per_note:
         average_num_tokens_per_note = get_average_num_tokens_per_note(
             tokenizer, files_paths[:MAX_NUM_FILES_NUM_TOKENS_PER_NOTE]
