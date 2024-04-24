@@ -12,6 +12,7 @@ from torch import LongTensor
 from tqdm import tqdm
 
 from miditok.constants import (
+    ABC_FILES_EXTENSIONS,
     MAX_NUM_FILES_NUM_TOKENS_PER_NOTE,
     MIDI_FILES_EXTENSIONS,
     SCORE_LOADING_EXCEPTION,
@@ -19,7 +20,7 @@ from miditok.constants import (
 from miditok.utils import (
     get_bars_ticks,
     get_num_notes_per_bar,
-    split_midi_per_tracks,
+    split_score_per_tracks,
 )
 from miditok.utils.utils import get_deepest_common_subdir
 
@@ -84,7 +85,10 @@ def split_files_for_training(
             f" Skipping file splitting.",
             stacklevel=2,
         )
-        return list(save_dir.glob("**/*.mid"))
+        chunks_paths = []
+        for suffix in MIDI_FILES_EXTENSIONS | ABC_FILES_EXTENSIONS:
+            chunks_paths += list(save_dir.glob(f"**/*{suffix}"))
+        return chunks_paths
     if not average_num_tokens_per_note:
         average_num_tokens_per_note = get_average_num_tokens_per_note(
             tokenizer, files_paths[:MAX_NUM_FILES_NUM_TOKENS_PER_NOTE]
@@ -109,7 +113,7 @@ def split_files_for_training(
         # Separate track first if needed
         tracks_separated = False
         if not tokenizer.one_token_stream and len(scores[0].tracks) > 1:
-            scores = split_midi_per_tracks(scores[0])
+            scores = split_score_per_tracks(scores[0])
             tracks_separated = True
 
         # Split per note density

@@ -69,8 +69,8 @@ from .utils import (
     compute_ticks_per_bar,
     convert_ids_tensors_to_list,
     detect_chords,
-    get_midi_programs,
-    get_midi_ticks_per_beat,
+    get_score_programs,
+    get_score_ticks_per_beat,
     merge_same_program_tracks,
     remove_duplicated_notes,
 )
@@ -409,7 +409,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             self.config.use_sustain_pedals and self.config.sustain_pedal_duration
         ):
             if self.config.use_time_signatures:
-                ticks_per_beat = get_midi_ticks_per_beat(midi)
+                ticks_per_beat = get_score_ticks_per_beat(midi)
             else:
                 ticks_per_beat = np.array([[midi.end(), midi.ticks_per_quarter]])
         else:
@@ -990,9 +990,9 @@ class MIDITokenizer(ABC, HFHubMixin):
             if dur_idx_last is None:
                 break
 
-    def _midi_to_tokens(self, midi: Score) -> TokSequence | list[TokSequence]:
+    def _score_to_tokens(self, score: Score) -> TokSequence | list[TokSequence]:
         r"""
-        Convert a **preprocessed** MIDI object to a sequence of tokens.
+        Convert a **preprocessed** ``symusic.Score`` object to a sequence of tokens.
 
         The workflow of this method is as follows: the global events (*Tempo*,
         *TimeSignature*...) and track events (*Pitch*, *Velocity*, *Pedal*...) are
@@ -1000,20 +1000,20 @@ class MIDITokenizer(ABC, HFHubMixin):
         ``True``, all events of all tracks are treated all at once, otherwise the
         events of each track are treated independently.
 
-        :param midi: the MIDI :class:`symusic.Score` object to convert.
+        :param score: the :class:`symusic.Score` object to convert.
         :return: a :class:`miditok.TokSequence` if ``tokenizer.one_token_stream`` is
             ``True``, else a list of :class:`miditok.TokSequence` objects.
         """
         # Create events list
         all_events = []
         if not self.one_token_stream:
-            if len(midi.tracks) == 0:
+            if len(score.tracks) == 0:
                 all_events.append([])
             else:
-                all_events = [[] for _ in range(len(midi.tracks))]
+                all_events = [[] for _ in range(len(score.tracks))]
 
         # Global events (Tempo, TimeSignature)
-        global_events = self._create_midi_events(midi)
+        global_events = self._create_midi_events(score)
         if self.one_token_stream:
             all_events += global_events
         else:
@@ -1029,14 +1029,14 @@ class MIDITokenizer(ABC, HFHubMixin):
             or self.config.use_pitch_intervals
         ):
             if self.config.use_time_signatures:
-                ticks_per_beat = get_midi_ticks_per_beat(midi)
+                ticks_per_beat = get_score_ticks_per_beat(score)
             else:
-                ticks_per_beat = np.array([[midi.end(), self.time_division]])
+                ticks_per_beat = np.array([[score.end(), self.time_division]])
         else:
             ticks_per_beat = None
 
         # Adds track tokens
-        for ti, track in enumerate(midi.tracks):
+        for ti, track in enumerate(score.tracks):
             track_events = self._create_track_events(track, ticks_per_beat)
             if self.one_token_stream:
                 all_events += track_events
@@ -1058,14 +1058,14 @@ class MIDITokenizer(ABC, HFHubMixin):
 
         # Add time events
         if self.one_token_stream:
-            all_events = self._add_time_events(all_events, midi.ticks_per_quarter)
+            all_events = self._add_time_events(all_events, score.ticks_per_quarter)
             tok_sequence = TokSequence(events=all_events)
             self.complete_sequence(tok_sequence)
         else:
             tok_sequence = []
             for i in range(len(all_events)):
                 all_events[i] = self._add_time_events(
-                    all_events[i], midi.ticks_per_quarter
+                    all_events[i], score.ticks_per_quarter
                 )
                 tok_sequence.append(TokSequence(events=all_events[i]))
                 self.complete_sequence(tok_sequence[-1])
@@ -1385,8 +1385,8 @@ class MIDITokenizer(ABC, HFHubMixin):
         to be fed to a model.
 
         :param events: sequence of global and track events to create tokens time from.
-        :param time_division: time division in ticks per quarter of the MIDI being
-            tokenized.
+        :param time_division: time division in ticks per quarter of the
+            ``symusic.Score`` being tokenized.
         :return: the same events, with time events inserted.
         """
         raise NotImplementedError
@@ -1429,7 +1429,7 @@ class MIDITokenizer(ABC, HFHubMixin):
         score = self.preprocess_score(score)
 
         # Tokenize it
-        tokens = self._midi_to_tokens(score)
+        tokens = self._score_to_tokens(score)
         # Add bar/beat ticks here to TokSeq as they need to be from preprocessed MIDI
         add_bar_beats_ticks_to_tokseq(tokens, score)
 
@@ -1720,7 +1720,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             for seq in tokens:
                 self._preprocess_tokseq_before_decoding(seq)
 
-        midi = self._tokens_to_midi(tokens, programs)
+        midi = self._tokens_to_score(tokens, programs)
 
         # Create controls for pedals
         # This is required so that they are saved when the MIDI is dumped, as symusic
@@ -1746,22 +1746,22 @@ class MIDITokenizer(ABC, HFHubMixin):
         return midi
 
     @abstractmethod
-    def _tokens_to_midi(
+    def _tokens_to_score(
         self,
         tokens: TokSequence | list[TokSequence],
         programs: list[tuple[int, bool]] | None = None,
     ) -> Score:
         r"""
-        Convert tokens (:class:`miditok.TokSequence`) into a MIDI.
+        Convert tokens (:class:`miditok.TokSequence`) into a ``symusic.Score``.
 
         This is an internal method called by ``self.decode``, intended to be
-        implemented by classes inheriting :class:`miditok.MidiTokenizer`.
+        implemented by classes inheriting :class:`miditok.MusicTokenizer`.
 
         :param tokens: tokens to convert. Can be either a list of
             :class:`miditok.TokSequence` or a list of :class:`miditok.TokSequence`s.
         :param programs: programs of the tracks. If none is given, will default to
             piano, program 0. (default: ``None``)
-        :return: the midi object (:class:`symusic.Score`).
+        :return: the ``symusic.Score`` object.
         """
         raise NotImplementedError
 
@@ -2884,7 +2884,7 @@ class MIDITokenizer(ABC, HFHubMixin):
             self.save_tokens(
                 tokens,
                 out_path,
-                get_midi_programs(midi) if save_programs else None,
+                get_score_programs(midi) if save_programs else None,
             )
 
         # Set it back to False

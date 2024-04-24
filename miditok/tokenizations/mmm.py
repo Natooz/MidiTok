@@ -77,8 +77,8 @@ class MMM(MIDITokenizer):
         to be fed to a model.
 
         :param events: sequence of global and track events to create tokens time from.
-        :param time_division: time division in ticks per quarter of the MIDI being
-            tokenized.
+        :param time_division: time division in ticks per quarter of the
+            ``symusic.Score`` being tokenized.
         :return: the same events, with time events inserted.
         """
         if len(events) < 2:  # empty list
@@ -90,18 +90,24 @@ class MMM(MIDITokenizer):
         track_end_event = Event("Track", "End", track_events[-1].time + 1)
         return [track_start_event, *track_events, track_end_event]
 
-    def _midi_to_tokens(self, midi: Score) -> TokSequence:
+    def _score_to_tokens(self, score: Score) -> TokSequence:
         r"""
-        Convert a **preprocessed** MIDI object to a sequence of tokens.
+        Convert a **preprocessed** ``symusic.Score`` object to a sequence of tokens.
 
         We need to override the parent method to concatenate the tracks sequences.
 
-        :param midi: the MIDI :class:`symusic.Score` object to convert.
+        The workflow of this method is as follows: the global events (*Tempo*,
+        *TimeSignature*...) and track events (*Pitch*, *Velocity*, *Pedal*...) are
+        gathered into a list, then the time events are added. If `one_token_stream` is
+        ``True``, all events of all tracks are treated all at once, otherwise the
+        events of each track are treated independently.
+
+        :param score: the :class:`symusic.Score` object to convert.
         :return: a :class:`miditok.TokSequence` if ``tokenizer.one_token_stream`` is
             ``True``, else a list of :class:`miditok.TokSequence` objects.
         """
         self.one_token_stream = False
-        sequences = super()._midi_to_tokens(midi)
+        sequences = super()._score_to_tokens(score)
         self.one_token_stream = True
 
         # Concatenate the sequences
@@ -114,22 +120,22 @@ class MMM(MIDITokenizer):
     def _sort_events(self, events: list[Event]) -> None:
         self.base_tokenizer._sort_events(events)
 
-    def _tokens_to_midi(
+    def _tokens_to_score(
         self,
         tokens: TokSequence,
         _: None = None,
     ) -> Score:
         r"""
-        Convert tokens (:class:`miditok.TokSequence`) into a MIDI.
+        Convert tokens (:class:`miditok.TokSequence`) into a ``symusic.Score``.
 
         This is an internal method called by ``self.decode``, intended to be
-        implemented by classes inheriting :class:`miditok.MidiTokenizer`.
+        implemented by classes inheriting :class:`miditok.MusicTokenizer`.
 
         :param tokens: tokens to convert. Can be either a list of
             :class:`miditok.TokSequence` or a list of :class:`miditok.TokSequence`s.
         :param _: in place of programs of the parent method, unused here.
             (default: ``None``)
-        :return: the midi object (:class:`symusic.Score`).
+        :return: the ``symusic.Score`` object.
         """
         tokseqs = []
         i = 0
@@ -146,7 +152,7 @@ class MMM(MIDITokenizer):
             tokseqs.append(tokens[i + 1 : j])
             i = j
 
-        return self.base_tokenizer._tokens_to_midi(tokseqs)
+        return self.base_tokenizer._tokens_to_score(tokseqs)
 
     def _create_base_vocabulary(self) -> list[str]:
         r"""

@@ -51,7 +51,7 @@ class CPWord(MIDITokenizer):
     small models.
     **Note:** When decoding multiple token sequences (of multiple tracks), i.e. when
     ``config.use_programs`` is False, only the tempos and time signatures of the first
-    sequence will be decoded for the whole MIDI.
+    sequence will be decoded for the whole music.
     """
 
     def _tweak_config_before_creating_voc(self) -> None:
@@ -102,8 +102,8 @@ class CPWord(MIDITokenizer):
         to be fed to a model.
 
         :param events: sequence of global and track events to create tokens time from.
-        :param time_division: time division in ticks per quarter of the MIDI being
-            tokenized.
+        :param time_division: time division in ticks per quarter of the
+            ``symusic.Score`` being tokenized.
         :return: the same events, with time events inserted.
         """
         # Add time events
@@ -385,29 +385,29 @@ class CPWord(MIDITokenizer):
 
         return cp_token
 
-    def _tokens_to_midi(
+    def _tokens_to_score(
         self,
         tokens: TokSequence | list[TokSequence],
         programs: list[tuple[int, bool]] | None = None,
     ) -> Score:
         r"""
-        Convert tokens (:class:`miditok.TokSequence`) into a MIDI.
+        Convert tokens (:class:`miditok.TokSequence`) into a ``symusic.Score``.
 
         This is an internal method called by ``self.decode``, intended to be
-        implemented by classes inheriting :class:`miditok.MidiTokenizer`.
+        implemented by classes inheriting :class:`miditok.MusicTokenizer`.
 
         :param tokens: tokens to convert. Can be either a list of
             :class:`miditok.TokSequence` or a list of :class:`miditok.TokSequence`s.
         :param programs: programs of the tracks. If none is given, will default to
             piano, program 0. (default: ``None``)
-        :return: the midi object (:class:`symusic.Score`).
+        :return: the ``symusic.Score`` object.
         """
         # Unsqueeze tokens in case of one_token_stream
         if self.one_token_stream:  # ie single token seq
             tokens = [tokens]
         for i in range(len(tokens)):
             tokens[i] = tokens[i].tokens
-        midi = Score(self.time_division)
+        score = Score(self.time_division)
 
         # RESULTS
         tracks: dict[int, Track] = {}
@@ -458,7 +458,7 @@ class CPWord(MIDITokenizer):
                     time_signature_changes.append(TimeSignature(0, *TIME_SIGNATURE))
             current_time_sig = time_signature_changes[0]
             ticks_per_bar = compute_ticks_per_bar(
-                current_time_sig, midi.ticks_per_quarter
+                current_time_sig, score.ticks_per_quarter
             )
             ticks_per_beat = self._tpb_per_ts[current_time_sig.denominator]
             ticks_per_pos = ticks_per_beat // self.config.max_num_pos_per_beat
@@ -528,7 +528,7 @@ class CPWord(MIDITokenizer):
                                 tick_at_last_ts_change = tick_at_current_bar
                                 bar_at_last_ts_change = current_bar
                                 ticks_per_bar = compute_ticks_per_bar(
-                                    current_time_sig, midi.ticks_per_quarter
+                                    current_time_sig, score.ticks_per_quarter
                                 )
                                 ticks_per_beat = self._tpb_per_ts[
                                     current_time_sig.denominator
@@ -581,9 +581,9 @@ class CPWord(MIDITokenizer):
 
                     previous_note_end = max(previous_note_end, current_tick)
 
-            # Add current_inst to midi and handle notes still active
+            # Add current_inst to score and handle notes still active
             if not self.one_token_stream and not is_track_empty(current_track):
-                midi.tracks.append(current_track)
+                score.tracks.append(current_track)
 
         # Delete mocked
         # And handle first tempo (tick 0) here instead of super
@@ -596,13 +596,13 @@ class CPWord(MIDITokenizer):
         elif round(tempo_changes[0].tempo, 2) == self.default_tempo:
             tempo_changes[0].time = 0
 
-        # create MidiFile
+        # Add global events to score
         if self.one_token_stream:
-            midi.tracks = list(tracks.values())
-        midi.tempos = tempo_changes
-        midi.time_signatures = time_signature_changes
+            score.tracks = list(tracks.values())
+        score.tempos = tempo_changes
+        score.time_signatures = time_signature_changes
 
-        return midi
+        return score
 
     def _create_base_vocabulary(self) -> list[list[str]]:
         r"""

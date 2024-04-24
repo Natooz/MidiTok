@@ -47,16 +47,16 @@ class Structured(MIDITokenizer):
         Concerned events are: *Pitch*, *Velocity*, *Duration*, *NoteOn*, *NoteOff* and
         optionally *Chord*, *Pedal* and *PitchBend*.
         **If the tokenizer is using pitch intervals, the notes must be sorted by time
-        then pitch values. This is done in** ``preprocess_midi``.
+        then pitch values. This is done in** ``preprocess_score``.
 
         :param track: ``symusic.Track`` to extract events from.
         :param _: in place of ``ticks_per_beat``, unused here as Structured do not
             support time signatures, hence the ticks_per_beat value is always the same
-            and equal to the MIDI's time division.
+            and equal to the Score's time division.
         :return: sequence of corresponding ``Event``s.
         """
         # Make sure the notes are sorted first by their onset (start) times, second by
-        # pitch: notes.sort(key=lambda x: (x.start, x.pitch)) done in preprocess_midi
+        # pitch: notes.sort(key=lambda x: (x.start, x.pitch)) done in preprocess_score
         program = track.program if not track.is_drum else -1
         events = []
 
@@ -138,8 +138,8 @@ class Structured(MIDITokenizer):
         to be fed to a model.
 
         :param events: sequence of global and track events to create tokens time from.
-        :param time_division: time division in ticks per quarter of the MIDI being
-            tokenized.
+        :param time_division: time division in ticks per quarter of the
+            ``symusic.Score`` being tokenized.
         :return: the same events, with time events inserted.
         """
         all_events = []
@@ -179,9 +179,9 @@ class Structured(MIDITokenizer):
 
         return all_events
 
-    def _midi_to_tokens(self, midi: Score) -> TokSequence | list[TokSequence]:
+    def _score_to_tokens(self, score: Score) -> TokSequence | list[TokSequence]:
         r"""
-        Convert a **preprocessed** MIDI object to a sequence of tokens.
+        Convert a **preprocessed** ``symusic.Score`` object to a sequence of tokens.
 
         We override the parent method to handle the "non-program" case where
         *TimeShift* events have already been added by `_notes_to_events`.
@@ -191,7 +191,13 @@ class Structured(MIDITokenizer):
         ``True``, all events of all tracks are treated all at once, otherwise the
         events of each track are treated independently.
 
-        :param midi: the MIDI :class:`symusic.Score` object to convert.
+        The workflow of this method is as follows: the global events (*Tempo*,
+        *TimeSignature*...) and track events (*Pitch*, *Velocity*, *Pedal*...) are
+        gathered into a list, then the time events are added. If `one_token_stream` is
+        ``True``, all events of all tracks are treated all at once, otherwise the
+        events of each track are treated independently.
+
+        :param score: the :class:`symusic.Score` object to convert.
         :return: a :class:`miditok.TokSequence` if ``tokenizer.one_token_stream`` is
             ``True``, else a list of :class:`miditok.TokSequence` objects.
         """
@@ -199,9 +205,9 @@ class Structured(MIDITokenizer):
         all_events = []
 
         # Adds note tokens
-        if not self.one_token_stream and len(midi.tracks) == 0:
+        if not self.one_token_stream and len(score.tracks) == 0:
             all_events.append([])
-        for track in midi.tracks:
+        for track in score.tracks:
             note_events = self._create_track_events(track)
             if self.one_token_stream:
                 all_events += note_events
@@ -210,9 +216,9 @@ class Structured(MIDITokenizer):
 
         # Add time events
         if self.one_token_stream:
-            if len(midi.tracks) > 1:
+            if len(score.tracks) > 1:
                 all_events.sort(key=lambda x: x.time)
-            all_events = self._add_time_events(all_events, midi.ticks_per_quarter)
+            all_events = self._add_time_events(all_events, score.ticks_per_quarter)
             tok_sequence = TokSequence(events=all_events)
             self.complete_sequence(tok_sequence)
         else:
@@ -224,29 +230,29 @@ class Structured(MIDITokenizer):
 
         return tok_sequence
 
-    def _tokens_to_midi(
+    def _tokens_to_score(
         self,
         tokens: TokSequence | list[TokSequence],
         programs: list[tuple[int, bool]] | None = None,
     ) -> Score:
         r"""
-        Convert tokens (:class:`miditok.TokSequence`) into a MIDI.
+        Convert tokens (:class:`miditok.TokSequence`) into a ``symusic.Score``.
 
         This is an internal method called by ``self.decode``, intended to be
-        implemented by classes inheriting :class:`miditok.MidiTokenizer`.
+        implemented by classes inheriting :class:`miditok.MusicTokenizer`.
 
         :param tokens: tokens to convert. Can be either a list of
             :class:`miditok.TokSequence` or a list of :class:`miditok.TokSequence`s.
         :param programs: programs of the tracks. If none is given, will default to
             piano, program 0. (default: ``None``)
-        :return: the midi object (:class:`symusic.Score`).
+        :return: the ``symusic.Score`` object.
         """
         # Unsqueeze tokens in case of one_token_stream
         if self.one_token_stream:  # ie single token seq
             tokens = [tokens]
         for i in range(len(tokens)):
             tokens[i] = tokens[i].tokens
-        midi = Score(self.time_division)
+        score = Score(self.time_division)
 
         # RESULTS
         instruments: dict[int, Track] = {}
@@ -267,7 +273,7 @@ class Structured(MIDITokenizer):
         current_tick = 0
         current_program = 0
         current_track = None
-        ticks_per_beat = midi.ticks_per_quarter
+        ticks_per_beat = score.ticks_per_quarter
         for si, seq in enumerate(tokens):
             # Set track / sequence program if needed
             if not self.one_token_stream:
@@ -313,15 +319,14 @@ class Structured(MIDITokenizer):
                 elif token_type == "Program":
                     current_program = int(token_val)
 
-            # Add current_inst to midi and handle notes still active
+            # Add current_inst to score and handle notes still active
             if not self.one_token_stream and not is_track_empty(current_track):
-                midi.tracks.append(current_track)
+                score.tracks.append(current_track)
 
-        # create MidiFile
         if self.one_token_stream:
-            midi.tracks = list(instruments.values())
+            score.tracks = list(instruments.values())
 
-        return midi
+        return score
 
     def _create_base_vocabulary(self) -> list[str]:
         r"""

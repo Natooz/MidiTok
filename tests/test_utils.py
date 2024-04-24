@@ -309,7 +309,7 @@ def test_get_num_notes_per_bar(file_path: Path):
 @pytest.mark.parametrize("file_path", MIDI_PATHS_MULTITRACK)
 def test_split_concat_score(file_path: Path, max_num_beats: int = 16):
     score = Score(file_path)
-    score_splits = miditok.utils.split_midi_per_beats(score, max_num_beats)
+    score_splits = miditok.utils.split_score_per_beats(score, max_num_beats)
     ticks_beat = miditok.utils.get_beats_ticks(score)
 
     # Check there is the good number of split music files
@@ -324,7 +324,7 @@ def test_split_concat_score(file_path: Path, max_num_beats: int = 16):
     end_ticks = [
         ticks_beat[i] for i in range(max_num_beats, len(ticks_beat), max_num_beats)
     ]
-    score_concat = miditok.utils.concat_midis(score_splits, end_ticks)
+    score_concat = miditok.utils.concat_scores(score_splits, end_ticks)
 
     # Assert the concatenated Score is identical to the original one
     # We do not test tempos, time signatures and key signature as they are duplicated
@@ -337,7 +337,7 @@ def test_split_concat_score(file_path: Path, max_num_beats: int = 16):
 @pytest.mark.parametrize("file_path", MIDI_PATHS_MULTITRACK)
 def test_split_score_per_tracks(file_path: Path):
     score = Score(file_path)
-    score_splits = miditok.utils.split_midi_per_tracks(score)
+    score_splits = miditok.utils.split_score_per_tracks(score)
 
     # Check there is the good number of split Scores
     assert len(score_splits) == len(score.tracks)
@@ -349,7 +349,7 @@ def test_split_score_per_tracks(file_path: Path):
         score_split.key_signatures = []
         score_split.lyrics = []
         score_split.markers = []
-    score_merged = miditok.utils.merge_midis(score_splits)
+    score_merged = miditok.utils.merge_scores(score_splits)
 
     # Assert the merges Score is identical to the original one
     assert score == score_merged

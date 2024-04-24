@@ -161,7 +161,7 @@ def adapt_ref_score_before_tokenize(
                             tpb,
                         ),
                     ]
-                    for end_tick, tpb in miditok.utils.get_midi_ticks_per_beat(score)
+                    for end_tick, tpb in miditok.utils.get_score_ticks_per_beat(score)
                 ],
                 dtype=np.intc,
             )
@@ -376,7 +376,7 @@ def tokenize_and_check_equals(
     tokens = tokenizer(score)
     score_decoded = tokenizer(
         tokens,
-        miditok.utils.get_midi_programs(score) if len(score.tracks) > 0 else None,
+        miditok.utils.get_score_programs(score) if len(score.tracks) > 0 else None,
     )
 
     # Post-process the reference and decoded Scores
