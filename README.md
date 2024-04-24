@@ -49,7 +49,7 @@ Here is a complete yet concise example of how you can use MidiTok to train any P
 
 ```python
 from miditok import REMI, TokenizerConfig
-from miditok.pytorch_data import DatasetMIDI, DataCollator, split_midis_for_training
+from miditok.pytorch_data import DatasetMIDI, DataCollator, split_files_for_training
 from torch.utils.data import DataLoader
 from pathlib import Path
 
@@ -66,7 +66,7 @@ tokenizer.push_to_hub("username/model-name", private=True, token="your_hf_token"
 
 # Split MIDIs into smaller chunks for training
 dataset_chunks_dir = Path("path", "to", "midi_chunks")
-split_midis_for_training(
+split_files_for_training(
     files_paths=files_paths,
     tokenizer=tokenizer,
     save_dir=dataset_chunks_dir,

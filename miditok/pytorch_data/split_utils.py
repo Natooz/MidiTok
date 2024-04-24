@@ -1,4 +1,4 @@
-"""Utils methods for MIDI/tokens split."""
+"""Utils methods for Score/tokens split."""
 from __future__ import annotations
 
 import json
@@ -11,7 +11,11 @@ from symusic import Score, TextMeta
 from torch import LongTensor
 from tqdm import tqdm
 
-from miditok.constants import MAX_NUM_FILES_NUM_TOKENS_PER_NOTE, SCORE_LOADING_EXCEPTION
+from miditok.constants import (
+    MAX_NUM_FILES_NUM_TOKENS_PER_NOTE,
+    MIDI_FILES_EXTENSIONS,
+    SCORE_LOADING_EXCEPTION,
+)
 from miditok.utils import (
     get_bars_ticks,
     get_num_notes_per_bar,
@@ -25,7 +29,7 @@ if TYPE_CHECKING:
     from miditok import MIDITokenizer
 
 
-def split_midis_for_training(
+def split_files_for_training(
     files_paths: Sequence[Path],
     tokenizer: MIDITokenizer,
     save_dir: Path,
@@ -35,50 +39,49 @@ def split_midis_for_training(
     min_seq_len: int | None = None,
 ) -> list[Path]:
     """
-    Split a list of MIDIs into smaller chunks to use for training.
+    Split a list of music files into smaller chunks to use for training.
 
-    MIDI splitting allows to split each MIDI from a dataset into chunks of lengths
-    calculated in function of the note densities of its bars in order to reduce the
-    padding of the batches, using the
-    :py:func:`miditok.pytorch_data.split_midi_per_note_density` method.
-    The MIDIs are only split at bars, in order have chunks starting at relevant times.
+    Splitting files allows to split them into chunks of lengths calculated in function
+    of the note densities of its bars in order to reduce the padding of the batches,
+    using the :py:func:`miditok.pytorch_data.split_score_per_note_density` method.
+    The files are only split at bars, in order have chunks starting at relevant times.
 
-    MIDI splitting can be performed on a dataset once. This method will save a hidden
+    File splitting can be performed on a dataset once. This method will save a hidden
     file, with a name corresponding to the hash of the list of file paths, in the
     ``save_dir`` directory. When called, it will first check that this file does not
-    already exist, and if it is the case will return the paths to all the MIDI files
-    within ``save_dir``.
+    already exist, and if it is the case will return the paths to all the files within
+    ``save_dir``.
 
     **If your tokenizer does not tokenize all tracks in one sequence of tokens**
-    (``tokenizer.one_token_stream``), the MIDI tracks will be split independently.
+    (``tokenizer.one_token_stream``), the music tracks will be split independently.
 
-    :param files_paths: paths to MIDI files to split.
+    :param files_paths: paths to music files to split.
     :param tokenizer: tokenizer.
-    :param save_dir: path to the directory to save the MIDI splits.
+    :param save_dir: path to the directory to save the files splits.
     :param max_seq_len: maximum token sequence length that the model will be trained
         with.
     :param average_num_tokens_per_note: average number of tokens per note associated to
         this tokenizer. If given ``None``, this value will automatically be calculated
-        from the first 200 MIDI files with the
+        from the first 200 files with the
         :py:func:`miditok.pytorch_data.get_average_num_tokens_per_note` method.
     :param num_overlap_bars: will create chunks with consecutive overlapping bars. For
-        example, if this argument is given ``1``, two consecutive MIDI chunks might
-        end at the bar *n* and start at the bar *n-1* respectively, thus they will
-        encompass the same bar. This allows to create a causality chain between chunks.
-        This value should be determined based on the ``average_num_tokens_per_note``
-        value of the tokenizer and the ``max_seq_len`` value, so that it is neither
-        too high nor too low. (default: ``1``).
+        example, if this argument is given ``1``, two consecutive chunks might end at
+        the bar *n* and start at the bar *n-1* respectively, thus they will encompass
+        the same bar. This allows to create a causality chain between chunks. This value
+        should be determined based on the ``average_num_tokens_per_note`` value of the
+        tokenizer and the ``max_seq_len`` value, so that it is neither too high nor too
+        low. (default: ``1``).
     :param min_seq_len: minimum sequence length, only used when splitting at the last
-        bar of the MIDI. (default: ``None``, see default value of
-        :py:func:`miditok.pytorch_data.split_midi_per_note_density`)
-    :return: the paths to the MIDI splits.
+        bar of the file. (default: ``None``, see default value of
+        :py:func:`miditok.pytorch_data.split_score_per_note_density`)
+    :return: the paths to the files splits.
     """
     # Safety checks
-    midi_split_hidden_file_path = save_dir / f".{hash(tuple(files_paths))}"
-    if midi_split_hidden_file_path.is_file():
+    split_hidden_file_path = save_dir / f".{hash(tuple(files_paths))}"
+    if split_hidden_file_path.is_file():
         warn(
-            f"These MIDI have already been split in the saving directory ({save_dir})."
-            f" Skipping MIDI splitting.",
+            f"These files have already been split in the saving directory ({save_dir})."
+            f" Skipping file splitting.",
             stacklevel=2,
         )
         return list(save_dir.glob("**/*.mid"))
@@ -90,29 +93,29 @@ def split_midis_for_training(
     # Determine the deepest common subdirectory to replicate file tree
     root_dir = get_deepest_common_subdir(files_paths)
 
-    # Splitting MIDIs
+    # Splitting files
     new_files_paths = []
     for file_path in tqdm(
         files_paths,
-        desc=f"Splitting MIDIs ({save_dir})",
+        desc=f"Splitting music files ({save_dir})",
         miniters=int(len(files_paths) / 20),
         maxinterval=480,
     ):
         try:
-            midis = [Score(file_path)]
+            scores = [Score(file_path)]
         except SCORE_LOADING_EXCEPTION:
             continue
 
         # Separate track first if needed
         tracks_separated = False
-        if not tokenizer.one_token_stream and len(midis[0].tracks) > 1:
-            midis = split_midi_per_tracks(midis[0])
+        if not tokenizer.one_token_stream and len(scores[0].tracks) > 1:
+            scores = split_midi_per_tracks(scores[0])
             tracks_separated = True
 
         # Split per note density
-        for ti, midi_to_split in enumerate(midis):
-            midi_splits = split_midi_per_note_density(
-                midi_to_split,
+        for ti, score_to_split in enumerate(scores):
+            score_chunks = split_score_per_note_density(
+                score_to_split,
                 max_seq_len,
                 average_num_tokens_per_note,
                 num_overlap_bars,
@@ -120,73 +123,76 @@ def split_midis_for_training(
             )
 
             # Save them
-            for _i, midi_to_save in enumerate(midi_splits):
+            for _i, chunk_to_save in enumerate(score_chunks):
                 # Skip it if there are no notes, this can happen with
                 # portions of tracks with no notes but tempo/signature
                 # changes happening later
-                if len(midi_to_save.tracks) == 0 or midi_to_save.note_num() == 0:
+                if len(chunk_to_save.tracks) == 0 or chunk_to_save.note_num() == 0:
                     continue
                 # Add a marker to indicate chunk number
-                midi_to_save.markers.append(
-                    TextMeta(0, f"miditok: chunk {_i}/{len(midi_splits) - 1}")
+                chunk_to_save.markers.append(
+                    TextMeta(0, f"miditok: chunk {_i}/{len(score_chunks) - 1}")
                 )
                 if tracks_separated:
-                    file_name = f"{file_path.stem}_t{ti}_{_i}.mid"
+                    file_name = f"{file_path.stem}_t{ti}_{_i}{file_path.suffix}"
                 else:
-                    file_name = f"{file_path.stem}_{_i}.mid"
+                    file_name = f"{file_path.stem}_{_i}{file_path.suffix}"
                 # use with_stem when dropping support for python 3.8
                 saving_path = (
                     save_dir / file_path.relative_to(root_dir).parent / file_name
                 )
                 saving_path.parent.mkdir(parents=True, exist_ok=True)
-                midi_to_save.dump_midi(saving_path)
+                if file_path.suffix in MIDI_FILES_EXTENSIONS:
+                    chunk_to_save.dump_midi(saving_path)
+                else:
+                    chunk_to_save.dump_abc(saving_path)
                 new_files_paths.append(saving_path)
 
-    # Save file in save_dir to indicate MIDI split has been performed
-    with midi_split_hidden_file_path.open("w") as f:
-        f.write(f"{len(files_paths)} files after MIDI splits")
+    # Save file in save_dir to indicate file split has been performed
+    with split_hidden_file_path.open("w") as f:
+        f.write(f"{len(files_paths)} files after file splits")
 
     return new_files_paths
 
 
-def split_midi_per_note_density(
-    midi: Score,
+def split_score_per_note_density(
+    score: Score,
     max_seq_len: int,
     average_num_tokens_per_note: float,
     num_overlap_bars: int = 1,
     min_seq_len: int | None = None,
 ) -> list[Score]:
     """
-    Split a MIDI (at bars) into chunks depending on their note densities.
+    Split a ``symusic.Score`` (at bars) into chunks depending on their note densities.
 
-    This method aims to split MIDIs at bars to reduce the amount of padding to apply to
-    batches during training. It offers several parameters to control where to split
-    depending on the desired outcome, e.g. reduce padding or keep the largest amount of
-    data at the cost of padding.
+    This method aims to split music files at bars to reduce the amount of padding to
+    apply to batches during training. It offers several parameters to control where to
+    split depending on the desired outcome, e.g. reduce padding or keep the largest
+    amount of data at the cost of padding.
 
     This method will estimate the number of tokens for each bar depending on the
     tokenizer's average number of tokens per note (tpn), will loop over the estimated
-    number of tokens per bar to determine the bars at which the MIDI will be "cut".
+    number of tokens per bar to determine the bars at which the file will be "cut".
 
     It is recommended to use this method with a non-zero ``num_overlap_bars``, as
-    overlapping allows to keep a form of causality throughout a MIDI sample from one
-    chunk to another. It also reduces padding, but will slightly increase the overall
-    training duration.
+    overlapping allows to keep a form of causality throughout a file from one chunk to
+    another. It also reduces padding, but will slightly increase the overall training
+    time.
 
-    :param midi: MIDI to split.
+    :param score: ``symusic.Score`` to split.
     :param max_seq_len: maximum number of tokens per sequence.
     :param average_num_tokens_per_note: average number of tokens per note associated to
         this tokenizer.
     :param num_overlap_bars: will create chunks with consecutive overlapping bars. For
-        example, if this argument is given ``1``, two consecutive MIDI chunks might
+        example, if this argument is given ``1``, two consecutive music chunks might
         end at the bar *n* and start at the bar *n-1* respectively, thus they will
         encompass the same bar. This allows to create a causality chain between chunks.
         This value should be determined based on the ``average_num_tokens_per_note``
         value of the tokenizer and the ``max_seq_len`` value, so that it is neither
         too high nor too low. (default: ``1``).
     :param min_seq_len: minimum sequence length, only used when splitting at the last
-        bar of the MIDI. (default: ``max_seq_len // 4``)
-    :return: the list of split MIDIs.
+        bar of the file. (default: ``max_seq_len // 4``)
+    :return: the list of ``symusic.Score`` chunks.
     """
     if num_overlap_bars < 0:
         msg = (
@@ -196,8 +202,8 @@ def split_midi_per_note_density(
         raise ValueError(msg)
     if min_seq_len is None:
         min_seq_len = max_seq_len // 4
-    bar_ticks = get_bars_ticks(midi)
-    num_notes_per_bar = get_num_notes_per_bar(midi)
+    bar_ticks = get_bars_ticks(score)
+    num_notes_per_bar = get_num_notes_per_bar(score)
     num_tokens_per_bar = [
         npb * average_num_tokens_per_note for npb in num_notes_per_bar
     ]
@@ -258,13 +264,14 @@ def split_midi_per_note_density(
 
     # Add the last chunk if its token sequence length is greater than the minimum
     if num_tokens_current_chunk >= min_seq_len:
-        ticks_split.append((bar_ticks[bi_start_chunk], midi.end() + 1))
+        ticks_split.append((bar_ticks[bi_start_chunk], score.end() + 1))
 
     if len(ticks_split) == 1:
-        return [midi]
+        return [score]
 
     return [
-        midi.clip(t_start, t_end).shift_time(-t_start) for t_start, t_end in ticks_split
+        score.clip(t_start, t_end).shift_time(-t_start)
+        for t_start, t_end in ticks_split
     ]
 
 
@@ -272,26 +279,26 @@ def get_average_num_tokens_per_note(
     tokenizer: MIDITokenizer, files_paths: Sequence[Path]
 ) -> float:
     """
-    Return the average number of tokens per note (tpn) for a list of MIDIs.
+    Return the average number of tokens per note (tpn) for a list of music files.
 
     With a trained tokenizer, the average tpn is likely to be very low.
 
     :param tokenizer: tokenizer.
-    :param files_paths: list of MIDI file paths.
+    :param files_paths: list of paths to music files.
     :return: the average tokens per note.
     """
     num_tokens_per_note = []
     for file_path in files_paths:
         try:
-            midi = Score(file_path)
+            score = Score(file_path)
         except SCORE_LOADING_EXCEPTION:
             continue
-        tok_seq = tokenizer(midi)
+        tok_seq = tokenizer(score)
         if tokenizer.one_token_stream:
-            num_notes = midi.note_num()
+            num_notes = score.note_num()
             num_tokens_per_note.append(len(tok_seq) / num_notes)
         else:
-            for track, seq in zip(midi.tracks, tok_seq):
+            for track, seq in zip(score.tracks, tok_seq):
                 num_tokens_per_note.append(len(seq) / track.note_num())
 
     return sum(num_tokens_per_note) / len(num_tokens_per_note)

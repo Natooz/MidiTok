@@ -302,13 +302,13 @@ class TokenizerConfig:
     r"""
     Tokenizer configuration, to be used with all tokenizers.
 
-    :param pitch_range: range of MIDI pitches to use. Pitches can take values between
+    :param pitch_range: range of note pitches to use. Pitches can take values between
         0 and 127 (included). The `General MIDI 2 (GM2) specifications
         <https://www.midi.org/specifications-old/item/general-midi-2>`_ indicate the
         **recommended** ranges of pitches per MIDI program (instrument). These
         recommended ranges can also be found in ``miditok.constants``. In all cases,
         the range from 21 to 108 (included) covers all the recommended values. When
-        processing a MIDI, the notes with pitches under or above this range can be
+        processing a MIDI file, the notes with pitches under or above this range can be
         discarded. (default: ``(21, 109)``)
     :param beat_res: beat resolutions, as a dictionary in the form:
         ``{(beat_x1, beat_x2): beat_res_1, (beat_x2, beat_x3): beat_res_2, ...}``.
@@ -319,11 +319,10 @@ class TokenizerConfig:
         total number of possible positions will be set at four times the maximum
         resolution given (``max(beat_res.values)``\).
         (default: ``{(0, 4): 8, (4, 12): 4}``)
-    :param num_velocities: number of velocity bins. In the MIDI norm, velocities can
+    :param num_velocities: number of velocity bins. In the MIDI protocol, velocities can
         take up to 128 values (0 to 127). This parameter allows to reduce the number
-        of velocity values. The velocities of the MIDIs resolution will be downsampled
-        to ``num_velocities`` values, equally separated between 0 and 127.
-        (default: ``32``)
+        of velocity values. The velocities of the file will be downsampled to
+        ``num_velocities`` values, equally spaced between 0 and 127. (default: ``32``)
     :param special_tokens: list of special tokens. The "PAD" token is required and
         will be included in the vocabulary anyway if you did not include it in
         ``special_tokens``. This must be given as a list of strings, that should
@@ -358,9 +357,9 @@ class TokenizerConfig:
         compatible. ``TimeSignature`` tokens will specify the current time signature.
         Note that :ref:`REMI` adds a ``TimeSignature`` token at the beginning of each
         Bar (i.e. after ``Bar`` tokens), while :ref:`TSD` and :ref:`MIDI-Like` will
-        only represent time signature changes (MIDI messages) as they come. If you want
-        more "recalls" of the current time signature within your token sequences, you
-        can preprocess your MIDI file to add more ``TimeSignatureChange`` objects.
+        only represent time signature changes as they come. If you want more "recalls"
+        of the current time signature within your token sequences, you can preprocess
+        a ``symusic.Score`` object to add more ``symusic.TimeSignature`` objects.
         (default: ``False``)
     :param use_sustain_pedals: will use ``Pedal`` tokens to represent the sustain pedal
         events. In multitrack setting, The value of each ``Pedal`` token will be equal
@@ -381,16 +380,16 @@ class TokenizerConfig:
         the ``programs``, ``one_token_stream_for_programs`` and `program_changes`
         arguments. By default, it will prepend a ``Program`` tokens before each
         ``Pitch``/``NoteOn`` token to indicate its associated instrument, and will
-        treat all the tracks of a MIDI as a single sequence of tokens. :ref:`CPWord`,
+        treat all the tracks of a file as a single sequence of tokens. :ref:`CPWord`,
         :ref:`Octuple` and :ref:`MuMIDI` add a ``Program`` tokens with the stacks of
         ``Pitch``, ``Velocity`` and ``Duration`` tokens. The :ref:`Octuple`, :ref:`MMM`
         and :ref:`MuMIDI` tokenizers use natively ``Program`` tokens, this option is
         always enabled. (default: ``False``)
     :param use_pitchdrum_tokens: will use dedicated ``PitchDrum`` tokens for pitches
-        of drums tracks. In the MIDI norm, the pitches of drums tracks corresponds to
-        discrete drum elements (bass drum, high tom, cymbals...) which are unrelated to
-        the pitch value of other instruments/programs. Using dedicated tokens for drums
-        allow to disambiguate this, and is thus recommended. (default: ``True``)
+        of drums tracks. In the MIDI protocol, the pitches of drums tracks corresponds
+        to discrete drum elements (bass drum, high tom, cymbals...) which are unrelated
+        to the pitch value of other instruments/programs. Using dedicated tokens for
+        drums allow to disambiguate this, and is thus recommended. (default: ``True``)
     :param beat_res_rest: the beat resolution of ``Rest`` tokens. It follows the same
         data pattern as the ``beat_res`` argument, however the maximum resolution for
         rests cannot be higher than the highest "global" resolution (``beat_res``).
@@ -413,14 +412,14 @@ class TokenizerConfig:
         (default: ``(40, 250)``)
     :param log_tempos: will use log scaled tempo values instead of linearly scaled.
         (default: ``False``)
-    :param remove_duplicated_notes: will remove duplicated notes before tokenizing
-        MIDIs. Notes with the same onset time and pitch value will be deduplicated.
+    :param remove_duplicated_notes: will remove duplicated notes before tokenizing.
+        Notes with the same onset time and pitch value will be deduplicated.
         This option will slightly increase the tokenization time. This option will add
-        an extra note sorting step in the MIDI preprocessing, which can increase the
-        overall tokenization time. (default: ``False``)
+        an extra note sorting step in the music file preprocessing, which can increase
+        the overall tokenization time. (default: ``False``)
     :param delete_equal_successive_tempo_changes: setting this option True will delete
-        identical successive tempo changes when preprocessing a MIDI file after loading
-        it. For examples, if a MIDI has two tempo changes for tempo 120 at tick 1000
+        identical successive tempo changes when preprocessing a music file after loading
+        it. For examples, if a file has two tempo changes for tempo 120 at tick 1000
         and the next one is for tempo 121 at tick 1200, during preprocessing the tempo
         values are likely to be downsampled and become identical (120 or 121). If
         that's the case, the second tempo change will be deleted and not tokenized.
@@ -428,8 +427,8 @@ class TokenizerConfig:
         information at recurrent timings (e.g. :ref:`Octuple`). For others, note that
         setting it True might reduce the number of ``Tempo`` tokens and in turn the
         recurrence of this information. Leave it False if you want to have recurrent
-        ``Tempo`` tokens, that you might inject yourself by adding ``TempoChange``
-        objects to your MIDIs. (default: ``False``)
+        ``Tempo`` tokens, that you might inject yourself by adding ``symusic.Tempo``
+        objects to a ``symusic.Score``. (default: ``False``)
     :param time_signature_range: range as a dictionary
         ``{denom_i: [num_i1, ..., num_in]/(min_num_i, max_num_i)}``.
         (default: ``{8: [3, 12, 6], 4: [5, 6, 3, 2, 1, 4]}``)
@@ -443,8 +442,8 @@ class TokenizerConfig:
         will be ``num_of_values`` tokens equally spaced between ``lowest_value` and
         `highest_value``. (default: ``(-8192, 8191, 32)``)
     :param delete_equal_successive_time_sig_changes: setting this option True will
-        delete identical successive time signature changes when preprocessing a MIDI
-        file after loading it. For examples, if a MIDI has two time signature changes
+        delete identical successive time signature changes when preprocessing a music
+        file after loading it. For examples, if a file has two time signature changes
         for 4/4 at tick 1000 and the next one is also 4/4 at tick 1200, the second time
         signature change will be deleted and not tokenized. This parameter doesn't
         apply for tokenizations that natively inject the time signature information at
@@ -452,18 +451,19 @@ class TokenizerConfig:
         ``True`` might reduce the number of ``TimeSig`` tokens and in turn the
         recurrence of this information. Leave it ``False`` if you want to have
         recurrent ``TimeSig`` tokens, that you might inject yourself by adding
-        ``TimeSignatureChange`` objects to your MIDIs. (default: ``False``)
+        ``symusic.TimeSignature`` objects to a ``symusic.Score``. (default: ``False``)
     :param programs: sequence of MIDI programs to use. Note that ``-1`` is used and
         reserved for drums tracks. (default: ``list(range(-1, 128))``, from -1 to 127
         included)
     :param one_token_stream_for_programs: when using programs (``use_programs``), this
-        parameters will make the tokenizer treat all the tracks of a MIDI as a single
-        stream of tokens. A ``Program`` token will prepend each ``Pitch``, ``NoteOn``
-        and ``NoteOff`` tokens to indicate their associated program / instrument. Note
-        that this parameter is always set to True for :ref:`MuMIDI` and :ref:`MMM`.
-        Setting it to False will make the tokenizer not use ``Programs``, but will
-        allow to still have ``Program`` tokens in the vocabulary. (default: ``True``)
-    :param program_changes: to be used with ``use_programs``. If given True, the
+        parameters will make the tokenizer serialize all the tracks of a
+        ``symusic.Score`` in a single sequence of tokens. A ``Program`` token will
+        prepend each ``Pitch``, ``NoteOn`` and ``NoteOff`` tokens to indicate their
+        associated program / instrument. Note that this parameter is always set to True
+        for :ref:`MuMIDI` and :ref:`MMM`. Disabling will make the tokenizer not use
+        ``Programs``, but will allow to still have ``Program`` tokens in the vocabulary.
+        (default: ``True``)
+    :param program_changes: to be used with ``use_programs``. If given ``True``, the
         tokenizer will place ``Program`` tokens whenever a note is being played by an
         instrument different from the last one. This mimics the ProgramChange MIDI
         messages. If given False, a ``Program`` token will precede each note tokens
@@ -551,8 +551,8 @@ class TokenizerConfig:
                 if not log2(denominator).is_integer():
                     msg = (
                         "`time_signature_range` contains an invalid time signature "
-                        "denominator. The MIDI norm only supports powers of 2"
-                        f"denominators. Received {denominator}"
+                        "denominator. MidiTok only supports powers of 2 denominators, "
+                        f"does the MIDI protocol. Received {denominator}."
                     )
                     raise ValueError(msg)
 

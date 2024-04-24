@@ -70,7 +70,7 @@ def test_dataset_midi(
     # the ones created in the first call.
     if split_files:
         t0 = time()
-        file_paths_split1 = miditok.pytorch_data.split_midis_for_training(
+        file_paths_split1 = miditok.pytorch_data.split_files_for_training(
             files_paths,
             tokenizer,
             tmp_path,
@@ -80,7 +80,7 @@ def test_dataset_midi(
         t1 = time() - t0
         print(f"First Score split call: {t1:.2f} sec")
         t0 = time()
-        file_paths_split2 = miditok.pytorch_data.split_midis_for_training(
+        file_paths_split2 = miditok.pytorch_data.split_files_for_training(
             files_paths,
             tokenizer,
             tmp_path,

@@ -7,6 +7,7 @@ CURRENT_TOKENIZERS_VERSION = version("tokenizers")
 CURRENT_SYMUSIC_VERSION = version("symusic")
 
 MIDI_FILES_EXTENSIONS = {".mid", ".midi", ".MID", ".MIDI"}
+ABC_FILES_EXTENSIONS = {".abc", ".ABC"}
 SCORE_LOADING_EXCEPTION = (
     RuntimeError,
     ValueError,
@@ -24,9 +25,9 @@ DEFAULT_TOKENIZER_FILE_NAME = "tokenizer.json"
 # List of unicode characters: https://www.fileformat.info/info/charset/UTF-8/list.htm
 CHR_ID_START = 33
 
-# MIDI encodings default parameters, used when tokenizing a dataset and using tokens
-# These are the parameters from which a MIDI file will be tokenized
-# the recommended pitches for piano in the GM2 specs are from 21 to 108
+# Default parameters for TokenizerConfig, used when tokenizing a dataset and using
+# tokens. These parameters impact the file preprocessing (downsampling).
+# The recommended pitches for piano in the GM2 specs are from 21 to 108
 PITCH_RANGE = (21, 109)
 BEAT_RES = {(0, 4): 8, (4, 12): 4}  # samples per beat
 # number of velocity bins, velocities values from 0 to 127 will be quantized
@@ -117,7 +118,7 @@ REMOVE_DUPLICATED_NOTES = False
 MMM_COMPATIBLE_TOKENIZERS = {"TSD", "REMI", "MIDILike"}
 USE_BAR_END_TOKENS = False  # REMI
 
-# Defaults values when writing new MIDI files
+# Defaults values when writing new files
 TEMPO = 120
 TIME_SIGNATURE = (4, 4)
 KEY_SIGNATURE_KEY = KEY_SIGNATURE_TONALITY = 0  # C major
@@ -131,7 +132,7 @@ WORDPIECE_MAX_INPUT_CHARS_PER_WORD_BEAT = 100
 UNIGRAM_MAX_PIECE_LENGTH = 32
 UNIGRAM_SPECIAL_TOKEN_SUFFIX = "-unigram"
 
-# For MIDI split in DatasetMIDI
+# For file split in DatasetMIDI
 MAX_NUM_FILES_NUM_TOKENS_PER_NOTE = 200
 
 # Used with chords

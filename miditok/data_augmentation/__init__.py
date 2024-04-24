@@ -13,13 +13,13 @@ The module implements three public methods:
 """
 
 from .data_augmentation import (
-    augment_midi,
-    augment_midi_dataset,
-    augment_midi_multiple_offsets,
+    augment_dataset,
+    augment_score,
+    augment_score_multiple_offsets,
 )
 
 __all__ = [
-    "augment_midi",
-    "augment_midi_dataset",
-    "augment_midi_multiple_offsets",
+    "augment_score",
+    "augment_dataset",
+    "augment_score_multiple_offsets",
 ]

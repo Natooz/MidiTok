@@ -8,7 +8,7 @@ from symusic import Score
 from tqdm import tqdm
 
 from miditok.data_augmentation import (
-    augment_midi_dataset,
+    augment_dataset,
 )
 
 from .utils_tests import HERE
@@ -25,7 +25,7 @@ def test_augment_dataset(
 
     midi_aug_path = tmp_path / "Multitrack_MIDIs_aug"
     min_duration = 0.03125
-    augment_midi_dataset(
+    augment_dataset(
         data_path,
         pitch_offsets=[-2, 1, 2],
         velocity_offsets=[-4, 5],
