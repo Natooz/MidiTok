@@ -8,14 +8,14 @@ Tokens and vocabulary
 ------------------------
 
 A token is a distinct element, part of a sequence of tokens. In natural language, a token can be a character, a subword or a word. A sentence can then be tokenized into a sequence of tokens representing the words and punctuation.
-For symbolic music, tokens can represent the values of the note attributes (pitch, valocity, duration) or time events. These are the "basic" tokens, that can be compared to the characters in natural language. With :ref:`Byte Pair Encoding (BPE)`, tokens can represent **successions** of these basic tokens.
+For symbolic music, tokens can represent the values of the note attributes (pitch, valocity, duration) or time events. These are the "basic" tokens, that can be compared to the characters in natural language. In the vocabulary of trained tokenizers, the tokens can represent **successions** of these basic tokens.
 A token can take three forms, which we name by convention:
 
 * Token (``string``): the form describing it, e.g. *Pitch_50*.
-* Id (``int``): an unique associated integer, used as an index.
-* Byte (``string``): an unique associated byte, used internally for :ref:`Byte Pair Encoding (BPE)`.
+* Id (``int``): an unique associated integer, which corresponds to the index of the index in the vocabulary.
+* Byte (``string``): an distinct byte, used internally for trained tokenizers (:ref:`Training a tokenizer`).
 
-MidiTok works with :ref:`TokSequence` objects to output token sequences of represented by these three forms.
+MidiTok works with :ref:`TokSequence` objects to conveniently represent these three forms.
 
 Vocabulary
 ------------------------
@@ -25,7 +25,7 @@ For tokenizations with embedding pooling (e.g. :ref:`CPWord` or :ref:`Octuple`),
 
 **With Byte Pair Encoding:**
 ``tokenizer.vocab`` holds all the basic tokens describing the note and time attributes of music. By analogy with text, these tokens can be seen as unique characters.
-After training a tokenizer with :ref:`Byte Pair Encoding (BPE)`, a new vocabulary is built with newly created tokens from pairs of basic tokens. This vocabulary can be accessed with ``tokenizer.vocab_bpe``, and binds tokens as bytes (string) to their associated ids (int). This is the vocabulary of the 🤗tokenizers BPE model.
+After :ref:`Training a tokenizer`, a new vocabulary is built with newly created tokens from pairs of basic tokens. This vocabulary can be accessed with ``tokenizer.vocab_bpe``, and binds tokens as bytes (string) to their associated ids (int). This is the vocabulary of the 🤗tokenizers BPE model.
 
 TokSequence
 ------------------------
@@ -37,7 +37,7 @@ You can use the :py:func:`miditok.MusicTokenizer.complete_sequence` method to au
 .. autoclass:: miditok.TokSequence
     :members:
 
-MIDI Tokenizer
+The MusicTokenizer class
 ------------------------
 
 MidiTok features several MIDI tokenizations, all inheriting from the :class:`miditok.MusicTokenizer` class.

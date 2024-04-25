@@ -37,8 +37,8 @@ MAX_NUM_FILES_PER_DATASET = 2000
 # Training
 TOKENIZATIONS = ["REMI", "TSD", "MIDILike"]
 MODELS: list[Literal["BPE", "Unigram", "WordPiece"]] = ["BPE", "Unigram", "WordPiece"]
-VOCAB_SIZE = 20000
-MAX_NUM_FILES_TRAINING = 20000
+VOCAB_SIZE = 200000
+MAX_NUM_FILES_TRAINING = 50000
 
 # Encoding-decoding
 BATCH_SIZES = [1, 16, 64, 128]
@@ -180,9 +180,18 @@ def seq_len_splits(datasets_params: list[tuple[str, dict, str]]) -> None:
     df.to_latex(RESULTS_PATH / "seq_split_lengths.txt")
 
 
-def benchmark_training_time() -> None:
-    r"""Benchmark BPE encoding, batched and un-batched."""
-    indexes = [f"{model} {split}-split" for model in MODELS for split in SPLITS]
+def benchmark_training_time(vocab_size: int) -> None:
+    r"""
+    Benchmark BPE encoding, batched and un-batched.
+
+    :param vocab_size: size of the vocabulary.
+    """
+    indexes = [
+        f"{model} {split}-split"
+        for model in MODELS
+        for split in SPLITS
+        if (model, split) != ("Unigram", "no")
+    ]
     df_file_path = RESULTS_PATH / "training_time.csv"
     if df_file_path.is_file():
         df = read_csv(df_file_path, index_col=0)
@@ -197,6 +206,8 @@ def benchmark_training_time() -> None:
             col_name = f"{dataset} {tokenization}"
             for model in MODELS:
                 for split in SPLITS:
+                    if (model, split) == ("Unigram", "no"):
+                        continue
                     index_name = f"{model} {split}-split"
 
                     # Check measure is not already performed
@@ -215,7 +226,7 @@ def benchmark_training_time() -> None:
                     random.seed(SEED)
                     t0 = time()
                     tokenizer.train(
-                        vocab_size=VOCAB_SIZE,
+                        vocab_size=vocab_size,
                         model=model,
                         files_paths=files_paths,
                     )
