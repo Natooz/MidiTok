@@ -4,7 +4,7 @@ This benchmark measures the read times of MIDI files, comparing the [symusic](ht
 
 ## Configuration
 
-**Hardware:** Apple M1 Pro cpu, 16GB of unified memory, macOS 14.4.1
+**Hardware:** Apple M1 Pro cpu, 16GB of memory, macOS 14.4.1
 
 * symusic version: 0.4.5
 * miditoolkit version: 1.0.1
