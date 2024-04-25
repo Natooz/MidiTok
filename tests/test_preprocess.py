@@ -1,4 +1,4 @@
-"""Tests on the preprocessing steps of MIDI files, before tokenization."""
+"""Tests on the preprocessing steps of music files, before tokenization."""
 
 from pathlib import Path
 
@@ -23,22 +23,22 @@ TOKENIZATIONS = ["MIDILike", "TSD"]
 
 
 @pytest.mark.parametrize("tokenization", TOKENIZATIONS)
-@pytest.mark.parametrize("midi_path", MIDI_PATHS_ALL)
-def test_preprocess(tokenization: str, midi_path: Path):
+@pytest.mark.parametrize("file_path", MIDI_PATHS_ALL)
+def test_preprocess(tokenization: str, file_path: Path):
     r"""
     Check that a second preprocessing doesn't alter the MIDI anymore.
 
     :param tokenization: name of the tokenizer class.
-    :param midi_path: paths to MIDI file to test.
+    :param file_path: paths to MIDI file to test.
     """
     # Creates tokenizer
     tok_config = miditok.TokenizerConfig(**CONFIG_KWARGS)
     tokenizer = getattr(miditok, tokenization)(tok_config)
 
-    # Preprocess original MIDI, and once again on the already preprocessed MIDI
-    midi = Score(midi_path)
-    midi_processed1 = tokenizer.preprocess_score(midi)
-    midi_processed2 = tokenizer.preprocess_score(midi_processed1)
+    # Preprocess original file, and once again on the already preprocessed file
+    score = Score(file_path)
+    score_processed1 = tokenizer.preprocess_score(score)
+    score_processed2 = tokenizer.preprocess_score(score_processed1)
 
     # The second preprocess shouldn't do anything
-    assert midi_processed1 == midi_processed2
+    assert score_processed1 == score_processed2

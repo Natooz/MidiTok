@@ -6,18 +6,18 @@ from symusic import Note, Pedal, PitchBend, Score, Tempo, TimeSignature, Track
 
 from miditok.classes import Event, TokSequence
 from miditok.constants import MIDI_INSTRUMENTS, TIME_SIGNATURE
-from miditok.midi_tokenizer import MIDITokenizer
+from miditok.midi_tokenizer import MusicTokenizer
 from miditok.utils import compute_ticks_per_beat
 
 
-class MIDILike(MIDITokenizer):
+class MIDILike(MusicTokenizer):
     r"""
     MIDI-Like tokenizer.
 
     Introduced in `This time with feeling (Oore et al.) <https://arxiv.org/abs/1808.03715>`_
     and later used with `Music Transformer (Huang et al.) <https://openreview.net/forum?id=rJe4ShAcF7>`_
     and `MT3 (Gardner et al.) <https://openreview.net/forum?id=iMSjopcOn0p>`_,
-    this tokenization simply converts MIDI messages (*NoteOn*, *NoteOff*,
+    this tokenization converts music files to MIDI messages (*NoteOn*, *NoteOff*,
     *TimeShift*...) to tokens, hence the name "MIDI-Like".
     ``MIDILike`` decode tokens following a FIFO (First In First Out) logic. When
     decoding tokens, you can limit the duration of the created notes by setting a
@@ -40,7 +40,7 @@ class MIDILike(MIDITokenizer):
     second one.
     **Note:** When decoding multiple token sequences (of multiple tracks), i.e. when
     ``config.use_programs`` is False, only the tempos and time signatures of the first
-    sequence will be decoded for the whole MIDI.
+    sequence will be decoded for the whole music.
     """
 
     def _tweak_config_before_creating_voc(self) -> None:
@@ -55,8 +55,8 @@ class MIDILike(MIDITokenizer):
         to be fed to a model.
 
         :param events: sequence of global and track events to create tokens time from.
-        :param time_division: time division in ticks per quarter of the MIDI being
-            tokenized.
+        :param time_division: time division in ticks per quarter of the
+            ``symusic.Score`` being tokenized.
         :return: the same events, with time events inserted.
         """
         # Add time events
@@ -153,7 +153,7 @@ class MIDILike(MIDITokenizer):
         :param event: event to determine priority.
         :return: priority as an int
         """
-        # Global MIDI tokens first
+        # Global tokens first
         if event.type_ in {"Tempo", "TimeSig"}:
             return 0
         # Then NoteOff
@@ -175,29 +175,29 @@ class MIDILike(MIDITokenizer):
         # Track notes then
         return 10
 
-    def _tokens_to_midi(
+    def _tokens_to_score(
         self,
         tokens: TokSequence | list[TokSequence],
         programs: list[tuple[int, bool]] | None = None,
     ) -> Score:
         r"""
-        Convert tokens (:class:`miditok.TokSequence`) into a MIDI.
+        Convert tokens (:class:`miditok.TokSequence`) into a ``symusic.Score``.
 
         This is an internal method called by ``self.decode``, intended to be
-        implemented by classes inheriting :class:`miditok.MidiTokenizer`.
+        implemented by classes inheriting :class:`miditok.MusicTokenizer`.
 
         :param tokens: tokens to convert. Can be either a list of
             :class:`miditok.TokSequence` or a list of :class:`miditok.TokSequence`s.
         :param programs: programs of the tracks. If none is given, will default to
             piano, program 0. (default: ``None``)
-        :return: the midi object (:class:`symusic.Score`).
+        :return: the ``symusic.Score`` object.
         """
         # Unsqueeze tokens in case of one_token_stream
         if self.one_token_stream:  # ie single token seq
             tokens = [tokens]
         for i in range(len(tokens)):
             tokens[i] = tokens[i].tokens
-        midi = Score(self.time_division)
+        score = Score(self.time_division)
         max_duration_str = self.config.additional_params.get("max_duration", None)
         max_duration = None
 
@@ -257,7 +257,7 @@ class MIDILike(MIDITokenizer):
             previous_pitch_onset = {prog: -128 for prog in self.config.programs}
             previous_pitch_chord = {prog: -128 for prog in self.config.programs}
             active_pedals = {}
-            ticks_per_beat = midi.ticks_per_quarter
+            ticks_per_beat = score.ticks_per_quarter
             if max_duration_str is not None:
                 max_duration = self._time_token_to_ticks(
                     max_duration_str, ticks_per_beat
@@ -398,9 +398,9 @@ class MIDILike(MIDITokenizer):
                     else:
                         current_track.pitch_bends.append(new_pitch_bend)
 
-            # Add current_inst to midi and handle notes still active
+            # Add current_inst to score and handle notes still active
             if not self.one_token_stream and not is_track_empty(current_track):
-                midi.tracks.append(current_track)
+                score.tracks.append(current_track)
                 clear_active_notes()
                 active_notes[current_track.program] = {
                     pi: []
@@ -413,13 +413,13 @@ class MIDILike(MIDITokenizer):
         if self.one_token_stream:
             clear_active_notes()
 
-        # create MidiFile
+        # Add global events to the Score
         if self.one_token_stream:
-            midi.tracks = list(tracks.values())
-        midi.tempos = tempo_changes
-        midi.time_signatures = time_signature_changes
+            score.tracks = list(tracks.values())
+        score.tempos = tempo_changes
+        score.time_signatures = time_signature_changes
 
-        return midi
+        return score
 
     def _create_base_vocabulary(self) -> list[str]:
         r"""
@@ -427,10 +427,10 @@ class MIDILike(MIDITokenizer):
 
         Each token is given as the form ``"Type_Value"``, with its type and value
         separated with an underscore. Example: ``Pitch_58``.
-        The :class:`miditok.MIDITokenizer` main class will then create the "real"
+        The :class:`miditok.MusicTokenizer` main class will then create the "real"
         vocabulary as a dictionary. Special tokens have to be given when creating the
         tokenizer, and will be added to the vocabulary by
-        :class:`miditok.MIDITokenizer`.
+        :class:`miditok.MusicTokenizer`.
 
         :return: the vocabulary as a list of string.
         """

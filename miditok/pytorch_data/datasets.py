@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
     from pathlib import Path
 
-    from miditok import MIDITokenizer, TokSequence
+    from miditok import MusicTokenizer, TokSequence
 
 
 class _DatasetABC(Dataset, ABC):
@@ -78,16 +78,17 @@ class _DatasetABC(Dataset, ABC):
 
 class DatasetMIDI(_DatasetABC):
     r"""
-    A ``Dataset`` loading and tokenizing MIDIs during training.
+    A ``Dataset`` loading and tokenizing music files (MIDI, abc) during training.
 
-    This class can be used for either tokenize MIDIs on the fly when iterating it, or
-    by pre-tokenizing all the MIDIs at its initialization and store the tokens in
+    This class can be used for either tokenize music files on the fly when iterating it,
+    or by pre-tokenizing all the files at its initialization and store the tokens in
     memory.
 
     **Important note:** you should probably use this class in concert with the
-    :py:func:`miditok.pytorch_data.split_midis_for_training` method in order to train
-    your model with chunks of MIDIs of token sequence lengths close to ``max_seq_len``.
-    When using this class with MIDI chunks, the ``BOS`` and ``EOS`` tokens will only be
+    :py:func:`miditok.pytorch_data.split_files_for_training` method in order to train
+    your model with chunks of music files having token sequence lengths close to the
+    ``max_seq_len`` value.
+    When using this class with file chunks, the ``BOS`` and ``EOS`` tokens will only be
     added to the first and last chunks respectively. This allows to not train the model
     with ``EOS`` tokens that would incorrectly inform the model the end of the data
     samples, and break the causality chain of consecutive chunks with incorrectly
@@ -96,13 +97,13 @@ class DatasetMIDI(_DatasetABC):
     Additionally, you can use the ``func_to_get_labels`` argument to provide a method
     allowing to use labels (one label per file).
 
-    **Handling of corrupted MIDIs:**
+    **Handling of corrupted files:**
     Some MIDI files may be corrupted, as for example containing unexpected values.
     In such cases, if the ``DatasetMIDI`` pre-tokenizes, it will simply ignore these
     files. Otherwise, the ``DatasetMIDI`` will return dictionaries with ``None`` values
     when iterated.
 
-    :param files_paths: paths to MIDI files to load.
+    :param files_paths: paths to the music files to load.
     :param tokenizer: tokenizer.
     :param max_seq_len: maximum sequence length (in num of tokens)
     :param bos_token_id: *BOS* token id. (default: ``None``)
@@ -110,7 +111,7 @@ class DatasetMIDI(_DatasetABC):
     :param pre_tokenize:
     :param func_to_get_labels: a function to retrieve the label of a file. The method
         must take two positional arguments: the first is either the
-        :class:`miditok.TokSequence` returned when tokenizing a MIDI, the second is the
+        :class:`miditok.TokSequence` returned when tokenizing a file, the second is the
         path to the file just loaded. The method must return an integer which
         corresponds to the label id (and not the absolute value, e.g. if you are
         classifying 10 musicians, return the id from 0 to 9 included corresponding to
@@ -124,7 +125,7 @@ class DatasetMIDI(_DatasetABC):
     def __init__(
         self,
         files_paths: Sequence[Path],
-        tokenizer: MIDITokenizer,
+        tokenizer: MusicTokenizer,
         max_seq_len: int,
         bos_token_id: int | None = None,
         eos_token_id: int | None = None,
@@ -151,7 +152,7 @@ class DatasetMIDI(_DatasetABC):
         self.labels_key_name = labels_key_name
         self.samples, self.labels = ([], []) if func_to_get_labels else (None, None)
 
-        # Pre-tokenize the MIDI files
+        # Pre-tokenize the files
         if pre_tokenize:
             for file_path in tqdm(
                 self.files_paths,
@@ -160,16 +161,16 @@ class DatasetMIDI(_DatasetABC):
                 maxinterval=480,
             ):
                 try:
-                    midi = Score(file_path)
+                    score = Score(file_path)
                 except SCORE_LOADING_EXCEPTION:
                     continue
-                tokseq = self._tokenize_midi(midi)
+                tokseq = self._tokenize_score(score)
                 if tokenizer.one_token_stream:
                     tokseq = [tokseq]
                 for seq in tokseq:
                     self.samples.append(LongTensor(seq.ids))
                     if func_to_get_labels:
-                        label = func_to_get_labels(midi, seq, file_path)
+                        label = func_to_get_labels(score, seq, file_path)
                         if not isinstance(label, LongTensor):
                             label = LongTensor(label)
                         self.labels.append(label)
@@ -179,8 +180,8 @@ class DatasetMIDI(_DatasetABC):
         Return the ``idx`` elements of the dataset.
 
         If the dataset is pre-tokenized, the method will return the token ids.
-        Otherwise, it will tokenize the ``idx``th MIDI file on the fly. If the MIDI to
-        load is corrupted, the method will return an dictionary with ``None`` values.
+        Otherwise, it will tokenize the ``idx``th file on the fly. If the file to is
+        corrupted, the method will return an dictionary with ``None`` values.
 
         :param idx: idx of the file/sample.
         :return: the token ids, with optionally the associated label.
@@ -196,13 +197,13 @@ class DatasetMIDI(_DatasetABC):
         # Tokenize on the fly
         else:
             try:
-                midi = Score(self.files_paths[idx])
-                tseq = self._tokenize_midi(midi)
+                score = Score(self.files_paths[idx])
+                tseq = self._tokenize_score(score)
                 # If not one_token_stream, we only take the first track/sequence
                 token_ids = tseq.ids if self.tokenizer.one_token_stream else tseq[0].ids
                 if self.func_to_get_labels is not None:
                     # tokseq can be given as a list of TokSequence to get the labels
-                    labels = self.func_to_get_labels(midi, tseq, self.files_paths[idx])
+                    labels = self.func_to_get_labels(score, tseq, self.files_paths[idx])
                     if not isinstance(labels, LongTensor):
                         labels = LongTensor(
                             [labels] if isinstance(labels, int) else labels
@@ -220,20 +221,20 @@ class DatasetMIDI(_DatasetABC):
 
         return item
 
-    def _tokenize_midi(self, midi: Score) -> TokSequence | list[TokSequence]:
+    def _tokenize_score(self, score: Score) -> TokSequence | list[TokSequence]:
         # Tokenize it
-        tokseq = self.tokenizer.encode(midi)
+        tokseq = self.tokenizer.encode(score)
 
         # If tokenizing on the fly a multi-stream tokenizer, only keeps the first track
         if not self.pre_tokenize and not self.tokenizer.one_token_stream:
             tokseq = [tokseq[0]]
 
-        # If this file is a chunk (split_midis_for_training), determine its id.
+        # If this file is a chunk (split_files_for_training), determine its id.
         # By default, we add BOS and EOS tokens following the values of
         # self.bos_token_id and self.eos_token_id (that may be None), except when the
         # file is identified as a chunk.
         add_bos_token = add_eos_token = True
-        for marker in midi.markers:
+        for marker in score.markers:
             if marker.time != 0:
                 break
             if marker.text.startswith("miditok: chunk"):
@@ -278,12 +279,12 @@ class DatasetMIDI(_DatasetABC):
     def __str__(self) -> str:  # noqa:D105
         if self.pre_tokenize:
             return f"Pre-tokenized dataset with {len(self.samples)} samples"
-        return f"{len(self.files_paths)} MIDI files."
+        return f"{len(self.files_paths)} files."
 
 
 class DatasetJSON(_DatasetABC):
     r"""
-    Basic ``Dataset`` loading JSON files of tokenized MIDIs.
+    Basic ``Dataset`` loading JSON files of tokenized music files.
 
     When indexed (``dataset[idx]``), a ``DatasetJSON`` will load the
     ``files_paths[idx]`` JSON file and return the token ids, that can be used to train
@@ -296,7 +297,7 @@ class DatasetJSON(_DatasetABC):
 
     If your dataset contains token sequences with lengths largely varying, you might
     want to first split it into subsequences with the
-    :py:func:`miditok.pytorch_data.split_midis_for_training` method before loading
+    :py:func:`miditok.pytorch_data.split_files_for_training` method before loading
     it to avoid losing data.
 
     :param files_paths: list of paths to files to load.

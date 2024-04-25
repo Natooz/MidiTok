@@ -6,11 +6,11 @@ from symusic import Note, Score, Tempo, TimeSignature, Track
 
 from miditok.classes import Event, TokSequence
 from miditok.constants import MIDI_INSTRUMENTS, TIME_SIGNATURE
-from miditok.midi_tokenizer import MIDITokenizer
+from miditok.midi_tokenizer import MusicTokenizer
 from miditok.utils import compute_ticks_per_bar, compute_ticks_per_beat, get_bars_ticks
 
 
-class Octuple(MIDITokenizer):
+class Octuple(MusicTokenizer):
     r"""
     Octuple tokenizer.
 
@@ -49,7 +49,7 @@ class Octuple(MIDITokenizer):
     * Tracks with the same *Program* will be merged.
     * When decoding multiple token sequences (of multiple tracks), i.e. when
         `config.use_programs` is False, only the tempos and time signatures of the
-        first sequence will be decoded for the whole MIDI.
+        first sequence will be decoded for the whole music.
     """
 
     def _tweak_config_before_creating_voc(self) -> None:
@@ -62,7 +62,6 @@ class Octuple(MIDITokenizer):
         self.config.program_changes = False
 
         # used in place of positional encoding
-        # This attribute might increase if the tokenizer encounter longer MIDIs
         if "max_bar_embedding" not in self.config.additional_params:
             self.config.additional_params["max_bar_embedding"] = 60
 
@@ -88,8 +87,8 @@ class Octuple(MIDITokenizer):
         to be fed to a model.
 
         :param events: sequence of global and track events to create tokens time from.
-        :param time_division: time division in ticks per quarter of the MIDI being
-            tokenized.
+        :param time_division: time division in ticks per quarter of the
+            ``symusic.Score`` being tokenized.
         :return: the same events, with time events inserted.
         """
         # Add time events
@@ -162,56 +161,57 @@ class Octuple(MIDITokenizer):
 
         return all_events
 
-    def _midi_to_tokens(self, midi: Score) -> TokSequence | list[TokSequence]:
+    def _score_to_tokens(self, score: Score) -> TokSequence | list[TokSequence]:
         r"""
-        Convert a **preprocessed** MIDI object to a sequence of tokens.
+        Convert a **preprocessed** ``symusic.Score`` object to a sequence of tokens.
 
-        We override the parent method in order to check the number of bars in the MIDI.
+        We override the parent method in order to check the number of bars in the file.
+
         The workflow of this method is as follows: the global events (*Tempo*,
         *TimeSignature*...) and track events (*Pitch*, *Velocity*, *Pedal*...) are
         gathered into a list, then the time events are added. If `one_token_stream` is
         ``True``, all events of all tracks are treated all at once, otherwise the
         events of each track are treated independently.
 
-        :param midi: the MIDI :class:`symusic.Score` object to convert.
+        :param score: the :class:`symusic.Score` object to convert.
         :return: a :class:`miditok.TokSequence` if ``tokenizer.one_token_stream`` is
             ``True``, else a list of :class:`miditok.TokSequence` objects.
         """
         # Check bar embedding limit, update if needed
-        num_bars = len(get_bars_ticks(midi))
+        num_bars = len(get_bars_ticks(score))
         if self.config.additional_params["max_bar_embedding"] < num_bars:
             msg = (
-                "miditok: Octuple cannot handle this MIDI file, as it contains "
+                "miditok: Octuple cannot handle this file, as it contains "
                 f"{num_bars} whereas the limit of the tokenizer is "
                 f"{self.config.additional_params['max_bar_embedding']}"
             )
             raise ValueError(msg)
 
-        return super()._midi_to_tokens(midi)
+        return super()._score_to_tokens(score)
 
-    def _tokens_to_midi(
+    def _tokens_to_score(
         self,
         tokens: TokSequence | list[TokSequence],
         programs: list[tuple[int, bool]] | None = None,
     ) -> Score:
         r"""
-        Convert tokens (:class:`miditok.TokSequence`) into a MIDI.
+        Convert tokens (:class:`miditok.TokSequence`) into a ``symusic.Score``.
 
         This is an internal method called by ``self.decode``, intended to be
-        implemented by classes inheriting :class:`miditok.MidiTokenizer`.
+        implemented by classes inheriting :class:`miditok.MusicTokenizer`.
 
         :param tokens: tokens to convert. Can be either a list of
             :class:`miditok.TokSequence` or a list of :class:`miditok.TokSequence`s.
         :param programs: programs of the tracks. If none is given, will default to
             piano, program 0. (default: ``None``)
-        :return: the midi object (:class:`symusic.Score`).
+        :return: the ``symusic.Score`` object.
         """
         # Unsqueeze tokens in case of one_token_stream
         if self.one_token_stream:  # ie single token seq
             tokens = [tokens]
         for i in range(len(tokens)):
             tokens[i] = tokens[i].tokens
-        midi = Score(self.time_division)
+        score = Score(self.time_division)
 
         # RESULTS
         tracks: dict[int, Track] = {}
@@ -246,7 +246,7 @@ class Octuple(MIDITokenizer):
                 time_signature_changes.append(TimeSignature(0, *TIME_SIGNATURE))
             current_time_sig = time_signature_changes[0]
             ticks_per_bar = compute_ticks_per_bar(
-                current_time_sig, midi.ticks_per_quarter
+                current_time_sig, score.ticks_per_quarter
             )
             ticks_per_beat = self._tpb_per_ts[current_time_sig.denominator]
             ticks_per_pos = ticks_per_beat // self.config.max_num_pos_per_beat
@@ -311,7 +311,7 @@ class Octuple(MIDITokenizer):
                             time_signature_changes.append(current_time_sig)
                         bar_at_last_ts_change = event_bar
                         ticks_per_bar = compute_ticks_per_bar(
-                            current_time_sig, midi.ticks_per_quarter
+                            current_time_sig, score.ticks_per_quarter
                         )
                         ticks_per_beat = self._tpb_per_ts[current_time_sig.denominator]
                         ticks_per_pos = (
@@ -343,9 +343,9 @@ class Octuple(MIDITokenizer):
                     if tempo != round(tempo_changes[-1].tempo, 2):
                         tempo_changes.append(Tempo(current_tick, tempo))
 
-            # Add current_inst to midi and handle notes still active
+            # Add current_inst to the score and handle notes still active
             if not self.one_token_stream and not is_track_empty(current_track):
-                midi.tracks.append(current_track)
+                score.tracks.append(current_track)
 
         # Delete mocked
         # And handle first tempo (tick 0) here instead of super
@@ -358,13 +358,13 @@ class Octuple(MIDITokenizer):
         elif round(tempo_changes[0].tempo, 2) == self.default_tempo:
             tempo_changes[0].time = 0
 
-        # create MidiFile
+        # Add global events to the score
         if self.one_token_stream:
-            midi.tracks = list(tracks.values())
-        midi.tempos = tempo_changes
-        midi.time_signatures = time_signature_changes
+            score.tracks = list(tracks.values())
+        score.tempos = tempo_changes
+        score.time_signatures = time_signature_changes
 
-        return midi
+        return score
 
     def _create_base_vocabulary(self) -> list[list[str]]:
         r"""
@@ -372,10 +372,10 @@ class Octuple(MIDITokenizer):
 
         Each token is given as the form ``"Type_Value"``, with its type and value
         separated with an underscore. Example: ``Pitch_58``.
-        The :class:`miditok.MIDITokenizer` main class will then create the "real"
+        The :class:`miditok.MusicTokenizer` main class will then create the "real"
         vocabulary as a dictionary. Special tokens have to be given when creating the
         tokenizer, and will be added to the vocabulary by
-        :class:`miditok.MIDITokenizer`.
+        :class:`miditok.MusicTokenizer`.
 
         :return: the vocabulary as a list of string.
         """

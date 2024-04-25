@@ -14,10 +14,11 @@ from miditok.constants import (
     MIDI_FILES_EXTENSIONS,
     MIDI_INSTRUMENTS,
     SCORE_LOADING_EXCEPTION,
+    SUPPORTED_MUSIC_FILE_EXTENSIONS,
 )
 
 
-def augment_midi_dataset(
+def augment_dataset(
     data_path: Path | str,
     pitch_offsets: list[int] | None = None,
     velocity_offsets: list[int] | None = None,
@@ -32,7 +33,7 @@ def augment_midi_dataset(
     save_data_aug_report: bool = True,
 ) -> None:
     r"""
-    Perform data augmentation on a dataset of MIDI files.
+    Perform data augmentation on a dataset of music files.
 
     The new created files have names in two parts, separated with a "#" character. Make
     sure your files do not have '§' in their names if you intend to reuse the
@@ -42,7 +43,7 @@ def augment_midi_dataset(
     :param data_path: root path to the folder containing tokenized json files.
     :param pitch_offsets: list of pitch offsets for augmentation. (default: ``None``)
     :param velocity_offsets: list of velocity offsets for augmentation. If you plan to
-        tokenize this MIDI, the velocity offsets should be chosen accordingly to the
+        tokenize these files, the velocity offsets should be chosen accordingly to the
         number of velocities in your tokenizer's vocabulary (``num_velocities``).
         (default: ``None``)
     :param duration_offsets: list of duration offsets for augmentation, to be given
@@ -59,15 +60,15 @@ def augment_midi_dataset(
     :param duration_in_ticks: if given ``True``, the ``duration_offset`` argument will
         be considered as expressed in ticks. Otherwise, it is considered in beats, and
         the equivalent in ticks will be determined by multiplying it by the MIDI's
-        time division. (default: False)
+        time division (480 by default for abc files). (default: False)
     :param min_duration: minimum duration limit to apply if ``duration_offset`` is
         negative. If ``duration_in_ticks`` is ``True``, it must be given in ticks,
         otherwise in beats as a float or integer. (default: 0.03125)
     :param out_path: output path to save the augmented files. Original (non-augmented)
-        MIDIs will be saved to this location. If none is given, they will be saved in
+        files will be saved to this location. If none is given, they will be saved in
         the same location as the data_path. (default: None)
     :param copy_original_in_new_location: if given True, the original (non-augmented)
-        MIDIs will be saved in the out_path location too. (default: True)
+        files will be saved in the out_path location too. (default: True)
     :param save_data_aug_report: will save numbers from the data augmentation in a
         ``data_augmentation_report.txt`` file in the output directory. (default: True)
     """
@@ -78,18 +79,20 @@ def augment_midi_dataset(
             out_path = Path(out_path)
         out_path.mkdir(parents=True, exist_ok=True)
     files_paths = [
-        path for path in data_path.glob("**/*") if path.suffix in MIDI_FILES_EXTENSIONS
+        path
+        for path in data_path.glob("**/*")
+        if path.suffix in SUPPORTED_MUSIC_FILE_EXTENSIONS
     ]
 
     num_augmentations, num_tracks_augmented = 0, 0
     for file_path in tqdm(files_paths, desc="Performing data augmentation"):
         try:
-            midi = Score(file_path)
+            score = Score(file_path)
         except SCORE_LOADING_EXCEPTION:
             continue
 
-        augmented_midis = augment_midi_multiple_offsets(
-            midi,
+        augmented_scores = augment_score_multiple_offsets(
+            score,
             pitch_offsets,
             velocity_offsets,
             duration_offsets,
@@ -99,8 +102,8 @@ def augment_midi_dataset(
             duration_in_ticks,
             min_duration,
         )
-        for aug_offsets, midi_aug in augmented_midis:
-            if len(midi_aug.tracks) == 0:
+        for aug_offsets, score_aug in augmented_scores:
+            if len(score_aug.tracks) == 0:
                 continue
             suffix = "#" + "_".join(
                 [
@@ -111,10 +114,13 @@ def augment_midi_dataset(
             )
             saving_path = out_path / file_path.parent.relative_to(data_path)
             saving_path.mkdir(parents=True, exist_ok=True)
-            saving_path /= f"{file_path.stem}{suffix}.mid"
-            midi_aug.dump_midi(saving_path)
+            saving_path /= f"{file_path.stem}{suffix}{file_path.suffix}"
+            if file_path.suffix in MIDI_FILES_EXTENSIONS:
+                score_aug.dump_midi(saving_path)
+            else:
+                score_aug.dump_abc(saving_path)
             num_augmentations += 1
-            num_tracks_augmented += len(midi_aug.tracks)
+            num_tracks_augmented += len(score_aug.tracks)
         if copy_original_in_new_location and out_path != data_path:
             saving_path = out_path / file_path.relative_to(data_path)
             saving_path.parent.mkdir(parents=True, exist_ok=True)
@@ -134,25 +140,25 @@ def augment_midi_dataset(
             )
 
 
-def _filter_offset_tuples_to_midi(
+def _filter_offset_tuples_to_score(
     pitch_offsets: list[int],
-    midi: Score,
+    score: Score,
     restrict_on_program_tessitura: bool,
 ) -> list[int]:
     r"""
     Remove pitch offset values that would cause errors or are out of tessitura.
 
     :param pitch_offsets: list of pitch offsets for augmentation.
-    :param midi: midi object to augment (default: None)
+    :param score: ``symusic.Score`` object to augment (default: None)
     :param restrict_on_program_tessitura: if ``True``, the method will consider the
         recommended pitch values of each instrument/program as the range of possible
         values after augmentation. Otherwise, the ``(0, 127)`` range will be used.
     :return: the filtered offsets of pitch.
     """
-    # Get min and max pitches in the MIDI (except drum tracks)
+    # Get min and max pitches in the Score (except drum tracks)
     all_pitches = [
         np.array([note.pitch for note in track.notes])
-        for track in midi.tracks
+        for track in score.tracks
         if not track.is_drum
     ]
     min_pitches = [np.min(pitches) for pitches in all_pitches]
@@ -162,7 +168,7 @@ def _filter_offset_tuples_to_midi(
     if restrict_on_program_tessitura:
         min_possible_pitch_offset, max_possible_pitch_offset = -127, 127
         for min_pitch, max_pitch, track in zip(
-            min_pitches, max_pitches, [t for t in midi.tracks if not t.is_drum]
+            min_pitches, max_pitches, [t for t in score.tracks if not t.is_drum]
         ):
             pitch_range = MIDI_INSTRUMENTS[track.program]["pitch_range"]
             min_possible_pitch_offset = max(
@@ -183,7 +189,7 @@ def _filter_offset_tuples_to_midi(
 
 
 def _create_offsets_tuples(
-    midi: Score,
+    score: Score,
     pitch_offsets: list[int] | None = None,
     velocity_offsets: list[int] | None = None,
     duration_offsets: list[int] | None = None,
@@ -193,10 +199,10 @@ def _create_offsets_tuples(
     """
     Create the data augmentation tuples combinations from lists of offsets.
 
-    :param midi: midi object to augment.
+    :param score: ``symusic.Score`` object to augment.
     :param pitch_offsets: list of pitch offsets for augmentation.
     :param velocity_offsets: list of velocity offsets for augmentation. If you plan to
-        tokenize this MIDI, the velocity offsets should be chosen accordingly to the
+        tokenize this file, the velocity offsets should be chosen accordingly to the
         number of velocities in your tokenizer's vocabulary (``num_velocities``).
     :param duration_offsets: list of duration offsets for augmentation, to be given
         either in beats if ``duration_in_ticks`` is ``False``, in ticks otherwise.
@@ -210,8 +216,8 @@ def _create_offsets_tuples(
     :return:
     """
     # Remove pitch offsets that would cause errors or are out of tessitura
-    pitch_offsets = _filter_offset_tuples_to_midi(
-        pitch_offsets, midi, restrict_on_program_tessitura
+    pitch_offsets = _filter_offset_tuples_to_score(
+        pitch_offsets, score, restrict_on_program_tessitura
     )
     # Create basic offsets
     offsets = [(pitch_offset, 0, 0) for pitch_offset in pitch_offsets]
@@ -237,8 +243,8 @@ def _create_offsets_tuples(
     return offsets
 
 
-def augment_midi(
-    midi: Score,
+def augment_score(
+    score: Score,
     pitch_offset: int = 0,
     velocity_offset: int = 0,
     duration_offset: int | float = 0,
@@ -247,18 +253,18 @@ def augment_midi(
     min_duration: int | float = 0.03125,
 ) -> Score:
     r"""
-    Augment a MIDI object by shifting its pitch, velocity and/or duration values.
+    Augment a Score object by shifting its pitch, velocity and/or duration values.
 
     Velocity and duration values will be clipped according to the ``velocity_range``
     and ``min_duration`` arguments. Drum tracks are only augmented on the velocity.
-    If you are using a pitch offset, make sure the MIDI doesn't contain notes with
+    If you are using a pitch offset, make sure the files doesn't contain notes with
     pitches that would end outside the conventional ``(0, 127)`` range, the method will
     otherwise crash.
 
-    :param midi: midi object to augment.
+    :param score: ``symusic.Score`` object to augment.
     :param pitch_offset: pitch offset for augmentation. (default: ``0``)
     :param velocity_offset: velocity offset for augmentation. If you plan to tokenize
-        this MIDI, the velocity offset should be chosen accordingly to the number of
+        this file, the velocity offset should be chosen accordingly to the number of
         velocities in your tokenizer's vocabulary (``num_velocities``).
         (default: ``0``)
     :param duration_offset: duration offset for augmentation, to be given
@@ -268,21 +274,21 @@ def augment_midi(
     :param duration_in_ticks: if given ``True``, the ``duration_offset`` argument will
         be considered as expressed in ticks. Otherwise, it is considered in beats, and
         the equivalent in ticks will be determined by multiplying it by the MIDI's
-        time division. (default: ``False``)
+        time division (480 by default for abc files). (default: ``False``)
     :param min_duration: minimum duration limit to apply if ``duration_offset`` is
         negative. If ``duration_in_ticks`` is ``True``, it must be given in ticks,
         otherwise in beats as a float or integer. (default: ``0.03125``)
-    :return: the augmented MIDI object.
+    :return: the augmented ``symusic.Score`` object.
     """
-    midi_aug = copy(midi)
+    score_aug = copy(score)
 
     if pitch_offset != 0:
-        for track in midi_aug.tracks:
+        for track in score_aug.tracks:
             if not track.is_drum:
                 track.shift_pitch(pitch_offset, inplace=True)
 
     if velocity_offset != 0:
-        for track in midi_aug.tracks:
+        for track in score_aug.tracks:
             for note in track.notes:
                 vel_shifted = note.velocity + velocity_offset
                 if velocity_offset < 0:
@@ -292,13 +298,13 @@ def augment_midi(
 
     if duration_offset != 0:
         if not duration_in_ticks:
-            duration_offset = max(round(duration_offset * midi.ticks_per_quarter), 1)
-            min_duration = max(round(min_duration * midi.ticks_per_quarter), 1)
+            duration_offset = max(round(duration_offset * score.ticks_per_quarter), 1)
+            min_duration = max(round(min_duration * score.ticks_per_quarter), 1)
         # If in ticks but the offset is a float, we round it to the closest integer.
         elif isinstance(duration_offset, float):
             duration_offset = round(duration_offset)
             min_duration = round(min_duration)
-        for track in midi_aug.tracks:
+        for track in score_aug.tracks:
             if not track.is_drum:
                 for note in track.notes:
                     if duration_offset < 0:
@@ -310,11 +316,11 @@ def augment_midi(
                     else:
                         note.duration += duration_offset
 
-    return midi_aug
+    return score_aug
 
 
-def augment_midi_multiple_offsets(
-    midi: Score,
+def augment_score_multiple_offsets(
+    score: Score,
     pitch_offsets: list[int] | None = None,
     velocity_offsets: list[int] | None = None,
     duration_offsets: list[int] | None = None,
@@ -325,15 +331,15 @@ def augment_midi_multiple_offsets(
     min_duration: int | float = 0.03125,
 ) -> list[tuple[tuple[int, int, int], Score]]:
     r"""
-    Perform data augmentations on a MIDI object with multiple offset values.
+    Perform data augmentation on a ``symusic.Score`` object with multiple offset values.
 
     Velocity and duration values will be clipped according to the ``velocity_range`` and
     ``min_duration`` arguments. Drum tracks are only augmented on the velocity.
 
-    :param midi: midi object to augment.
+    :param score: ``symusic.Score`` object to augment.
     :param pitch_offsets: list of pitch offsets for augmentation.
     :param velocity_offsets: list of velocity offsets for augmentation. If you plan to
-        tokenize this MIDI, the velocity offsets should be chosen accordingly to the
+        tokenize this file, the velocity offsets should be chosen accordingly to the
         number of velocities in your tokenizer's vocabulary (``num_velocities``).
         (default: ``None``)
     :param duration_offsets: list of duration offsets for augmentation, to be given
@@ -350,23 +356,23 @@ def augment_midi_multiple_offsets(
     :param duration_in_ticks: if given ``True``, the ``duration_offset`` argument will
         be considered as expressed in ticks. Otherwise, it is considered in beats, and
         the equivalent in ticks will be determined by multiplying it by the MIDI's
-        time division. (default: False)
+        time division (480 by default for abc files). (default: False)
     :param min_duration: minimum duration limit to apply if ``duration_offset`` is
         negative. If ``duration_in_ticks`` is ``True``, it must be given in ticks,
         otherwise in beats as a float or integer. (default: 0.03125)
-    :return: augmented MIDI objects.
+    :return: augmented ``symusic.Score`` objects.
     """
     # Create offset tuples
     # If duration offsets are given in beats, we convert them to ticks here so
     # that the conversion is not done multiple times in downstream methods
     if duration_offsets and not duration_in_ticks:
         duration_offsets = [
-            round(duration_offset * midi.ticks_per_quarter)
+            round(duration_offset * score.ticks_per_quarter)
             for duration_offset in duration_offsets
         ]
-        min_duration = max(round(min_duration * midi.ticks_per_quarter), 1)
+        min_duration = max(round(min_duration * score.ticks_per_quarter), 1)
     offsets = _create_offsets_tuples(
-        midi,
+        score,
         pitch_offsets,
         velocity_offsets,
         duration_offsets,
@@ -378,8 +384,8 @@ def augment_midi_multiple_offsets(
     return [
         (
             offsets_tuple,
-            augment_midi(
-                midi,
+            augment_score(
+                score,
                 *offsets_tuple,
                 velocity_range=velocity_range,
                 duration_in_ticks=True,

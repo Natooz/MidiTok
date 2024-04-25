@@ -14,15 +14,15 @@ from symusic import (
 
 from miditok.classes import Event, TokSequence
 from miditok.constants import MIDI_INSTRUMENTS, TIME_SIGNATURE
-from miditok.midi_tokenizer import MIDITokenizer
+from miditok.midi_tokenizer import MusicTokenizer
 from miditok.utils import compute_ticks_per_beat
 
 
-class TSD(MIDITokenizer):
+class TSD(MusicTokenizer):
     r"""
     TSD (Time Shift Duration) tokenizer.
 
-    It is similar to MIDI-Like :ref:`MIDI-Like` but uses explicit *Duration* tokens to
+    It is similar to :ref:`MIDI-Like` but uses explicit *Duration* tokens to
     represent note durations, which have showed `better results than with *NoteOff*
     tokens <https://arxiv.org/abs/2002.00212>`_. If you specify ``use_programs`` as
     ``True`` in the config file, the tokenizer will add *Program* tokens before each
@@ -34,7 +34,7 @@ class TSD(MIDITokenizer):
     value. In such cases, the maximum *TimeShift* value will be used.
     **Note:** When decoding multiple token sequences (of multiple tracks), i.e. when
     ``config.use_programs`` is False, only the tempos and time signatures of the first
-    sequence will be decoded for the whole MIDI.
+    sequence will be decoded for the whole music.
     """
 
     def _tweak_config_before_creating_voc(self) -> None:
@@ -50,8 +50,8 @@ class TSD(MIDITokenizer):
         to be fed to a model.
 
         :param events: sequence of global and track events to create tokens time from.
-        :param time_division: time division in ticks per quarter of the MIDI being
-            tokenized.
+        :param time_division: time division in ticks per quarter of the
+        ``symusic.Score`` being tokenized.
         :return: the same events, with time events inserted.
         """
         # Add time events
@@ -129,29 +129,29 @@ class TSD(MIDITokenizer):
 
         return all_events
 
-    def _tokens_to_midi(
+    def _tokens_to_score(
         self,
         tokens: TokSequence | list[TokSequence],
         programs: list[tuple[int, bool]] | None = None,
     ) -> Score:
         r"""
-        Convert tokens (:class:`miditok.TokSequence`) into a MIDI.
+        Convert tokens (:class:`miditok.TokSequence`) into a ``symusic.Score``.
 
         This is an internal method called by ``self.decode``, intended to be
-        implemented by classes inheriting :class:`miditok.MidiTokenizer`.
+        implemented by classes inheriting :class:`miditok.MusicTokenizer`.
 
         :param tokens: tokens to convert. Can be either a list of
             :class:`miditok.TokSequence` or a list of :class:`miditok.TokSequence`s.
         :param programs: programs of the tracks. If none is given, will default to
             piano, program 0. (default: ``None``)
-        :return: the midi object (:class:`symusic.Score`).
+        :return: the ``symusic.Score`` object.
         """
         # Unsqueeze tokens in case of one_token_stream
         if self.one_token_stream:  # ie single token seq
             tokens = [tokens]
         for i in range(len(tokens)):
             tokens[i] = tokens[i].tokens
-        midi = Score(self.time_division)
+        score = Score(self.time_division)
 
         # RESULTS
         tracks: dict[int, Track] = {}
@@ -179,7 +179,7 @@ class TSD(MIDITokenizer):
             previous_pitch_onset = {prog: -128 for prog in self.config.programs}
             previous_pitch_chord = {prog: -128 for prog in self.config.programs}
             active_pedals = {}
-            ticks_per_beat = midi.ticks_per_quarter
+            ticks_per_beat = score.ticks_per_quarter
 
             # Set track / sequence program if needed
             if not self.one_token_stream:
@@ -321,17 +321,17 @@ class TSD(MIDITokenizer):
                 ]:
                     previous_note_end = max(previous_note_end, current_tick)
 
-            # Add current_inst to midi and handle notes still active
+            # Add current_inst to the score and handle notes still active
             if not self.one_token_stream and not is_track_empty(current_track):
-                midi.tracks.append(current_track)
+                score.tracks.append(current_track)
 
-        # create MidiFile
+        # Add global events to the score
         if self.one_token_stream:
-            midi.tracks = list(tracks.values())
-        midi.tempos = tempo_changes
-        midi.time_signatures = time_signature_changes
+            score.tracks = list(tracks.values())
+        score.tempos = tempo_changes
+        score.time_signatures = time_signature_changes
 
-        return midi
+        return score
 
     def _create_base_vocabulary(self) -> list[str]:
         r"""
@@ -339,10 +339,10 @@ class TSD(MIDITokenizer):
 
         Each token is given as the form ``"Type_Value"``, with its type and value
         separated with an underscore. Example: ``Pitch_58``.
-        The :class:`miditok.MIDITokenizer` main class will then create the "real"
+        The :class:`miditok.MusicTokenizer` main class will then create the "real"
         vocabulary as a dictionary. Special tokens have to be given when creating the
         tokenizer, and will be added to the vocabulary by
-        :class:`miditok.MIDITokenizer`.
+        :class:`miditok.MusicTokenizer`.
 
         :return: the vocabulary as a list of string.
         """

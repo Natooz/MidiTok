@@ -77,7 +77,7 @@ Note that the loss is computed over the whole training data and current vocabula
 Note that Unigram is not a deterministic algorithm: training a tokenizer twice with the same data and training parameter will likely result in similar vocabularies, but a few differences.
 You can read more details on the loss computation in the `documentation of the tokenizers library <https://huggingface.co/learn/nlp-course/en/chapter6/7>`_.
 
-The Unigram model supports the additional training arguments that can be provided as keyword arguments to the :py:func:`miditok.MIDITokenizer.train` method:
+The Unigram model supports the additional training arguments that can be provided as keyword arguments to the :py:func:`miditok.MusicTokenizer.train` method:
 
 * ``shrinking_factor``: shrinking factor to used to reduce the vocabulary at each training step (default: 0.75);
 * ``max_piece_length``: maximum length a token can reach (default in MidiTok: 32);
@@ -97,7 +97,7 @@ Dividing the frequency of the succession of two symbols by the product of their 
 
 Another key difference with BPE is on the training procedure: WordPiece starts by computing all the pairs in the data, and then counts their frequencies. It will learn long words first, and splitting them in multiple subtokens when they do not exist in the vocabulary.
 
-As a result, WordPiece features a ``max_input_chars_per_word`` attribute limiting the length of the "words", base tokens successions in MidiTok's case, it can process. Token successions with a length exceeding this parameter will be replaced by a ``unk_token`` token (MidiTok uses the padding token by default). You can set the ``max_input_chars_per_word`` in the keyword arguments of the :py:func:`miditok.MIDITokenizer.train` method, but the highest this parameter is, the slower the encoding-decoding will be. The number of base tokens for a music file is likely to go in the tens of thousands. As a result, **WordPiece should exclusively be used while splitting the token ids per bars or beats** in order to make sure that the lengths of the token successions remain below this limit.
+As a result, WordPiece features a ``max_input_chars_per_word`` attribute limiting the length of the "words", base tokens successions in MidiTok's case, it can process. Token successions with a length exceeding this parameter will be replaced by a ``unk_token`` token (MidiTok uses the padding token by default). You can set the ``max_input_chars_per_word`` in the keyword arguments of the :py:func:`miditok.MusicTokenizer.train` method, but the highest this parameter is, the slower the encoding-decoding will be. The number of base tokens for a music file is likely to go in the tens of thousands. As a result, **WordPiece should exclusively be used while splitting the token ids per bars or beats** in order to make sure that the lengths of the token successions remain below this limit.
 
 
 Splitting the ids
@@ -136,15 +136,15 @@ Training example
 Methods
 ------------------------
 
-A tokenizer can be trained with the :py:func:`miditok.MIDITokenizer.train` method. After being trained, the tokenizer will automatically encode the token ids with its model when tokenizing music files.
+A tokenizer can be trained with the :py:func:`miditok.MusicTokenizer.train` method. After being trained, the tokenizer will automatically encode the token ids with its model when tokenizing music files.
 
 Trained tokenizers can be saved and loaded back (:ref:`Save / Load tokenizer`).
 
-.. autofunction:: miditok.MIDITokenizer.train
+.. autofunction:: miditok.MusicTokenizer.train
     :noindex:
 
-.. autofunction:: miditok.MIDITokenizer.encode_token_ids
+.. autofunction:: miditok.MusicTokenizer.encode_token_ids
     :noindex:
 
-.. autofunction:: miditok.MIDITokenizer.decode_token_ids
+.. autofunction:: miditok.MusicTokenizer.decode_token_ids
     :noindex:

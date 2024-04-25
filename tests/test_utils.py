@@ -37,7 +37,7 @@ from .utils_tests import (
     MIDI_PATHS_ONE_TRACK,
     TEST_LOG_DIR,
     TOKENIZER_CONFIG_KWARGS,
-    check_midis_equals,
+    check_scores_equals,
     del_invalid_time_sig,
 )
 
@@ -89,98 +89,98 @@ def test_containers_assertions():
     assert cc2 == cc3
 
 
-@pytest.mark.parametrize("midi_path", MIDI_PATHS_ONE_TRACK)
-def test_check_midi_equals(midi_path: Path):
-    midi = Score(midi_path)
-    midi_copy = copy(midi)
+@pytest.mark.parametrize("file_path", MIDI_PATHS_ONE_TRACK)
+def test_check_scores_equals(file_path: Path):
+    score = Score(file_path)
+    score_copy = copy(score)
 
     # Check when midi is untouched
-    assert check_midis_equals(midi, midi_copy)
+    assert check_scores_equals(score, score_copy)
 
     # Altering notes
     i = 0
-    while i < len(midi_copy.tracks):
-        if len(midi_copy.tracks[i].notes) > 0:
-            midi_copy.tracks[i].notes[-1].pitch += 5
-            assert not check_midis_equals(midi, midi_copy)
+    while i < len(score_copy.tracks):
+        if len(score_copy.tracks[i].notes) > 0:
+            score_copy.tracks[i].notes[-1].pitch += 5
+            assert not check_scores_equals(score, score_copy)
             break
         i += 1
 
     # Altering track events
-    if len(midi_copy.tracks) > 0:
+    if len(score_copy.tracks) > 0:
         # Altering pedals
-        midi_copy = copy(midi)
-        if len(midi_copy.tracks[0].pedals) == 0:
-            midi_copy.tracks[0].pedals.append(Pedal(0, 10))
+        score_copy = copy(score)
+        if len(score_copy.tracks[0].pedals) == 0:
+            score_copy.tracks[0].pedals.append(Pedal(0, 10))
         else:
-            midi_copy.tracks[0].pedals[-1].duration += 10
-        assert not check_midis_equals(midi, midi_copy)
+            score_copy.tracks[0].pedals[-1].duration += 10
+        assert not check_scores_equals(score, score_copy)
 
         # Altering pitch bends
-        midi_copy = copy(midi)
-        if len(midi_copy.tracks[0].pitch_bends) == 0:
-            midi_copy.tracks[0].pitch_bends.append(PitchBend(50, 10))
+        score_copy = copy(score)
+        if len(score_copy.tracks[0].pitch_bends) == 0:
+            score_copy.tracks[0].pitch_bends.append(PitchBend(50, 10))
         else:
-            midi_copy.tracks[0].pitch_bends[-1].value += 10
-        assert not check_midis_equals(midi, midi_copy)
+            score_copy.tracks[0].pitch_bends[-1].value += 10
+        assert not check_scores_equals(score, score_copy)
 
     # Altering tempos
-    midi_copy = copy(midi)
-    if len(midi_copy.tempos) == 0:
-        midi_copy.tempos.append(Tempo(50, 10))
+    score_copy = copy(score)
+    if len(score_copy.tempos) == 0:
+        score_copy.tempos.append(Tempo(50, 10))
     else:
-        midi_copy.tempos[-1].time += 10
-    assert not check_midis_equals(midi, midi_copy)
+        score_copy.tempos[-1].time += 10
+    assert not check_scores_equals(score, score_copy)
 
     # Altering time signatures
-    midi_copy = copy(midi)
-    if len(midi_copy.time_signatures) == 0:
-        midi_copy.time_signatures.append(TimeSignature(10, 4, 4))
+    score_copy = copy(score)
+    if len(score_copy.time_signatures) == 0:
+        score_copy.time_signatures.append(TimeSignature(10, 4, 4))
     else:
-        midi_copy.time_signatures[-1].time += 10
-    assert not check_midis_equals(midi, midi_copy)
+        score_copy.time_signatures[-1].time += 10
+    assert not check_scores_equals(score, score_copy)
 
 
 def test_merge_tracks(
-    midi_path: str | Path = MIDI_PATHS_ONE_TRACK[0],
+    file_path: str | Path = MIDI_PATHS_ONE_TRACK[0],
 ):
-    # Load MIDI and only keep the first track
-    midi = Score(midi_path)
-    midi.tracks = [midi.tracks[0]]
+    # Load music file and only keep the first track
+    score = Score(file_path)
+    score.tracks = [score.tracks[0]]
 
     # Duplicate the track and merge it
-    original_track = copy(midi.tracks[0])
-    midi.tracks.append(copy(midi.tracks[0]))
+    original_track = copy(score.tracks[0])
+    score.tracks.append(copy(score.tracks[0]))
 
     # Test merge with effects
-    merge_tracks(midi, effects=True)
-    assert len(midi.tracks[0].notes) == 2 * len(original_track.notes)
-    assert len(midi.tracks[0].pedals) == 2 * len(original_track.pedals)
-    assert len(midi.tracks[0].controls) == 2 * len(original_track.controls)
-    assert len(midi.tracks[0].pitch_bends) == 2 * len(original_track.pitch_bends)
+    merge_tracks(score, effects=True)
+    assert len(score.tracks[0].notes) == 2 * len(original_track.notes)
+    assert len(score.tracks[0].pedals) == 2 * len(original_track.pedals)
+    assert len(score.tracks[0].controls) == 2 * len(original_track.controls)
+    assert len(score.tracks[0].pitch_bends) == 2 * len(original_track.pitch_bends)
 
 
-@pytest.mark.parametrize("midi_path", MIDI_PATHS_MULTITRACK)
-def test_merge_same_program_tracks_and_by_class(midi_path: str | Path):
-    midi = Score(midi_path)
-    for track in midi.tracks:
+@pytest.mark.parametrize("file_path", MIDI_PATHS_MULTITRACK)
+def test_merge_same_program_tracks_and_by_class(file_path: str | Path):
+    score = Score(file_path)
+    for track in score.tracks:
         if track.is_drum:
             track.program = 128
 
     # Test merge same program
-    midi_copy = copy(midi)
-    programs = [track.program for track in midi_copy.tracks]
+    score_copy = copy(score)
+    programs = [track.program for track in score_copy.tracks]
     unique_programs = list(set(programs))
-    merge_same_program_tracks(midi_copy.tracks)
-    new_programs = [track.program for track in midi_copy.tracks]
+    merge_same_program_tracks(score_copy.tracks)
+    new_programs = [track.program for track in score_copy.tracks]
     unique_programs.sort()
     new_programs.sort()
     assert new_programs == unique_programs
 
     # Test merge same class
-    midi_copy = copy(midi)
+    score_copy = copy(score)
     merge_tracks_per_class(
-        midi_copy,
+        score_copy,
         CLASS_OF_INST,
         valid_programs=list(range(-1, 129)),
         filter_pitches=True,
@@ -190,10 +190,10 @@ def test_merge_same_program_tracks_and_by_class(midi_path: str | Path):
 def test_num_pos():
     (tok_conf := TokenizerConfig(**TOKENIZER_CONFIG_KWARGS)).use_time_signatures = True
     tokenizer = REMI(tok_conf)
-    midi = Score(MIDI_PATHS_ONE_TRACK[0])
-    del_invalid_time_sig(midi.time_signatures, tokenizer.time_signatures)
+    score = Score(MIDI_PATHS_ONE_TRACK[0])
+    del_invalid_time_sig(score.time_signatures, tokenizer.time_signatures)
     _ = num_bar_pos(
-        tokenizer.encode(midi)[0].ids,
+        tokenizer.encode(score)[0].ids,
         tokenizer["Bar_None"],
         tokenizer.token_ids_of_type("Position"),
     )
@@ -284,73 +284,75 @@ def test_remove_duplicated_notes():
             assert len(notes) - len(notes_filtered_dur) == diff_with_duration
 
 
-@pytest.mark.parametrize("midi_path", MIDI_PATHS_ONE_TRACK)
-def test_get_bars(midi_path: Path, save_bars_markers: bool = False):
+@pytest.mark.parametrize("file_path", MIDI_PATHS_ONE_TRACK)
+def test_get_bars(file_path: Path, save_bars_markers: bool = False):
     # Used for debug, this method do not make assertions
-    midi = Score(midi_path)
-    bars_ticks = miditok.utils.get_bars_ticks(midi)
+    score = Score(file_path)
+    bars_ticks = miditok.utils.get_bars_ticks(score)
     if save_bars_markers:
         for bar_num, bar_tick in enumerate(bars_ticks):
-            midi.markers.append(TextMeta(bar_tick, f"Bar {bar_num + 1}"))
-        midi.dump_midi(TEST_LOG_DIR / f"{midi_path.stem}_bars.mid")
+            score.markers.append(TextMeta(bar_tick, f"Bar {bar_num + 1}"))
+        score.dump_midi(TEST_LOG_DIR / f"{file_path.stem}_bars.mid")
 
 
-@pytest.mark.parametrize("midi_path", MIDI_PATHS_MULTITRACK)
-def test_get_num_notes_per_bar(midi_path: Path):
-    midi = Score(midi_path)
-    num_notes = miditok.utils.get_num_notes_per_bar(midi)
-    num_notes_track_indep = miditok.utils.get_num_notes_per_bar(midi, tracks_indep=True)
+@pytest.mark.parametrize("file_path", MIDI_PATHS_MULTITRACK)
+def test_get_num_notes_per_bar(file_path: Path):
+    score = Score(file_path)
+    num_notes = miditok.utils.get_num_notes_per_bar(score)
+    num_notes_track_indep = miditok.utils.get_num_notes_per_bar(
+        score, tracks_indep=True
+    )
     num_notes_track_indep_summed = [sum(num_n) for num_n in num_notes_track_indep]
     assert num_notes == num_notes_track_indep_summed
 
 
-@pytest.mark.parametrize("midi_path", MIDI_PATHS_MULTITRACK)
-def test_split_concat_midi(midi_path: Path, max_num_beats: int = 16):
-    midi = Score(midi_path)
-    midi_splits = miditok.utils.split_midi_per_beats(midi, max_num_beats)
-    ticks_beat = miditok.utils.get_beats_ticks(midi)
+@pytest.mark.parametrize("file_path", MIDI_PATHS_MULTITRACK)
+def test_split_concat_score(file_path: Path, max_num_beats: int = 16):
+    score = Score(file_path)
+    score_splits = miditok.utils.split_score_per_beats(score, max_num_beats)
+    ticks_beat = miditok.utils.get_beats_ticks(score)
 
-    # Check there is the good number of split MIDIs
-    assert len(midi_splits) == ceil(len(ticks_beat) / max_num_beats)
+    # Check there is the good number of split music files
+    assert len(score_splits) == ceil(len(ticks_beat) / max_num_beats)
 
     """# Saves each chunk separately (for debug purposes)
     from tests.utils_tests import HERE
-    for i, midi_split in enumerate(midi_splits):
-        midi_split.dump_midi(HERE / "midi_splits" / f"{i}.mid")"""
+    for i, score_split in enumerate(score_splits):
+        score_split.dump_midi(HERE / "score_splits" / f"{i}.mid")"""
 
     # Concatenate split MIDIs and assert its equal to original one
     end_ticks = [
         ticks_beat[i] for i in range(max_num_beats, len(ticks_beat), max_num_beats)
     ]
-    midi_concat = miditok.utils.concat_midis(midi_splits, end_ticks)
+    score_concat = miditok.utils.concat_scores(score_splits, end_ticks)
 
-    # Assert the concatenated MIDI is identical to the original one
+    # Assert the concatenated Score is identical to the original one
     # We do not test tempos, time signatures and key signature as they are duplicated
-    # in midi_concat (same consecutive ones for each chunk).
-    assert midi.tracks == midi_concat.tracks
-    assert midi.lyrics == midi_concat.lyrics
-    assert midi.markers == midi_concat.markers
+    # in score_concat (same consecutive ones for each chunk).
+    assert score.tracks == score_concat.tracks
+    assert score.lyrics == score_concat.lyrics
+    assert score.markers == score_concat.markers
 
 
-@pytest.mark.parametrize("midi_path", MIDI_PATHS_MULTITRACK)
-def test_split_midi_per_tracks(midi_path: Path):
-    midi = Score(midi_path)
-    midi_splits = miditok.utils.split_midi_per_tracks(midi)
+@pytest.mark.parametrize("file_path", MIDI_PATHS_MULTITRACK)
+def test_split_score_per_tracks(file_path: Path):
+    score = Score(file_path)
+    score_splits = miditok.utils.split_score_per_tracks(score)
 
-    # Check there is the good number of split MIDIs
-    assert len(midi_splits) == len(midi.tracks)
+    # Check there is the good number of split Scores
+    assert len(score_splits) == len(score.tracks)
 
-    # Merge split MIDIs and assert its equal to original one
-    for midi_split in midi_splits[1:]:  # dedup global events
-        midi_split.tempos = []
-        midi_split.time_signatures = []
-        midi_split.key_signatures = []
-        midi_split.lyrics = []
-        midi_split.markers = []
-    midi_merged = miditok.utils.merge_midis(midi_splits)
+    # Merge split Scores and assert its equal to original one
+    for score_split in score_splits[1:]:  # dedup global events
+        score_split.tempos = []
+        score_split.time_signatures = []
+        score_split.key_signatures = []
+        score_split.lyrics = []
+        score_split.markers = []
+    score_merged = miditok.utils.merge_scores(score_splits)
 
-    # Assert the merges MIDI is identical to the original one
-    assert midi == midi_merged
+    # Assert the merges Score is identical to the original one
+    assert score == score_merged
 
 
 def test_filter_dataset():

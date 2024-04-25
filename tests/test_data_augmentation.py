@@ -8,7 +8,7 @@ from symusic import Score
 from tqdm import tqdm
 
 from miditok.data_augmentation import (
-    augment_midi_dataset,
+    augment_dataset,
 )
 
 from .utils_tests import HERE
@@ -17,16 +17,15 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-def test_augment_midi_dataset(
+def test_augment_dataset(
     tmp_path: Path,
     data_path: str | Path = HERE / "MIDIs_multitrack",
 ):
-    # We only test data augmentation on MIDIs with one tokenization, as tokenizers does
-    # not play here
+    # We only test data augmentation on MIDIs with one tokenization
 
     midi_aug_path = tmp_path / "Multitrack_MIDIs_aug"
     min_duration = 0.03125
-    augment_midi_dataset(
+    augment_dataset(
         data_path,
         pitch_offsets=[-2, 1, 2],
         velocity_offsets=[-4, 5],

@@ -5,11 +5,11 @@ from .datasets import (
     DatasetJSON,
     DatasetMIDI,
 )
-from .split_midi_utils import (
+from .split_utils import (
     get_average_num_tokens_per_note,
     split_dataset_to_subsequences,
-    split_midi_per_note_density,
-    split_midis_for_training,
+    split_files_for_training,
+    split_score_per_note_density,
     split_seq_in_subsequences,
 )
 
@@ -18,8 +18,8 @@ __all__ = [
     "DatasetJSON",
     "DataCollator",
     "get_average_num_tokens_per_note",
-    "split_midis_for_training",
-    "split_midi_per_note_density",
+    "split_files_for_training",
+    "split_score_per_note_density",
     "split_dataset_to_subsequences",
     "split_seq_in_subsequences",
 ]

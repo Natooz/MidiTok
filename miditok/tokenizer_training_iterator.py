@@ -12,15 +12,16 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
-    from .midi_tokenizer import MIDITokenizer
+    from .midi_tokenizer import MusicTokenizer
 
 
 class TokTrainingIterator:
     r"""
     An iterable class to be used when training a tokenizer.
 
-    It loads MIDI files and tokenize them on the fly, to be used with the Hugging Face
-    tokenizers library to build a vocabulary with BPE, Unigram or other models.
+    It loads music files (MIDI, abc) and tokenize them on the fly, to be used with the
+    Hugging Face tokenizers library to build a vocabulary with BPE, Unigram or WordPiece
+    models.
 
     :param tokenizer: tokenizer to use for training.
     :param files_paths: sequence of paths of files to load for training.
@@ -28,7 +29,7 @@ class TokTrainingIterator:
 
     def __init__(
         self,
-        tokenizer: MIDITokenizer,
+        tokenizer: MusicTokenizer,
         files_paths: Sequence[Path],
     ) -> None:
         self.tokenizer = tokenizer
@@ -37,18 +38,18 @@ class TokTrainingIterator:
 
     def load_file(self, path: Path) -> list[str]:
         """
-        Load a MIDI file and convert it to its byte representation.
+        Load a music file and convert it to its byte representation.
 
         :param path: path to the file to load.
         :return: the byte representation of the file.
         """
         # Load and tokenize file
         try:
-            midi = Score(path)
+            score = Score(path)
         except SCORE_LOADING_EXCEPTION:
             return []
         # Need to specify `encode_ids=False` as it might be already pretrained
-        tokseq = self.tokenizer(midi, encode_ids=False)
+        tokseq = self.tokenizer(score, encode_ids=False)
 
         # Split ids if requested
         if self.tokenizer.config.encode_ids_split in ["bar", "beat"]:

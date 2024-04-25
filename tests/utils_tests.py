@@ -77,7 +77,7 @@ def adjust_tok_params_for_tests(tokenization: str, params: dict[str, Any]) -> No
     Adjust tokenizer config parameters for tests.
 
     Depending on the tokenization, some adjustments are necessary to ensure that the
-    MIDI decoded from tokens is identical to the original one.
+    Score decoded from tokens is identical to the original one.
 
     :param tokenization: tokenization.
     :param params: parameters as a dictionary of keyword arguments.
@@ -103,19 +103,19 @@ def adjust_tok_params_for_tests(tokenization: str, params: dict[str, Any]) -> No
         params["use_rests"] = False
 
 
-def sort_midi(midi: Score, sort_tracks: bool = True) -> None:
+def sort_score(score: Score, sort_tracks: bool = True) -> None:
     """
-    Sorts a MIDI: its notes and other track events, and the tracks themselves.
+    Sorts a Score: its notes and other track events, and the tracks themselves.
 
-    :param midi: midi to sort.
+    :param score: ``symusic.Score`` object to sort.
     :param sort_tracks: will sort the tracks by program if given True.
     """
-    for track in midi.tracks:
+    for track in score.tracks:
         if track.is_drum:
             track.program = 0  # need to be done before sorting tracks per program
         # notes sorted by (start, duration, pitch) by symusic
         # we keep this order here as if we need to sort them specifically, this will be
-        # done in tokenizer.preprocess_midi
+        # done in tokenizer.preprocess_score
         track.notes.sort()
         # track.notes.sort(key=lambda x: (x.time, x.pitch, x.duration, x.velocity))
         # track.pedals.sort()
@@ -123,19 +123,19 @@ def sort_midi(midi: Score, sort_tracks: bool = True) -> None:
         # track.controls.sort()
 
     # Sorts tracks
-    # MIDI detokenized with one_token_stream contains tracks sorted by note occurrence
+    # Score decoded with one_token_stream contains tracks sorted by note occurrence
     # This is done at the end as we may
     if sort_tracks:
-        midi.tracks.sort(key=lambda x: (x.program, x.is_drum))
+        score.tracks.sort(key=lambda x: (x.program, x.is_drum))
 
 
-def adapt_ref_midi_before_tokenize(
-    midi: Score, tokenizer: miditok.MIDITokenizer
+def adapt_ref_score_before_tokenize(
+    score: Score, tokenizer: miditok.MusicTokenizer
 ) -> None:
     """
-    Adapt (inplace) the contents of a MIDI before it is tokenized.
+    Adapt (inplace) the contents of a Score before it is tokenized.
 
-    :param midi: MIDI object to adapt.
+    :param score: ``symusic.Score`` object to adapt.
     :param tokenizer: tokenizer being used.
     """
     tokenization = type(tokenizer).__name__ if tokenizer is not None else None
@@ -146,7 +146,7 @@ def adapt_ref_midi_before_tokenize(
         # tokens are decoded in a FIFO logic.
         # But before sorting, we need to merge the tracks if needed, and clip durations
         if tokenizer.config.use_programs and tokenizer.one_token_stream:
-            miditok.utils.merge_same_program_tracks(midi.tracks)
+            miditok.utils.merge_same_program_tracks(score.tracks)
 
         # If a max_duration is provided, we clip the durations of the notes before
         # tokenizing, otherwise these notes will be tokenized with durations > to this
@@ -161,93 +161,95 @@ def adapt_ref_midi_before_tokenize(
                             tpb,
                         ),
                     ]
-                    for end_tick, tpb in miditok.utils.get_midi_ticks_per_beat(midi)
+                    for end_tick, tpb in miditok.utils.get_score_ticks_per_beat(score)
                 ],
                 dtype=np.intc,
             )
-            for track in midi.tracks:
+            for track in score.tracks:
                 clip_durations(track.notes, max_durations)
 
         # This is required for tests, as after resampling, for some overlapping notes
         # with different onset times with the second note ending last (as FIFO), it can
         # happen that after resampling the second note now ends before the first one.
         # Example: POP909_191 at tick 3152 (time division of 16 tpq)
-        for track in midi.tracks:
+        for track in score.tracks:
             miditok.utils.fix_offsets_overlapping_notes(track.notes)
 
         # Now we can sort the notes
-        sort_midi(midi, sort_tracks=False)
+        sort_score(score, sort_tracks=False)
 
     # For Octuple, CPWord and MMM, the time signature is carried with the notes.
-    # If a MIDI doesn't have any note, no time signature will be tokenized, and in turn
+    # If a Score doesn't have any note, no time signature will be tokenized, and in turn
     # decoded. If that's the case, we simply set time signatures to the default one.
     if (
         tokenizer.config.use_time_signatures
         and tokenization in ["Octuple", "CPWord", "MMM"]
-        and (len(midi.tracks) == 0 or len(midi.tracks[0].notes) == 0)
+        and (len(score.tracks) == 0 or len(score.tracks[0].notes) == 0)
     ):
-        midi.time_signatures = [TimeSignature(0, *TIME_SIGNATURE)]
+        score.time_signatures = [TimeSignature(0, *TIME_SIGNATURE)]
 
 
-def adapt_ref_midi_for_tests_assertion(
-    midi: Score, tokenizer: miditok.MIDITokenizer
+def adapt_ref_score_for_tests_assertion(
+    score: Score, tokenizer: miditok.MusicTokenizer
 ) -> Score:
     """
-    Adapt a reference raw/unprocessed MIDI for test assertions.
+    Adapt a reference raw/unprocessed Score for test assertions.
 
-    This method is meant to be used with a reference MIDI, and preprocess it so that
-    its contents match exactly those of the MIDI decoded from the tokens of this
-    reference MIDI.
-    The transformed MIDI will be preprocessed (`tokenizer.preprocess_midi()`), and
+    This method is meant to be used with a reference Score, and preprocess it so that
+    its contents match exactly those of the Score decoded from the tokens of this
+    reference Score.
+    The transformed Score will be preprocessed (`tokenizer.preprocess_score()`), and
     other attributes such as tempos or time signature times may be altered.
 
-    :param midi: midi reference.
-    :param tokenizer: in order to downsample the MIDI before sorting its content.
-    :return: a new MIDI object with track (and notes) sorted.
+    :param score: ``symusic.Score`` object reference.
+    :param tokenizer: in order to downsample the Score before sorting its content.
+    :return: a new ``symusic.Score`` object with track (and notes) sorted.
     """
     tokenization = type(tokenizer).__name__ if tokenizer is not None else None
-    new_midi = copy(midi)
+    new_score = copy(score)
 
     # Merging is performed in preprocess only in one_token_stream mode
     # but in multi token stream, decoding will actually keep one track per program
     if tokenizer.config.use_programs and tokenizer.one_token_stream:
-        miditok.utils.merge_same_program_tracks(new_midi.tracks)
+        miditok.utils.merge_same_program_tracks(new_score.tracks)
 
-    # Preprocess the MIDI: downsample it, remove notes outside of pitch range...
-    new_midi = tokenizer.preprocess_score(new_midi)
+    # Preprocess the Score: downsample it, remove notes outside of pitch range...
+    new_score = tokenizer.preprocess_score(new_score)
 
     # For Octuple, as tempo is only carried at notes times, we need to adapt
     # their times for comparison. Set tempo changes at onset times of notes.
     # We use the first track only, as it is the one for which tempos are decoded
     if tokenizer.config.use_tempos and tokenization in ["Octuple"]:
-        if len(new_midi.tracks) > 0:
+        if len(new_score.tracks) > 0:
             adapt_tempo_changes_times(
-                new_midi.tracks if tokenizer.one_token_stream else new_midi.tracks[:1],
-                new_midi.tempos,
+                new_score.tracks
+                if tokenizer.one_token_stream
+                else new_score.tracks[:1],
+                new_score.tempos,
                 tokenizer.default_tempo,
             )
         else:
-            new_midi.tempos = [Tempo(0, tokenizer.default_tempo)]
+            new_score.tempos = [Tempo(0, tokenizer.default_tempo)]
 
-    return new_midi
+    return new_score
 
 
-def midis_notes_equals(
-    midi1: Score, midi2: Score
+def scores_notes_equals(
+    score1: Score, score2: Score
 ) -> list[tuple[int, str, list[tuple[str, Note | int, int]]]]:
     """
-    Check that the notes from two MIDIs are all equal.
+    Check that the notes from two Scores are all equal.
 
     If they are not all equal, the method returns the list of errors.
 
-    :param midi1: first MIDI.
-    :param midi2: second MIDI.
+    :param score1: first ``symusic.Score``.
+    :param score2: second ``symusic.Score``.
     :return: list of errors.
     """
-    if len(midi1.tracks) != len(midi2.tracks):
+    if len(score1.tracks) != len(score2.tracks):
         return [(0, "num tracks", [])]
     errors = []
-    for track1, track2 in zip(midi1.tracks, midi2.tracks):
+    for track1, track2 in zip(score1.tracks, score2.tracks):
         if track1.program != track2.program or track1.is_drum != track2.is_drum:
             errors.append((0, "program", []))
             continue
@@ -295,9 +297,9 @@ def tempos_equals(tempos1: TempoTickList, tempos2: TempoTickList) -> bool:
     return True
 
 
-def check_midis_equals(
-    midi1: Score,
-    midi2: Score,
+def check_scores_equals(
+    score1: Score,
+    score2: Score,
     check_tempos: bool = True,
     check_time_signatures: bool = True,
     check_pedals: bool = True,
@@ -308,13 +310,13 @@ def check_midis_equals(
     types_of_errors = []
 
     # Checks notes and add markers if errors
-    errors = midis_notes_equals(midi1, midi2)
+    errors = scores_notes_equals(score1, score2)
     if len(errors) > 0:
         has_errors = True
         for e, track_err in enumerate(errors):
             if track_err[-1][0][0] != "len":
                 for err, note, exp in track_err[-1]:
-                    midi2.markers.append(
+                    score2.markers.append(
                         TextMeta(
                             note.start,
                             f"{e}: with note {err} (pitch {note.pitch}), expected "
@@ -326,31 +328,31 @@ def check_midis_equals(
 
     # Check pedals
     if check_pedals:
-        for inst1, inst2 in zip(midi1.tracks, midi2.tracks):
+        for inst1, inst2 in zip(score1.tracks, score2.tracks):
             if inst1.pedals != inst2.pedals:
                 types_of_errors.append("PEDALS")
                 break
 
     # Check pitch bends
     if check_pitch_bends:
-        for inst1, inst2 in zip(midi1.tracks, midi2.tracks):
+        for inst1, inst2 in zip(score1.tracks, score2.tracks):
             if inst1.pitch_bends != inst2.pitch_bends:
                 types_of_errors.append("PITCH BENDS")
                 break
 
     """# Check control changes
     if check_control_changes:
-        for inst1, inst2 in zip(midi1.tracks, midi2.tracks):
+        for inst1, inst2 in zip(score1.tracks, score2.tracks):
             if inst1.controls != inst2.controls:
                 types_of_errors.append("CONTROL CHANGES")
                 break"""
 
     # Checks tempos
-    if check_tempos and not tempos_equals(midi1.tempos, midi2.tempos):
+    if check_tempos and not tempos_equals(score1.tempos, score2.tempos):
         types_of_errors.append("TEMPOS")
 
     # Checks time signatures
-    if check_time_signatures and midi1.time_signatures != midi2.time_signatures:
+    if check_time_signatures and score1.time_signatures != score2.time_signatures:
         types_of_errors.append("TIME SIGNATURES")
 
     # Prints types of errors
@@ -362,35 +364,35 @@ def check_midis_equals(
 
 
 def tokenize_and_check_equals(
-    midi: Score,
-    tokenizer: miditok.MIDITokenizer,
+    score: Score,
+    tokenizer: miditok.MusicTokenizer,
     file_name: str,
 ) -> tuple[Score, Score, bool]:
     tokenization = type(tokenizer).__name__
     log_prefix = f"{file_name} / {tokenization}"
 
     # Tokenize and detokenize
-    adapt_ref_midi_before_tokenize(midi, tokenizer)
-    tokens = tokenizer(midi)
-    midi_decoded = tokenizer(
+    adapt_ref_score_before_tokenize(score, tokenizer)
+    tokens = tokenizer(score)
+    score_decoded = tokenizer(
         tokens,
-        miditok.utils.get_midi_programs(midi) if len(midi.tracks) > 0 else None,
+        miditok.utils.get_score_programs(score) if len(score.tracks) > 0 else None,
     )
 
-    # Post-process the reference and decoded MIDIs
-    # We might need to resample the original preprocessed MIDI, as it has been
+    # Post-process the reference and decoded Scores
+    # We might need to resample the original preprocessed Score, as it has been
     # resampled with its highest ticks/beat whereas the tokens has been decoded with
     # the tokenizer's time division, which can be different if using time signatures.
-    midi = adapt_ref_midi_for_tests_assertion(midi, tokenizer)
-    if midi.ticks_per_quarter != midi_decoded.ticks_per_quarter:
-        midi = midi.resample(tpq=midi_decoded.ticks_per_quarter)
-    sort_midi(midi)
-    sort_midi(midi_decoded)
+    score = adapt_ref_score_for_tests_assertion(score, tokenizer)
+    if score.ticks_per_quarter != score_decoded.ticks_per_quarter:
+        score = score.resample(tpq=score_decoded.ticks_per_quarter)
+    sort_score(score)
+    sort_score(score_decoded)
 
-    # Check decoded MIDI is identical
-    midi_equals = check_midis_equals(
-        midi,
-        midi_decoded,
+    # Check decoded Score is identical to the reference one
+    scores_equals = check_scores_equals(
+        score,
+        score_decoded,
         check_tempos=tokenizer.config.use_tempos and tokenization != "MuMIDI",
         check_time_signatures=tokenizer.config.use_time_signatures,
         check_pedals=tokenizer.config.use_sustain_pedals,
@@ -403,20 +405,20 @@ def tokenize_and_check_equals(
     if isinstance(err_tse, list):
         err_tse = sum(err_tse)
     if err_tse != 0.0:
-        midi_equals = False
+        scores_equals = False
         print(f"{log_prefix} Validation of tokens types / values successions failed")
 
-    return midi_decoded, midi, not midi_equals
+    return score_decoded, score, not scores_equals
 
 
 def del_invalid_time_sig(
     time_sigs: list[TimeSignature], time_sigs_tokenizer: list[TimeSignature]
 ) -> None:
     r"""
-    Delete time signatures of a MIDI outside those supported by a tokenizer.
+    Delete time signatures of a Score outside those supported by a tokenizer.
 
     This is actually unused in our tokenization test pipeline, as removing the
-    invalid time signature is already done in ``preprocess_midi``.
+    invalid time signature is already done in ``preprocess_score``.
 
     :param time_sigs: time signatures to filter
     :param time_sigs_tokenizer:
@@ -443,7 +445,7 @@ def adapt_tempo_changes_times(
     This is needed to pass the tempo tests for Octuple as the tempos
     will be decoded only from the notes.
 
-    :param tracks: tracks of the MIDI to adapt the tempo changes
+    :param tracks: tracks of the Score to adapt the tempo changes
     :param tempo_changes: tempo changes to adapt
     :param default_tempo: default tempo value to mock at beginning if needed
     """
@@ -493,9 +495,9 @@ def clip_durations(
     """
     Clip the duration of notes or pedals to a specific limit.
 
-    This method is applied in the tokenization tests to a preprocessed reference MIDI
+    This method is applied in the tokenization tests to a preprocessed reference Score
     to make sure that the there are no note/pedal durations that exceed the limit, as
-    the MIDI decoded from tokens will have limited durations. This applies to
+    the Score decoded from tokens will have limited durations. This applies to
     tokenizers using *NoteOff* and *PedalOff* tokens, as otherwise (i.e. using
     *Duration* tokens) the durations are already clipped during the preprocessing step.
 
@@ -504,7 +506,7 @@ def clip_durations(
         shape ``(N,2)`` for ``N`` sections, and the second dimension corresponding to
         the end tick and the max duration in ticks of each section. Processing by
         sections is required as the original maximum duration is given in beats, and
-        the length of the beats of a MIDI can very with time signature changes.
+        the length of the beats of a Score can very with time signature changes.
     """
     tpb_idx = 0
     for note_pedal in notes_pedals:

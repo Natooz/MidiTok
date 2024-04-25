@@ -32,7 +32,7 @@ TokSequence
 
 The methods of MidiTok use :class:`miditok.TokSequence` objects as input and outputs. A :class:`miditok.TokSequence` holds tokens as the three forms described in :ref:`Byte Pair Encoding (BPE)`. TokSequences are subscriptable and implement ``__len__`` (you can run ``tok_seq[id]`` and ``len(tok_seq)``).
 
-You can use the :py:func:`miditok.MIDITokenizer.complete_sequence` method to automatically fill the non-initialized attributes of a :class:`miditok.TokSequence`.
+You can use the :py:func:`miditok.MusicTokenizer.complete_sequence` method to automatically fill the non-initialized attributes of a :class:`miditok.TokSequence`.
 
 .. autoclass:: miditok.TokSequence
     :members:
@@ -40,10 +40,10 @@ You can use the :py:func:`miditok.MIDITokenizer.complete_sequence` method to aut
 MIDI Tokenizer
 ------------------------
 
-MidiTok features several MIDI tokenizations, all inheriting from the :class:`miditok.MIDITokenizer` class.
+MidiTok features several MIDI tokenizations, all inheriting from the :class:`miditok.MusicTokenizer` class.
 You can customize your tokenizer by creating it with a custom :ref:`Tokenizer config`.
 
-.. autoclass:: miditok.MIDITokenizer
+.. autoclass:: miditok.MusicTokenizer
     :members:
 
 Tokenizer config
@@ -99,9 +99,9 @@ To use special tokens, you must specify them with the ``special_tokens`` argumen
 Tokens & TokSequence input / output format
 --------------------------------------------
 
-Depending on the tokenizer at use, the **format** of the tokens returned by the `:py:func:`miditok.MIDITokenizer.encode` method may vary, as well as the expected format for the :py:func:`miditok.MIDITokenizer.decode` method. The format is given by the :py:func:`miditok.MIDITokenizer.io_format` property. For any tokenizer, the format is the same for both methods.
+Depending on the tokenizer at use, the **format** of the tokens returned by the `:py:func:`miditok.MusicTokenizer.encode` method may vary, as well as the expected format for the :py:func:`miditok.MusicTokenizer.decode` method. The format is given by the :py:func:`miditok.MusicTokenizer.io_format` property. For any tokenizer, the format is the same for both methods.
 
-The format is deduced from the :py:func:`miditok.MIDITokenizer.is_multi_voc` and ``one_token_stream`` tokenizer attributes. ``one_token_stream`` being ``True`` means that the tokenizer will convert a MIDI file into a single stream of tokens for all instrument tracks, otherwise it will convert each track to a distinct token sequence. :py:func:`miditok.MIDITokenizer.is_multi_voc` being True means that each token stream is a list of lists of tokens, of shape ``(T,C)`` for T time steps and C subtokens per time step.
+The format is deduced from the :py:func:`miditok.MusicTokenizer.is_multi_voc` and ``one_token_stream`` tokenizer attributes. ``one_token_stream`` being ``True`` means that the tokenizer will convert a MIDI file into a single stream of tokens for all instrument tracks, otherwise it will convert each track to a distinct token sequence. :py:func:`miditok.MusicTokenizer.is_multi_voc` being True means that each token stream is a list of lists of tokens, of shape ``(T,C)`` for T time steps and C subtokens per time step.
 
 This results in four situations, where I is the number of tracks, T is the number of tokens (or time steps) and C the number of subtokens per time step:
 
@@ -110,7 +110,7 @@ This results in four situations, where I is the number of tracks, T is the numbe
 * ``is_multi_voc`` is ``True`` and ``one_token_stream`` is ``False``: ``[I,(T,C)]``;
 * ``is_multi_voc`` and ``one_token_stream`` are both ``True``: ``(T,C)``.
 
-**Note that if there is no I dimension in the format, the output of** `:py:func:`miditok.MIDITokenizer.encode` **is a** :class:`miditok.TokSequence` **object, otherwise it is a list of** :class:`miditok.TokSequence` **objects (one per token stream / track).**
+**Note that if there is no I dimension in the format, the output of** `:py:func:`miditok.MusicTokenizer.encode` **is a** :class:`miditok.TokSequence` **object, otherwise it is a list of** :class:`miditok.TokSequence` **objects (one per token stream / track).**
 
 Some tokenizer examples to illustrate:
 
@@ -125,27 +125,27 @@ Magic methods
 
 `Magic methods <https://rszalski.github.io/magicmethods/>`_ allows to intuitively access to a tokenizer's attributes and methods. We list them here with some examples.
 
-.. autofunction:: miditok.MIDITokenizer.__call__
+.. autofunction:: miditok.MusicTokenizer.__call__
     :noindex:
 ..  code-block:: python
 
     tokens = tokenizer(midi)
     midi2 = tokenizer(tokens)
 
-.. autofunction:: miditok.MIDITokenizer.__getitem__
+.. autofunction:: miditok.MusicTokenizer.__getitem__
     :noindex:
 ..  code-block:: python
 
     pad_token = tokenizer["PAD_None"]
 
-.. autofunction:: miditok.MIDITokenizer.__len__
+.. autofunction:: miditok.MusicTokenizer.__len__
     :noindex:
 ..  code-block:: python
 
     num_classes = len(tokenizer)
     num_classes_per_vocab = tokenizer.len  # applicable to tokenizer with embedding pooling, e.g. CPWord or Octuple
 
-.. autofunction:: miditok.MIDITokenizer.__eq__
+.. autofunction:: miditok.MusicTokenizer.__eq__
     :noindex:
 ..  code-block:: python
 
@@ -157,7 +157,7 @@ Save / Load tokenizer
 
 You can save and load a tokenizer's parameters and vocabulary. This is especially useful to track tokenized datasets, and to save tokenizers with vocabularies learned with :ref:`Byte Pair Encoding (BPE)`.
 
-.. autofunction:: miditok.MIDITokenizer.save_params
+.. autofunction:: miditok.MusicTokenizer.save_params
     :noindex:
 
 To load a tokenizer from saved parameters, just use the ``params`` argument when creating a it:
