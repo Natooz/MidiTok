@@ -186,12 +186,7 @@ def benchmark_training_time(vocab_size: int) -> None:
 
     :param vocab_size: size of the vocabulary.
     """
-    indexes = [
-        f"{model} {split}-split"
-        for model in MODELS
-        for split in SPLITS
-        if (model, split) != ("Unigram", "no")
-    ]
+    indexes = [f"{model} {split}-split" for model in MODELS for split in SPLITS]
     df_file_path = RESULTS_PATH / "training_time.csv"
     if df_file_path.is_file():
         df = read_csv(df_file_path, index_col=0)
@@ -201,13 +196,13 @@ def benchmark_training_time(vocab_size: int) -> None:
 
     # Perform measures
     for dataset in DATASETS:
+        if dataset == "Lakh":
+            break
         files_paths = dataset_files_paths(dataset)
         for tokenization in TOKENIZATIONS:
             col_name = f"{dataset} {tokenization}"
             for model in MODELS:
                 for split in SPLITS:
-                    if (model, split) == ("Unigram", "no"):
-                        continue
                     index_name = f"{model} {split}-split"
 
                     # Check measure is not already performed
@@ -385,7 +380,6 @@ def wordpiece_max_chars(
                     continue
 
                 # Creates tokenizer
-                tok_params = TOKENIZER_PARAMS.copy()
                 tok_params["encode_ids_split"] = split
                 tokenizer: miditok.MusicTokenizer = getattr(miditok, tokenization)(
                     tokenizer_config=miditok.TokenizerConfig(**tok_params)
@@ -476,7 +470,7 @@ if __name__ == "__main__":
     # seq_len_splits(data_sets)
 
     # Training time
-    benchmark_training_time()
+    benchmark_training_time(VOCAB_SIZE)
 
     # Encoding-decoding time and sequence length reduction
     # benchmark_encoding_decoding_speed_seq_len_reduction()

@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from numpy import ndarray
+from utils.utils import format_special_token
 
 from .constants import (
     BEAT_RES,
@@ -565,19 +566,8 @@ class TokenizerConfig:
 
         # Special tokens
         self.special_tokens: list[str] = []
-        for special_token in list(special_tokens) + MANDATORY_SPECIAL_TOKENS:
-            parts = special_token.split("_")
-            if len(parts) == 1:
-                parts.append("None")
-            elif len(parts) > 2:
-                parts = ["-".join(parts[:-1]), parts[-1]]
-                warnings.warn(
-                    f"miditok.TokenizerConfig: special token {special_token} must"
-                    " contain one underscore (_).This token will be saved as"
-                    f" {'_'.join(parts)}.",
-                    stacklevel=2,
-                )
-            token = "_".join(parts)
+        for special_token in list(special_tokens):
+            token = format_special_token(special_token)
             if token not in self.special_tokens:
                 self.special_tokens.append(token)
             else:
@@ -586,6 +576,11 @@ class TokenizerConfig:
                     f" Skipping its duplicated occurrence.",
                     stacklevel=2,
                 )
+        # Mandatory special tokens, no warning here
+        for special_token in MANDATORY_SPECIAL_TOKENS:
+            token = format_special_token(special_token)
+            if token not in self.special_tokens:
+                self.special_tokens.append(token)
 
         # Additional token types params, enabling additional token types
         self.use_chords: bool = use_chords
