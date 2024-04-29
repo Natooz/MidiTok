@@ -39,30 +39,6 @@ if TYPE_CHECKING:
     from symusic.core import TrackTickList
 
 
-def format_special_token(token: str) -> str:
-    """
-    Format a special token provided by a user.
-
-    The method will split it in a "type" and a "value" categories separated by an
-    underscore.
-
-    :param token: special token as string.
-    :return: formated special token.
-    """
-    parts = token.split("_")
-    if len(parts) == 1:
-        parts.append("None")
-    elif len(parts) > 2:
-        parts = ["-".join(parts[:-1]), parts[-1]]
-        warnings.warn(
-            f"miditok.TokenizerConfig: special token {token} must"
-            " contain one underscore (_).This token will be saved as"
-            f" {'_'.join(parts)}.",
-            stacklevel=2,
-        )
-    return "_".join(parts)
-
-
 def convert_ids_tensors_to_list(ids) -> list[int] | list[list[int]]:  # noqa: ANN001
     """
     Convert a PyTorch, Tensorflow Tensor or numpy array to a list of integers.

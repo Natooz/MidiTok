@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from numpy import ndarray
-from utils.utils import format_special_token
 
 from .constants import (
     BEAT_RES,
@@ -299,6 +298,30 @@ class TokSequence:
         return self
 
 
+def _format_special_token(token: str) -> str:
+    """
+    Format a special token provided by a user.
+
+    The method will split it in a "type" and a "value" categories separated by an
+    underscore.
+
+    :param token: special token as string.
+    :return: formated special token.
+    """
+    parts = token.split("_")
+    if len(parts) == 1:
+        parts.append("None")
+    elif len(parts) > 2:
+        parts = ["-".join(parts[:-1]), parts[-1]]
+        warnings.warn(
+            f"miditok.TokenizerConfig: special token {token} must"
+            " contain one underscore (_).This token will be saved as"
+            f" {'_'.join(parts)}.",
+            stacklevel=2,
+        )
+    return "_".join(parts)
+
+
 class TokenizerConfig:
     r"""
     Tokenizer configuration, to be used with all tokenizers.
@@ -567,7 +590,7 @@ class TokenizerConfig:
         # Special tokens
         self.special_tokens: list[str] = []
         for special_token in list(special_tokens):
-            token = format_special_token(special_token)
+            token = _format_special_token(special_token)
             if token not in self.special_tokens:
                 self.special_tokens.append(token)
             else:
@@ -578,7 +601,7 @@ class TokenizerConfig:
                 )
         # Mandatory special tokens, no warning here
         for special_token in MANDATORY_SPECIAL_TOKENS:
-            token = format_special_token(special_token)
+            token = _format_special_token(special_token)
             if token not in self.special_tokens:
                 self.special_tokens.append(token)
 
