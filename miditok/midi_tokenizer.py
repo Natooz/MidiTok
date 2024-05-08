@@ -119,7 +119,6 @@ class MusicTokenizer(ABC, HFHubMixin):
         self._vocab_learned_bytes_to_tokens = {}
         # Fast tokenizer model backed with 🤗tokenizers
         self._model = None
-        self._model_name = None
         # Used in _notes_to_events, especially MIDILike
         self._note_on_off = False
         # Determines how the tokenizer will handle multiple tracks: either each track
@@ -297,6 +296,12 @@ class MusicTokenizer(ABC, HFHubMixin):
         if not self.is_trained:
             return None
         return self._model.get_vocab()
+
+    @property
+    def _model_name(self) -> str:
+        if self._model is None:
+            return "None"
+        return type(self._model.model).__name__
 
     @property
     def vocab_size(self) -> int:
@@ -2669,7 +2674,6 @@ class MusicTokenizer(ABC, HFHubMixin):
         }
 
         self._model = tokenizer
-        self._model_name = model_name
 
     @staticmethod
     def __reload_hf_tokenizer(tokenizer: _HFTokenizer) -> _HFTokenizer:

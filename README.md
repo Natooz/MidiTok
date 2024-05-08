@@ -81,7 +81,7 @@ dataset = DatasetMIDI(
     bos_token_id=tokenizer["BOS_None"],
     eos_token_id=tokenizer["EOS_None"],
 )
-collator = DataCollator(tokenizer.pad_token_id)
+collator = DataCollator(tokenizer.pad_token_id, copy_inputs_as_labels=True)
 dataloader = DataLoader(dataset, batch_size=64, collate_fn=collator)
 
 # Iterate over the dataloader to train a model
