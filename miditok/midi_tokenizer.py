@@ -59,7 +59,8 @@ from .constants import (
     SUPPORTED_MUSIC_FILE_EXTENSIONS,
     TEMPO,
     TIME_SIGNATURE,
-    UNIGRAM_MAX_PIECE_LENGTH,
+    UNIGRAM_MAX_INPUT_CHARS_PER_WORD_BAR,
+    UNIGRAM_MAX_INPUT_CHARS_PER_WORD_BEAT,
     UNIGRAM_SPECIAL_TOKEN_SUFFIX,
     UNKNOWN_CHORD_PREFIX,
     WORDPIECE_MAX_INPUT_CHARS_PER_WORD_BAR,
@@ -2437,7 +2438,7 @@ class MusicTokenizer(ABC, HFHubMixin):
         <https://huggingface.co/course/chapter6/2?fw=pt>`_ for more details about the
         ``iterator`` and input type.
 
-        **A few considerations must be noted:**
+        **A few considerations to note:**
 
         1. The WordPiece model has a ``max_input_chars_per_word`` attribute, which
         controls the maximum number of "base tokens" a sequence of ids can contain until
@@ -2547,9 +2548,9 @@ class MusicTokenizer(ABC, HFHubMixin):
                 model_kwargs["continuing_subword_prefix"] = ""
                 model_kwargs["max_input_chars_per_word"] = kwargs.pop(
                     "max_input_chars_per_word",
-                    WORDPIECE_MAX_INPUT_CHARS_PER_WORD_BAR
-                    if self.config.encode_ids_split == "bar"
-                    else WORDPIECE_MAX_INPUT_CHARS_PER_WORD_BEAT,
+                    WORDPIECE_MAX_INPUT_CHARS_PER_WORD_BEAT
+                    if self.config.encode_ids_split == "beat"
+                    else WORDPIECE_MAX_INPUT_CHARS_PER_WORD_BAR,
                 )
             tokenizer = _HFTokenizer(getattr(_tok_models, model)(**model_kwargs))
         else:
@@ -2652,7 +2653,11 @@ class MusicTokenizer(ABC, HFHubMixin):
                 ]
         elif model_name == "Unigram" and tokenizer_json["model"]["unk_id"] is not None:
             if "max_piece_length" not in kwargs:
-                kwargs["max_piece_length"] = UNIGRAM_MAX_PIECE_LENGTH
+                kwargs["max_piece_length"] = (
+                    UNIGRAM_MAX_INPUT_CHARS_PER_WORD_BEAT
+                    if self.config.encode_ids_split == "beat"
+                    else UNIGRAM_MAX_INPUT_CHARS_PER_WORD_BAR
+                )
             unk_id = tokenizer_json["model"]["unk_id"]
             kwargs["unk_token"] = tokenizer_json["model"]["vocab"][unk_id][0]
 

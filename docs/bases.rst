@@ -99,7 +99,7 @@ To use special tokens, you must specify them with the ``special_tokens`` argumen
 Tokens & TokSequence input / output format
 --------------------------------------------
 
-Depending on the tokenizer at use, the **format** of the tokens returned by the `:py:func:`miditok.MusicTokenizer.encode` method may vary, as well as the expected format for the :py:func:`miditok.MusicTokenizer.decode` method. The format is given by the :py:func:`miditok.MusicTokenizer.io_format` property. For any tokenizer, the format is the same for both methods.
+Depending on the tokenizer at use, the **format** of the tokens returned by the :py:func:`miditok.MusicTokenizer.encode` method may vary, as well as the expected format for the :py:func:`miditok.MusicTokenizer.decode` method. The format is given by the :py:func:`miditok.MusicTokenizer.io_format` property. For any tokenizer, the format is the same for both methods.
 
 The format is deduced from the :py:func:`miditok.MusicTokenizer.is_multi_voc` and ``one_token_stream`` tokenizer attributes. ``one_token_stream`` being ``True`` means that the tokenizer will convert a MIDI file into a single stream of tokens for all instrument tracks, otherwise it will convert each track to a distinct token sequence. :py:func:`miditok.MusicTokenizer.is_multi_voc` being True means that each token stream is a list of lists of tokens, of shape ``(T,C)`` for T time steps and C subtokens per time step.
 
@@ -110,7 +110,7 @@ This results in four situations, where I is the number of tracks, T is the numbe
 * ``is_multi_voc`` is ``True`` and ``one_token_stream`` is ``False``: ``[I,(T,C)]``;
 * ``is_multi_voc`` and ``one_token_stream`` are both ``True``: ``(T,C)``.
 
-**Note that if there is no I dimension in the format, the output of** `:py:func:`miditok.MusicTokenizer.encode` **is a** :class:`miditok.TokSequence` **object, otherwise it is a list of** :class:`miditok.TokSequence` **objects (one per token stream / track).**
+**Note that if there is no I dimension in the format, the output of** :py:func:`miditok.MusicTokenizer.encode` **is a** :class:`miditok.TokSequence` **object, otherwise it is a list of** :class:`miditok.TokSequence` **objects (one per token stream / track).**
 
 Some tokenizer examples to illustrate:
 
