@@ -80,7 +80,7 @@ You can read more details on the loss computation in the `documentation of the t
 The Unigram model supports the additional training arguments that can be provided as keyword arguments to the :py:func:`miditok.MusicTokenizer.train` method:
 
 * ``shrinking_factor``: shrinking factor to used to reduce the vocabulary at each training step (default: 0.75);
-* ``max_piece_length``: maximum length a token can reach (default in MidiTok: 32);
+* ``max_piece_length``: maximum length a token can reach (default in MidiTok: 50 if splitting ids per beats, 200 otherwise i.e. splitting ids per bars or no split);
 * ``n_sub_iterations``: number of Expectation-Maximization algorithm iterations performed before pruning the vocabulary (default: 2).
 
 Unigram is also implemented in the `SentencePiece <https://aclanthology.org/D18-2012/>`_ library.
