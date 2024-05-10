@@ -59,18 +59,18 @@ Tokenizer models
 Byte Pair Encoding (BPE)
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-`BPE <https://en.wikipedia.org/wiki/Byte_pair_encoding>`_ is a compression technique that replaces the most recurrent token successions of a corpus, by newly created ones. It works by counting all the successions of pairs of tokens, and at each training step merging the one with the highest count into a newly learned token.
+`BPE <https://en.wikipedia.org/wiki/Byte_pair_encoding>`_ is a compression algorithm that replaces the most recurrent token successions of a corpus, by newly created ones. It starts from a vocabulary containing tokens representing the initial alphabet of the modality of the data at hand, and iteratively counts the occurrences of each token successions, or bigrams, in the data, and merges the most recurrent one with a new token representing both of them, until the vocabulary reaches the desired size.
 
 For instance, in the character sequence ``aabaabaacaa``, the sub-sequence ``aa`` occurs three times and is the most recurrent one. Learning BPE on this sequence would replace ``aa`` with a new symbol, e.g., `d`, resulting in a compressed sequence ``dbdbdcd``. The latter can be reduced again by replacing the ``db`` subsequence, giving ``eedcd``. The vocabulary, which initially contained three characters (``a``, ``b`` and ``c``) now also contains ``d`` and ``e``. In practice BPE is learned on a corpus until the vocabulary reaches a target size.
 
-Today in the NLP field, BPE is used with almost all tokenizations to build their vocabulary, as `it allows to encode rare words and segmenting unknown or composed words as sequences of sub-word units <https://aclanthology.org/P16-1162/>`_. The base initial vocabulary is the set of all the unique characters present in the data, which compose the words that are automatically learned as tokens by the BPE algorithm.
+Today in the NLP field, BPE is used with many tokenizers to build their vocabulary, as `it allows to encode rare words and segmenting unknown or composed words as sequences of sub-word units <https://aclanthology.org/P16-1162/>`_. The base initial vocabulary is the set of all the unique characters present in the data, which compose the words that are automatically learned as tokens by the BPE algorithm.
 
 Unigram
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-The `Unigram <https://aclanthology.org/P18-1007/>`_ algorithm serves the same purpose than BPE, but works in the other direction: it starts from a large vocabulary of token successions and removes the tokens until it reaches the desired size, while keeping the most relevant tokens.
+The `Unigram <https://aclanthology.org/P18-1007/>`_ algorithm serves the same purpose than BPE, but works in the other direction: it starts from a large vocabulary of byte successions (e.g. words) and substitute some of them with smaller pieces until the vocabulary reaches the desired size.
 
-At each training step, Unigram computes a loss over the training data and current vocabulary. For each token in the vocabulary, Unigram computes how much removing it would increase the loss. The tokens that increase the loss the least have the lowest impact on the overall data representation, and can be considered less important, and Unigram will remove them until the vocabulary reaches the desired size.
+At each training step, Unigram compute the subword occurrence probabilities with the Expectation maximization (EM) algorithm and computes a loss over the training data and current vocabulary. For each token in the vocabulary, Unigram computes how much removing it would increase the loss. The tokens that increase the loss the least have the lowest impact on the overall data representation, and can be considered less important, and Unigram will remove them until the vocabulary reaches the desired size.
 
 Note that the loss is computed over the whole training data and current vocabulary. This step is computationally expensive. Hence removing a single token per training step would require a significant amount of time. In practice, `n` percents of the vocabulary is removed at each step, with `n` being a hyperparameter to set.
 
@@ -89,15 +89,25 @@ Unigram is also implemented in the `SentencePiece <https://aclanthology.org/D18-
 WordPiece
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-`WordPiece <https://arxiv.org/abs/1609.08144>`_ is a subword-based algorithm similar to BPE.
+`WordPiece <https://ieeexplore.ieee.org/document/6289079>`_ is a subword-based algorithm very similar to BPE. The original implementation was never open-sourced by Google. The training procedure is known to be a variation of BPE. In `🤗tokenizers <https://github.com/huggingface/tokenizers>`_ (and so in MidiTok), BPE is used to create the vocabulary.
 
-It counts the successions of tokens in the data, but instead of merging the pair with the highest count, WordPiece merges the one with the highest score computed as: :math:`\mathrm{score}_{ij} = \frac{ \mathrm{freq}_{ij} }{\mathrm{freq}_{i} \times \mathrm{freq}_{j}}` for two symbols :math:`i` and :math:`j`.
+The difference with BPE lies in the way the bytes are tokenized after training: for a specific word to tokenize, WordPiece will look in the vocabulary if it is present. If so, there is nothing to do and the token id of the word can be used. Otherwise, it will decrement the word from its end until it finds a match in the vocabulary, and iteratively do the same for all the components ("pieces") of the word. The procedure is explained more in detail in the `Tensorflow documentation <https://www.tensorflow.org/text/guide/subwords_tokenizer#optional_the_algorithm>`_.
 
-Dividing the frequency of the succession of two symbols by the product of their frequency in the data allows to merge pairs where one token is less frequent. The most frequent pair will hence not necessarily be merged. Doing so, WordPiece tries to learn tokens while evaluating their impact.
+Intuitively, WordPiece tokenization is trying to satisfy two different objectives:
 
-Another key difference with BPE is on the training procedure: WordPiece starts by computing all the pairs in the data, and then counts their frequencies. It will learn long words first, and splitting them in multiple subtokens when they do not exist in the vocabulary.
+1. Tokenize the data into the least number of tokens as possible;
+2. When a byte sequence needs to be split, it is split into tokens that have a maximum count in the training data.
 
-As a result, WordPiece features a ``max_input_chars_per_word`` attribute limiting the length of the "words", base tokens successions in MidiTok's case, it can process. Token successions with a length exceeding this parameter will be replaced by a ``unk_token`` token (MidiTok uses the padding token by default). You can set the ``max_input_chars_per_word`` in the keyword arguments of the :py:func:`miditok.MusicTokenizer.train` method, but the highest this parameter is, the slower the encoding-decoding will be. The number of base tokens for a music file is likely to go in the tens of thousands. As a result, **WordPiece should exclusively be used while splitting the token ids per bars or beats** in order to make sure that the lengths of the token successions remain below this limit.
+
+..
+    Commented, previous docs based on Hugging Face's course, which is actually incorrect: https://huggingface.co/learn/nlp-course/en/chapter6/6#tokenization-algorithm
+    It counts the successions of tokens in the data, but instead of merging the pair with the highest count, WordPiece merges the one with the highest score computed as: :math:`\mathrm{score}_{ij} = \frac{ \mathrm{freq}_{ij} }{\mathrm{freq}_{i} \times \mathrm{freq}_{j}}` for two symbols :math:`i` and :math:`j`.
+
+    Dividing the frequency of the succession of two symbols by the product of their frequency in the data allows to merge pairs where one token is less frequent. The most frequent pair will hence not necessarily be merged. Doing so, WordPiece tries to learn tokens while evaluating their impact.
+
+    Another key difference with BPE is on the training procedure: WordPiece starts by computing all the pairs in the data, and then counts their frequencies. It will learn long words first, and splitting them in multiple subtokens when they do not exist in the vocabulary.
+
+WordPiece features a ``max_input_chars_per_word`` attribute limiting the length of the "words", base tokens successions in MidiTok's case, it can process. Token successions with a length exceeding this parameter will be replaced by a ``unk_token`` token (MidiTok uses the padding token by default). You can set the ``max_input_chars_per_word`` in the keyword arguments of the :py:func:`miditok.MusicTokenizer.train` method, but the higher this parameter is, the slower the encoding-decoding will be. The number of base tokens for a music file is likely to go in the tens of thousands. As a result, **WordPiece should exclusively be used while splitting the token ids per bars or beats** in order to make sure that the lengths of the token successions remain below this limit.
 
 
 Splitting the ids
