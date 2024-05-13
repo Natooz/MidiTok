@@ -109,6 +109,8 @@ def test_tokenizer_training_and_encoding_decoding(
     tokenizer2.train(
         vocab_size=vocab_size + NUM_ADDITIONAL_TOKENS_SECOND_TRAINING,
         files_paths=files_paths,
+        model=model,
+        **training_kwargs,
     )
 
     # Tests _vocab_base and _vocab_base_id_to_byte are synced
@@ -122,9 +124,11 @@ def test_tokenizer_training_and_encoding_decoding(
     ), "Vocabulary inversion failed, something is wrong with the way they are built"
     # Test the two tokenizers are identical
     assert len(tokenizer2) == vocab_size + NUM_ADDITIONAL_TOKENS_SECOND_TRAINING
-    # Vocabs may have swapped ids orders for Unigram as the training is not 100%
-    # deterministic.
-    if model in ["BPE", "WordPiece"]:
+
+    # Training is only deterministic when training with BPE (and WordPiece as training
+    # is the same) when not using a `continuing_subword_prefix`.
+    # With Unigram, vocabs may have swapped ids orders.
+    if model in ["BPE", "WordPiece"] and encode_ids_split == "no":
         assert (
             tokenizer2 == tokenizer1
         ), "tokenizer 1-shot not equal to tokenizer 2-shots"
@@ -149,7 +153,12 @@ def test_tokenizer_training_and_encoding_decoding(
     )
 
     # Unbatched encoding-decoding
-    func_check = _check_seq_len if model == "Unigram" else _check_equal_seq
+    if model in ("BPE", "WordPiece") and encode_ids_split == "no":
+        func_check = _check_equal_seq
+    elif model == "Unigram":
+        func_check = _check_seq_len
+    else:
+        func_check = _check_seq_enc_dec
     at_least_one_error = False
     tok_time = 0
     samples_og, seq_len_reductions = [], []  # sample_og used for batched
@@ -253,11 +262,7 @@ def _check_equal_seq(
             f"Encoded tokens not equal between two trained tokenizers"
         )
         no_error = False
-    if not seq1_decoded.ids == seq2_decoded.ids == seq_og.ids:
-        print(
-            f"Decoding error for {tokenization}: "
-            f"Decoded tokens do not match the original ones"
-        )
+    if not __check_seq_enc_dec(seq_og, seq1_decoded, seq2_decoded, tokenization):
         no_error = False
     return no_error
 
@@ -279,10 +284,28 @@ def _check_seq_len(
             f"Encoded tokens not equal between two trained tokenizers"
         )
         no_error = False
+    if not __check_seq_enc_dec(seq_og, seq1_decoded, seq2_decoded, tokenization):
+        no_error = False
+    return no_error
+
+
+def _check_seq_enc_dec(
+    *args: miditok.TokSequence | str,
+) -> bool:
+    return __check_seq_enc_dec(args[0], args[3], args[4], args[5])
+
+
+def __check_seq_enc_dec(
+    seq_og: miditok.TokSequence,
+    seq1_decoded: miditok.TokSequence,
+    seq2_decoded: miditok.TokSequence,
+    tokenization: str,
+) -> bool:
+    # just check decoded sequences are identical to the original one
     if not len(seq1_decoded.ids) == len(seq2_decoded.ids) == len(seq_og.ids):
         print(
             f"Decoding error for {tokenization}: "
             f"Decoded tokens do not match the original ones"
         )
-        no_error = False
-    return no_error
+        return False
+    return True

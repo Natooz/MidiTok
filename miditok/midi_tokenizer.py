@@ -48,6 +48,7 @@ from .constants import (
     ABC_FILES_EXTENSIONS,
     BOS_TOKEN_NAME,
     CHR_ID_START,
+    CONTINUING_SUBWORD_PREFIX,
     CURRENT_MIDITOK_VERSION,
     CURRENT_SYMUSIC_VERSION,
     CURRENT_TOKENIZERS_VERSION,
@@ -2437,6 +2438,9 @@ class MusicTokenizer(ABC, HFHubMixin):
         <https://huggingface.co/docs/tokenizers/index>`_, and `🤗tokenizers course
         <https://huggingface.co/course/chapter6/2?fw=pt>`_ for more details about the
         ``iterator`` and input type.
+        For BPE and WordPiece, the default ``continuing_subword_prefix`` value is
+        ``##`` if the token sequences are split per bars or beats, otherwise if there is
+        no split there is no prefix.
 
         **A few considerations to note:**
 
@@ -2537,15 +2541,15 @@ class MusicTokenizer(ABC, HFHubMixin):
             if model is None:  # default
                 model = DEFAULT_TRAINING_MODEL_NAME
             model_kwargs = {"vocab": [] if model == "Unigram" else initial_alphabet}
+            if model in ("BPE", "WordPiece") and self.config.encode_ids_split != "no":
+                model_kwargs["continuing_subword_prefix"] = CONTINUING_SUBWORD_PREFIX
+                model_kwargs["end_of_word_suffix"] = ""
             if model == "BPE":
                 model_kwargs["merges"] = []
-                model_kwargs["continuing_subword_prefix"] = ""
-                model_kwargs["end_of_word_suffix"] = ""
             elif model == "WordPiece":
                 model_kwargs["unk_token"] = kwargs.pop(
                     "unk_token", chr(self.pad_token_id + CHR_ID_START)
                 )
-                model_kwargs["continuing_subword_prefix"] = ""
                 model_kwargs["max_input_chars_per_word"] = kwargs.pop(
                     "max_input_chars_per_word",
                     WORDPIECE_MAX_INPUT_CHARS_PER_WORD_BEAT
@@ -2636,21 +2640,9 @@ class MusicTokenizer(ABC, HFHubMixin):
 
         # Trainer needs to know the end of word / continuing subword thingies in BPE
         if model_name in ["BPE", "WordPiece"]:
-            if (
-                "continuing_subword_prefix" not in kwargs
-                and tokenizer_json["model"]["continuing_subword_prefix"] is not None
-            ):
-                kwargs["continuing_subword_prefix"] = tokenizer_json["model"][
-                    "continuing_subword_prefix"
-                ]
-            if (
-                model_name == "BPE"
-                and "end_of_word_suffix" not in kwargs
-                and tokenizer_json["model"]["end_of_word_suffix"] is not None
-            ):
-                kwargs["end_of_word_suffix"] = tokenizer_json["model"][
-                    "end_of_word_suffix"
-                ]
+            for arg in ("continuing_subword_prefix", "end_of_word_suffix"):
+                if arg not in kwargs and tokenizer_json["model"][arg] is not None:
+                    kwargs[arg] = tokenizer_json["model"][arg]
         elif model_name == "Unigram" and tokenizer_json["model"]["unk_id"] is not None:
             if "max_piece_length" not in kwargs:
                 kwargs["max_piece_length"] = (
@@ -2673,10 +2665,20 @@ class MusicTokenizer(ABC, HFHubMixin):
         tokenizer.train_from_iterator(iterator, length=len(iterator), trainer=trainer)
 
         # Update _vocab_learned_bytes_to_tokens for faster decoding
-        self._vocab_learned_bytes_to_tokens = {
-            k: [self._vocab_base_byte_to_token[b] for b in k]
-            for k in tokenizer.get_vocab()
-        }
+        self._vocab_learned_bytes_to_tokens = {}
+        continuing_subword_prefix = tokenizer_json["model"]["continuing_subword_prefix"]
+        end_of_word_suffix = tokenizer_json["model"]["end_of_word_suffix"]
+        for k in tokenizer.get_vocab():
+            key_ = k
+            if continuing_subword_prefix != "" and key_.startswith(
+                continuing_subword_prefix
+            ):
+                key_ = key_[len(continuing_subword_prefix) :]
+            if end_of_word_suffix != "" and key_.endswith(end_of_word_suffix):
+                key_ = key_[: -len(end_of_word_suffix)]
+            self._vocab_learned_bytes_to_tokens[k] = [
+                self._vocab_base_byte_to_token[b] for b in key_
+            ]
 
         self._model = tokenizer
 
