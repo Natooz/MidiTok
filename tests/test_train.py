@@ -71,6 +71,10 @@ def test_tokenizer_training_and_encoding_decoding(
     :param files_paths: list of paths of music files to use for the tests.
     :param encode_ids_split: type of token ids split before encoding/training.
     """
+    """from transformers import AutoTokenizer
+    import json
+    tokenizer = AutoTokenizer.from_pretrained("xlnet-base-cased")
+    tokenizer_json = json.loads(tokenizer.backend_tokenizer.to_str())"""
     if encode_ids_split == "no" and model == "WordPiece":
         pytest.skip(f"Skipping training with {model} and {encode_ids_split} split")
 
