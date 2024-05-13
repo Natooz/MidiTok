@@ -109,8 +109,6 @@ def test_tokenizer_training_and_encoding_decoding(
     tokenizer2.train(
         vocab_size=vocab_size + NUM_ADDITIONAL_TOKENS_SECOND_TRAINING,
         files_paths=files_paths,
-        model=model,
-        **training_kwargs,
     )
 
     # Tests _vocab_base and _vocab_base_id_to_byte are synced

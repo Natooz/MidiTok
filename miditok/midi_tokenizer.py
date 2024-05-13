@@ -2666,8 +2666,14 @@ class MusicTokenizer(ABC, HFHubMixin):
 
         # Update _vocab_learned_bytes_to_tokens for faster decoding
         self._vocab_learned_bytes_to_tokens = {}
-        continuing_subword_prefix = tokenizer_json["model"]["continuing_subword_prefix"]
-        end_of_word_suffix = tokenizer_json["model"]["end_of_word_suffix"]
+        continuing_subword_prefix = tokenizer_json["model"].get(
+            "continuing_subword_prefix", ""
+        )
+        end_of_word_suffix = tokenizer_json["model"].get("end_of_word_suffix", "")
+        if continuing_subword_prefix is None:
+            continuing_subword_prefix = ""
+        if end_of_word_suffix is None:
+            end_of_word_suffix = ""
         for k in tokenizer.get_vocab():
             key_ = k
             if continuing_subword_prefix != "" and key_.startswith(
