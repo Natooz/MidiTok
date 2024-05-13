@@ -39,7 +39,9 @@ except ImportError:
     MidiFile = None
 from tokenizers import AddedToken
 from tokenizers import Tokenizer as _HFTokenizer
+from tokenizers import decoders as _decoders
 from tokenizers import models as _tok_models
+from tokenizers import pre_tokenizers as _pre_tokenizers
 from tokenizers import trainers as _tok_trainers
 from tqdm import tqdm
 
@@ -2438,6 +2440,11 @@ class MusicTokenizer(ABC, HFHubMixin):
         <https://huggingface.co/course/chapter6/2?fw=pt>`_ for more details about the
         ``iterator`` and input type.
 
+        If splitting the token sequences per bar or beat, a
+        `"Metaspace" <https://huggingface.co/docs/tokenizers/api/pre-tokenizers#tokenizers.pre_tokenizers.Metaspace>`_
+        pre-tokenizer and decoder will be used. Each chunk of tokens will be prepended
+        with a special "▁" (U+2581) character to mark its beginning, as would be a word.
+
         **A few considerations to note:**
 
         1. The WordPiece model has a ``max_input_chars_per_word`` attribute, which
@@ -2537,15 +2544,15 @@ class MusicTokenizer(ABC, HFHubMixin):
             if model is None:  # default
                 model = DEFAULT_TRAINING_MODEL_NAME
             model_kwargs = {"vocab": [] if model == "Unigram" else initial_alphabet}
-            if model == "BPE":
-                model_kwargs["merges"] = []
+            if model in ("BPE", "WordPiece") and self.config.encode_ids_split != "no":
                 model_kwargs["continuing_subword_prefix"] = ""
                 model_kwargs["end_of_word_suffix"] = ""
+            if model == "BPE":
+                model_kwargs["merges"] = []
             elif model == "WordPiece":
                 model_kwargs["unk_token"] = kwargs.pop(
                     "unk_token", chr(self.pad_token_id + CHR_ID_START)
                 )
-                model_kwargs["continuing_subword_prefix"] = ""
                 model_kwargs["max_input_chars_per_word"] = kwargs.pop(
                     "max_input_chars_per_word",
                     WORDPIECE_MAX_INPUT_CHARS_PER_WORD_BEAT
@@ -2553,6 +2560,11 @@ class MusicTokenizer(ABC, HFHubMixin):
                     else WORDPIECE_MAX_INPUT_CHARS_PER_WORD_BAR,
                 )
             tokenizer = _HFTokenizer(getattr(_tok_models, model)(**model_kwargs))
+            if self.config.encode_ids_split != "no":
+                # TODO the special char ▁ (U+2581) shouldn't be used elsewhere in vocab
+                # chr(9601) = ▁
+                tokenizer.pre_tokenizer = _pre_tokenizers.Metaspace()
+                tokenizer.decoder = _decoders.Metaspace()
         else:
             msg = (
                 "miditok - tokenizer.train: the `model` argument must be a str specify "
@@ -2636,21 +2648,12 @@ class MusicTokenizer(ABC, HFHubMixin):
 
         # Trainer needs to know the end of word / continuing subword thingies in BPE
         if model_name in ["BPE", "WordPiece"]:
-            if (
-                "continuing_subword_prefix" not in kwargs
-                and tokenizer_json["model"]["continuing_subword_prefix"] is not None
-            ):
-                kwargs["continuing_subword_prefix"] = tokenizer_json["model"][
-                    "continuing_subword_prefix"
-                ]
-            if (
-                model_name == "BPE"
-                and "end_of_word_suffix" not in kwargs
-                and tokenizer_json["model"]["end_of_word_suffix"] is not None
-            ):
-                kwargs["end_of_word_suffix"] = tokenizer_json["model"][
-                    "end_of_word_suffix"
-                ]
+            args = ["continuing_subword_prefix"]
+            if model_name == "BPE":
+                args.append("end_of_word_suffix")
+            for arg in args:
+                if arg not in kwargs and tokenizer_json["model"][arg] is not None:
+                    kwargs[arg] = tokenizer_json["model"][arg]
         elif model_name == "Unigram" and tokenizer_json["model"]["unk_id"] is not None:
             if "max_piece_length" not in kwargs:
                 kwargs["max_piece_length"] = (
@@ -2671,14 +2674,11 @@ class MusicTokenizer(ABC, HFHubMixin):
             **kwargs,
         )
         tokenizer.train_from_iterator(iterator, length=len(iterator), trainer=trainer)
+        self._model = tokenizer
 
         # Update _vocab_learned_bytes_to_tokens for faster decoding
-        self._vocab_learned_bytes_to_tokens = {
-            k: [self._vocab_base_byte_to_token[b] for b in k]
-            for k in tokenizer.get_vocab()
-        }
-
-        self._model = tokenizer
+        self._vocab_learned_bytes_to_tokens = {}
+        self.__create_vocab_learned_bytes_to_tokens()
 
     @staticmethod
     def __reload_hf_tokenizer(tokenizer: _HFTokenizer) -> _HFTokenizer:
@@ -2709,6 +2709,36 @@ class MusicTokenizer(ABC, HFHubMixin):
             raise ValueError(msg)
 
         return _HFTokenizer.from_str(json.dumps(tokenizer_json))
+
+    def __create_vocab_learned_bytes_to_tokens(self) -> None:
+        try:
+            continuing_subword_prefix = self._model.model.continuing_subword_prefix
+        except AttributeError:
+            continuing_subword_prefix = ""
+        if continuing_subword_prefix is None:
+            continuing_subword_prefix = ""
+        try:
+            end_of_word_suffix = self._model.model.end_of_word_suffix
+        except AttributeError:
+            end_of_word_suffix = ""
+        if end_of_word_suffix is None:
+            end_of_word_suffix = ""
+
+        for k in self._model.get_vocab():
+            key_ = k
+            if continuing_subword_prefix != "" and key_.startswith(
+                continuing_subword_prefix
+            ):
+                key_ = key_[len(continuing_subword_prefix) :]
+            if end_of_word_suffix != "" and key_.endswith(end_of_word_suffix):
+                key_ = key_[: -len(end_of_word_suffix)]
+            if isinstance(self._model.pre_tokenizer, _pre_tokenizers.Metaspace):
+                replacement = self._model.pre_tokenizer.replacement
+                if key_.startswith(replacement):
+                    key_ = key_[len(replacement) :]
+            self._vocab_learned_bytes_to_tokens[k] = [
+                self._vocab_base_byte_to_token[b] for b in key_
+            ]
 
     def apply_bpe(self, *args, **kwargs) -> Score:  # noqa: D102, ANN002
         warnings.warn(
@@ -3286,10 +3316,7 @@ class MusicTokenizer(ABC, HFHubMixin):
                 self._vocab_base_id_to_byte = {
                     i: token_to_byte[tok] for tok, i in self._vocab_base.items()
                 }
-                self._vocab_learned_bytes_to_tokens = {
-                    k: [self._vocab_base_byte_to_token[b] for b in k]
-                    for k in self._model.get_vocab()
-                }
+                self.__create_vocab_learned_bytes_to_tokens()
                 continue
             if key == "config":
                 if "chord_maps" in value:

@@ -136,8 +136,7 @@ The BibTeX citations of all tokenizations can be found [in the documentation](ht
 
 ## Acknowledgments
 
-Special thanks to all the contributors.
-We acknowledge [Aubay](https://blog.aubay.com/index.php/language/en/home/?lang=en), the [LIP6](https://www.lip6.fr/?LANG=en), [LERIA](http://blog.univ-angers.fr/leria/n) and [ESEO](https://eseo.fr/en) for the initial financing and support.
+@Natooz thanks its employers who allowed him to develop this project, by chronological order [Aubay](https://blog.aubay.com/index.php/language/en/home/?lang=en), the [LIP6 (Sorbonne University)](https://www.lip6.fr/?LANG=en), and the [Metacreation Lab (Simon Fraser University)](https://www.metacreation.net).
 
 ## All Thanks To Our Contributors
 
