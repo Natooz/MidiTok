@@ -2562,6 +2562,7 @@ class MusicTokenizer(ABC, HFHubMixin):
             tokenizer = _HFTokenizer(getattr(_tok_models, model)(**model_kwargs))
             if self.config.encode_ids_split != "no":
                 # TODO the special char ▁ (U+2581) shouldn't be used elsewhere in vocab
+                # chr(9601) = ▁
                 tokenizer.pre_tokenizer = _pre_tokenizers.Metaspace()
                 tokenizer.decoder = _decoders.Metaspace()
         else:
