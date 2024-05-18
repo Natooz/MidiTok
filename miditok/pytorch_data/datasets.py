@@ -150,7 +150,7 @@ class DatasetMIDI(_DatasetABC):
         self.func_to_get_labels = func_to_get_labels
         self.sample_key_name = sample_key_name
         self.labels_key_name = labels_key_name
-        self.samples, self.labels = ([], []) if func_to_get_labels else (None, None)
+        self.samples, self.labels = [], [] if func_to_get_labels else None
 
         # Pre-tokenize the files
         if pre_tokenize:
