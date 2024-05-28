@@ -1094,7 +1094,8 @@ class MusicTokenizer(ABC, HFHubMixin):
         Concerned events are: *Pitch*, *Velocity*, *Duration*, *NoteOn*, *NoteOff* and
         optionally *Chord*, *Pedal* and *PitchBend*.
         **If the tokenizer is using pitch intervals, the notes must be sorted by time
-        then pitch values. This is done in** ``preprocess_score``.
+        then pitch values. This is done in**
+        :py:func:`miditok.MusicTokenizer.preprocess_score`.
 
         :param track: ``symusic.Track`` to extract events from.
         :param ticks_per_beat: array indicating the number of ticks per beat per
@@ -1431,9 +1432,9 @@ class MusicTokenizer(ABC, HFHubMixin):
         :param no_preprocess_score: whether to preprocess the ``symusic.Score``. If this
             argument is provided as ``True``, make sure that the corresponding music
             file / ``symusic.Score`` has already been preprocessed by the tokenizer
-            (:py:func:`miditok.MusicTokenizer.encode`) or that its content is aligned
-            with the tokenizer's vocabulary, otherwise the tokenization is likely to
-            crash. This argument is useful in cases where you need to use the
+            (:py:func:`miditok.MusicTokenizer.preprocess_score`) or that its content is
+            aligned with the tokenizer's vocabulary, otherwise the tokenization is
+            likely to crash. This argument is useful in cases where you need to use the
             preprocessed ``symusic.Score`` along with the tokens to not have to
             preprocess it twice as this method preprocesses it inplace.
             (default: ``False``)
