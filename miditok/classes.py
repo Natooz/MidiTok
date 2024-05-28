@@ -453,8 +453,10 @@ class TokenizerConfig:
         recurrence of this information. Leave it False if you want to have recurrent
         ``Tempo`` tokens, that you might inject yourself by adding ``symusic.Tempo``
         objects to a ``symusic.Score``. (default: ``False``)
-    :param time_signature_range: range as a dictionary
-        ``{denom_i: [num_i1, ..., num_in]/(min_num_i, max_num_i)}``.
+    :param time_signature_range: range as a dictionary. They keys are denominators
+        (beat/note value), the values can be either the list of associated numerators
+        (``{denom_i: [num_i_1, ..., num_i_n]}``) or a tuple ranging from the minimum
+        numerator to the maximum (``{denom_i: (min_num_i, max_num_i)}``).
         (default: ``{8: [3, 12, 6], 4: [5, 6, 3, 2, 1, 4]}``)
     :param sustain_pedal_duration: by default, the tokenizer will use ``PedalOff``
         tokens to mark the offset times of pedals. By setting this parameter True, it
