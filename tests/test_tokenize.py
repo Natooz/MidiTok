@@ -242,7 +242,7 @@ def _id_tok(tok_params_set: tuple[str, dict]) -> str:
     return tok_params_set[0]
 
 
-@pytest.mark.parametrize("file_path", MIDI_PATHS_ONE_TRACK)
+@pytest.mark.parametrize("file_path", MIDI_PATHS_ONE_TRACK, ids=lambda p: p.name)
 @pytest.mark.parametrize("tok_params_set", TOK_PARAMS_ONE_TRACK, ids=_id_tok)
 def test_one_track_midi_to_tokens_to_midi(
     file_path: str | Path,
@@ -252,7 +252,7 @@ def test_one_track_midi_to_tokens_to_midi(
     _test_tokenize(file_path, tok_params_set, saving_erroneous_files)
 
 
-@pytest.mark.parametrize("file_path", MIDI_PATHS_ONE_TRACK_HARD)
+@pytest.mark.parametrize("file_path", MIDI_PATHS_ONE_TRACK_HARD, ids=lambda p: p.name)
 @pytest.mark.parametrize("tok_params_set", TOK_PARAMS_ONE_TRACK_HARD, ids=_id_tok)
 def test_one_track_midi_to_tokens_to_midi_hard(
     file_path: str | Path,
@@ -262,7 +262,7 @@ def test_one_track_midi_to_tokens_to_midi_hard(
     _test_tokenize(file_path, tok_params_set, saving_erroneous_files)
 
 
-@pytest.mark.parametrize("file_path", MIDI_PATHS_MULTITRACK)
+@pytest.mark.parametrize("file_path", MIDI_PATHS_MULTITRACK, ids=lambda p: p.name)
 @pytest.mark.parametrize("tok_params_set", TOK_PARAMS_MULTITRACK, ids=_id_tok)
 def test_multitrack_midi_to_tokens_to_midi(
     file_path: str | Path,
@@ -272,7 +272,7 @@ def test_multitrack_midi_to_tokens_to_midi(
     _test_tokenize(file_path, tok_params_set, saving_erroneous_files)
 
 
-@pytest.mark.parametrize("file_path", ABC_PATHS)
+@pytest.mark.parametrize("file_path", ABC_PATHS, ids=lambda p: p.name)
 @pytest.mark.parametrize("tok_params_set", TOK_PARAMS_ONE_TRACK, ids=_id_tok)
 def test_abc_to_tokens_to_abc(
     file_path: str | Path,

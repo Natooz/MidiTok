@@ -90,7 +90,7 @@ def test_saving_loading_tokenizer(tokenization: str, tmp_path: Path):
         assert tokenizer != tokenizer2
 
 
-@pytest.mark.parametrize("file_path", MIDI_PATHS_MULTITRACK[:3])
+@pytest.mark.parametrize("file_path", MIDI_PATHS_MULTITRACK[:3], ids=lambda p: p.name)
 @pytest.mark.parametrize("tok_params_set", TOK_PARAMS_MULTITRACK)
 def test_multitrack_midi_to_tokens_to_midi(
     file_path: Path,

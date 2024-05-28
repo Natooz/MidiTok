@@ -89,7 +89,7 @@ def test_containers_assertions():
     assert cc2 == cc3
 
 
-@pytest.mark.parametrize("file_path", MIDI_PATHS_ONE_TRACK)
+@pytest.mark.parametrize("file_path", MIDI_PATHS_ONE_TRACK, ids=lambda p: p.name)
 def test_check_scores_equals(file_path: Path):
     score = Score(file_path)
     score_copy = copy(score)
@@ -160,7 +160,7 @@ def test_merge_tracks(
     assert len(score.tracks[0].pitch_bends) == 2 * len(original_track.pitch_bends)
 
 
-@pytest.mark.parametrize("file_path", MIDI_PATHS_MULTITRACK)
+@pytest.mark.parametrize("file_path", MIDI_PATHS_MULTITRACK, ids=lambda p: p.name)
 def test_merge_same_program_tracks_and_by_class(file_path: str | Path):
     score = Score(file_path)
     for track in score.tracks:
@@ -284,7 +284,7 @@ def test_remove_duplicated_notes():
             assert len(notes) - len(notes_filtered_dur) == diff_with_duration
 
 
-@pytest.mark.parametrize("file_path", MIDI_PATHS_ONE_TRACK)
+@pytest.mark.parametrize("file_path", MIDI_PATHS_ONE_TRACK, ids=lambda p: p.name)
 def test_get_bars(file_path: Path, save_bars_markers: bool = False):
     # Used for debug, this method do not make assertions
     score = Score(file_path)
@@ -295,7 +295,7 @@ def test_get_bars(file_path: Path, save_bars_markers: bool = False):
         score.dump_midi(TEST_LOG_DIR / f"{file_path.stem}_bars.mid")
 
 
-@pytest.mark.parametrize("file_path", MIDI_PATHS_MULTITRACK)
+@pytest.mark.parametrize("file_path", MIDI_PATHS_MULTITRACK, ids=lambda p: p.name)
 def test_get_num_notes_per_bar(file_path: Path):
     score = Score(file_path)
     num_notes = miditok.utils.get_num_notes_per_bar(score)
@@ -306,7 +306,7 @@ def test_get_num_notes_per_bar(file_path: Path):
     assert num_notes == num_notes_track_indep_summed
 
 
-@pytest.mark.parametrize("file_path", MIDI_PATHS_MULTITRACK)
+@pytest.mark.parametrize("file_path", MIDI_PATHS_MULTITRACK, ids=lambda p: p.name)
 def test_split_concat_score(file_path: Path, max_num_beats: int = 16):
     score = Score(file_path)
     score_splits = miditok.utils.split_score_per_beats(score, max_num_beats)
@@ -334,7 +334,7 @@ def test_split_concat_score(file_path: Path, max_num_beats: int = 16):
     assert score.markers == score_concat.markers
 
 
-@pytest.mark.parametrize("file_path", MIDI_PATHS_MULTITRACK)
+@pytest.mark.parametrize("file_path", MIDI_PATHS_MULTITRACK, ids=lambda p: p.name)
 def test_split_score_per_tracks(file_path: Path):
     score = Score(file_path)
     score_splits = miditok.utils.split_score_per_tracks(score)
