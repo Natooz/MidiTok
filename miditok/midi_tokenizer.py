@@ -1412,6 +1412,7 @@ class MusicTokenizer(ABC, HFHubMixin):
         self,
         score: Score | Path,
         encode_ids: bool = True,
+        no_preprocess_score: bool = False,
     ) -> TokSequence | list[TokSequence]:
         r"""
         Tokenize a music file (MIDI/abc), given as a ``symusic.Score`` or a file path.
@@ -1427,6 +1428,15 @@ class MusicTokenizer(ABC, HFHubMixin):
         :param encode_ids: the backbone model (BPE, Unigram, WordPiece) will encode the
             tokens and compress the sequence. Can only be used if the tokenizer has been
             trained. (default: ``True``)
+        :param no_preprocess_score: whether to preprocess the ``symusic.Score``. If this
+            argument is provided as ``True``, make sure that the corresponding music
+            file / ``symusic.Score`` has already been preprocessed by the tokenizer
+            (:py:func:`miditok.MusicTokenizer.encode`) or that its content is aligned
+            with the tokenizer's vocabulary, otherwise the tokenization is likely to
+            crash. This argument is useful in cases where you need to use the
+            preprocessed ``symusic.Score`` along with the tokens to not have to
+            preprocess it twice as this method preprocesses it inplace.
+            (default: ``False``)
         :return: a :class:`miditok.TokSequence` if ``tokenizer.one_token_stream`` is
             ``True``, else a list of :class:`miditok.TokSequence` objects.
         """
@@ -1435,7 +1445,8 @@ class MusicTokenizer(ABC, HFHubMixin):
             score = Score(score)
 
         # Preprocess the music file
-        score = self.preprocess_score(score)
+        if not no_preprocess_score:
+            score = self.preprocess_score(score)
 
         # Tokenize it
         tokens = self._score_to_tokens(score)
