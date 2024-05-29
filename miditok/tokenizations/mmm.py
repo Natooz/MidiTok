@@ -10,6 +10,8 @@ from miditok.classes import Event, TokSequence
 from miditok.constants import MMM_COMPATIBLE_TOKENIZERS
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from symusic import Score
 
 
@@ -39,6 +41,8 @@ class MMM(MusicTokenizer):
         self.config.use_programs = True
         self.config.program_changes = True
         self.config.one_token_stream_for_programs = True
+
+        self.concatenate_track_sequences = True
 
         # Checks base tokenizer argument
         if "base_tokenizer" not in self.config.additional_params:
@@ -90,7 +94,45 @@ class MMM(MusicTokenizer):
         track_end_event = Event("Track", "End", track_events[-1].time + 1)
         return [track_start_event, *track_events, track_end_event]
 
-    def _score_to_tokens(self, score: Score) -> TokSequence:
+    def encode(
+        self,
+        score: Score | Path,
+        encode_ids: bool = True,
+        no_preprocess_score: bool = False,
+        concatenate_track_sequences: bool = True,
+    ) -> TokSequence | list[TokSequence]:
+        r"""
+        Tokenize a music file (MIDI/abc), given as a ``symusic.Score`` or a file path.
+
+        You can provide a ``Path`` to the file to tokenize, or a ``symusic.Score``
+        object.
+        This method returns a (list of) :class:`miditok.TokSequence`.
+
+        If you are implementing your own tokenization by subclassing this class,
+        **override the protected** ``_score_to_tokens`` **method**.
+
+        :param score: the ``symusic.Score`` object to convert.
+        :param encode_ids: the backbone model (BPE, Unigram, WordPiece) will encode the
+            tokens and compress the sequence. Can only be used if the tokenizer has been
+            trained. (default: ``True``)
+        :param no_preprocess_score: whether to preprocess the ``symusic.Score``. If this
+            argument is provided as ``True``, make sure that the corresponding music
+            file / ``symusic.Score`` has already been preprocessed by the tokenizer
+            (:py:func:`miditok.MusicTokenizer.preprocess_score`) or that its content is
+            aligned with the tokenizer's vocabulary, otherwise the tokenization is
+            likely to crash. This argument is useful in cases where you need to use the
+            preprocessed ``symusic.Score`` along with the tokens to not have to
+            preprocess it twice as this method preprocesses it inplace.
+            (default: ``False``)
+        :param concatenate_track_sequences: will concatenate the token sequences of each
+            track after tokenizing them. (default: ``True``)
+        :return: a :class:`miditok.TokSequence` if ``tokenizer.one_token_stream`` is
+            ``True``, else a list of :class:`miditok.TokSequence` objects.
+        """
+        self.concatenate_track_sequences = concatenate_track_sequences
+        return super().encode(score, encode_ids, no_preprocess_score)
+
+    def _score_to_tokens(self, score: Score) -> TokSequence | list[TokSequence]:
         r"""
         Convert a **preprocessed** ``symusic.Score`` object to a sequence of tokens.
 
@@ -111,11 +153,9 @@ class MMM(MusicTokenizer):
         self.one_token_stream = True
 
         # Concatenate the sequences
-        seq = TokSequence([], [], events=[])
-        for track_seq in sequences:
-            seq += track_seq
-
-        return seq
+        if self.concatenate_track_sequences:
+            return sum(sequences)
+        return sequences
 
     def _sort_events(self, events: list[Event]) -> None:
         self.base_tokenizer._sort_events(events)

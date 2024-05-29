@@ -268,7 +268,7 @@ class TokSequence:
         The `ìds``, ``tokens``, ``events`` and ``bytes`` will be concatenated.
 
         :param other: other ``TokSequence``.
-        :return: the concatenation of the two sequences.
+        :return: the two sequences concatenated.
         """
         seq = replace(self)
         seq += other
@@ -281,7 +281,7 @@ class TokSequence:
         The `ìds``, ``tokens``, ``events`` and ``bytes`` will be concatenated.
 
         :param other: other ``TokSequence``.
-        :return: self.
+        :return: the two sequences concatenated.
         """
         if not isinstance(other, TokSequence):
             msg = (
@@ -296,6 +296,17 @@ class TokSequence:
                 setattr(self, attr, self_attr + other_attr)
 
         return self
+
+    def __radd__(self, other: TokSequence) -> TokSequence:
+        """
+        Reverse addition operation, allowing ``TokSequence``s to be summed.
+
+        :param other: other ``TokSequence``.
+        :return: the two sequences concatenated.
+        """
+        if other == 0:
+            return self
+        return self.__add__(other)
 
 
 def _format_special_token(token: str) -> str:
