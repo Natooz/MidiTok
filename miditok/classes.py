@@ -760,7 +760,7 @@ class TokenizerConfig:
 
     def save_to_json(self, out_path: Path) -> None:
         r"""
-        Save a tokenizer configuration object to the `out_path` path.
+        Save a tokenizer configuration as a JSON file.
 
         :param out_path: path to the output configuration JSON file.
         """
@@ -783,7 +783,7 @@ class TokenizerConfig:
     @classmethod
     def load_from_json(cls, config_file_path: Path) -> TokenizerConfig:
         r"""
-        Load a tokenizer configuration from the `config_path` path.
+        Load a tokenizer configuration from a JSON file.
 
         :param config_file_path: path to the configuration JSON file to load.
         """
@@ -808,9 +808,9 @@ class TokenizerConfig:
 
     def copy(self) -> TokenizerConfig:
         """
-        Copy the ``TokSequence``.
+        Copy the ``TokenizerConfig``.
 
-        :return: a copy of the ``TokSequence``.
+        :return: a copy of the ``TokenizerConfig``.
         """
         return deepcopy(self)
 
