@@ -79,7 +79,7 @@ def test_saving_loading_tokenizer(tokenization: str, tmp_path: Path):
     tokenizer: miditok.MusicTokenizer = getattr(miditok, tokenization)(
         tokenizer_config=tokenizer_config
     )
-    tokenizer.save_params(tmp_path / f"{tokenization}.txt")
+    tokenizer.save(tmp_path / f"{tokenization}.txt")
 
     tokenizer2: miditok.MusicTokenizer = getattr(miditok, tokenization)(
         params=tmp_path / f"{tokenization}.txt"

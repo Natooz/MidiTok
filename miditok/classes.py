@@ -18,9 +18,6 @@ from .constants import (
     CHORD_MAPS,
     CHORD_TOKENS_WITH_ROOT_NOTE,
     CHORD_UNKNOWN,
-    CURRENT_MIDITOK_VERSION,
-    CURRENT_SYMUSIC_VERSION,
-    CURRENT_TOKENIZERS_VERSION,
     DELETE_EQUAL_SUCCESSIVE_TEMPO_CHANGES,
     DELETE_EQUAL_SUCCESSIVE_TIME_SIG_CHANGES,
     DRUM_PITCH_RANGE,
@@ -752,11 +749,13 @@ class TokenizerConfig:
 
         :param dict_: dictionary to serialize
         """
-        for key in dict_:
-            if isinstance(dict_[key], dict):
-                self.__serialize_dict(dict_[key])
-            elif isinstance(dict_[key], ndarray):
-                dict_[key] = dict_[key].tolist()
+        for key, value in dict_.items():
+            if key in {"beat_res", "beat_res_rest"}:
+                dict_[key] = {f"{k1}_{k2}": v for (k1, k2), v in value.items()}
+            elif isinstance(value, dict):
+                self.__serialize_dict(value)
+            elif isinstance(value, ndarray):
+                dict_[key] = value.tolist()
 
     def save_to_json(self, out_path: Path) -> None:
         r"""
@@ -769,13 +768,6 @@ class TokenizerConfig:
         out_path.parent.mkdir(parents=True, exist_ok=True)
 
         dict_config = self.to_dict(serialize=True)
-        for beat_res_key in ["beat_res", "beat_res_rest"]:
-            dict_config[beat_res_key] = {
-                f"{k1}_{k2}": v for (k1, k2), v in dict_config[beat_res_key].items()
-            }
-        dict_config["miditok_version"] = CURRENT_MIDITOK_VERSION
-        dict_config["symusic_version"] = CURRENT_SYMUSIC_VERSION
-        dict_config["hf_tokenizers_version"] = CURRENT_TOKENIZERS_VERSION
 
         with out_path.open("w") as outfile:
             json.dump(dict_config, outfile, indent=4)
