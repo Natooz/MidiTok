@@ -46,6 +46,7 @@ Contents
 
 .. toctree::
    bases
+   tokenizing_music_with_miditok
    examples
    tokenizations
    train
