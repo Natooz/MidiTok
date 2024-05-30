@@ -48,8 +48,8 @@ The MIDI protocol
 
 Token, vocabulary, token id, embedding
 
-Tokens and vocabulary
-------------------------
+Sequential / Language models
+----------------------------
 
 A token is a distinct element, part of a sequence of tokens. In natural language, a token can be a character, a subword or a word. A sentence can then be tokenized into a sequence of tokens representing the words and punctuation.
 For symbolic music, tokens can represent the values of the note attributes (pitch, valocity, duration) or time events. These are the "basic" tokens, that can be compared to the characters in natural language. In the vocabulary of trained tokenizers, the tokens can represent **successions** of these basic tokens.
