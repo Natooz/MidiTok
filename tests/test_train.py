@@ -106,7 +106,7 @@ def test_tokenizer_training_and_encoding_decoding(
     tokenizer2.train(
         vocab_size=vocab_size, model=model, files_paths=files_paths, **training_kwargs
     )
-    tokenizer2.save_params(tmp_path)
+    tokenizer2.save(tmp_path)
     tokenizer2 = getattr(miditok, tokenization)(
         params=tmp_path / DEFAULT_TOKENIZER_FILE_NAME
     )

@@ -18,9 +18,6 @@ from .constants import (
     CHORD_MAPS,
     CHORD_TOKENS_WITH_ROOT_NOTE,
     CHORD_UNKNOWN,
-    CURRENT_MIDITOK_VERSION,
-    CURRENT_SYMUSIC_VERSION,
-    CURRENT_TOKENIZERS_VERSION,
     DELETE_EQUAL_SUCCESSIVE_TEMPO_CHANGES,
     DELETE_EQUAL_SUCCESSIVE_TIME_SIG_CHANGES,
     DRUM_PITCH_RANGE,
@@ -268,7 +265,7 @@ class TokSequence:
         The `ìds``, ``tokens``, ``events`` and ``bytes`` will be concatenated.
 
         :param other: other ``TokSequence``.
-        :return: the concatenation of the two sequences.
+        :return: the two sequences concatenated.
         """
         seq = replace(self)
         seq += other
@@ -281,7 +278,7 @@ class TokSequence:
         The `ìds``, ``tokens``, ``events`` and ``bytes`` will be concatenated.
 
         :param other: other ``TokSequence``.
-        :return: self.
+        :return: the two sequences concatenated.
         """
         if not isinstance(other, TokSequence):
             msg = (
@@ -296,6 +293,17 @@ class TokSequence:
                 setattr(self, attr, self_attr + other_attr)
 
         return self
+
+    def __radd__(self, other: TokSequence) -> TokSequence:
+        """
+        Reverse addition operation, allowing ``TokSequence``s to be summed.
+
+        :param other: other ``TokSequence``.
+        :return: the two sequences concatenated.
+        """
+        if other == 0:
+            return self
+        return self.__add__(other)
 
 
 def _format_special_token(token: str) -> str:
@@ -741,15 +749,17 @@ class TokenizerConfig:
 
         :param dict_: dictionary to serialize
         """
-        for key in dict_:
-            if isinstance(dict_[key], dict):
-                self.__serialize_dict(dict_[key])
-            elif isinstance(dict_[key], ndarray):
-                dict_[key] = dict_[key].tolist()
+        for key, value in dict_.items():
+            if key in {"beat_res", "beat_res_rest"}:
+                dict_[key] = {f"{k1}_{k2}": v for (k1, k2), v in value.items()}
+            elif isinstance(value, dict):
+                self.__serialize_dict(value)
+            elif isinstance(value, ndarray):
+                dict_[key] = value.tolist()
 
     def save_to_json(self, out_path: Path) -> None:
         r"""
-        Save a tokenizer configuration object to the `out_path` path.
+        Save a tokenizer configuration as a JSON file.
 
         :param out_path: path to the output configuration JSON file.
         """
@@ -758,13 +768,6 @@ class TokenizerConfig:
         out_path.parent.mkdir(parents=True, exist_ok=True)
 
         dict_config = self.to_dict(serialize=True)
-        for beat_res_key in ["beat_res", "beat_res_rest"]:
-            dict_config[beat_res_key] = {
-                f"{k1}_{k2}": v for (k1, k2), v in dict_config[beat_res_key].items()
-            }
-        dict_config["miditok_version"] = CURRENT_MIDITOK_VERSION
-        dict_config["symusic_version"] = CURRENT_SYMUSIC_VERSION
-        dict_config["hf_tokenizers_version"] = CURRENT_TOKENIZERS_VERSION
 
         with out_path.open("w") as outfile:
             json.dump(dict_config, outfile, indent=4)
@@ -772,7 +775,7 @@ class TokenizerConfig:
     @classmethod
     def load_from_json(cls, config_file_path: Path) -> TokenizerConfig:
         r"""
-        Load a tokenizer configuration from the `config_path` path.
+        Load a tokenizer configuration from a JSON file.
 
         :param config_file_path: path to the configuration JSON file to load.
         """
@@ -797,9 +800,9 @@ class TokenizerConfig:
 
     def copy(self) -> TokenizerConfig:
         """
-        Copy the ``TokSequence``.
+        Copy the ``TokenizerConfig``.
 
-        :return: a copy of the ``TokSequence``.
+        :return: a copy of the ``TokenizerConfig``.
         """
         return deepcopy(self)
 

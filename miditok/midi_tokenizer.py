@@ -132,7 +132,7 @@ class MusicTokenizer(ABC, HFHubMixin):
         # Loading params, or initializing them from args
         if params is not None:
             # Will overwrite self.config
-            self._load_params(params)
+            self._load_from_json(params)
         # If no TokenizerConfig is given, we falls back to the default parameters
         elif self.config is None:
             self.config = TokenizerConfig()
@@ -3178,9 +3178,39 @@ class MusicTokenizer(ABC, HFHubMixin):
 
     def _save_pretrained(self, *args, **kwargs) -> None:  # noqa: ANN002
         # called by `ModelHubMixin.from_pretrained`.
-        self.save_params(*args, **kwargs)
+        self.save(*args, **kwargs)
 
-    def save_params(
+    def save_params(self, *args, **kwargs) -> None:  # noqa: ANN002
+        """
+        **DEPRECIATED:** save a tokenizer as a JSON file (calling ``tokenizer.save``).
+
+        :param args: positional arguments.
+        :param kwargs: keyword arguments.
+        """
+        warnings.warn(
+            "miditok: The `save_params` method had been renamed `save`. It is now "
+            "depreciated and will be removed in future updates.",
+            stacklevel=2,
+        )
+        return self.save(*args, **kwargs)
+
+    def to_dict(self) -> dict:
+        """Return the serializable dictionary form of the tokenizer."""
+        params = {
+            "config": self.config.to_dict(serialize=True),
+            "one_token_stream": self.one_token_stream,
+            "tokenization": self.__class__.__name__,
+            "miditok_version": CURRENT_MIDITOK_VERSION,
+            "symusic_version": CURRENT_SYMUSIC_VERSION,
+            "hf_tokenizers_version": CURRENT_TOKENIZERS_VERSION,
+        }
+        if self.is_trained:  # saves whole vocab if trained
+            params["_vocab_base"] = self._vocab_base
+            params["_model"] = self._model.to_str()
+            params["_vocab_base_byte_to_token"] = self._vocab_base_byte_to_token
+        return params
+
+    def save(
         self,
         out_path: str | Path,
         additional_attributes: dict | None = None,
@@ -3200,36 +3230,17 @@ class MusicTokenizer(ABC, HFHubMixin):
         :param filename: name of the file to save, to be used in case ``out_path`` leads
             to a directory. (default: ``"tokenizer.json"``)
         """
-        if additional_attributes is None:
-            additional_attributes = {}
-        if self.is_trained:  # saves whole vocab if trained
-            additional_attributes["_vocab_base"] = self._vocab_base
-            additional_attributes["_model"] = self._model.to_str()
-            additional_attributes[
-                "_vocab_base_byte_to_token"
-            ] = self._vocab_base_byte_to_token
+        tokenizer_dict = self.to_dict()
 
-        dict_config = self.config.to_dict(serialize=True)
-        for beat_res_key in ["beat_res", "beat_res_rest"]:
-            dict_config[beat_res_key] = {
-                f"{k1}_{k2}": v for (k1, k2), v in dict_config[beat_res_key].items()
-            }
-        params = {
-            "config": dict_config,
-            "one_token_stream": self.one_token_stream,
-            "tokenization": self.__class__.__name__,
-            "miditok_version": CURRENT_MIDITOK_VERSION,
-            "symusic_version": CURRENT_SYMUSIC_VERSION,
-            "hf_tokenizers_version": CURRENT_TOKENIZERS_VERSION,
-            **additional_attributes,
-        }
+        if additional_attributes:
+            tokenizer_dict.update(additional_attributes)
 
         out_path = Path(out_path)
         if out_path.is_dir() or "." not in out_path.name:
             out_path /= filename
         out_path.parent.mkdir(parents=True, exist_ok=True)
         with out_path.open("w") as outfile:
-            json.dump(params, outfile, indent=4)
+            json.dump(tokenizer_dict, outfile, indent=4)
 
     @classmethod
     def _from_pretrained(
@@ -3286,16 +3297,16 @@ class MusicTokenizer(ABC, HFHubMixin):
         miditok_module = sys.modules[".".join(__name__.split(".")[:-1])]
         return getattr(miditok_module, tokenization)(params=params_path)
 
-    def _load_params(self, config_file_path: str | Path) -> None:
+    def _load_from_json(self, file_path: str | Path) -> None:
         r"""
         Load the parameters of the tokenizer from a config file.
 
         This method is not intended to be called outside __init__, when creating a
         tokenizer.
 
-        :param config_file_path: path to the tokenizer config file (encoded as json).
+        :param file_path: path to the tokenizer JSON file.
         """
-        with Path(config_file_path).open() as param_file:
+        with Path(file_path).open() as param_file:
             params = json.load(param_file)
 
         # Grab config, or creates one with default parameters (for retro-compatibility

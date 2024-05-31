@@ -233,9 +233,7 @@ def benchmark_training_time(vocab_size: int) -> None:
                     tokenizer_filename = (
                         f"{tokenization}_{model}_{split}-split_{dataset}.json"
                     )
-                    tokenizer.save_params(
-                        BENCHMARK_PATH / "tokenizers" / tokenizer_filename
-                    )
+                    tokenizer.save(BENCHMARK_PATH / "tokenizers" / tokenizer_filename)
 
     # Save results
     df.to_markdown(RESULTS_PATH / "training_time.md")
