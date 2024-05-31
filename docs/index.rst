@@ -45,13 +45,33 @@ Contents
 ==================
 
 .. toctree::
+   :maxdepth: 2
+   :caption: Bases of Music and AI
+
    bases
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Bases of Music and AI
+
    tokenizing_music_with_miditok
-   examples
    tokenizations
    train
    hf_hub
    pytorch_data
    data_augmentation
    utils
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Others
+
+   examples
    citations
+
+.. toctree::
+   :hidden:
+   :caption: Project Links
+
+   GitHub <https://github.com/Natooz/GitHub>
+   PyPi <https://pypi.org/project/miditok/>
