@@ -52,6 +52,7 @@ Each tune begins with a few lines indicating its title, time signature, default 
 MusicXML is an open file format and music notation. Inspired by the XML file format, it is structured with the same item-hierarchy. An example is shown below.
 
 ..  code-block:: xml
+
     <?xml version="1.0" encoding="UTF-8" standalone="no"?>
     <!DOCTYPE score-partwise PUBLIC
         "-//Recordare//DTD MusicXML 3.1 Partwise//EN"
