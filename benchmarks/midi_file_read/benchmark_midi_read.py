@@ -22,7 +22,7 @@ MAX_NUM_FILES = 1000
 
 
 def read_midi_files(
-    midi_paths: list[Path]
+    midi_paths: list[Path],
 ) -> tuple[list[float], list[float], list[float]]:
     """
     Read a list of MIDI files and return their reading times.
@@ -83,9 +83,9 @@ def benchmark_midi_parsing(
                 unit = "ms"
             else:
                 unit = "sec"
-            df.at[
-                library, dataset
-            ] = f"{np.mean(times_):.2f} ± {np.std(times_):.2f} {unit}"
+            df.at[library, dataset] = (
+                f"{np.mean(times_):.2f} ± {np.std(times_):.2f} {unit}"
+            )
 
     df.to_csv(HERE / "midi_read.csv")
     df.to_markdown(HERE / "midi_read.md")

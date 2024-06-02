@@ -48,7 +48,9 @@ Contents
    :maxdepth: 2
    :caption: Bases of Music and AI
 
-   bases
+   music_formats
+   midi
+   language_models
 
 .. toctree::
    :maxdepth: 2

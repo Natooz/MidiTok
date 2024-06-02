@@ -1,4 +1,5 @@
 """Base tokenizer class, acting as a "framework" for all tokenizers."""
+
 from __future__ import annotations
 
 import json
@@ -1984,9 +1985,9 @@ class MusicTokenizer(ABC, HFHubMixin):
 
         if vocab_idx is not None:
             self._vocab_base[vocab_idx][token_str] = len(self._vocab_base[vocab_idx])
-            self.__vocab_base_inv[vocab_idx][
-                len(self.__vocab_base_inv[vocab_idx])
-            ] = token_str
+            self.__vocab_base_inv[vocab_idx][len(self.__vocab_base_inv[vocab_idx])] = (
+                token_str
+            )
         else:
             id_ = len(self._model.get_vocab()) if self.is_trained else len(self.vocab)
             self._vocab_base[token_str] = id_
@@ -3484,7 +3485,7 @@ class MusicTokenizer(ABC, HFHubMixin):
         return len(self.vocab)
 
     @property
-    def len(self) -> int | list[int]:  # noqa: A003
+    def len(self) -> int | list[int]:
         r"""
         Return the length of the vocabulary.
 

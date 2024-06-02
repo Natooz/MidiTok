@@ -1,4 +1,5 @@
 """Collator objects for PyTorch ``DataLoader``s."""
+
 from __future__ import annotations
 
 import warnings
@@ -9,7 +10,7 @@ import torch
 from torch import LongTensor
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
 
 
 class DataCollator:
@@ -124,7 +125,7 @@ class DataCollator:
 
 
 def _pad_batch(
-    batch: list[LongTensor],
+    batch: Sequence[LongTensor],
     pad_token_id: int,
     pad_on_left: bool = False,
 ) -> LongTensor:
@@ -154,7 +155,7 @@ def _pad_batch(
     ).long()
 
 
-def _pad_left(batch: list[LongTensor], pad_token_id: int) -> LongTensor:
+def _pad_left(batch: Sequence[LongTensor], pad_token_id: int) -> LongTensor:
     r"""
     Pad sequences on the left, i.e. on the first indices.
 

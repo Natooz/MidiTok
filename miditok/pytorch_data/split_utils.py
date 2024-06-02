@@ -1,4 +1,5 @@
 """Utils methods for Score/tokens split."""
+
 from __future__ import annotations
 
 import json

@@ -50,7 +50,7 @@ from .constants import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
 
 IGNORED_CONFIG_KEY_DICT = [
     "miditok_version",
@@ -73,9 +73,9 @@ class Event:
 
     type_: str
     value: str | int
-    time: int | float = None
-    program: int = None
-    desc: Any = None
+    time: int | float | None = None
+    program: int | None = None
+    desc: str = ""
 
     def __str__(self) -> str:
         """
@@ -120,12 +120,13 @@ class TokSequence:
 
     tokens: list[str | list[str]] = None
     ids: list[int | list[int]] = None  # can be encoded with BPE/Unigram/WordPiece
-    bytes: str = None  # noqa: A003
+    bytes: str = None
     events: list[Event | list[Event]] = None
     are_ids_encoded: bool = False
     _ticks_bars: list[int] = None  # slice/add not handled
     _ticks_beats: list[int] = None  # slice/add not handled
     _ids_decoded: list[int | list[int]] = None
+    # field(default_factory=lambda: ["your_values"])
 
     def split_per_bars(self) -> list[TokSequence]:
         """
@@ -236,7 +237,7 @@ class TokSequence:
                 setattr(seq, attr, getattr(self, attr)[sli])
         return seq
 
-    def __eq__(self, other: TokSequence) -> bool:
+    def __eq__(self, other: object) -> bool:
         r"""
         Check that too sequences are equal.
 
@@ -247,6 +248,8 @@ class TokSequence:
         :param other: other sequence to compare.
         :return: ``True`` if the sequences have equal attributes.
         """
+        if not isinstance(other, TokSequence):
+            return False
         # Start from True assumption as some attributes might be unfilled (None)
         attributes = ["tokens", "ids", "bytes", "events"]
         eq = [True for _ in attributes]
@@ -545,7 +548,7 @@ class TokenizerConfig:
         delete_equal_successive_tempo_changes: bool = (
             DELETE_EQUAL_SUCCESSIVE_TEMPO_CHANGES
         ),
-        time_signature_range: dict[
+        time_signature_range: Mapping[
             int, list[int] | tuple[int, int]
         ] = TIME_SIGNATURE_RANGE,
         sustain_pedal_duration: bool = SUSTAIN_PEDAL_DURATION,
@@ -806,7 +809,7 @@ class TokenizerConfig:
         """
         return deepcopy(self)
 
-    def __eq__(self, other: TokenizerConfig) -> bool:
+    def __eq__(self, other: object) -> bool:
         """
         Check two configs are equal.
 
@@ -816,6 +819,8 @@ class TokenizerConfig:
         # We don't use the == operator as it yields False when comparing lists and
         # tuples containing the same elements. This method is not recursive and only
         # checks the first level of iterable values / attributes
+        if not isinstance(other, TokenizerConfig):
+            return False
         other_dict = other.to_dict()
         for key, value in self.to_dict().items():
             if key not in other_dict:

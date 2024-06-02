@@ -1,4 +1,5 @@
 """Useful methods."""
+
 from __future__ import annotations
 
 import warnings
@@ -761,7 +762,7 @@ def add_bar_beats_ticks_to_tokseq(
 
 def get_num_notes_per_bar(
     score: Score, tracks_indep: bool = False
-) -> list[int | list[int]]:
+) -> list[int] | list[list[int]]:
     """
     Return the number of notes within each bar of a ``symusic.Score``.
 

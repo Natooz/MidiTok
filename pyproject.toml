@@ -70,6 +70,15 @@ include = [
     "/miditok",
 ]
 
+[mypy]
+warn_return_any = "True"
+warn_unused_configs = "True"
+plugins = "numpy.typing.mypy_plugin"
+exclude = [
+    "venv",
+    ".venv",
+]
+
 [tool.coverage.report]
 exclude_also = [
     "def __repr__",
