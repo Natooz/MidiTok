@@ -40,6 +40,6 @@ Research in neural audio codecs allowed to "compress" audio waveform into a redu
 Symbolic music files format
 -----------------------------
 
-MIDI `The MIDI protocol`_
+MIDI :ref:`midi-protocol-label`_
 ABC
 MusicXML
