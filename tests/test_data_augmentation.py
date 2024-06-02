@@ -19,8 +19,8 @@ if TYPE_CHECKING:
 
 def test_augment_dataset(
     tmp_path: Path,
-    data_path: str | Path = HERE / "MIDIs_multitrack",
-):
+    data_path: Path = HERE / "MIDIs_multitrack",
+) -> None:
     # We only test data augmentation on MIDIs with one tokenization
 
     midi_aug_path = tmp_path / "Multitrack_MIDIs_aug"

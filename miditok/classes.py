@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import warnings
 from copy import deepcopy
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from math import log2
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
@@ -73,8 +73,8 @@ class Event:
 
     type_: str
     value: str | int
-    time: int | float | None = None
-    program: int | None = None
+    time: int = -1
+    program: int = 0
     desc: str = ""
 
     def __str__(self) -> str:
@@ -118,15 +118,14 @@ class TokSequence:
     non-initialized attributes.
     """
 
-    tokens: list[str | list[str]] = None
-    ids: list[int | list[int]] = None  # can be encoded with BPE/Unigram/WordPiece
-    bytes: str = None
-    events: list[Event | list[Event]] = None
+    tokens: list[str | list[str]] = field(default_factory=list)
+    ids: list[int | list[int]] = field(default_factory=list)
+    bytes: str = field(default_factory=str)
+    events: list[Event | list[Event]] = field(default_factory=list)
     are_ids_encoded: bool = False
-    _ticks_bars: list[int] = None  # slice/add not handled
-    _ticks_beats: list[int] = None  # slice/add not handled
-    _ids_decoded: list[int | list[int]] = None
-    # field(default_factory=lambda: ["your_values"])
+    _ticks_bars: list[int] = field(default_factory=list)  # slice/add not handled
+    _ticks_beats: list[int] = field(default_factory=list)  # slice/add not handled
+    _ids_decoded: list[int | list[int]] = field(default_factory=list)
 
     def split_per_bars(self) -> list[TokSequence]:
         """

@@ -40,6 +40,44 @@ Research in neural audio codecs allowed to "compress" audio waveform into a redu
 Symbolic music files format
 -----------------------------
 
-MIDI :ref:`midi-protocol-label`_
-ABC
-MusicXML
+There are three major file formats for symbolic music: MIDI, abc and musicXML.
+
+MIDI, standing for *Musical Instrument Digital Interface*, is a digital communication protocol standard in the music sector. It describes the protocol itself, the physical connector to transmit the protocol between devices, and a digital file format.
+A MIDI file allows to store MIDI messages as a symbolic music file. It is the most abundant file format among available music datasets. It is the most comprehensive and versatile file format for musical music, as such we present it more in detail in :ref:`midi-protocol-label`.
+
+
+The ABC notation is a notation for symbolic music, and a file format with the extension ``abc``. Its simplicity has made it widely used to write and share traditional and folk tunes from Western Europe.
+Each tune begins with a few lines indicating its title, time signature, default note length, key and others. Lines following the key represent the notes. A note is indicated by its letter, followed by a ``/x`` or ``x`` to respectively divide or multiply its length by ``x`` :math:`\in \mathbb{N}^{\star}` compared to the default note length. An upper case (e.g., A) means a pitch one octave below than a lower case (a).
+
+MusicXML is an open file format and music notation. Inspired by the XML file format, it is structured with the same item-hierarchy. An example is shown below.
+
+..  code-block:: xml
+    <?xml version="1.0" encoding="UTF-8" standalone="no"?>
+    <!DOCTYPE score-partwise PUBLIC
+        "-//Recordare//DTD MusicXML 3.1 Partwise//EN"
+        "http://www.musicxml.org/dtds/partwise.dtd">
+    <score-partwise version="3.1">
+        <part-list>
+            <score-part id="P1">
+                <part-name>Music</part-name>
+            </score-part>
+        </part-list>
+        <part id="P1">
+            <measure number="1">
+                <attributes>
+                    <divisions>1</divisions>
+                    <key><fifths>0</fifths></key>
+                    <time><beats>4</beats><beat-type>4</beat-type></time>
+                    <clef><sign>G</sign><line>2</line></clef>
+                </attributes>
+                <note>
+                    <pitch><step>C</step><octave>4</octave></pitch>
+                    <duration>4</duration>
+                    <type>whole</type>
+                </note>
+            </measure>
+        </part>
+    </score-partwise>
+
+The `part-list` references the parts to be written following with the tag `part`. A `measure` is defined with its attributes, followed by notes and their attributes.
+The common file extensions are `.mxl` and `.musicxml`.
