@@ -75,7 +75,7 @@ class Event:
     value: str | int
     time: int = -1
     program: int = 0
-    desc: str = ""
+    desc: str | int = 0
 
     def __str__(self) -> str:
         """
@@ -176,22 +176,13 @@ class TokSequence:
 
         :return: number of elements in the sequence.
         """
-        if self.ids is not None:
-            return len(self.ids)
-        if self.tokens is not None:
-            return len(self.tokens)
-        if self.events is not None:
-            return len(self.events)
-        if self.bytes is not None:
-            return len(self.bytes)
-        if self._ids_decoded is not None:
-            return len(self._ids_decoded)
-
-        msg = (
-            "This TokSequence seems to not be initialized, all its attributes "
-            "are None."
-        )
-        raise ValueError(msg)
+        attr_to_check = ("ids", "tokens", "events", "bytes")
+        lengths = [len(getattr(self, attr_)) for attr_ in attr_to_check]
+        if all(length == 0 for length in lengths):
+            return 0
+        for length in lengths:
+            if length != 0:
+                return length
 
     def __getitem__(self, val: int | slice) -> int | str | Event | TokSequence:
         """
@@ -205,16 +196,10 @@ class TokSequence:
         if isinstance(val, slice):
             return self.__slice(val)
 
-        if self.ids is not None:
-            return self.ids[val]
-        if self.tokens is not None:
-            return self.tokens[val]
-        if self.events is not None:
-            return self.events[val]
-        if self.bytes is not None:
-            return self.bytes[val]
-        if self._ids_decoded is not None:
-            return self._ids_decoded[val]
+        attr_to_check = ("ids", "tokens", "events", "bytes")
+        for attr_ in attr_to_check:
+            if len(getattr(self, attr_)) > 0:
+                return getattr(self, attr_)[val]
 
         msg = (
             "This TokSequence seems to not be initialized, all its attributes "
@@ -232,7 +217,7 @@ class TokSequence:
         seq = replace(self)
         attributes = ["tokens", "ids", "bytes", "events", "_ids_decoded"]
         for attr in attributes:
-            if getattr(self, attr):
+            if len(getattr(self, attr)) > 0:
                 setattr(seq, attr, getattr(self, attr)[sli])
         return seq
 
@@ -254,7 +239,7 @@ class TokSequence:
         eq = [True for _ in attributes]
         one_common_attr = False
         for i, attr in enumerate(attributes):
-            if getattr(self, attr) is not None and getattr(other, attr) is not None:
+            if len(getattr(self, attr)) > 0 and len(getattr(other, attr)) > 0:
                 eq[i] = getattr(self, attr) == getattr(other, attr)
                 one_common_attr = True
 
@@ -291,8 +276,7 @@ class TokSequence:
         attributes = ["tokens", "ids", "bytes", "events", "_ids_decoded"]
         for attr in attributes:
             self_attr, other_attr = getattr(self, attr), getattr(other, attr)
-            if self_attr is not None and other_attr is not None:
-                setattr(self, attr, self_attr + other_attr)
+            setattr(self, attr, self_attr + other_attr)
 
         return self
 

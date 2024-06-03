@@ -36,9 +36,9 @@ Time in MIDI is determined by its **time division**, which is a clock signal exp
 The time division can also be set in ticks per second, but this solution is more rarely encountered as it makes less sense to use seconds while the tempo and time signature are known.
 The time division is the first information that can be read at the beginning of a file, and a MIDI can only have one time division.
 
-The number of ticks per bar and ticks per beat can be calculated from the MIDI's time division (:math:`t_{div}`) and the current time signature (:math:`\frac{ts_{num}}{ts_{denom}}`):
+The number of ticks per bar and ticks per beat can be calculated from the MIDI's time division (:math:`time_{div}`) and the current time signature (:math:`\frac{ts_{num}}{ts_{denom}}`):
 
-- :math:`tpbeat = t_{div} \times \frac{4}{ts_{denom}}`
+- :math:`tpbeat = time_{div} \times \frac{4}{ts_{denom}}`
 - :math:`tpbar = tpbeat \times ts_{num}`
 
 Hence, for a :math:`\frac{4}{4}` time signature, the number of ticks per beat is equal to the time division (as a beat is equal to a quarter note) and the number of ticks per bar is equal to four times the number of ticks per beat.

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from copy import copy
+from copy import copy, deepcopy
 from math import ceil
 from typing import TYPE_CHECKING
 
@@ -92,7 +92,8 @@ def test_containers_assertions():
 @pytest.mark.parametrize("file_path", MIDI_PATHS_ONE_TRACK, ids=lambda p: p.name)
 def test_check_scores_equals(file_path: Path):
     score = Score(file_path)
-    score_copy = copy(score)
+    score_copy = deepcopy(score)
+    # score_copy = score.copy(deep=True)
 
     # Check when midi is untouched
     assert check_scores_equals(score, score_copy)
@@ -109,7 +110,7 @@ def test_check_scores_equals(file_path: Path):
     # Altering track events
     if len(score_copy.tracks) > 0:
         # Altering pedals
-        score_copy = copy(score)
+        score_copy = deepcopy(score)
         if len(score_copy.tracks[0].pedals) == 0:
             score_copy.tracks[0].pedals.append(Pedal(0, 10))
         else:
@@ -117,7 +118,7 @@ def test_check_scores_equals(file_path: Path):
         assert not check_scores_equals(score, score_copy)
 
         # Altering pitch bends
-        score_copy = copy(score)
+        score_copy = deepcopy(score)
         if len(score_copy.tracks[0].pitch_bends) == 0:
             score_copy.tracks[0].pitch_bends.append(PitchBend(50, 10))
         else:
@@ -125,7 +126,7 @@ def test_check_scores_equals(file_path: Path):
         assert not check_scores_equals(score, score_copy)
 
     # Altering tempos
-    score_copy = copy(score)
+    score_copy = deepcopy(score)
     if len(score_copy.tempos) == 0:
         score_copy.tempos.append(Tempo(50, 10))
     else:
@@ -133,7 +134,7 @@ def test_check_scores_equals(file_path: Path):
     assert not check_scores_equals(score, score_copy)
 
     # Altering time signatures
-    score_copy = copy(score)
+    score_copy = deepcopy(score)
     if len(score_copy.time_signatures) == 0:
         score_copy.time_signatures.append(TimeSignature(10, 4, 4))
     else:

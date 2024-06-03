@@ -1,5 +1,5 @@
 =================
-Examples
+Code examples
 =================
 
 Create a tokenizer

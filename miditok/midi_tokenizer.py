@@ -62,6 +62,7 @@ from .constants import (
     SUPPORTED_MUSIC_FILE_EXTENSIONS,
     TEMPO,
     TIME_SIGNATURE,
+    TOKEN_TYPE_BEFORE_PC,
     UNIGRAM_MAX_INPUT_CHARS_PER_WORD_BAR,
     UNIGRAM_MAX_INPUT_CHARS_PER_WORD_BEAT,
     UNIGRAM_SPECIAL_TOKEN_SUFFIX,
@@ -1051,14 +1052,20 @@ class MusicTokenizer(ABC, HFHubMixin):
             if self.one_token_stream:
                 all_events += track_events
             else:
+                all_events[ti] += track_events
                 if self.config.program_changes:
                     # ProgramNoteOff desc to make sure it appears before Pedals and
                     # everything else
                     program = track.program if not track.is_drum else -1
-                    track_events.insert(
-                        0, Event("Program", program, 0, desc="ProgramNoteOff")
+                    idx = 0
+                    while (
+                        idx < len(all_events)
+                        and all_events[ti][idx].type_ in TOKEN_TYPE_BEFORE_PC
+                    ):
+                        idx += 1
+                    all_events[ti].insert(
+                        idx, Event("Program", program, 0, desc="ProgramNoteOff")
                     )
-                all_events[ti] += track_events
                 self._sort_events(all_events[ti])
         if self.one_token_stream:
             self._sort_events(all_events)
@@ -1340,7 +1347,7 @@ class MusicTokenizer(ABC, HFHubMixin):
             if (
                 event.program is not None
                 and event.program != previous_program
-                and event.type_ not in ["Pedal", "PedalOff"]
+                and event.type_ not in ["Pedal", "PedalOff", *TOKEN_TYPE_BEFORE_PC]
                 and not (event.type_ == "Duration" and previous_type == "Pedal")
             ):
                 previous_program = event.program
@@ -1476,17 +1483,17 @@ class MusicTokenizer(ABC, HFHubMixin):
         :param complete_bytes: will complete the bytes form of each token. This is only
             applicable if the tokenizer has been trained.
         """
-        if seq.tokens is None:
-            if seq.events is not None:
+        if len(seq.tokens) == 0:
+            if len(seq.events) > 0:
                 seq.tokens = self._events_to_tokens(seq.events)
-            elif seq.ids is not None:
+            elif len(seq.ids) > 0:
                 seq.tokens = self._ids_to_tokens(seq.ids)
-            elif seq.bytes is not None:
+            elif len(seq.bytes) > 0:
                 seq.tokens = self._bytes_to_tokens(seq.bytes)
-        if seq.ids is None:
+        if len(seq.ids) == 0:
             seq.ids = self._tokens_to_ids(seq.tokens)
 
-        if complete_bytes and self.is_trained and seq.bytes is None:
+        if complete_bytes and self.is_trained and len(seq.bytes) == 0:
             seq.bytes = self._ids_to_bytes(seq.ids, as_one_str=True)
 
     def _tokens_to_ids(
@@ -1692,7 +1699,7 @@ class MusicTokenizer(ABC, HFHubMixin):
         return np.any(np.array(ids) >= len(self.vocab))
 
     def _preprocess_tokseq_before_decoding(self, tokseq: TokSequence) -> None:
-        if tokseq.tokens is None:
+        if len(tokseq.tokens) == 0:
             if tokseq.are_ids_encoded:
                 self.decode_token_ids(tokseq)
             self.complete_sequence(tokseq)
@@ -3095,7 +3102,7 @@ class MusicTokenizer(ABC, HFHubMixin):
         ids_encoded = None
 
         if isinstance(tokens, TokSequence):
-            if tokens.ids is None:
+            if len(tokens.ids) == 0:
                 self.complete_sequence(tokens)
             ids_encoded = tokens.are_ids_encoded
             ids = tokens.ids
@@ -3104,7 +3111,7 @@ class MusicTokenizer(ABC, HFHubMixin):
         elif isinstance(tokens[0], TokSequence):
             ids_encoded = []
             for seq in tokens:
-                if seq.ids is None:
+                if len(seq.ids) == 0:
                     self.complete_sequence(seq)
                 ids_encoded.append(seq.are_ids_encoded)
                 ids.append(seq.ids)

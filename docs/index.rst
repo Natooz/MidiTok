@@ -54,7 +54,7 @@ Contents
 
 .. toctree::
    :maxdepth: 2
-   :caption: Bases of Music and AI
+   :caption: MidiTok
 
    tokenizing_music_with_miditok
    tokenizations

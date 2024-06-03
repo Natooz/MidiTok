@@ -153,6 +153,9 @@ PITCH_CLASSES = [
     "B",
 ]
 
+# During tokenization
+TOKEN_TYPE_BEFORE_PC = ["TimeSig", "Tempo"]
+
 # http://newt.phys.unsw.edu.au/jw/notes.html
 # https://www.midi.org/specifications
 
