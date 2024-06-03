@@ -50,7 +50,7 @@ Contents
 
    music_formats
    midi
-   language_models
+   sequential_models
 
 .. toctree::
    :maxdepth: 2

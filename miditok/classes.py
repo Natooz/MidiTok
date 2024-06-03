@@ -176,13 +176,11 @@ class TokSequence:
 
         :return: number of elements in the sequence.
         """
-        attr_to_check = ("ids", "tokens", "events", "bytes")
-        lengths = [len(getattr(self, attr_)) for attr_ in attr_to_check]
-        if all(length == 0 for length in lengths):
-            return 0
-        for length in lengths:
-            if length != 0:
+        for attr_ in ("ids", "tokens", "events", "bytes"):
+            if (length := len(getattr(self, attr_))) != 0:
                 return length
+        # Are all 0s
+        return 0
 
     def __getitem__(self, val: int | slice) -> int | str | Event | TokSequence:
         """

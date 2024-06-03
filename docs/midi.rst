@@ -12,7 +12,8 @@ History of MIDI
 
 MIDI first appeared in the early eighties, when digital instrument manufacturers needed a digital protocol for communication between devices such as synthesizers and computers. It was standardized in 1983 by the first specifications, and is currently maintained by the `MIDI Manufacturers Association <https://www.midi.org>`_\. Meanwhile `new specifications <https://www.midi.org/specifications>`_ were made, the two major ones and still the norm today being the General MIDI 1 (GM1) and General MIDI 2. These specifications aim to guide the manufacturers to design digital music devices compatible with the ones from other manufacturers.
 
-The MIDI protocol is event based. It consists of a series of messages, which can occur in multiple channels. Each message is composed of two key information, 1) the delta time expressed, which is the distance in ticks with the previous event (in the same channel) and so represents its position in time, 2) a message which represents its content.
+The MIDI protocol allows to represent **notes, tempos, time signatures, key signatures, instruments (called programs) and effects (called controls) such as sustain pedal, pitch bend or modulation.**
+MIDI is an event based protocol. It consists of a series of messages, which can occur in multiple channels. Each message is composed of two key information, 1) the delta time expressed, which is the distance in ticks with the previous event (in the same channel) and so represents its position in time, 2) a message which represents its content.
 
 The latest evolution of the MIDI protocol is the MIDI Polyphonic Expression (shortly called MPE). This new norm allows manufacturers to create MIDI devices on which a specific channel is assigned to each note allowing the user to apply pitch bend and modulation on each key independently. These devices are typically built with touch-sensitive keys. The MIDI Manufacturers Association released the complete `specifications <https://www.midi.org/midi-articles/midi-polyphonic-expression-mpe>`_ on March 2018.
 
@@ -24,6 +25,8 @@ A message expresses an event or an information. It takes the form of a series of
 
 - *Note On*: a note is being played, specifies its pitch and velocity;
 - *Note Off*: a note is released, specifies the note (by its pitch) to stop and the velocity;
+- *Time Signature Change*: indicates the current time signature;
+- *Tempo Change*: indicates the current tempo;
 - *Program Change*: specifies the current instrument being played;
 - *Control Change*: a control parameter is modified or applied. The modulation wheel, foot sustain pedal, volume control or bank select are for instance effects transcribed into Control Change messages.
 

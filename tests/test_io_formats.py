@@ -71,7 +71,7 @@ for tokenization_ in ALL_TOKENIZATIONS:
             TOK_PARAMS_IO.append((tokenization_, params_tmp))
 
 
-@pytest.mark.parametrize("tok_params_set", TOK_PARAMS_IO)  # type: ignore
+@pytest.mark.parametrize("tok_params_set", TOK_PARAMS_IO)
 def test_io_formats(
     tok_params_set: tuple[str, dict[str, Any]],
     midi_path: Path = HERE / "MIDIs_multitrack" / "Funkytown.mid",
