@@ -110,12 +110,12 @@ Magic methods
         print("The tokenizers have the same vocabulary and configurations!")
 
 
-Save / Load tokenizer
+Save / Load a tokenizer
 ------------------------
 
-You can save and load a tokenizer's parameters and vocabulary. This is especially useful to track tokenized datasets, and to save tokenizers with vocabularies learned with :ref:`Byte Pair Encoding (BPE)`.
+You can save and load a tokenizer, include its configuration and vocabulary. This is especially useful after :ref:`Training a tokenizer`.
 
-.. autofunction:: miditok.MusicTokenizer.save_params
+.. autofunction:: miditok.MusicTokenizer.save
     :noindex:
 
 To load a tokenizer from saved parameters, just use the ``params`` argument when creating a it:

@@ -2,12 +2,12 @@
 Tokenizer Configuration
 =======================
 
-MidiTok's tokenizers can be customized with a wide variety of option, and nearly all preprocessing and downsampling attributes
+MidiTok's tokenizers can be customized with a wide variety of options, and most of the preprocessing and downsampling steps can be tailored to your specifications.
 
 Tokenizer config
 ------------------------
 
-All tokenizers are initialized with common parameters, that are hold in a :class:`miditok.TokenizerConfig` object, documented below. You can access a tokenizer's configuration with ``tokenizer.config``.
+All tokenizers are initialized with common parameters, that are hold in a :class:`miditok.TokenizerConfig` object, documented below. A tokenizer's configuration can be accessed with ``tokenizer.config``.
 Some tokenizers might take additional specific arguments / parameters when creating them.
 
 .. autoclass:: miditok.TokenizerConfig
