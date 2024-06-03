@@ -2,7 +2,7 @@
 Tokenizer Configuration
 =======================
 
-This page features the bases of MidiTok, of how tokenizers work.
+MidiTok's tokenizers can be customized with a wide variety of option, and nearly all preprocessing and downsampling attributes
 
 Tokenizer config
 ------------------------
@@ -13,6 +13,30 @@ Some tokenizers might take additional specific arguments / parameters when creat
 .. autoclass:: miditok.TokenizerConfig
     :members:
 
+
+How MidiTok handles time
+----------------------------
+
+MidiTok handles time by resampling the music file's time division (time resolution) to a new resolution determined by the ``beat_res`` attribute of of :class:`miditok.TokenizerConfig`. This argument determines which time tokens are present in the vocabulary.
+
+It allows to create ``Duration`` and ``TimeShift`` tokens with different resolution depending on their values. It is typically common to use higher resolutions for short time duration (i.e. short values will be represented with greater accuracy) and lower resolutions for higher time values (that generally do not need to be represented with great accuracy).
+The values of these tokens take the form of tuple as: ``(num_beats, num_samples, resolution)``. For instance, the time value of token ``(2, 3, 8)`` corresponds to 2 beats and 3/8 of a beat. ``(2, 2, 4)`` corresponds to 2 beats and half of a beat (2.5).
+
+For position-based tokenizers, the number of ``Position`` in the vocabulary is equal to the maximum resolution found in ``beat_res``.
+
+An example of the downsampling applied by MidiTok during the preprocessing is shown below.
+
+..  figure:: /assets/midi_preprocessing_original.png
+    :alt: Original MIDI file
+    :width: 800
+
+    Original MIDI file from the `Maestro dataset <https://magenta.tensorflow.org/datasets/maestro>`_ with a 4/4 time signature. The numbers at the top indicate the bar number (125) followed by the beat number within the bar.
+
+..  figure:: /assets/midi_preprocessing_preprocessed.png
+    :alt: Downsampled MIDI file.
+    :width: 800
+
+    MIDI file with time downsampled to 8 samples per beat.
 
 Additional tokens
 ------------------------
