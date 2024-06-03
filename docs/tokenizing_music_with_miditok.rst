@@ -4,7 +4,7 @@ Bases of MidiTok
 
 This page features the bases of MidiTok, of how tokenizers work.
 
-Tokens and vocabulary
+Tokens
 ------------------------
 
 A token is a distinct element, part of a sequence of tokens. In natural language, a token can be a character, a subword or a word. A sentence can then be tokenized into a sequence of tokens representing the words and punctuation.
