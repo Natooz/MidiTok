@@ -57,6 +57,7 @@ Contents
    :caption: MidiTok
 
    tokenizing_music_with_miditok
+   configuration
    tokenizations
    train
    hf_hub

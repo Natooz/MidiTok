@@ -80,5 +80,5 @@ MusicXML is an open file format and music notation. Inspired by the XML file for
         </part>
     </score-partwise>
 
-The `part-list` references the parts to be written following with the tag `part`. A `measure` is defined with its attributes, followed by notes and their attributes.
-The common file extensions are `.mxl` and `.musicxml`.
+The ``part-list`` references the parts to be written following with the tag ``part``. A ``measure`` is defined with its attributes, followed by notes and their attributes.
+The common file extensions are ``.mxl`` and ``.musicxml``.
