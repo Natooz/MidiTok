@@ -1,4 +1,4 @@
-.. sequential-models-label:
+.. _sequential-models-label:
 
 ===================================
 Sequential models and tokens
@@ -7,12 +7,12 @@ Sequential models and tokens
 This page introduces the basic concepts of sequential models, which are often called "language models" as commonly use for natural language, which can be used with MidiTok to be trained on music data.
 
 
-Sequential model
+Sequential models
 ----------------------------
 
 We qualify as sequential model and model that takes as input **sequences of discrete elements**. `RNN <http://www.cs.toronto.edu/~hinton/absps/pdp8.pdf>`_\, `Long Short Term Memory (LSTM) <https://direct.mit.edu/neco/article-abstract/9/8/1735/6109/Long-Short-Term-Memory?redirectedFrom=fulltext>`_ and `Transformers <https://papers.nips.cc/paper_files/paper/2017/hash/3f5ee243547dee91fbd053c1c4a845aa-Abstract.html>`_ fall into this category. As a general rule, the operation of these models noted :math:`p_\theta` can be formulated as :math:`p_\theta (\mathbf{x}) = y` where :math:`\mathbf{x} \in \mathbb{N}^n` is a sequence of :math:`\mathbb{N}^n` elements (integers here) and :math:`y` can either be a scalar or a sequence. The common feature of these is that :math:`y` **is conditioned on all the elements from** :math:`\mathbf{x}`.
 
-.. transformer-label:
+.. _transformer-label:
 
 ..  figure:: /assets/transformer.png
     :alt: Schema of a Transformer model
@@ -55,6 +55,6 @@ An embedding :math:`\mathbf{e}^d` is a vector of :math:`d` dimensions, which rep
 
     Visualization of an embedding space reduced in 2 dimensions with `TSNE <https://www.jmlr.org/papers/v9/vandermaaten08a.html>`_\.
 
-The embeddings are actually the real input of a sequential model. Each token acts as an index for the model's embedding matrix. In :ref:`transformer-label`\, the first operation consist in indexing this matrix with the token ids to get their embeddings which are then processed by the model.
+The embeddings are actually the real input of a sequential model. Each token acts as an index for the model's embedding matrix. In :ref:`transformer-label`, the first operation consist in indexing this matrix with the token ids to get their embeddings which are then processed by the model.
 
-MidiTok allows you to leverage the features of model embeddings by training the tokenizer (:ref:`training-tokenizer-label`\).
+MidiTok allows you to leverage the features of model embeddings by training the tokenizer (:ref:`training-tokenizer-label`).

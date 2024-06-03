@@ -1,4 +1,4 @@
-.. training-tokenizer-label:
+.. _training-tokenizer-label:
 
 ========================
 Training a tokenizer
