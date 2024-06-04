@@ -40,6 +40,9 @@ class _DatasetABC(Dataset, ABC):
         eos_token_id: int | None = None,
         enforce_eos_token_if_seq_len_exceed_lim: bool = False,
     ) -> list[int | list[int]]:
+        if len(token_ids) == 0:
+            return token_ids
+
         # Reduce sequence length
         max_seq_len -= sum([1 for t in [bos_token_id, eos_token_id] if t is not None])
         if len(token_ids) > max_seq_len:

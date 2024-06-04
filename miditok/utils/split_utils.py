@@ -301,11 +301,12 @@ def get_average_num_tokens_per_note(
             continue
         tok_seq = tokenizer(score)
         if tokenizer.one_token_stream:
-            num_notes = score.note_num()
-            num_tokens_per_note.append(len(tok_seq) / num_notes)
+            if (num_notes := score.note_num()) > 0:
+                num_tokens_per_note.append(len(tok_seq) / num_notes)
         else:
             for track, seq in zip(score.tracks, tok_seq):
-                num_tokens_per_note.append(len(seq) / track.note_num())
+                if (num_notes := track.note_num()) > 0:
+                    num_tokens_per_note.append(len(seq) / num_notes)
 
     return sum(num_tokens_per_note) / len(num_tokens_per_note)
 

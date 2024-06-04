@@ -16,6 +16,7 @@ from .utils_tests import (
     MAX_BAR_EMBEDDING,
     MIDI_PATHS_CORRUPTED,
     MIDI_PATHS_MULTITRACK,
+    MIDI_PATHS_ONE_TRACK,
 )
 
 if TYPE_CHECKING:
@@ -26,9 +27,10 @@ if TYPE_CHECKING:
 
 
 def get_labels_seq_len(score: Score, tokseq: miditok.TokSequence, _: Path) -> int:
+    num_track = 1 if len(score.tracks) == 0 else len(score.tracks)
     if isinstance(tokseq, miditok.TokSequence):
-        return len(tokseq) // len(score.tracks)
-    return len(tokseq[0]) // len(score.tracks)
+        return len(tokseq) // num_track
+    return len(tokseq[0]) // num_track
 
 
 def get_labels_seq(score: Score, tokseq: miditok.TokSequence, _: Path) -> list[int]:
@@ -56,6 +58,7 @@ def test_dataset_midi(
     func_labels: Callable,
     num_overlap_bars: int,
     files_paths: Sequence[Path] = MIDI_PATHS_MULTITRACK
+    + MIDI_PATHS_ONE_TRACK
     + MIDI_PATHS_CORRUPTED
     + ABC_PATHS,
     max_seq_len: int = 1000,
