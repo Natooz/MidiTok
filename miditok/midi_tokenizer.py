@@ -367,35 +367,56 @@ class MusicTokenizer(ABC, HFHubMixin):
         sorted, duplicated notes removed, as well as tempos. Empty tracks (with no
         note) will be removed from the ``symusic.Score`` object. Notes with pitches
         outside ``self.config.pitch_range`` will be deleted.
+        This method is **not inplace** and performs no alteration on the provided
+        ``score`` object.
 
         :param score: ``symusic.Score`` object to preprocess.
+        :return: the preprocessed ``score``.
         """
         # Filter time signatures.
         # We need to do this first to determine the Score's new time division.
+        # A copy of the time signatures is made here to make inplace operations without
+        # modifying the provided Score object. This copy will be set to the copy of the
+        # score after resampling it.
+        time_signatures_copy = score.time_signatures.copy()
         if self.config.use_time_signatures:
-            self._filter_unsupported_time_signatures(score.time_signatures)
+            self._filter_unsupported_time_signatures(time_signatures_copy)
             # We mock the first with 0, even if there are already time signatures. This
             # is required as if the Score only had */2 time signatures, we must make
             # sure the resampling tpq is calculated according to a maximum denom of 4
             # if the beginning of the Score is mocked at 4/4.
-            if len(score.time_signatures) == 0 or score.time_signatures[0].time != 0:
-                score.time_signatures.insert(0, TimeSignature(0, *TIME_SIGNATURE))
+            if len(time_signatures_copy) == 0 or time_signatures_copy[0].time != 0:
+                time_signatures_copy.insert(0, TimeSignature(0, *TIME_SIGNATURE))
             # The new time division is chosen depending on its highest time signature
             # denominator, and is equivalent to the highest possible tick/beat ratio.
-            max_ts_denom = max(ts.denominator for ts in score.time_signatures)
+            max_ts_denom = max(ts.denominator for ts in time_signatures_copy)
             new_tpq = int(self.config.max_num_pos_per_beat * max_ts_denom / 4)
         else:
-            # In this case, we set the time signature as being only 4/4.
-            # This is required as we will add the ticks of the bars and beats to the
-            # TokSequence, to split it per bars/beats when encoding the ids.
-            score.time_signatures = TimeSignatureTickList(
+            time_signatures_copy = TimeSignatureTickList(
                 [TimeSignature(0, *TIME_SIGNATURE)]
             )
             new_tpq = self.config.max_num_pos_per_beat
 
-        # Resample time (not inplace)
+        # Resample time if needed (not inplace) and attribute preprocessed time sig.
         if score.ticks_per_quarter != new_tpq:
+            # Times of time signatures copy need to be resampled too
+            time_signatures_soa = time_signatures_copy.numpy()
+            time_signatures_soa["time"] = (
+                time_signatures_soa["time"] * (new_tpq / score.ticks_per_quarter)
+            ).astype(np.int32)
+
             score = score.resample(new_tpq, min_dur=1)
+            score.time_signatures = TimeSignatureTickList.from_numpy(
+                time_signatures_soa["time"],
+                time_signatures_soa["numerator"],
+                time_signatures_soa["denominator"],
+            )
+        # Otherwise we do a copy in order to make sure no inplace operation is performed
+        # on the provided Score object.
+        # We make a copy here instead of at beginning as resample also makes a copy.
+        else:
+            score = score.copy()
+            score.time_signatures = time_signatures_copy
 
         # Merge instruments of the same program / inst before preprocessing them.
         # This allows to avoid potential duplicated notes in some multitrack settings

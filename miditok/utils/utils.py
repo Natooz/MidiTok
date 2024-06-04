@@ -666,6 +666,8 @@ def get_bars_ticks(score: Score) -> list[int]:
     max_tick = score.end()
     bars_ticks = []
     time_sigs = copy(score.time_signatures)
+    if len(time_sigs) == 0:
+        time_sigs.append(TimeSignature(0, *TIME_SIGNATURE))
     # Mock the last one to cover the last section in the loop below
     if time_sigs[-1].time != max_tick:
         time_sigs.append(TimeSignature(max_tick, *TIME_SIGNATURE))
