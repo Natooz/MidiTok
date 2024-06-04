@@ -40,7 +40,7 @@ Research in neural audio codecs allowed to "compress" audio waveform into a redu
 Symbolic music files format
 -----------------------------
 
-There are three major file formats for symbolic music: MIDI, abc and musicXML.
+There are three major file formats for symbolic music: MIDI, abc and musicXML. **MidiTok supports MIDI and abc files.**
 
 MIDI, standing for *Musical Instrument Digital Interface*, is a digital communication protocol standard in the music sector. It describes the protocol itself, the physical connector to transmit the protocol between devices, and a digital file format.
 A MIDI file allows to store MIDI messages as a symbolic music file. It is the most abundant file format among available music datasets. It is the most comprehensive and versatile file format for musical music, as such we present it more in detail in :ref:`midi-protocol-label`.

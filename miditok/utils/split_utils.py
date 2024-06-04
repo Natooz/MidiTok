@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Any
 from warnings import warn
 
 from symusic import Score, TextMeta
-from torch import LongTensor
 from tqdm import tqdm
 
 from miditok.constants import (
@@ -18,12 +17,13 @@ from miditok.constants import (
     SCORE_LOADING_EXCEPTION,
     SUPPORTED_MUSIC_FILE_EXTENSIONS,
 )
-from miditok.utils import (
+
+from .utils import (
     get_bars_ticks,
+    get_deepest_common_subdir,
     get_num_notes_per_bar,
     split_score_per_tracks,
 )
-from miditok.utils.utils import get_deepest_common_subdir
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -329,13 +329,13 @@ def split_seq_in_subsequences(
     while i < len(seq):
         if i >= len(seq) - min_seq_len:
             break  # last sample is too short
-        sub_seq.append(LongTensor(seq[i : i + max_seq_len]))
+        sub_seq.append(seq[i : i + max_seq_len])
         i += len(sub_seq[-1])  # could be replaced with max_seq_len
 
     return sub_seq
 
 
-def split_dataset_to_subsequences(
+def split_tokens_files_to_subsequences(
     files_paths: Sequence[Path],
     out_dir: Path,
     min_seq_len: int,
@@ -343,7 +343,7 @@ def split_dataset_to_subsequences(
     one_token_stream: bool = True,
 ) -> None:
     """
-    Split a dataset of tokens files into subsequences.
+    Split JSON tokens files into subsequences of defined lengths.
 
     This method is particularly useful if you plan to use a
     :class:`miditok.pytorch_data.DatasetJSON`, as it would split token sequences

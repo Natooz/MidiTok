@@ -267,7 +267,7 @@ def detect_chords(
                         value=chord_quality,
                         time=min(chord[:, 1]),
                         program=program,
-                        desc=chord_map,
+                        desc=str(chord_map),
                     )
                 )
 

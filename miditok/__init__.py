@@ -19,7 +19,6 @@ from .tokenizations import (
     Structured,
 )
 from .tokenizer_training_iterator import TokTrainingIterator
-from .utils import utils
 
 __all__ = [
     "MusicTokenizer",
