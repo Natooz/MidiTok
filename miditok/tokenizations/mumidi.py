@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from math import ceil
 from typing import TYPE_CHECKING
+from warnings import warn
 
 from symusic import Note, Score, Tempo, Track
 
 from miditok.classes import Event, TokSequence
 from miditok.constants import MIDI_INSTRUMENTS
 from miditok.midi_tokenizer import MusicTokenizer
-from miditok.utils import detect_chords, get_score_ticks_per_beat
+from miditok.utils import detect_chords, get_bars_ticks, get_score_ticks_per_beat
 
 if TYPE_CHECKING:
     import numpy as np
@@ -102,14 +102,19 @@ class MuMIDI(MusicTokenizer):
             ``True``, else a list of :class:`miditok.TokSequence` objects.
         """
         # Check bar embedding limit, update if needed
-        num_bars = ceil(score.end() / (score.ticks_per_quarter * 4))
-        if self.config.additional_params["max_bar_embedding"] < num_bars:
-            msg = (
-                "miditok: MuMIDI cannot handle this file as it contains "
-                f"{num_bars} whereas the limit of the tokenizer is "
-                f"{self.config.additional_params['max_bar_embedding']}"
+        bar_ticks = get_bars_ticks(score)
+        if self.config.additional_params["max_bar_embedding"] < len(bar_ticks):
+            score = score.clip(
+                0, bar_ticks[self.config.additional_params["max_bar_embedding"]]
             )
-            raise ValueError(msg)
+            msg = (
+                f"miditok: {type(self).__name__} cannot tokenize entirely this file "
+                f"as it contains {len(bar_ticks)} bars whereas the limit of the "
+                f"tokenizer is {self.config.additional_params['max_bar_embedding']}. "
+                "It is therefore clipped to "
+                f"{self.config.additional_params['max_bar_embedding']} bars."
+            )
+            warn(msg, stacklevel=2)
 
         # Convert each track to tokens (except first pos to track time)
         if self.config.use_chords:
