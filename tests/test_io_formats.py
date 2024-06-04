@@ -74,8 +74,8 @@ for tokenization_ in ALL_TOKENIZATIONS:
 @pytest.mark.parametrize("tok_params_set", TOK_PARAMS_IO)
 def test_io_formats(
     tok_params_set: tuple[str, dict[str, Any]],
-    midi_path: str | Path = HERE / "MIDIs_multitrack" / "Funkytown.mid",
-):
+    midi_path: Path = HERE / "MIDIs_multitrack" / "Funkytown.mid",
+) -> None:
     r"""
     Tokenize and decode a MIDI back to make sure the possible I/O format are ok.
 

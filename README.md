@@ -49,7 +49,8 @@ Here is a complete yet concise example of how you can use MidiTok to train any P
 
 ```python
 from miditok import REMI, TokenizerConfig
-from miditok.pytorch_data import DatasetMIDI, DataCollator, split_files_for_training
+from miditok.pytorch_data import DatasetMIDI, DataCollator
+from miditok.utils import split_files_for_training
 from torch.utils.data import DataLoader
 from pathlib import Path
 

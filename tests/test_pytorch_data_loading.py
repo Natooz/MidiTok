@@ -16,6 +16,7 @@ from .utils_tests import (
     MAX_BAR_EMBEDDING,
     MIDI_PATHS_CORRUPTED,
     MIDI_PATHS_MULTITRACK,
+    MIDI_PATHS_ONE_TRACK,
 )
 
 if TYPE_CHECKING:
@@ -26,9 +27,10 @@ if TYPE_CHECKING:
 
 
 def get_labels_seq_len(score: Score, tokseq: miditok.TokSequence, _: Path) -> int:
+    num_track = 1 if len(score.tracks) == 0 else len(score.tracks)
     if isinstance(tokseq, miditok.TokSequence):
-        return len(tokseq) // len(score.tracks)
-    return len(tokseq[0]) // len(score.tracks)
+        return len(tokseq) // num_track
+    return len(tokseq[0]) // num_track
 
 
 def get_labels_seq(score: Score, tokseq: miditok.TokSequence, _: Path) -> list[int]:
@@ -56,6 +58,7 @@ def test_dataset_midi(
     func_labels: Callable,
     num_overlap_bars: int,
     files_paths: Sequence[Path] = MIDI_PATHS_MULTITRACK
+    + MIDI_PATHS_ONE_TRACK
     + MIDI_PATHS_CORRUPTED
     + ABC_PATHS,
     max_seq_len: int = 1000,
@@ -70,7 +73,7 @@ def test_dataset_midi(
     # the ones created in the first call.
     if split_files:
         t0 = time()
-        file_paths_split1 = miditok.pytorch_data.split_files_for_training(
+        file_paths_split1 = miditok.utils.split_files_for_training(
             files_paths,
             tokenizer,
             tmp_path,
@@ -80,7 +83,7 @@ def test_dataset_midi(
         t1 = time() - t0
         print(f"First Score split call: {t1:.2f} sec")
         t0 = time()
-        file_paths_split2 = miditok.pytorch_data.split_files_for_training(
+        file_paths_split2 = miditok.utils.split_files_for_training(
             files_paths,
             tokenizer,
             tmp_path,
@@ -134,7 +137,7 @@ def test_dataset_json(tmp_path: Path, file_paths: Sequence[Path] | None = None):
         tokenizer.tokenize_dataset(file_paths, tokens_dir_path)
 
     tokens_split_dir_path = tmp_path / "multitrack_tokens_dataset_json_split"
-    miditok.pytorch_data.split_dataset_to_subsequences(
+    miditok.utils.split_tokens_files_to_subsequences(
         list(tokens_dir_path.glob("**/*.json")),
         tokens_split_dir_path,
         300,

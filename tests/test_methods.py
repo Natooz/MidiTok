@@ -23,13 +23,14 @@ from miditok.utils.utils import miditoolkit_to_symusic
 from .utils_tests import HERE, MIDI_PATHS_ALL
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
     from pathlib import Path
 
+    import miditoolkit
+    import symusic
     from symusic import Score, Track
 
 
-def test_convert_tensors():
+def test_convert_tensors() -> None:
     original = [[2, 6, 95, 130, 25, 15]]
     types = [ptTensor, ptIntTensor, ptFloatTensor, tfTensor]
 
@@ -42,8 +43,8 @@ def test_convert_tensors():
 
 
 def test_tokenize_datasets_file_tree(
-    tmp_path: Path, midi_paths: Sequence[str | Path] | None = None
-):
+    tmp_path: Path, midi_paths: list[str | Path] | None = None
+) -> None:
     if midi_paths is None:
         midi_paths = MIDI_PATHS_ALL
 
@@ -65,7 +66,7 @@ def test_tokenize_datasets_file_tree(
     tokenizer.tokenize_dataset(midi_paths, tmp_path, overwrite_mode=False)
 
 
-def are_notes_equals(note1, note2) -> bool:  # noqa:ANN001
+def are_notes_equals(note1: miditoolkit.Note, note2: symusic.Note) -> bool:
     attrs_to_check = ("start", "pitch", "velocity", "end")
     for attr_to_check in attrs_to_check:
         if getattr(note1, attr_to_check) != getattr(note2, attr_to_check):
@@ -73,15 +74,17 @@ def are_notes_equals(note1, note2) -> bool:  # noqa:ANN001
     return True
 
 
-def are_control_changes_equals(cc1, cc2) -> bool:  # noqa:ANN001
+def are_control_changes_equals(
+    cc1: miditoolkit.ControlChange, cc2: symusic.ControlChange
+) -> bool:
     return cc1.time == cc2.time and cc1.number == cc2.number and cc1.value == cc2.value
 
 
-def are_pitch_bends_equals(pb1, pb2) -> bool:  # noqa:ANN001
+def are_pitch_bends_equals(pb1: miditoolkit.PitchBend, pb2: symusic.PitchBend) -> bool:
     return pb1.time == pb2.time and pb1.pitch == pb2.value
 
 
-def are_pedals_equals(sp1, sp2) -> bool:  # noqa:ANN001
+def are_pedals_equals(sp1: miditoolkit.Pedal, sp2: symusic.Pedal) -> bool:
     return sp1.start == sp2.time and sp1.end == sp2.time + sp2.duration
 
 
@@ -108,7 +111,7 @@ def are_tracks_equals(track1: Instrument, track2: Track) -> int:
         # found. We first need to sort the CC messages
         track1.control_changes.sort(key=lambda cc: cc.time)
         last_pedal_on_time = None
-        pedals_track1 = []
+        pedals_track1: list[miditoolkit.Pedal] = []
         for control_change in track1.control_changes:
             if control_change.number != 64:
                 continue
@@ -124,7 +127,9 @@ def are_tracks_equals(track1: Instrument, track2: Track) -> int:
     return err
 
 
-def are_tempos_equals(tempo_change1, tempo_change2) -> bool:  # noqa:ANN001
+def are_tempos_equals(
+    tempo_change1: miditoolkit.TempoChange, tempo_change2: symusic.Tempo
+) -> bool:
     if tempo_change1.time != tempo_change2.time or round(
         tempo_change1.tempo, 3
     ) != round(tempo_change2.tempo, 3):
@@ -132,7 +137,9 @@ def are_tempos_equals(tempo_change1, tempo_change2) -> bool:  # noqa:ANN001
     return True
 
 
-def are_time_signatures_equals(time_sig1, time_sig2) -> bool:  # noqa:ANN001
+def are_time_signatures_equals(
+    time_sig1: miditoolkit.TimeSignature, time_sig2: symusic.TimeSignature
+) -> bool:
     if (
         time_sig1.time != time_sig2.time
         or time_sig1.numerator != time_sig2.numerator
@@ -142,7 +149,9 @@ def are_time_signatures_equals(time_sig1, time_sig2) -> bool:  # noqa:ANN001
     return True
 
 
-def are_key_signatures_equals(key_sig1, key_sig2) -> bool:  # noqa:ANN001
+def are_key_signatures_equals(
+    key_sig1: miditoolkit.KeySignature, key_sig2: symusic.KeySignature
+) -> bool:
     # if key_sig1.time != key_sig2.time or key_sig1.key_number != key_sig2.key:
     # we don't test key signatures as they are decoded differently
     if key_sig1.time != key_sig2.time:
@@ -150,7 +159,9 @@ def are_key_signatures_equals(key_sig1, key_sig2) -> bool:  # noqa:ANN001
     return True
 
 
-def are_lyrics_or_markers_equals(lyric1, lyric2) -> bool:  # noqa:ANN001
+def are_lyrics_or_markers_equals(
+    lyric1: miditoolkit.Lyric, lyric2: symusic.core.TextMetaTick
+) -> bool:
     if lyric1.time != lyric2.time or lyric1.text != lyric2.text:
         return False
     return True
@@ -213,14 +224,14 @@ def are_midis_equals(midi_mtk: MidiFile, midi_sms: Score) -> bool:
     return err == 0
 
 
-def test_miditoolkit_to_symusic(midi_path: Path = MIDI_PATHS_ALL[0]):
+def test_miditoolkit_to_symusic(midi_path: Path = MIDI_PATHS_ALL[0]) -> None:
     midi = MidiFile(midi_path)
     score = miditoolkit_to_symusic(midi)
 
     assert are_midis_equals(midi, score)
 
 
-def test_legacy_miditoolkit(midi_path: Path = MIDI_PATHS_ALL[0]):
+def test_legacy_miditoolkit(midi_path: Path = MIDI_PATHS_ALL[0]) -> None:
     midi = MidiFile(midi_path)
     tokenizer = miditok.TSD()
     _ = tokenizer(midi)

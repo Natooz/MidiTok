@@ -1,4 +1,5 @@
 """Useful methods."""
+
 from __future__ import annotations
 
 import warnings
@@ -266,7 +267,7 @@ def detect_chords(
                         value=chord_quality,
                         time=min(chord[:, 1]),
                         program=program,
-                        desc=chord_map,
+                        desc=str(chord_map),
                     )
                 )
 
@@ -663,8 +664,13 @@ def get_bars_ticks(score: Score) -> list[int]:
     :return: list of ticks for each bar.
     """
     max_tick = score.end()
+    if max_tick == 0:
+        return [0]  # special case of empty file, we just list the first bar
+
     bars_ticks = []
     time_sigs = copy(score.time_signatures)
+    if len(time_sigs) == 0:
+        time_sigs.append(TimeSignature(0, *TIME_SIGNATURE))
     # Mock the last one to cover the last section in the loop below
     if time_sigs[-1].time != max_tick:
         time_sigs.append(TimeSignature(max_tick, *TIME_SIGNATURE))
@@ -702,8 +708,13 @@ def get_beats_ticks(score: Score) -> list[int]:
     :return: list of ticks for each beat.
     """
     max_tick = score.end()
+    if max_tick == 0:
+        return [0]  # special case of empty file, we just list the first beat
+
     beat_ticks = []
     time_sigs = copy(score.time_signatures)
+    if len(time_sigs) == 0:
+        time_sigs.append(TimeSignature(0, *TIME_SIGNATURE))
     # Mock the last one to cover the last section in the loop below
     if time_sigs[-1].time != max_tick:
         time_sigs.append(TimeSignature(max_tick, *TIME_SIGNATURE))
@@ -761,7 +772,7 @@ def add_bar_beats_ticks_to_tokseq(
 
 def get_num_notes_per_bar(
     score: Score, tracks_indep: bool = False
-) -> list[int | list[int]]:
+) -> list[int] | list[list[int]]:
     """
     Return the number of notes within each bar of a ``symusic.Score``.
 
@@ -769,16 +780,19 @@ def get_num_notes_per_bar(
     :param tracks_indep: whether to process each track independently or all together.
     :return: the number of notes within each bar.
     """
+    if len(score.tracks) == 0:
+        return [] if tracks_indep else [0]
+
     # Get bar and note times
     bar_ticks = get_bars_ticks(score)
     if bar_ticks[-1] != score.end():
         bar_ticks.append(score.end())
     tracks_times = [track.notes.numpy()["time"] for track in score.tracks]
-    num_notes_per_bar = []
     if not tracks_indep:
         tracks_times = [np.concatenate(tracks_times)]
         tracks_times[-1].sort()
-    elif len(score.tracks) > 1:
+        num_notes_per_bar = []
+    else:
         num_notes_per_bar = [[] for _ in range(len(bar_ticks) - 1)]
 
     for notes_times in tracks_times:

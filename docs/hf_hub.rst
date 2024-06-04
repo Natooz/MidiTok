@@ -1,5 +1,5 @@
 ========================
-Hugging Face hub
+Hugging Face Hub
 ========================
 
 What is the Hugging Face hub

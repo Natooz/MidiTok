@@ -1,4 +1,5 @@
 """Base tokenizer class, acting as a "framework" for all tokenizers."""
+
 from __future__ import annotations
 
 import json
@@ -61,6 +62,7 @@ from .constants import (
     SUPPORTED_MUSIC_FILE_EXTENSIONS,
     TEMPO,
     TIME_SIGNATURE,
+    TOKEN_TYPE_BEFORE_PC,
     UNIGRAM_MAX_INPUT_CHARS_PER_WORD_BAR,
     UNIGRAM_MAX_INPUT_CHARS_PER_WORD_BEAT,
     UNIGRAM_SPECIAL_TOKEN_SUFFIX,
@@ -365,35 +367,56 @@ class MusicTokenizer(ABC, HFHubMixin):
         sorted, duplicated notes removed, as well as tempos. Empty tracks (with no
         note) will be removed from the ``symusic.Score`` object. Notes with pitches
         outside ``self.config.pitch_range`` will be deleted.
+        This method is **not inplace** and performs no alteration on the provided
+        ``score`` object.
 
         :param score: ``symusic.Score`` object to preprocess.
+        :return: the preprocessed ``score``.
         """
         # Filter time signatures.
         # We need to do this first to determine the Score's new time division.
+        # A copy of the time signatures is made here to make inplace operations without
+        # modifying the provided Score object. This copy will be set to the copy of the
+        # score after resampling it.
+        time_signatures_copy = score.time_signatures.copy()
         if self.config.use_time_signatures:
-            self._filter_unsupported_time_signatures(score.time_signatures)
+            self._filter_unsupported_time_signatures(time_signatures_copy)
             # We mock the first with 0, even if there are already time signatures. This
             # is required as if the Score only had */2 time signatures, we must make
             # sure the resampling tpq is calculated according to a maximum denom of 4
             # if the beginning of the Score is mocked at 4/4.
-            if len(score.time_signatures) == 0 or score.time_signatures[0].time != 0:
-                score.time_signatures.insert(0, TimeSignature(0, *TIME_SIGNATURE))
+            if len(time_signatures_copy) == 0 or time_signatures_copy[0].time != 0:
+                time_signatures_copy.insert(0, TimeSignature(0, *TIME_SIGNATURE))
             # The new time division is chosen depending on its highest time signature
             # denominator, and is equivalent to the highest possible tick/beat ratio.
-            max_ts_denom = max(ts.denominator for ts in score.time_signatures)
+            max_ts_denom = max(ts.denominator for ts in time_signatures_copy)
             new_tpq = int(self.config.max_num_pos_per_beat * max_ts_denom / 4)
         else:
-            # In this case, we set the time signature as being only 4/4.
-            # This is required as we will add the ticks of the bars and beats to the
-            # TokSequence, to split it per bars/beats when encoding the ids.
-            score.time_signatures = TimeSignatureTickList(
+            time_signatures_copy = TimeSignatureTickList(
                 [TimeSignature(0, *TIME_SIGNATURE)]
             )
             new_tpq = self.config.max_num_pos_per_beat
 
-        # Resample time (not inplace)
+        # Resample time if needed (not inplace) and attribute preprocessed time sig.
         if score.ticks_per_quarter != new_tpq:
+            # Times of time signatures copy need to be resampled too
+            time_signatures_soa = time_signatures_copy.numpy()
+            time_signatures_soa["time"] = (
+                time_signatures_soa["time"] * (new_tpq / score.ticks_per_quarter)
+            ).astype(np.int32)
+
             score = score.resample(new_tpq, min_dur=1)
+            score.time_signatures = TimeSignatureTickList.from_numpy(
+                time_signatures_soa["time"],
+                time_signatures_soa["numerator"],
+                time_signatures_soa["denominator"],
+            )
+        # Otherwise we do a copy in order to make sure no inplace operation is performed
+        # on the provided Score object.
+        # We make a copy here instead of at beginning as resample also makes a copy.
+        else:
+            score = score.copy()
+            score.time_signatures = time_signatures_copy
 
         # Merge instruments of the same program / inst before preprocessing them.
         # This allows to avoid potential duplicated notes in some multitrack settings
@@ -1050,14 +1073,20 @@ class MusicTokenizer(ABC, HFHubMixin):
             if self.one_token_stream:
                 all_events += track_events
             else:
+                all_events[ti] += track_events
                 if self.config.program_changes:
                     # ProgramNoteOff desc to make sure it appears before Pedals and
                     # everything else
                     program = track.program if not track.is_drum else -1
-                    track_events.insert(
-                        0, Event("Program", program, 0, desc="ProgramNoteOff")
+                    idx = 0
+                    while (
+                        idx < len(all_events)
+                        and all_events[ti][idx].type_ in TOKEN_TYPE_BEFORE_PC
+                    ):
+                        idx += 1
+                    all_events[ti].insert(
+                        idx, Event("Program", program, 0, desc="ProgramNoteOff")
                     )
-                all_events[ti] += track_events
                 self._sort_events(all_events[ti])
         if self.one_token_stream:
             self._sort_events(all_events)
@@ -1339,7 +1368,7 @@ class MusicTokenizer(ABC, HFHubMixin):
             if (
                 event.program is not None
                 and event.program != previous_program
-                and event.type_ not in ["Pedal", "PedalOff"]
+                and event.type_ not in ["Pedal", "PedalOff", *TOKEN_TYPE_BEFORE_PC]
                 and not (event.type_ == "Duration" and previous_type == "Pedal")
             ):
                 previous_program = event.program
@@ -1475,17 +1504,17 @@ class MusicTokenizer(ABC, HFHubMixin):
         :param complete_bytes: will complete the bytes form of each token. This is only
             applicable if the tokenizer has been trained.
         """
-        if seq.tokens is None:
-            if seq.events is not None:
+        if len(seq.tokens) == 0:
+            if len(seq.events) > 0:
                 seq.tokens = self._events_to_tokens(seq.events)
-            elif seq.ids is not None:
+            elif len(seq.ids) > 0:
                 seq.tokens = self._ids_to_tokens(seq.ids)
-            elif seq.bytes is not None:
+            elif len(seq.bytes) > 0:
                 seq.tokens = self._bytes_to_tokens(seq.bytes)
-        if seq.ids is None:
+        if len(seq.ids) == 0:
             seq.ids = self._tokens_to_ids(seq.tokens)
 
-        if complete_bytes and self.is_trained and seq.bytes is None:
+        if complete_bytes and self.is_trained and len(seq.bytes) == 0:
             seq.bytes = self._ids_to_bytes(seq.ids, as_one_str=True)
 
     def _tokens_to_ids(
@@ -1691,7 +1720,7 @@ class MusicTokenizer(ABC, HFHubMixin):
         return np.any(np.array(ids) >= len(self.vocab))
 
     def _preprocess_tokseq_before_decoding(self, tokseq: TokSequence) -> None:
-        if tokseq.tokens is None:
+        if len(tokseq.tokens) == 0:
             if tokseq.are_ids_encoded:
                 self.decode_token_ids(tokseq)
             self.complete_sequence(tokseq)
@@ -1984,9 +2013,9 @@ class MusicTokenizer(ABC, HFHubMixin):
 
         if vocab_idx is not None:
             self._vocab_base[vocab_idx][token_str] = len(self._vocab_base[vocab_idx])
-            self.__vocab_base_inv[vocab_idx][
-                len(self.__vocab_base_inv[vocab_idx])
-            ] = token_str
+            self.__vocab_base_inv[vocab_idx][len(self.__vocab_base_inv[vocab_idx])] = (
+                token_str
+            )
         else:
             id_ = len(self._model.get_vocab()) if self.is_trained else len(self.vocab)
             self._vocab_base[token_str] = id_
@@ -3094,7 +3123,7 @@ class MusicTokenizer(ABC, HFHubMixin):
         ids_encoded = None
 
         if isinstance(tokens, TokSequence):
-            if tokens.ids is None:
+            if len(tokens.ids) == 0:
                 self.complete_sequence(tokens)
             ids_encoded = tokens.are_ids_encoded
             ids = tokens.ids
@@ -3103,7 +3132,7 @@ class MusicTokenizer(ABC, HFHubMixin):
         elif isinstance(tokens[0], TokSequence):
             ids_encoded = []
             for seq in tokens:
-                if seq.ids is None:
+                if len(seq.ids) == 0:
                     self.complete_sequence(seq)
                 ids_encoded.append(seq.are_ids_encoded)
                 ids.append(seq.ids)
@@ -3484,7 +3513,7 @@ class MusicTokenizer(ABC, HFHubMixin):
         return len(self.vocab)
 
     @property
-    def len(self) -> int | list[int]:  # noqa: A003
+    def len(self) -> int | list[int]:
         r"""
         Return the length of the vocabulary.
 

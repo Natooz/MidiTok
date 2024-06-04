@@ -48,13 +48,16 @@ Contents
    :maxdepth: 2
    :caption: Bases of Music and AI
 
-   bases
+   music_formats
+   midi
+   sequential_models
 
 .. toctree::
    :maxdepth: 2
-   :caption: Bases of Music and AI
+   :caption: MidiTok
 
    tokenizing_music_with_miditok
+   configuration
    tokenizations
    train
    hf_hub

@@ -6,7 +6,7 @@ import numpy as np
 
 
 def mean_std_str(
-    dist: np.array | list, num_dec: int = 2, latex_pm: bool = False
+    dist: np.array | list[int | float], num_dec: int = 2, latex_pm: bool = False
 ) -> str:
     r"""
     Create a nice looking mean and standard deviation string of a distribution.

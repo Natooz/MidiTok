@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import warnings
 from copy import deepcopy
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from math import log2
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
@@ -50,7 +50,7 @@ from .constants import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
 
 IGNORED_CONFIG_KEY_DICT = [
     "miditok_version",
@@ -73,9 +73,9 @@ class Event:
 
     type_: str
     value: str | int
-    time: int | float = None
-    program: int = None
-    desc: Any = None
+    time: int = -1
+    program: int = 0
+    desc: str | int = 0
 
     def __str__(self) -> str:
         """
@@ -118,14 +118,14 @@ class TokSequence:
     non-initialized attributes.
     """
 
-    tokens: list[str | list[str]] = None
-    ids: list[int | list[int]] = None  # can be encoded with BPE/Unigram/WordPiece
-    bytes: str = None  # noqa: A003
-    events: list[Event | list[Event]] = None
+    tokens: list[str | list[str]] = field(default_factory=list)
+    ids: list[int | list[int]] = field(default_factory=list)
+    bytes: str = field(default_factory=str)
+    events: list[Event | list[Event]] = field(default_factory=list)
     are_ids_encoded: bool = False
-    _ticks_bars: list[int] = None  # slice/add not handled
-    _ticks_beats: list[int] = None  # slice/add not handled
-    _ids_decoded: list[int | list[int]] = None
+    _ticks_bars: list[int] = field(default_factory=list)  # slice/add not handled
+    _ticks_beats: list[int] = field(default_factory=list)  # slice/add not handled
+    _ids_decoded: list[int | list[int]] = field(default_factory=list)
 
     def split_per_bars(self) -> list[TokSequence]:
         """
@@ -176,22 +176,11 @@ class TokSequence:
 
         :return: number of elements in the sequence.
         """
-        if self.ids is not None:
-            return len(self.ids)
-        if self.tokens is not None:
-            return len(self.tokens)
-        if self.events is not None:
-            return len(self.events)
-        if self.bytes is not None:
-            return len(self.bytes)
-        if self._ids_decoded is not None:
-            return len(self._ids_decoded)
-
-        msg = (
-            "This TokSequence seems to not be initialized, all its attributes "
-            "are None."
-        )
-        raise ValueError(msg)
+        for attr_ in ("ids", "tokens", "events", "bytes"):
+            if (length := len(getattr(self, attr_))) != 0:
+                return length
+        # Are all 0s
+        return 0
 
     def __getitem__(self, val: int | slice) -> int | str | Event | TokSequence:
         """
@@ -205,16 +194,10 @@ class TokSequence:
         if isinstance(val, slice):
             return self.__slice(val)
 
-        if self.ids is not None:
-            return self.ids[val]
-        if self.tokens is not None:
-            return self.tokens[val]
-        if self.events is not None:
-            return self.events[val]
-        if self.bytes is not None:
-            return self.bytes[val]
-        if self._ids_decoded is not None:
-            return self._ids_decoded[val]
+        attr_to_check = ("ids", "tokens", "events", "bytes")
+        for attr_ in attr_to_check:
+            if len(getattr(self, attr_)) > 0:
+                return getattr(self, attr_)[val]
 
         msg = (
             "This TokSequence seems to not be initialized, all its attributes "
@@ -232,11 +215,11 @@ class TokSequence:
         seq = replace(self)
         attributes = ["tokens", "ids", "bytes", "events", "_ids_decoded"]
         for attr in attributes:
-            if getattr(self, attr):
+            if len(getattr(self, attr)) > 0:
                 setattr(seq, attr, getattr(self, attr)[sli])
         return seq
 
-    def __eq__(self, other: TokSequence) -> bool:
+    def __eq__(self, other: object) -> bool:
         r"""
         Check that too sequences are equal.
 
@@ -247,12 +230,14 @@ class TokSequence:
         :param other: other sequence to compare.
         :return: ``True`` if the sequences have equal attributes.
         """
+        if not isinstance(other, TokSequence):
+            return False
         # Start from True assumption as some attributes might be unfilled (None)
         attributes = ["tokens", "ids", "bytes", "events"]
         eq = [True for _ in attributes]
         one_common_attr = False
         for i, attr in enumerate(attributes):
-            if getattr(self, attr) is not None and getattr(other, attr) is not None:
+            if len(getattr(self, attr)) > 0 and len(getattr(other, attr)) > 0:
                 eq[i] = getattr(self, attr) == getattr(other, attr)
                 one_common_attr = True
 
@@ -289,8 +274,7 @@ class TokSequence:
         attributes = ["tokens", "ids", "bytes", "events", "_ids_decoded"]
         for attr in attributes:
             self_attr, other_attr = getattr(self, attr), getattr(other, attr)
-            if self_attr is not None and other_attr is not None:
-                setattr(self, attr, self_attr + other_attr)
+            setattr(self, attr, self_attr + other_attr)
 
         return self
 
@@ -545,7 +529,7 @@ class TokenizerConfig:
         delete_equal_successive_tempo_changes: bool = (
             DELETE_EQUAL_SUCCESSIVE_TEMPO_CHANGES
         ),
-        time_signature_range: dict[
+        time_signature_range: Mapping[
             int, list[int] | tuple[int, int]
         ] = TIME_SIGNATURE_RANGE,
         sustain_pedal_duration: bool = SUSTAIN_PEDAL_DURATION,
@@ -806,7 +790,7 @@ class TokenizerConfig:
         """
         return deepcopy(self)
 
-    def __eq__(self, other: TokenizerConfig) -> bool:
+    def __eq__(self, other: object) -> bool:
         """
         Check two configs are equal.
 
@@ -816,6 +800,8 @@ class TokenizerConfig:
         # We don't use the == operator as it yields False when comparing lists and
         # tuples containing the same elements. This method is not recursive and only
         # checks the first level of iterable values / attributes
+        if not isinstance(other, TokenizerConfig):
+            return False
         other_dict = other.to_dict()
         for key, value in self.to_dict().items():
             if key not in other_dict:

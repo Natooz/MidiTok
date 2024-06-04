@@ -167,12 +167,12 @@ def seq_len_splits(datasets_params: list[tuple[str, dict, str]]) -> None:
 
             avg_std_bars = mean_std_str(lengths_subseqs_bars, 1)
             avg_std_beats = mean_std_str(lengths_subseqs_beats, 1)
-            df.at[
-                f"{tokenization} - bar", col_name
-            ] = f"{avg_std_bars} (↑ {max(lengths_subseqs_bars)})"
-            df.at[
-                f"{tokenization} - beat", col_name
-            ] = f"{avg_std_beats} (↑ {max(lengths_subseqs_beats)})"
+            df.at[f"{tokenization} - bar", col_name] = (
+                f"{avg_std_bars} (↑ {max(lengths_subseqs_bars)})"
+            )
+            df.at[f"{tokenization} - beat", col_name] = (
+                f"{avg_std_beats} (↑ {max(lengths_subseqs_beats)})"
+            )
 
     # Save results
     df.to_csv(RESULTS_PATH / "seq_split_lengths.csv")
@@ -436,9 +436,9 @@ def wordpiece_max_chars(
 
                 # Write dataframes
                 avg_unk = np.mean(np.array(ratios_unk_tokens))
-                df_enc.at[
-                    index_name, col_name
-                ] = f"{mean_std_str(times_encoding, 4)} ({avg_unk:.3f} unk)"
+                df_enc.at[index_name, col_name] = (
+                    f"{mean_std_str(times_encoding, 4)} ({avg_unk:.3f} unk)"
+                )
                 df_dec.at[index_name, col_name] = mean_std_str(times_decoding, 4)
 
                 # Saves dataframes

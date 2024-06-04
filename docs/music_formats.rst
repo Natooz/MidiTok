@@ -1,5 +1,5 @@
 ===================================
-Bases of AI models for music
+Music formats
 ===================================
 
 This page introduces the basic concepts of music, the MIDI protocol and sequential deep learning models. It aims to bring the basic knowledge around this subjects in order to understand how to use music with AI models, without going into too specific details, for which more comprehensive references are attached.
@@ -31,7 +31,7 @@ A sound, wether from an instrument, a human voice or a music arrangement, is a s
   :width: 800
   :alt: The spectrogram of a sound, abscissa is time, ordinate is frequency and the color represents the intensity in dB.
 
-Symbolic music can be seen as both discrete and continuous as it represent discrete notes that feature however "continuous-like" attributes, and potentially with a high time resolution (in samples per beat or other specific time duration). For this reason, it is more commonly used with discrete sequential models (e.g. `Transformers <https://papers.nips.cc/paper_files/paper/2017/hash/3f5ee243547dee91fbd053c1c4a845aa-Abstract.html>`_ ) by being represented as sequences of tokens, which is the purpose of MidiTok. Pianoroll has also been used with `Convolutional Neural Networks (CNNs) <https://en.wikipedia.org/wiki/Convolutional_neural_network>`_ in past works (e.g. `MuseGan <https://aaai.org/papers/11312-musegan-multi-track-sequential-generative-adversarial-networks-for-symbolic-music-generation-and-accompaniment/>`_ ) but is now uncommon due to the limitations it imposes on the representation of musical elements.
+Symbolic music can be seen as both discrete and continuous as it represent discrete notes that feature however "continuous-like" attributes, and potentially with a high time resolution (in samples per beat or other specific time duration). **For this reason, it is more commonly used with discrete sequential models**, which we introduce in :ref:`sequential-models-label`), **by being represented as sequences of tokens**, which is the purpose of MidiTok. Pianoroll has also been used with `Convolutional Neural Networks (CNNs) <https://en.wikipedia.org/wiki/Convolutional_neural_network>`_ in past works (e.g. `MuseGan <https://aaai.org/papers/11312-musegan-multi-track-sequential-generative-adversarial-networks-for-symbolic-music-generation-and-accompaniment/>`_ ) but is now uncommon due to the limitations it imposes on the representation of musical elements.
 
 On the other hand, audio is by nature a continuous modality, as it represent the waveform of the sound itself. From a practical point of view, modeling raw waveforms with neural networks is often intractable due to the high time resolution of audio, despite works that achieved to do it (`WaveNet <https://arxiv.org/pdf/1609.03499>`_ , `Jukebox <https://openai.com/index/jukebox/>`_ ). For this reason, audio has been more commonly formatted as spectrograms when used with neural networks, and used with CNNs as it conventiently takes the form of a 2-dimensional matrix with distinct continuous patterns like images.
 Research in neural audio codecs allowed to "compress" audio waveform into a reduced number of discrete values allows to use waveforms as sequences of tokens with discrete models such as Transformers. For more details, see `SoundStream <https://ieeexplore.ieee.org/document/9625818>`_ and `EnCodec <https://openreview.net/forum?id=ivCd8z8zR2>`_ which are respectively used with `MusicLM <https://arxiv.org/abs/2301.11325>`_ and `MusicGen <https://proceedings.neurips.cc/paper_files/paper/2023/hash/94b472a1842cd7c56dcb125fb2765fbd-Abstract-Conference.html>`_ .
@@ -40,31 +40,45 @@ Research in neural audio codecs allowed to "compress" audio waveform into a redu
 Symbolic music files format
 -----------------------------
 
+There are three major file formats for symbolic music: MIDI, abc and musicXML. **MidiTok supports MIDI and abc files.**
 
-The MIDI protocol
------------------------------
-
-
-
-Token, vocabulary, token id, embedding
-
-Sequential / Language models
-----------------------------
-
-A token is a distinct element, part of a sequence of tokens. In natural language, a token can be a character, a subword or a word. A sentence can then be tokenized into a sequence of tokens representing the words and punctuation.
-For symbolic music, tokens can represent the values of the note attributes (pitch, valocity, duration) or time events. These are the "basic" tokens, that can be compared to the characters in natural language. In the vocabulary of trained tokenizers, the tokens can represent **successions** of these basic tokens.
-A token can take three forms, which we name by convention:
-
-* Token (``string``): the form describing it, e.g. *Pitch_50*.
-* Id (``int``): an unique associated integer, which corresponds to the index of the index in the vocabulary.
-* Byte (``string``): an distinct byte, used internally for trained tokenizers (:ref:`Training a tokenizer`).
-
-MidiTok works with :ref:`TokSequence` objects to conveniently represent these three forms.
+MIDI, standing for *Musical Instrument Digital Interface*, is a digital communication protocol standard in the music sector. It describes the protocol itself, the physical connector to transmit the protocol between devices, and a digital file format.
+A MIDI file allows to store MIDI messages as a symbolic music file. It is the most abundant file format among available music datasets. It is the most comprehensive and versatile file format for musical music, as such we present it more in detail in :ref:`midi-protocol-label`.
 
 
-The vocabulary of a tokenizer acts as a lookup table, linking tokens (string / byte) to their ids (integer). The vocabulary is an attribute of the tokenizer and can be accessed with ``tokenizer.vocab``. The vocabulary is a Python dictionary binding tokens (keys) to their ids (values).
-For tokenizations with embedding pooling (e.g. :ref:`CPWord` or :ref:`Octuple`), ``tokenizer.vocab`` will be a list of ``Vocabulary`` objects, and the ``tokenizer.is_multi_vocab`` property will be ``True``.
+The ABC notation is a notation for symbolic music, and a file format with the extension ``abc``. Its simplicity has made it widely used to write and share traditional and folk tunes from Western Europe.
+Each tune begins with a few lines indicating its title, time signature, default note length, key and others. Lines following the key represent the notes. A note is indicated by its letter, followed by a ``/x`` or ``x`` to respectively divide or multiply its length by ``x`` :math:`\in \mathbb{N}^{\star}` compared to the default note length. An upper case (e.g., A) means a pitch one octave below than a lower case (a).
 
-**With Byte Pair Encoding:**
-``tokenizer.vocab`` holds all the basic tokens describing the note and time attributes of music. By analogy with text, these tokens can be seen as unique characters.
-After :ref:`Training a tokenizer`, a new vocabulary is built with newly created tokens from pairs of basic tokens. This vocabulary can be accessed with ``tokenizer.vocab_bpe``, and binds tokens as bytes (string) to their associated ids (int). This is the vocabulary of the 🤗tokenizers BPE model.
+MusicXML is an open file format and music notation. Inspired by the XML file format, it is structured with the same item-hierarchy. An example is shown below.
+
+..  code-block:: xml
+
+    <?xml version="1.0" encoding="UTF-8" standalone="no"?>
+    <!DOCTYPE score-partwise PUBLIC
+        "-//Recordare//DTD MusicXML 3.1 Partwise//EN"
+        "http://www.musicxml.org/dtds/partwise.dtd">
+    <score-partwise version="3.1">
+        <part-list>
+            <score-part id="P1">
+                <part-name>Music</part-name>
+            </score-part>
+        </part-list>
+        <part id="P1">
+            <measure number="1">
+                <attributes>
+                    <divisions>1</divisions>
+                    <key><fifths>0</fifths></key>
+                    <time><beats>4</beats><beat-type>4</beat-type></time>
+                    <clef><sign>G</sign><line>2</line></clef>
+                </attributes>
+                <note>
+                    <pitch><step>C</step><octave>4</octave></pitch>
+                    <duration>4</duration>
+                    <type>whole</type>
+                </note>
+            </measure>
+        </part>
+    </score-partwise>
+
+The ``part-list`` references the parts to be written following with the tag ``part``. A ``measure`` is defined with its attributes, followed by notes and their attributes.
+The common file extensions are ``.mxl`` and ``.musicxml``.

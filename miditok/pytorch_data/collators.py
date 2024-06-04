@@ -1,4 +1,5 @@
 """Collator objects for PyTorch ``DataLoader``s."""
+
 from __future__ import annotations
 
 import warnings
@@ -9,7 +10,7 @@ import torch
 from torch import LongTensor
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
 
 
 class DataCollator:
@@ -69,17 +70,19 @@ class DataCollator:
         # Figure out inputs
         if self.inputs_kwarg_name in batch[0]:
             x = [
-                seq[self.inputs_kwarg_name]
-                for seq in batch
-                if seq[self.inputs_kwarg_name] is not None
+                sample[self.inputs_kwarg_name]
+                for sample in batch
+                if sample[self.inputs_kwarg_name] is not None
+                and len(sample[self.inputs_kwarg_name]) > 0
             ]
 
         # Figure out labels
         if self.labels_kwarg_name in batch[0]:
             y = [
-                seq[self.labels_kwarg_name]
-                for seq in batch
-                if seq[self.labels_kwarg_name] is not None
+                sample[self.labels_kwarg_name]
+                for si, sample in enumerate(batch)
+                if sample[self.labels_kwarg_name] is not None
+                and len(batch[si][self.inputs_kwarg_name]) > 0  # x
             ]
         elif self.copy_inputs_as_labels:
             y = deepcopy(x)
@@ -124,7 +127,7 @@ class DataCollator:
 
 
 def _pad_batch(
-    batch: list[LongTensor],
+    batch: Sequence[LongTensor],
     pad_token_id: int,
     pad_on_left: bool = False,
 ) -> LongTensor:
@@ -154,7 +157,7 @@ def _pad_batch(
     ).long()
 
 
-def _pad_left(batch: list[LongTensor], pad_token_id: int) -> LongTensor:
+def _pad_left(batch: Sequence[LongTensor], pad_token_id: int) -> LongTensor:
     r"""
     Pad sequences on the left, i.e. on the first indices.
 

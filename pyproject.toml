@@ -38,7 +38,7 @@ classifiers = [
 ]
 dependencies = [
     "numpy>=1.19",
-    "symusic>=0.4.3",
+    "symusic>=0.4.3",  # TODO 0.5.0
     "tqdm",
     "tokenizers>=0.13.0",
     "huggingface_hub>=0.16.4",
@@ -56,6 +56,7 @@ docs = [
     "furo",  # theme
     "sphinx-copybutton",
     "torch",  # for pytorch_data module
+    # "sphinxcontrib-tikz",
 ]
 
 [project.urls]
@@ -68,6 +69,15 @@ path = "miditok/__init__.py"
 [tool.hatch.build.targets.sdist]
 include = [
     "/miditok",
+]
+
+[mypy]
+warn_return_any = "True"
+warn_unused_configs = "True"
+plugins = "numpy.typing.mypy_plugin"
+exclude = [
+    "venv",
+    ".venv",
 ]
 
 [tool.coverage.report]

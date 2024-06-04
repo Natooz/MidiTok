@@ -1,3 +1,5 @@
+.. _training-tokenizer-label:
+
 ========================
 Training a tokenizer
 ========================
@@ -148,7 +150,7 @@ Methods
 
 A tokenizer can be trained with the :py:func:`miditok.MusicTokenizer.train` method. After being trained, the tokenizer will automatically encode the token ids with its model when tokenizing music files.
 
-Trained tokenizers can be saved and loaded back (:ref:`Save / Load tokenizer`).
+Trained tokenizers can be saved and loaded back (:ref:`Save / Load a tokenizer`).
 
 .. autofunction:: miditok.MusicTokenizer.train
     :noindex:

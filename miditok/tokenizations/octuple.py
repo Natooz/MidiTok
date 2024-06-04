@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from warnings import warn
+
 from symusic import Note, Score, Tempo, TimeSignature, Track
 
 from miditok.classes import Event, TokSequence
@@ -178,14 +180,19 @@ class Octuple(MusicTokenizer):
             ``True``, else a list of :class:`miditok.TokSequence` objects.
         """
         # Check bar embedding limit, update if needed
-        num_bars = len(get_bars_ticks(score))
-        if self.config.additional_params["max_bar_embedding"] < num_bars:
-            msg = (
-                "miditok: Octuple cannot handle this file, as it contains "
-                f"{num_bars} whereas the limit of the tokenizer is "
-                f"{self.config.additional_params['max_bar_embedding']}"
+        bar_ticks = get_bars_ticks(score)
+        if self.config.additional_params["max_bar_embedding"] < len(bar_ticks):
+            score = score.clip(
+                0, bar_ticks[self.config.additional_params["max_bar_embedding"]]
             )
-            raise ValueError(msg)
+            msg = (
+                f"miditok: {type(self).__name__} cannot tokenize entirely this file "
+                f"as it contains {len(bar_ticks)} bars whereas the limit of the "
+                f"tokenizer is {self.config.additional_params['max_bar_embedding']}. "
+                "It is therefore clipped to "
+                f"{self.config.additional_params['max_bar_embedding']} bars."
+            )
+            warn(msg, stacklevel=2)
 
         return super()._score_to_tokens(score)
 

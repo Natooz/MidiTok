@@ -1,5 +1,12 @@
 """Module containing utils methods than can be used outside of tokenization."""
 
+from .split_utils import (
+    get_average_num_tokens_per_note,
+    split_files_for_training,
+    split_score_per_note_density,
+    split_seq_in_subsequences,
+    split_tokens_files_to_subsequences,
+)
 from .utils import (
     compute_ticks_per_bar,
     compute_ticks_per_beat,
@@ -46,4 +53,9 @@ __all__ = [
     "split_score_per_beats",
     "split_score_per_ticks",
     "split_score_per_tracks",
+    "get_average_num_tokens_per_note",
+    "split_files_for_training",
+    "split_score_per_note_density",
+    "split_tokens_files_to_subsequences",
+    "split_seq_in_subsequences",
 ]
