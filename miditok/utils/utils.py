@@ -795,7 +795,7 @@ def get_num_notes_per_bar(
         num_notes_per_bar = np.zeros(len(bar_ticks) - 1, dtype=np.int32)
     else:
         num_notes_per_bar = np.zeros(
-            (len(bar_ticks) - 1, min(len(score.tracks), 1)), dtype=np.int32
+            (len(bar_ticks) - 1, max(len(score.tracks), 1)), dtype=np.int32
         )
 
     for ti, notes_times in enumerate(tracks_times):
