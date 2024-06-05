@@ -8,7 +8,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from warnings import warn
 
-from symusic import Score, TextMeta
+from symusic import Score, TextMeta, TimeSignature
+from symusic.core import TimeSignatureTickList
 from tqdm import tqdm
 
 from miditok.constants import (
@@ -16,6 +17,7 @@ from miditok.constants import (
     MIDI_FILES_EXTENSIONS,
     SCORE_LOADING_EXCEPTION,
     SUPPORTED_MUSIC_FILE_EXTENSIONS,
+    TIME_SIGNATURE,
 )
 
 from .utils import (
@@ -112,7 +114,10 @@ def split_files_for_training(
         except SCORE_LOADING_EXCEPTION:
             continue
 
-        # Separate track first if needed
+        # First preprocess time signatures to avoid cases where they might cause errors
+        _preprocess_time_signatures(scores[0], tokenizer)
+
+        # Separate track if needed
         tracks_separated = False
         if not tokenizer.one_token_stream and len(scores[0].tracks) > 1:
             scores = split_score_per_tracks(scores[0])
@@ -308,6 +313,9 @@ def get_average_num_tokens_per_note(
                 if (num_notes := track.note_num()) > 0:
                     num_tokens_per_note.append(len(seq) / num_notes)
 
+    if len(num_tokens_per_note) == 0:
+        msg = "All the music files provided are empty and contain no note."
+        raise ValueError(msg)
     return sum(num_tokens_per_note) / len(num_tokens_per_note)
 
 
@@ -381,3 +389,20 @@ def split_tokens_files_to_subsequences(
                 new_tok = deepcopy(tokens)
                 new_tok["ids"] = subseq
                 json.dump(tokens, outfile)
+
+
+def _preprocess_time_signatures(score: Score, tokenizer: MusicTokenizer) -> None:
+    """
+    Make sure a Score contains time signature valid according to a tokenizer.
+
+    :param score: ``symusic.Score`` to preprocess the time signature.
+    :param tokenizer: :class:`miditok.MusicTokenizer`.
+    """
+    if tokenizer.config.use_time_signatures:
+        tokenizer._filter_unsupported_time_signatures(score.time_signatures)
+        if len(score.time_signatures) == 0 or score.time_signatures[0].time != 0:
+            score.time_signatures.insert(0, TimeSignature(0, *TIME_SIGNATURE))
+    else:
+        score.time_signatures = TimeSignatureTickList(
+            [TimeSignature(0, *TIME_SIGNATURE)]
+        )

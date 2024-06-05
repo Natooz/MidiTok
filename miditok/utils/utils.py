@@ -780,7 +780,7 @@ def get_num_notes_per_bar(
     :param tracks_indep: whether to process each track independently or all together.
     :return: the number of notes within each bar.
     """
-    if len(score.tracks) == 0:
+    if score.end() == 0:
         return [] if tracks_indep else [0]
 
     # Get bar and note times
@@ -789,13 +789,16 @@ def get_num_notes_per_bar(
         bar_ticks.append(score.end())
     tracks_times = [track.notes.numpy()["time"] for track in score.tracks]
     if not tracks_indep:
-        tracks_times = [np.concatenate(tracks_times)]
-        tracks_times[-1].sort()
-        num_notes_per_bar = []
+        if len(tracks_times) > 0:
+            tracks_times = [np.concatenate(tracks_times)]
+            tracks_times[-1].sort()
+        num_notes_per_bar = np.zeros(len(bar_ticks) - 1, dtype=np.int32)
     else:
-        num_notes_per_bar = [[] for _ in range(len(bar_ticks) - 1)]
+        num_notes_per_bar = np.zeros(
+            (len(bar_ticks) - 1, max(len(score.tracks), 1)), dtype=np.int32
+        )
 
-    for notes_times in tracks_times:
+    for ti, notes_times in enumerate(tracks_times):
         current_note_time_idx = previous_note_time_idx = 0
         current_bar_tick_idx = 0
         while current_bar_tick_idx < len(bar_ticks) - 1:
@@ -807,14 +810,14 @@ def get_num_notes_per_bar(
                 current_note_time_idx += 1
             num_notes = current_note_time_idx - previous_note_time_idx
             if tracks_indep and len(score.tracks) > 1:
-                num_notes_per_bar[current_bar_tick_idx].append(num_notes)
+                num_notes_per_bar[current_bar_tick_idx, ti] = num_notes
             else:
-                num_notes_per_bar.append(num_notes)
+                num_notes_per_bar[current_bar_tick_idx] = num_notes
 
             current_bar_tick_idx += 1
             previous_note_time_idx = current_note_time_idx
 
-    return num_notes_per_bar
+    return num_notes_per_bar.tolist()
 
 
 def get_score_ticks_per_beat(score: Score) -> np.ndarray:
