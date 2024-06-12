@@ -13,7 +13,6 @@ Welcome to MidiTok's documentation!
 **MidiTok** is a Python package for MIDI file tokenization, introduced at the ISMIR 2021 LBDs `(paper) <https://archives.ismir.net/ismir2021/latebreaking/000005.pdf>`_.
 It tokenize symbolic music files (MIDI, abc), i.e. convert them into sequences of tokens ready to be fed to models such as Transformer, for any generation, transcription or MIR task.
 MidiTok features most known MIDI :ref:`tokenizations`, and is built around the idea that they all share common methods. Tokenizers can be trained with BPE, Unigram or WordPiece (:ref:`Training a tokenizer`) and be push to and pulled from the Hugging Face hub!
-`Github repository <https://github.com/Natooz/MidiTok>`_
 
 Installation
 ==================
@@ -29,7 +28,7 @@ Citation
 
 If you use MidiTok for your research, a citation in your manuscript would be gladly appreciated. ❤️
 
-You can also find BibTeX :ref:`citations` of tokenizations.
+You can also find in this documentation BibTeX :ref:`citations` of related research works.
 
 ..  code-block:: bib
 
