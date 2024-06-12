@@ -6,7 +6,7 @@
 Welcome to MidiTok's documentation!
 =========================================
 
-.. image:: /assets/logo.png
+.. image:: /assets/miditok_logo_stroke.png
   :width: 600
   :alt:
 
