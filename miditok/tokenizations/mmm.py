@@ -249,3 +249,35 @@ class MMM(MusicTokenizer):
             err += self.base_tokenizer._tokens_errors(tokens[i + 1 : j])
             i = j
         return err
+
+    def add_to_vocab(
+        self,
+        token: str | Event,
+        special_token: bool = False,
+        vocab_idx: int | None = None,
+        byte_: str | None = None,
+        add_to_model: bool = False,
+    ) -> None:
+        r"""
+        Add an event to the vocabulary. Its id will be the length of the vocab.
+
+        :param token: token to add, as a formatted string of the form "Type_Value",
+            e.g. Pitch_80, or an Event.
+        :param special_token: whether the token is special. (default: ``False``)
+        :param vocab_idx: idx of the vocabulary (in case of embedding pooling).
+            (default: ``None``)
+        :param byte_: unique byte associated to the token. The associated byte of a
+            token is used to encode-decode ids with the tokenizer's model (BPE, Unigram,
+            WordPiece). If None is given, it will default to ``chr(id_ + CHR_ID_START)``
+            . (default: ``None``)
+        :param add_to_model: the token will be added to the model vocabulary
+            too. (default: ``None``)
+        """
+        self.base_tokenizer.add_to_vocab(
+            token,
+            special_token,
+            vocab_idx,
+            byte_,
+            add_to_model,
+        )
+        super().add_to_vocab(token, special_token, vocab_idx, byte_, add_to_model)
