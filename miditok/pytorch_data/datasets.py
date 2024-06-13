@@ -112,7 +112,9 @@ class DatasetMIDI(_DatasetABC):
     :param max_seq_len: maximum sequence length (in num of tokens)
     :param bos_token_id: *BOS* token id. (default: ``None``)
     :param eos_token_id: *EOS* token id. (default: ``None``)
-    :param pre_tokenize:
+    :param pre_tokenize: whether to pre-tokenize the data files when creating the
+        ``Dataset`` object. If this is enabled, the ``Dataset`` will tokenize all the
+        files at its initialization and store the tokens in memory.
     :param func_to_get_labels: a function to retrieve the label of a file. The method
         must take two positional arguments: the first is either the
         :class:`miditok.TokSequence` returned when tokenizing a file, the second is the
