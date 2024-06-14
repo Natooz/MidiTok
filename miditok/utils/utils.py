@@ -88,6 +88,37 @@ def get_score_programs(score: Score) -> list[tuple[int, bool]]:
     return [(int(track.program), track.is_drum) for track in score.tracks]
 
 
+def is_track_empty(
+    track: Track,
+    check_controls: bool = False,
+    check_pedals: bool = False,
+    check_pitch_bend: bool = False,
+) -> bool:
+    """
+    Return a boolean indicating if a ``symusic.Track`` is empty.
+
+    By default, only the notes are checked.
+
+    :param track: ``symusic.Track`` to check.
+    :param check_controls: whether to check the control changes. (default: ``False``)
+    :param check_pedals: whether to check the control changes. (default: ``False``)
+    :param check_pitch_bend: whether to check the pitch bends. (default: ``False``)
+    :return: a boolean indicating if the track has at least one element.
+    """
+    if check_controls and check_pedals and check_pitch_bend:
+        return track.empty()
+
+    is_empty = track.note_num() == 0
+    if check_controls:
+        is_empty &= len(track.controls) == 0
+    if check_pedals:
+        is_empty &= len(track.pedals) == 0
+    if check_pitch_bend:
+        is_empty &= len(track.pitch_bends) == 0
+
+    return is_empty
+
+
 def remove_duplicated_notes(
     notes: NoteTickList | dict[str, np.ndarray], consider_duration: bool = False
 ) -> None:
