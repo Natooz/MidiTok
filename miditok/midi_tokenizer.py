@@ -1084,6 +1084,9 @@ class MusicTokenizer(ABC, HFHubMixin):
             # Add ProgramChange (named Program) tokens if requested.
             if self.config.program_changes:
                 self._insert_program_change_events(all_events)
+        # Special case where there are only tempos/time sigs, we still need to sort them
+        elif len(score.tracks) == 0 and len(all_events[0]) > 2:
+            self._sort_events(all_events[0])
 
         # Add time events
         if self.one_token_stream:
