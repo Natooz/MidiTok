@@ -8,7 +8,7 @@ from pathlib import Path
 from shutil import copy2
 
 import numpy as np
-from symusic import Score
+from symusic import Note, Score
 from tqdm import tqdm
 
 from miditok.constants import (
@@ -164,9 +164,7 @@ def _filter_offset_tuples_to_score(
     """
     # Get min and max pitches in the Score (except drum tracks)
     all_pitches = [
-        np.array([note.pitch for note in track.notes])
-        for track in score.tracks
-        if not track.is_drum
+        track.notes.numpy()["pitch"] for track in score.tracks if not track.is_drum
     ]
     min_pitches = [np.min(pitches) for pitches in all_pitches]
     max_pitches = [np.max(pitches) for pitches in all_pitches]
@@ -182,7 +180,7 @@ def _filter_offset_tuples_to_score(
                 min_possible_pitch_offset, pitch_range.start - min_pitch
             )
             max_possible_pitch_offset = min(
-                max_possible_pitch_offset, pitch_range.stop - max_pitch
+                max_possible_pitch_offset, pitch_range.stop - 1 - max_pitch
             )
     else:
         min_possible_pitch_offset = -min(min_pitches)
@@ -311,17 +309,19 @@ def augment_score(
         elif isinstance(duration_offset, float):
             duration_offset = round(duration_offset)
             min_duration = round(min_duration)
+
         for track in score_aug.tracks:
-            if not track.is_drum:
-                for note in track.notes:
-                    if duration_offset < 0:
-                        # If note.duration <= min_duration, it is left unchanged
-                        if note.duration > min_duration:
-                            note.duration = max(
-                                min_duration, note.duration + duration_offset
-                            )
-                    else:
-                        note.duration += duration_offset
+            if track.is_drum:
+                continue
+            notes_soa = track.notes.numpy()
+            notes_soa["duration"] += duration_offset
+            if duration_offset < 0:
+                # This will also set durations that where originally between 0 and
+                # min_duration to min_duration
+                mask = np.where(notes_soa["duration"] < min_duration)[0]
+                notes_soa["duration"][mask] = min_duration
+
+            track.notes = Note.from_numpy(**notes_soa)
 
     return score_aug
 

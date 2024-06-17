@@ -10,7 +10,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable, Sequence
 from copy import deepcopy
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 from huggingface_hub import ModelHubMixin as HFHubMixin
@@ -30,7 +30,6 @@ from symusic.core import (
     PedalTickList,
     PitchBendTickList,
     ScoreTick,
-    TempoTickList,
     TimeSignatureTickList,
 )
 
@@ -88,6 +87,9 @@ from .utils.utils import (
     np_get_closest,
     tempo_qpm_to_mspq,
 )
+
+if TYPE_CHECKING:
+    from symusic.core import TempoTickList
 
 
 class MusicTokenizer(ABC, HFHubMixin):
@@ -408,10 +410,8 @@ class MusicTokenizer(ABC, HFHubMixin):
             ).astype(np.int32)
 
             score = score.resample(new_tpq, min_dur=1)
-            score.time_signatures = TimeSignatureTickList.from_numpy(
-                time_signatures_soa["time"],
-                time_signatures_soa["numerator"],
-                time_signatures_soa["denominator"],
+            score.time_signatures = TimeSignature.from_numpy(
+                **time_signatures_soa,
             )
         # Otherwise we do a copy in order to make sure no inplace operation is performed
         # on the provided Score object.
