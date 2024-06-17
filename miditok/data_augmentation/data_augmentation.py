@@ -133,6 +133,12 @@ def augment_dataset(
         with Path.open(out_path / "data_augmentation_report.txt", "w") as outfile:
             json.dump(
                 {
+                    "pitch_offsets": pitch_offsets,
+                    "velocity_offsets": velocity_offsets,
+                    "duration_offsets": duration_offsets,
+                    "all_offset_combinations": all_offset_combinations,
+                    "velocity_range": velocity_range,
+                    "min_duration": min_duration,
                     "num_tracks_augmented": num_tracks_augmented,
                     "num_files_before": len(files_paths),
                     "num_files_after": len(files_paths) + num_augmentations,
