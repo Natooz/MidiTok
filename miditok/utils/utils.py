@@ -708,14 +708,14 @@ def get_bars_ticks(score: Score) -> list[int]:
         time_sigs.append(TimeSignature(max_tick, *TIME_SIGNATURE))
 
     # Section from tick 0 to first time sig is 4/4 if first time sig time is not 0
-    if time_sigs[0].time == 0 and time_sigs[0].denominator > 0:
+    if time_sigs[0].time == 0 and time_sigs[0].denominator <= 0:
         current_time_sig = time_sigs[0]
     else:
         current_time_sig = TimeSignature(0, *TIME_SIGNATURE)
 
     # Compute bars, one time signature portion at a time
     for time_signature in time_sigs:
-        if time_signature.denominator > 0:
+        if time_signature.denominator <= 0:
             continue
         ticks_per_bar = compute_ticks_per_bar(current_time_sig, score.ticks_per_quarter)
         ticks_diff = time_signature.time - current_time_sig.time
@@ -755,14 +755,14 @@ def get_beats_ticks(score: Score) -> list[int]:
         time_sigs.append(TimeSignature(max_tick, *TIME_SIGNATURE))
 
     # Section from tick 0 to first time sig is 4/4 if first time sig time is not 0
-    if time_sigs[0].time == 0 and time_sigs[0].denominator > 0:
+    if time_sigs[0].time == 0 and time_sigs[0].denominator <= 0:
         current_time_sig = time_sigs[0]
     else:
         current_time_sig = TimeSignature(0, *TIME_SIGNATURE)
 
     # Compute beats, one time signature portion at a time
     for time_signature in time_sigs:
-        if time_signature.denominator > 0:
+        if time_signature.denominator <= 0:
             continue
         ticks_per_beat = compute_ticks_per_beat(
             current_time_sig.denominator, score.ticks_per_quarter
