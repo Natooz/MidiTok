@@ -690,7 +690,8 @@ def get_bars_ticks(score: Score) -> list[int]:
     software can proceed differently. Logic Pro, for example, uses the first one.
     I haven't found documentation or recommendations for this specific situation. It
     might be better to use the first one and discard the others.
-    Time signatures with non-positive denominator values (including 0) will be ignored.
+    Time signatures with non-positive numerator or denominator values (including 0) will
+    be ignored.
 
     :param score: ``symusic.Score`` to analyze.
     :return: list of ticks for each bar.
@@ -708,14 +709,18 @@ def get_bars_ticks(score: Score) -> list[int]:
         time_sigs.append(TimeSignature(max_tick, *TIME_SIGNATURE))
 
     # Section from tick 0 to first time sig is 4/4 if first time sig time is not 0
-    if time_sigs[0].time == 0 and time_sigs[0].denominator <= 0:
+    if (
+        time_sigs[0].time == 0
+        and time_sigs[0].denominator > 0
+        and time_sigs[0].numerator > 0
+    ):
         current_time_sig = time_sigs[0]
     else:
         current_time_sig = TimeSignature(0, *TIME_SIGNATURE)
 
     # Compute bars, one time signature portion at a time
     for time_signature in time_sigs:
-        if time_signature.denominator <= 0:
+        if time_signature.denominator <= 0 or time_signature.numerator <= 0:
             continue
         ticks_per_bar = compute_ticks_per_bar(current_time_sig, score.ticks_per_quarter)
         ticks_diff = time_signature.time - current_time_sig.time
@@ -737,7 +742,8 @@ def get_beats_ticks(score: Score) -> list[int]:
     software can proceed differently. Logic Pro, for example, uses the first one.
     I haven't found documentation or recommendations for this specific situation. It
     might be better to use the first one and discard the others.
-    Time signatures with non-positive denominator values (including 0) will be ignored.
+    Time signatures with non-positive numerator or denominator values (including 0) will
+    be ignored.
 
     :param score: ``symusic.Score`` to analyze.
     :return: list of ticks for each beat.
@@ -755,14 +761,18 @@ def get_beats_ticks(score: Score) -> list[int]:
         time_sigs.append(TimeSignature(max_tick, *TIME_SIGNATURE))
 
     # Section from tick 0 to first time sig is 4/4 if first time sig time is not 0
-    if time_sigs[0].time == 0 and time_sigs[0].denominator <= 0:
+    if (
+        time_sigs[0].time == 0
+        and time_sigs[0].denominator > 0
+        and time_sigs[0].numerator > 0
+    ):
         current_time_sig = time_sigs[0]
     else:
         current_time_sig = TimeSignature(0, *TIME_SIGNATURE)
 
     # Compute beats, one time signature portion at a time
     for time_signature in time_sigs:
-        if time_signature.denominator <= 0:
+        if time_signature.denominator <= 0 or time_signature.numerator <= 0:
             continue
         ticks_per_beat = compute_ticks_per_beat(
             current_time_sig.denominator, score.ticks_per_quarter
