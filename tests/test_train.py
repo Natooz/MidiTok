@@ -52,7 +52,7 @@ for tokenization_ in TOKENIZATIONS_TRAIN:
 @pytest.mark.parametrize(
     "encode_ids_split",
     ["no", "bar", "beat"],
-    ids=["no_split", "bar_split", "beat_split"],
+    ids=lambda s: f"{s}_split",
 )
 def test_tokenizer_training_and_encoding_decoding(
     tok_params_set: tuple[str, dict[str, Any]],

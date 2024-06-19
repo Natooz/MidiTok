@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import json
-from copy import deepcopy
 from pathlib import Path
 from shutil import copy2
 
 import numpy as np
-from symusic import Score
+from symusic import Note, Score
 from tqdm import tqdm
 
 from miditok.constants import (
@@ -133,6 +132,12 @@ def augment_dataset(
         with Path.open(out_path / "data_augmentation_report.txt", "w") as outfile:
             json.dump(
                 {
+                    "pitch_offsets": pitch_offsets,
+                    "velocity_offsets": velocity_offsets,
+                    "duration_offsets": duration_offsets,
+                    "all_offset_combinations": all_offset_combinations,
+                    "velocity_range": velocity_range,
+                    "min_duration": min_duration,
                     "num_tracks_augmented": num_tracks_augmented,
                     "num_files_before": len(files_paths),
                     "num_files_after": len(files_paths) + num_augmentations,
@@ -158,9 +163,7 @@ def _filter_offset_tuples_to_score(
     """
     # Get min and max pitches in the Score (except drum tracks)
     all_pitches = [
-        np.array([note.pitch for note in track.notes])
-        for track in score.tracks
-        if not track.is_drum
+        track.notes.numpy()["pitch"] for track in score.tracks if not track.is_drum
     ]
     min_pitches = [np.min(pitches) for pitches in all_pitches]
     max_pitches = [np.max(pitches) for pitches in all_pitches]
@@ -176,7 +179,7 @@ def _filter_offset_tuples_to_score(
                 min_possible_pitch_offset, pitch_range.start - min_pitch
             )
             max_possible_pitch_offset = min(
-                max_possible_pitch_offset, pitch_range.stop - max_pitch
+                max_possible_pitch_offset, pitch_range.stop - 1 - max_pitch
             )
     else:
         min_possible_pitch_offset = -min(min_pitches)
@@ -281,7 +284,8 @@ def augment_score(
         otherwise in beats as a float or integer. (default: ``0.03125``)
     :return: the augmented ``symusic.Score`` object.
     """
-    score_aug = deepcopy(score)
+    score_aug = score.copy()
+    # score_aug = score.copy(deep=True)
 
     if pitch_offset != 0:
         for track in score_aug.tracks:
@@ -305,17 +309,19 @@ def augment_score(
         elif isinstance(duration_offset, float):
             duration_offset = round(duration_offset)
             min_duration = round(min_duration)
+
         for track in score_aug.tracks:
-            if not track.is_drum:
-                for note in track.notes:
-                    if duration_offset < 0:
-                        # If note.duration <= min_duration, it is left unchanged
-                        if note.duration > min_duration:
-                            note.duration = max(
-                                min_duration, note.duration + duration_offset
-                            )
-                    else:
-                        note.duration += duration_offset
+            if track.is_drum:
+                continue
+            notes_soa = track.notes.numpy()
+            notes_soa["duration"] += duration_offset
+            if duration_offset < 0:
+                # This will also set durations that where originally between 0 and
+                # min_duration to min_duration
+                mask = np.where(notes_soa["duration"] < min_duration)[0]
+                notes_soa["duration"][mask] = min_duration
+
+            track.notes = Note.from_numpy(**notes_soa)
 
     return score_aug
 

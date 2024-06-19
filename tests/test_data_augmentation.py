@@ -29,7 +29,7 @@ def test_augment_dataset(
         data_path,
         pitch_offsets=[-2, 1, 2],
         velocity_offsets=[-4, 5],
-        duration_offsets=[-1, 2],
+        duration_offsets=[-0.5, 1],
         all_offset_combinations=True,
         min_duration=min_duration,
         out_path=midi_aug_path,
@@ -69,11 +69,14 @@ def test_augment_dataset(
                         f"{note_o.pitch + offsets[0]}, got {note_a.pitch}"
                     )
                     raise ValueError(msg)
+                # If negative duration offset, dur_exp must be greater or equal than
+                # min_duration_ticks
                 if offsets[2] < 0:
                     dur_exp = max(
                         note_o.duration + offsets[2],
-                        min(min_duration_ticks, note_o.duration),
+                        min_duration_ticks,
                     )
+                # If positive duration offset, the original duration was just shifted
                 elif offsets[2] > 0:
                     dur_exp = note_o.duration + offsets[2]
                 else:

@@ -10,7 +10,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable, Sequence
 from copy import deepcopy
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 from huggingface_hub import ModelHubMixin as HFHubMixin
@@ -30,7 +30,6 @@ from symusic.core import (
     PedalTickList,
     PitchBendTickList,
     ScoreTick,
-    TempoTickList,
     TimeSignatureTickList,
 )
 
@@ -77,6 +76,7 @@ from .utils import (
     detect_chords,
     get_score_programs,
     get_score_ticks_per_beat,
+    is_track_empty,
     merge_same_program_tracks,
     remove_duplicated_notes,
 )
@@ -87,6 +87,9 @@ from .utils.utils import (
     np_get_closest,
     tempo_qpm_to_mspq,
 )
+
+if TYPE_CHECKING:
+    from symusic.core import TempoTickList
 
 
 class MusicTokenizer(ABC, HFHubMixin):
@@ -366,9 +369,10 @@ class MusicTokenizer(ABC, HFHubMixin):
         Its notes attributes (times, pitches, velocities) will be downsampled and
         sorted, duplicated notes removed, as well as tempos. Empty tracks (with no
         note) will be removed from the ``symusic.Score`` object. Notes with pitches
-        outside ``self.config.pitch_range`` will be deleted.
-        This method is **not inplace** and performs no alteration on the provided
-        ``score`` object.
+        outside ``self.config.pitch_range`` will be deleted. Tracks with programs not
+        supported by the tokenizer will be deleted.
+
+        This method is **not inplace** and does not alter the provided ``score`` object.
 
         :param score: ``symusic.Score`` object to preprocess.
         :return: the preprocessed ``score``.
@@ -406,10 +410,8 @@ class MusicTokenizer(ABC, HFHubMixin):
             ).astype(np.int32)
 
             score = score.resample(new_tpq, min_dur=1)
-            score.time_signatures = TimeSignatureTickList.from_numpy(
-                time_signatures_soa["time"],
-                time_signatures_soa["numerator"],
-                time_signatures_soa["denominator"],
+            score.time_signatures = TimeSignature.from_numpy(
+                **time_signatures_soa,
             )
         # Otherwise we do a copy in order to make sure no inplace operation is performed
         # on the provided Score object.
@@ -457,17 +459,12 @@ class MusicTokenizer(ABC, HFHubMixin):
         # Preprocess track events
         for t in range(len(score.tracks) - 1, -1, -1):
             # Delete track only there is nothing inside being used
-            if (
-                len(score.tracks[t].notes) == 0
-                and (
-                    not self.config.use_pitch_bends
-                    or len(score.tracks[t].pitch_bends) == 0
-                )
-                and (
-                    not self.config.use_sustain_pedals
-                    or len(score.tracks[t].pedals) == 0
-                )
-            ):
+            program = -1 if score.tracks[t].is_drum else score.tracks[t].program
+            if is_track_empty(
+                score.tracks[t],
+                check_pedals=self.config.use_sustain_pedals,
+                check_pitch_bend=self.config.use_pitch_bends,
+            ) or (self.config.use_programs and program not in self.config.programs):
                 del score.tracks[t]
                 continue
 
@@ -493,16 +490,10 @@ class MusicTokenizer(ABC, HFHubMixin):
                 )
 
             # Delete track only there is nothing inside being used
-            if (
-                len(score.tracks[t].notes) == 0
-                and (
-                    not self.config.use_pitch_bends
-                    or len(score.tracks[t].pitch_bends) == 0
-                )
-                and (
-                    not self.config.use_sustain_pedals
-                    or len(score.tracks[t].pedals) == 0
-                )
+            if is_track_empty(
+                score.tracks[t],
+                check_pedals=self.config.use_sustain_pedals,
+                check_pitch_bend=self.config.use_pitch_bends,
             ):
                 del score.tracks[t]
                 continue
@@ -1093,6 +1084,9 @@ class MusicTokenizer(ABC, HFHubMixin):
             # Add ProgramChange (named Program) tokens if requested.
             if self.config.program_changes:
                 self._insert_program_change_events(all_events)
+        # Special case where there are only tempos/time sigs, we still need to sort them
+        elif len(score.tracks) == 0 and len(all_events[0]) > 2:
+            self._sort_events(all_events[0])
 
         # Add time events
         if self.one_token_stream:

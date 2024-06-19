@@ -2,7 +2,7 @@
 
 Python package to tokenize music files, introduced at the ISMIR 2021 LBDs.
 
-![MidiTok Logo](docs/assets/logo.png?raw=true "")
+![MidiTok Logo](docs/assets/miditok_logo_stroke.png?raw=true "")
 
 [![PyPI version fury.io](https://badge.fury.io/py/miditok.svg)](https://pypi.python.org/pypi/miditok/)
 [![Python 3.8](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/release/)

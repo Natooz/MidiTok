@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from copy import copy, deepcopy
+from copy import deepcopy
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -206,32 +206,24 @@ def adapt_ref_score_for_tests_assertion(
     :return: a new ``symusic.Score`` object with track (and notes) sorted.
     """
     tokenization = type(tokenizer).__name__ if tokenizer is not None else None
-    new_score = copy(score)
-
-    # Merging is performed in preprocess only in one_token_stream mode
-    # but in multi token stream, decoding will actually keep one track per program
-    if tokenizer.config.use_programs and tokenizer.one_token_stream:
-        miditok.utils.merge_same_program_tracks(new_score.tracks)
 
     # Preprocess the Score: downsample it, remove notes outside of pitch range...
-    new_score = tokenizer.preprocess_score(new_score)
+    score = tokenizer.preprocess_score(score)
 
     # For Octuple, as tempo is only carried at notes times, we need to adapt
     # their times for comparison. Set tempo changes at onset times of notes.
     # We use the first track only, as it is the one for which tempos are decoded
     if tokenizer.config.use_tempos and tokenization in ["Octuple"]:
-        if len(new_score.tracks) > 0:
+        if len(score.tracks) > 0:
             adapt_tempo_changes_times(
-                new_score.tracks
-                if tokenizer.one_token_stream
-                else new_score.tracks[:1],
-                new_score.tempos,
+                score.tracks if tokenizer.one_token_stream else score.tracks[:1],
+                score.tempos,
                 tokenizer.default_tempo,
             )
         else:
-            new_score.tempos = [Tempo(0, tokenizer.default_tempo)]
+            score.tempos = [Tempo(0, tokenizer.default_tempo)]
 
-    return new_score
+    return score
 
 
 def scores_notes_equals(

@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import TYPE_CHECKING
+
+import numpy as np
 
 import miditok
 from miditok import MusicTokenizer
@@ -132,6 +135,29 @@ class MMM(MusicTokenizer):
         self.concatenate_track_sequences = concatenate_track_sequences
         return super().encode(score, encode_ids, no_preprocess_score)
 
+    def preprocess_score(self, score: Score) -> Score:
+        r"""
+        Pre-process a ``symusic.Score`` object to resample its time and events values.
+
+        This method is called before parsing a Score's contents for tokenization.
+        Its notes attributes (times, pitches, velocities) will be downsampled and
+        sorted, duplicated notes removed, as well as tempos. Empty tracks (with no
+        note) will be removed from the ``symusic.Score`` object. Notes with pitches
+        outside ``self.config.pitch_range`` will be deleted.
+        This method is **not inplace** and performs no alteration on the provided
+        ``score`` object.
+
+        :param score: ``symusic.Score`` object to preprocess.
+        :return: the preprocessed ``score``.
+        """
+        # Overriding the parent method in MMM is required to make sure that the tracks
+        # with the same programs are not merged.
+        previous_value = self.one_token_stream
+        self.one_token_stream = False
+        score = super().preprocess_score(score)
+        self.one_token_stream = previous_value
+        return score
+
     def _score_to_tokens(self, score: Score) -> TokSequence | list[TokSequence]:
         r"""
         Convert a **preprocessed** ``symusic.Score`` object to a sequence of tokens.
@@ -157,8 +183,75 @@ class MMM(MusicTokenizer):
             return sum(sequences)
         return sequences
 
+    def encode_token_ids(self, seq: TokSequence | list[TokSequence]) -> None:
+        """
+        Encode a :class:`miditok.TokSequence` with BPE, Unigram or WordPiece.
+
+        The method works inplace and only alters the sequence's ``.ids``.
+        The method also works with lists of :class:`miditok.TokSequence`.
+        If a list is given, the model will encode all sequences in one batch to speed up
+        the operation.
+
+        :param seq: :class:`miditok.TokSequence` to encode ids.
+        """
+        # If no split --> just call parent method
+        if self.config.encode_ids_split == "no":
+            super().encode_token_ids(seq)
+
+        # If `seq` is not a TokSequence (so a list) --> recursively call this method
+        elif isinstance(seq, list):
+            for subseq in seq:
+                self.encode_token_ids(subseq)
+
+        # Otherwise (it's a TokSequence) we must make sure to split the ids per
+        # bars/beats for each separate track: splitting the TokSequence as the parent
+        # method doesn't handle concatenated tracks in one single token sequence.
+        else:
+            seqs_split = self.split_tokseq_per_track(
+                deepcopy(seq), keep_track_tokens=True
+            )
+            super().encode_token_ids(seqs_split)
+
+            # Concatenate ids of the split sequences now encoded
+            seq.ids = []
+            for subseq in seqs_split:
+                seq.ids += subseq.ids
+            seq.are_ids_encoded = True
+
     def _sort_events(self, events: list[Event]) -> None:
         self.base_tokenizer._sort_events(events)
+
+    def split_tokseq_per_track(
+        self,
+        tokseq: TokSequence,
+        keep_track_tokens: bool = False,
+    ) -> list[TokSequence]:
+        """
+        Split an MMM :class:`miditok.TokSequence` per tracks.
+
+        :param tokseq: :class:`miditok.TokSequence` token sequence.
+        :param keep_track_tokens: whether to keep the ``Track_Start/End`` tokens.
+            (default: ``False``)
+        :return: list :class:`miditok.TokSequence`, one for each track in ``tokseq``.
+        """
+        track_tokens_idx = np.where(np.array(tokseq.ids) == self.vocab["Track_Start"])[
+            0
+        ].tolist()
+        if len(track_tokens_idx) == 0:
+            return [tokseq]
+
+        tokseqs = []
+        for i, track_idx in enumerate(track_tokens_idx):
+            if i + 1 == len(track_tokens_idx):
+                idx_end = None
+            elif keep_track_tokens:
+                idx_end = track_tokens_idx[i + 1]
+            else:
+                idx_end = track_tokens_idx[i + 1] - 1
+            idx_start = track_idx if keep_track_tokens else track_idx + 1
+            tokseqs.append(tokseq[idx_start:idx_end])
+
+        return tokseqs
 
     def _tokens_to_score(
         self,
@@ -177,21 +270,7 @@ class MMM(MusicTokenizer):
             (default: ``None``)
         :return: the ``symusic.Score`` object.
         """
-        tokseqs = []
-        i = 0
-        while i < len(tokens):
-            if tokens.tokens[i] != "Track_Start":
-                i += 1
-                continue
-
-            j = i
-            while j < len(tokens) and tokens.tokens[j] != "Track_End":
-                j += 1
-
-            # Extract the subseq
-            tokseqs.append(tokens[i + 1 : j])
-            i = j
-
+        tokseqs = self.split_tokseq_per_track(tokens)
         return self.base_tokenizer._tokens_to_score(tokseqs)
 
     def _create_base_vocabulary(self) -> list[str]:
@@ -249,3 +328,35 @@ class MMM(MusicTokenizer):
             err += self.base_tokenizer._tokens_errors(tokens[i + 1 : j])
             i = j
         return err
+
+    def add_to_vocab(
+        self,
+        token: str | Event,
+        special_token: bool = False,
+        vocab_idx: int | None = None,
+        byte_: str | None = None,
+        add_to_model: bool = False,
+    ) -> None:
+        r"""
+        Add an event to the vocabulary. Its id will be the length of the vocab.
+
+        :param token: token to add, as a formatted string of the form "Type_Value",
+            e.g. Pitch_80, or an Event.
+        :param special_token: whether the token is special. (default: ``False``)
+        :param vocab_idx: idx of the vocabulary (in case of embedding pooling).
+            (default: ``None``)
+        :param byte_: unique byte associated to the token. The associated byte of a
+            token is used to encode-decode ids with the tokenizer's model (BPE, Unigram,
+            WordPiece). If None is given, it will default to ``chr(id_ + CHR_ID_START)``
+            . (default: ``None``)
+        :param add_to_model: the token will be added to the model vocabulary
+            too. (default: ``None``)
+        """
+        self.base_tokenizer.add_to_vocab(
+            token,
+            special_token,
+            vocab_idx,
+            byte_,
+            add_to_model,
+        )
+        super().add_to_vocab(token, special_token, vocab_idx, byte_, add_to_model)

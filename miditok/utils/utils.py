@@ -88,6 +88,37 @@ def get_score_programs(score: Score) -> list[tuple[int, bool]]:
     return [(int(track.program), track.is_drum) for track in score.tracks]
 
 
+def is_track_empty(
+    track: Track,
+    check_controls: bool = False,
+    check_pedals: bool = False,
+    check_pitch_bend: bool = False,
+) -> bool:
+    """
+    Return a boolean indicating if a ``symusic.Track`` is empty.
+
+    By default, only the notes are checked.
+
+    :param track: ``symusic.Track`` to check.
+    :param check_controls: whether to check the control changes. (default: ``False``)
+    :param check_pedals: whether to check the control changes. (default: ``False``)
+    :param check_pitch_bend: whether to check the pitch bends. (default: ``False``)
+    :return: a boolean indicating if the track has at least one element.
+    """
+    if check_controls and check_pedals and check_pitch_bend:
+        return track.empty()
+
+    is_empty = track.note_num() == 0
+    if check_controls:
+        is_empty &= len(track.controls) == 0
+    if check_pedals:
+        is_empty &= len(track.pedals) == 0
+    if check_pitch_bend:
+        is_empty &= len(track.pitch_bends) == 0
+
+    return is_empty
+
+
 def remove_duplicated_notes(
     notes: NoteTickList | dict[str, np.ndarray], consider_duration: bool = False
 ) -> None:
@@ -659,6 +690,8 @@ def get_bars_ticks(score: Score) -> list[int]:
     software can proceed differently. Logic Pro, for example, uses the first one.
     I haven't found documentation or recommendations for this specific situation. It
     might be better to use the first one and discard the others.
+    Time signatures with non-positive numerator or denominator values (including 0) will
+    be ignored.
 
     :param score: ``symusic.Score`` to analyze.
     :return: list of ticks for each bar.
@@ -676,13 +709,19 @@ def get_bars_ticks(score: Score) -> list[int]:
         time_sigs.append(TimeSignature(max_tick, *TIME_SIGNATURE))
 
     # Section from tick 0 to first time sig is 4/4 if first time sig time is not 0
-    if time_sigs[0].time == 0:
+    if (
+        time_sigs[0].time == 0
+        and time_sigs[0].denominator > 0
+        and time_sigs[0].numerator > 0
+    ):
         current_time_sig = time_sigs[0]
     else:
         current_time_sig = TimeSignature(0, *TIME_SIGNATURE)
 
     # Compute bars, one time signature portion at a time
     for time_signature in time_sigs:
+        if time_signature.denominator <= 0 or time_signature.numerator <= 0:
+            continue
         ticks_per_bar = compute_ticks_per_bar(current_time_sig, score.ticks_per_quarter)
         ticks_diff = time_signature.time - current_time_sig.time
         num_bars = ceil(ticks_diff / ticks_per_bar)
@@ -703,6 +742,8 @@ def get_beats_ticks(score: Score) -> list[int]:
     software can proceed differently. Logic Pro, for example, uses the first one.
     I haven't found documentation or recommendations for this specific situation. It
     might be better to use the first one and discard the others.
+    Time signatures with non-positive numerator or denominator values (including 0) will
+    be ignored.
 
     :param score: ``symusic.Score`` to analyze.
     :return: list of ticks for each beat.
@@ -720,13 +761,19 @@ def get_beats_ticks(score: Score) -> list[int]:
         time_sigs.append(TimeSignature(max_tick, *TIME_SIGNATURE))
 
     # Section from tick 0 to first time sig is 4/4 if first time sig time is not 0
-    if time_sigs[0].time == 0:
+    if (
+        time_sigs[0].time == 0
+        and time_sigs[0].denominator > 0
+        and time_sigs[0].numerator > 0
+    ):
         current_time_sig = time_sigs[0]
     else:
         current_time_sig = TimeSignature(0, *TIME_SIGNATURE)
 
     # Compute beats, one time signature portion at a time
     for time_signature in time_sigs:
+        if time_signature.denominator <= 0 or time_signature.numerator <= 0:
+            continue
         ticks_per_beat = compute_ticks_per_beat(
             current_time_sig.denominator, score.ticks_per_quarter
         )

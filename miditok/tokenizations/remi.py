@@ -593,6 +593,9 @@ class REMI(MusicTokenizer):
                     dic["Position"].add(token_type)
         if self.config.program_changes:
             dic["Duration"].add("Program")
+            # The first bar may be empty but the Program token will still be present
+            if self.config.additional_params["use_bar_end_tokens"]:
+                dic["Program"].add("Bar")
 
         if self.config.use_chords:
             dic["Chord"] = {first_note_token_type}
