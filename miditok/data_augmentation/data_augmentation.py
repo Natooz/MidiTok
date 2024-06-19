@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from copy import deepcopy
 from pathlib import Path
 from shutil import copy2
 
@@ -285,7 +284,8 @@ def augment_score(
         otherwise in beats as a float or integer. (default: ``0.03125``)
     :return: the augmented ``symusic.Score`` object.
     """
-    score_aug = deepcopy(score)
+    score_aug = score.copy()
+    # score_aug = score.copy(deep=True)
 
     if pitch_offset != 0:
         for track in score_aug.tracks:
