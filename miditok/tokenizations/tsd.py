@@ -344,6 +344,9 @@ class TSD(MusicTokenizer):
         tokenizer, and will be added to the vocabulary by
         :class:`miditok.MusicTokenizer`.
 
+        **Attribute control tokens are added when creating the tokenizer by the**
+        ``MusicTokenizer.add_attribute_control`` **method.**
+
         :return: the vocabulary as a list of string.
         """
         vocab = []

@@ -13,6 +13,21 @@ from typing import TYPE_CHECKING, Any, Literal
 from numpy import ndarray
 
 from .constants import (
+    AC_NOTE_DENSITY_BAR,
+    AC_NOTE_DENSITY_BAR_MAX,
+    AC_NOTE_DENSITY_TRACK,
+    AC_NOTE_DENSITY_TRACK_MAX,
+    AC_NOTE_DENSITY_TRACK_MIN,
+    AC_NOTE_DURATION_BAR,
+    AC_NOTE_DURATION_TRACK,
+    AC_PITCH_CLASS_BAR,
+    AC_POLYPHONY_BAR,
+    AC_POLYPHONY_MAX,
+    AC_POLYPHONY_MIN,
+    AC_POLYPHONY_TRACK,
+    AC_REPETITION_TRACK,
+    AC_REPETITION_TRACK_NUM_BINS,
+    AC_REPETITION_TRACK_NUM_CONSEC_BARS,
     BEAT_RES,
     BEAT_RES_REST,
     CHORD_MAPS,
@@ -498,6 +513,42 @@ class TokenizerConfig:
         argument is only used when ``use_drums_pitch_tokens`` is ``True``. (default:
         ``(27, 88)``, recommended range from the GM2 specs without the "Applause" at
         pitch 88 of the orchestra drum set)
+    :param ac_polyphony_track: enables track-level polyphony attribute control tokens
+        using :class:`miditok.attribute_controls.TrackOnsetPolyphony`. (default:
+        ``False``).
+    :param ac_polyphony_bar: enables bar-level polyphony attribute control tokens
+        using :class:`miditok.attribute_controls.BarOnsetPolyphony`. (default:
+        ``False``).
+    :param ac_polyphony_min: minimum number of simultaneous notes for polyphony
+        attribute control. (default: ``1``)
+    :param ac_polyphony_max: maximum number of simultaneous notes for polyphony
+        attribute control. (default: ``6``)
+    :param ac_pitch_class_bar: enables bar-level pitch class attribute control tokens
+        using :class:`miditok.attribute_controls.BarPitchClass`. (default: ``False``).
+    :param ac_note_density_track: enables track-level note density attribute control
+        tokens using :class:`miditok.attribute_controls.TrackNoteDensity`. (default:
+        ``False``).
+    :param ac_note_density_track_min: minimum note density per bar to consider.
+        (default: ``0``)
+    :param ac_note_density_track_max: maximum note density per bar to consider.
+        (default: ``18``)
+    :param ac_note_density_bar: enables bar-level note density attribute control
+        tokens using :class:`miditok.attribute_controls.BarNoteDensity`. (default:
+        ``False``).
+    :param ac_note_density_bar_max: maximum note density per bar to consider.
+        (default: ``18``)
+    :param ac_note_duration_bar: enables bar-level note duration attribute control
+        tokens using :class:`miditok.attribute_controls.BarNoteDuration`. (default:
+        ``False``).
+    :param ac_note_duration_track: enables track-level note duration attribute control
+        tokens using :class:`miditok.attribute_controls.TrackNoteDuration`. (default:
+        ``False``).
+    :param ac_repetition_track: enables track-level repetition attribute control tokens
+        using :class:`miditok.attribute_controls.TrackRepetition`. (default: ``False``).
+    :param ac_repetition_track_num_bins: number of levels of repetitions. (default:
+        ``10``)
+    :param ac_repetition_track_num_consec_bars: number of successive bars to
+        compare the repetition similarity between bars. (default: ``4``)
     :param kwargs: additional parameters that will be saved in
         ``config.additional_params``.
     """
@@ -543,6 +594,21 @@ class TokenizerConfig:
         max_pitch_interval: int = MAX_PITCH_INTERVAL,
         pitch_intervals_max_time_dist: bool = PITCH_INTERVALS_MAX_TIME_DIST,
         drums_pitch_range: tuple[int, int] = DRUM_PITCH_RANGE,
+        ac_polyphony_track: bool = AC_POLYPHONY_TRACK,
+        ac_polyphony_bar: bool = AC_POLYPHONY_BAR,
+        ac_polyphony_min: int = AC_POLYPHONY_MIN,
+        ac_polyphony_max: int = AC_POLYPHONY_MAX,
+        ac_pitch_class_bar: bool = AC_PITCH_CLASS_BAR,
+        ac_note_density_track: bool = AC_NOTE_DENSITY_TRACK,
+        ac_note_density_track_min: int = AC_NOTE_DENSITY_TRACK_MIN,
+        ac_note_density_track_max: int = AC_NOTE_DENSITY_TRACK_MAX,
+        ac_note_density_bar: bool = AC_NOTE_DENSITY_BAR,
+        ac_note_density_bar_max: int = AC_NOTE_DENSITY_BAR_MAX,
+        ac_note_duration_bar: bool = AC_NOTE_DURATION_BAR,
+        ac_note_duration_track: bool = AC_NOTE_DURATION_TRACK,
+        ac_repetition_track: bool = AC_REPETITION_TRACK,
+        ac_repetition_track_num_bins: int = AC_REPETITION_TRACK_NUM_BINS,
+        ac_repetition_track_num_consec_bars: int = AC_REPETITION_TRACK_NUM_CONSEC_BARS,
         **kwargs,
     ) -> None:
         # Checks
@@ -683,6 +749,23 @@ class TokenizerConfig:
                     " consider to updateyour code with this new argument name.",
                     stacklevel=2,
                 )
+
+        # Attribute controls
+        self.ac_polyphony_track = ac_polyphony_track
+        self.ac_polyphony_bar = ac_polyphony_bar
+        self.ac_polyphony_min = ac_polyphony_min
+        self.ac_polyphony_max = ac_polyphony_max
+        self.ac_pitch_class_bar = ac_pitch_class_bar
+        self.ac_note_density_track = ac_note_density_track
+        self.ac_note_density_track_min = ac_note_density_track_min
+        self.ac_note_density_track_max = ac_note_density_track_max
+        self.ac_note_density_bar = ac_note_density_bar
+        self.ac_note_density_bar_max = ac_note_density_bar_max
+        self.ac_note_duration_bar = ac_note_duration_bar
+        self.ac_note_duration_track = ac_note_duration_track
+        self.ac_repetition_track = ac_repetition_track
+        self.ac_repetition_track_num_bins = ac_repetition_track_num_bins
+        self.ac_repetition_track_num_consec_bars = ac_repetition_track_num_consec_bars
 
         # Additional params
         self.additional_params = kwargs

@@ -13,6 +13,7 @@ from miditok.classes import Event, TokSequence
 from miditok.constants import MMM_COMPATIBLE_TOKENIZERS
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
     from pathlib import Path
 
     from symusic import Score
@@ -102,6 +103,8 @@ class MMM(MusicTokenizer):
         score: Score | Path,
         encode_ids: bool = True,
         no_preprocess_score: bool = False,
+        attribute_controls_indexes: Mapping[int, Mapping[int, Sequence[int] | bool]]
+        | None = None,
         concatenate_track_sequences: bool = True,
     ) -> TokSequence | list[TokSequence]:
         r"""
@@ -127,13 +130,27 @@ class MMM(MusicTokenizer):
             preprocessed ``symusic.Score`` along with the tokens to not have to
             preprocess it twice as this method preprocesses it inplace.
             (default: ``False``)
+        :param attribute_controls_indexes: indices of the attribute controls to compute
+            and associated tracks and bars. This argument has to be provided as a
+            dictionary mapping track indices to dictionaries mapping attribute control
+            indices (indexing ``tokenizer.attribute_controls``) to a sequence of bar
+            indexes if the AC is "bar-level" or anything if it is "track-level".
+            Its structure is as:
+            ``{track_idx: {ac_idx: Any (track ac) | [bar_idx, ...] (bar ac)}}``
+            This argument is meant to be used when training a model in order to make it
+            learn to generate tokens accordingly to the attribute controls.
         :param concatenate_track_sequences: will concatenate the token sequences of each
             track after tokenizing them. (default: ``True``)
         :return: a :class:`miditok.TokSequence` if ``tokenizer.one_token_stream`` is
             ``True``, else a list of :class:`miditok.TokSequence` objects.
         """
         self.concatenate_track_sequences = concatenate_track_sequences
-        return super().encode(score, encode_ids, no_preprocess_score)
+        return super().encode(
+            score,
+            encode_ids,
+            no_preprocess_score,
+            attribute_controls_indexes,
+        )
 
     def preprocess_score(self, score: Score) -> Score:
         r"""
@@ -158,7 +175,12 @@ class MMM(MusicTokenizer):
         self.one_token_stream = previous_value
         return score
 
-    def _score_to_tokens(self, score: Score) -> TokSequence | list[TokSequence]:
+    def _score_to_tokens(
+        self,
+        score: Score,
+        attribute_controls_indexes: Mapping[int, Mapping[int, Sequence[int] | bool]]
+        | None = None,
+    ) -> TokSequence | list[TokSequence]:
         r"""
         Convert a **preprocessed** ``symusic.Score`` object to a sequence of tokens.
 
@@ -171,11 +193,20 @@ class MMM(MusicTokenizer):
         events of each track are treated independently.
 
         :param score: the :class:`symusic.Score` object to convert.
+        :param attribute_controls_indexes: indices of the attribute controls to compute
+            and associated tracks and bars. This argument has to be provided as a
+            dictionary mapping track indices to dictionaries mapping attribute control
+            indices (indexing ``tokenizer.attribute_controls``) to a sequence of bar
+            indexes if the AC is "bar-level" or anything if it is "track-level".
+            Its structure is as:
+            ``{track_idx: {ac_idx: Any (track ac) | [bar_idx, ...] (bar ac)}}``
+            This argument is meant to be used when training a model in order to make it
+            learn to generate tokens accordingly to the attribute controls.
         :return: a :class:`miditok.TokSequence` if ``tokenizer.one_token_stream`` is
             ``True``, else a list of :class:`miditok.TokSequence` objects.
         """
         self.one_token_stream = False
-        sequences = super()._score_to_tokens(score)
+        sequences = super()._score_to_tokens(score, attribute_controls_indexes)
         self.one_token_stream = True
 
         # Concatenate the sequences
@@ -284,6 +315,9 @@ class MMM(MusicTokenizer):
         tokenizer, and will be added to the vocabulary by
         :class:`miditok.MusicTokenizer`.
 
+        **Attribute control tokens are added when creating the tokenizer by the**
+        ``MusicTokenizer.add_attribute_control`` **method.**
+
         :return: the vocabulary as a list of string.
         """
         # `_tweak_config_before_creating_voc` already called, this method returns the
@@ -335,7 +369,6 @@ class MMM(MusicTokenizer):
         special_token: bool = False,
         vocab_idx: int | None = None,
         byte_: str | None = None,
-        add_to_model: bool = False,
     ) -> None:
         r"""
         Add an event to the vocabulary. Its id will be the length of the vocab.
@@ -349,14 +382,11 @@ class MMM(MusicTokenizer):
             token is used to encode-decode ids with the tokenizer's model (BPE, Unigram,
             WordPiece). If None is given, it will default to ``chr(id_ + CHR_ID_START)``
             . (default: ``None``)
-        :param add_to_model: the token will be added to the model vocabulary
-            too. (default: ``None``)
         """
         self.base_tokenizer.add_to_vocab(
             token,
             special_token,
             vocab_idx,
             byte_,
-            add_to_model,
         )
-        super().add_to_vocab(token, special_token, vocab_idx, byte_, add_to_model)
+        super().add_to_vocab(token, special_token, vocab_idx, byte_)

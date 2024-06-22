@@ -8,11 +8,11 @@ When indexed, the ``Dataset`` will output dictionaries with values corresponding
 Loading data
 --------------------------
 
-MidiTok provides two dataset classes: :class:`miditok.pytorch_data.DatasetMIDI` and :class:`miditok.pytorch_data.JSON`.
+MidiTok provides two dataset classes: :class:`miditok.pytorch_data.DatasetMIDI` and :class:`miditok.pytorch_data.DatasetJSON`.
 
 :class:`miditok.pytorch_data.DatasetMIDI` loads MIDI files and can either tokenize them on the fly when the dataset is indexed, or pre-tokenize them when creating it and saving the token ids in memory. **For most use cases, this Dataset should fulfill your needs and is recommended.**
 
-:class:`miditok.pytorch_data.JSON` loads JSON files containing token ids. It requires to first tokenize a dataset to be used. This dataset is only compatible with JSON files saved as "one token stream" (``tokenizer.one_token_stream``). In order to use it for all the tracks of a multi-stream tokenizer, you will need to save each track token sequence as a separate JSON file.
+:class:`miditok.pytorch_data.DatasetJSON` loads JSON files containing token ids. It requires to first tokenize a dataset to be used. This dataset is only compatible with JSON files saved as "one token stream" (``tokenizer.one_token_stream``). In order to use it for all the tracks of a multi-stream tokenizer, you will need to save each track token sequence as a separate JSON file.
 
 Preparing data
 --------------------------

@@ -76,6 +76,7 @@ class CPWord(MusicTokenizer):
         self.config.use_pitch_bends = False
         self.config.use_pitch_intervals = False
         self.config.program_changes = False
+        self._disable_attribute_controls()
         token_types = ["Family", "Position", "Pitch", "Velocity", "Duration"]
         for add_tok_attr, add_token in [
             ("use_programs", "Program"),

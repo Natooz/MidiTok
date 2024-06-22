@@ -18,10 +18,16 @@ from symusic import (
 )
 
 import miditok
+from miditok.attribute_controls import BarAttributeControl
 from miditok.constants import CHORD_MAPS, TIME_SIGNATURE, TIME_SIGNATURE_RANGE
+from miditok.utils import get_bars_ticks, get_beats_ticks
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
+
     from symusic.core import TempoTickList
+
+    from miditok import MusicTokenizer, TokSequence
 
 SEED = 777
 
@@ -70,6 +76,19 @@ TOKENIZER_CONFIG_KWARGS = {
     "use_bar_end_tokens": True,
 }
 MAX_BAR_EMBEDDING = 2000
+
+# For attribute controls
+_TOKEN_TYPES_TRACK_ATTRIBUTE = {"Track", "Program", "ProgramChange"}
+_TOKEN_TYPES_BREAK_ITERATION = {
+    "Bar",
+    "TimeShift",
+    "TimeSig",
+    "Tempo",
+    "Pitch",
+    "NoteOn",
+}
+TRACKS_RANDOM_RATIO_RANGE = (0.2, 0.7)
+BARS_RANDOM_RATIO_RANGE = (0.2, 0.7)
 
 
 def adjust_tok_params_for_tests(tokenization: str, params: dict[str, Any]) -> None:
@@ -129,9 +148,7 @@ def sort_score(score: Score, sort_tracks: bool = True) -> None:
         score.tracks.sort(key=lambda x: (x.program, x.is_drum))
 
 
-def adapt_ref_score_before_tokenize(
-    score: Score, tokenizer: miditok.MusicTokenizer
-) -> None:
+def adapt_ref_score_before_tokenize(score: Score, tokenizer: MusicTokenizer) -> None:
     """
     Adapt (inplace) the contents of a Score before it is tokenized.
 
@@ -190,7 +207,7 @@ def adapt_ref_score_before_tokenize(
 
 
 def adapt_ref_score_for_tests_assertion(
-    score: Score, tokenizer: miditok.MusicTokenizer
+    score: Score, tokenizer: MusicTokenizer
 ) -> Score:
     """
     Adapt a reference raw/unprocessed Score for test assertions.
@@ -357,7 +374,7 @@ def check_scores_equals(
 
 def tokenize_and_check_equals(
     score: Score,
-    tokenizer: miditok.MusicTokenizer,
+    tokenizer: MusicTokenizer,
     file_name: str,
 ) -> tuple[Score, Score, bool]:
     tokenization = type(tokenizer).__name__
@@ -506,3 +523,69 @@ def clip_durations(
             tpb_idx += 1
         if note_pedal.duration > max_durations[tpb_idx, 1]:
             note_pedal.duration = max_durations[tpb_idx, 1]
+
+
+def check_control_tokens_are_well_inserted(
+    tokenizer: MusicTokenizer,
+    score: Score,
+    tokens: TokSequence | Sequence[TokSequence],
+    ac_indexes: Mapping[int, Mapping[int, bool | Sequence[int]]],
+) -> list[tuple[int, str]]:
+    errors = []
+
+    # If MMM split the token sequence per track
+    if isinstance(tokenizer, miditok.MMM):
+        tokens = tokenizer.split_tokseq_per_track(tokens, keep_track_tokens=True)
+
+    ticks_bars = get_bars_ticks(score)
+    ticks_beats = get_beats_ticks(score)
+    for track_idx, acs in ac_indexes.items():
+        for ac_idx, tracks_bars_idx in acs.items():
+            controls = tokenizer.attribute_controls[ac_idx].compute(
+                score.tracks[track_idx],
+                score.ticks_per_quarter,
+                ticks_bars,
+                ticks_beats,
+                tracks_bars_idx,
+            )
+            seq = tokens[track_idx]
+            if isinstance(tokenizer.attribute_controls[ac_idx], BarAttributeControl):
+                tokens_times = np.array([event.time for event in seq.events])
+                for control in controls:
+                    bar_tick = control.time
+                    control_token = str(control)
+                    token_bar_idx = np.where(tokens_times >= bar_tick)[0][0].item()
+                    offset = 0
+                    while (
+                        token_bar_idx + offset < len(seq.tokens)
+                        and seq.events[token_bar_idx + offset].time == bar_tick
+                        and seq.tokens[token_bar_idx + offset] != control_token
+                    ):
+                        offset += 1
+                    if seq.tokens[token_bar_idx + offset] != control_token:
+                        errors.append(
+                            (
+                                track_idx,
+                                f"bar-{bar_tick}_{control_token}",
+                            )
+                        )
+
+            # Track-level attribute control
+            # Just make sure the controls are present at the beginning (exc. MMM)
+            else:
+                controls_tokens = [str(control) for control in controls]
+                for control in controls_tokens:
+                    for token in seq.tokens:
+                        if token == control:
+                            break
+                        if token in controls_tokens:
+                            continue
+                        token_type = token.split("_")[0]
+                        if not token_type.startswith("ACTrack") and (
+                            token_type not in _TOKEN_TYPES_TRACK_ATTRIBUTE
+                            or token_type in _TOKEN_TYPES_BREAK_ITERATION
+                        ):
+                            errors.append((track_idx, control))
+                            break
+
+    return errors

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from symusic import Score
 
+from .attribute_controls import create_random_ac_indexes
 from .classes import TokSequence
 from .constants import SCORE_LOADING_EXCEPTION
 
@@ -26,15 +27,29 @@ class TokTrainingIterator:
 
     :param tokenizer: tokenizer to use for training.
     :param files_paths: sequence of paths of files to load for training.
+    :param tracks_idx_random_ratio_range: range of ratios (between 0 and 1 included) of
+        tracks to compute attribute controls on. If ``None`` is given, the attribute
+        controls will be computed for all the tracks. (default: ``None``)
+    :param bars_idx_random_ratio_range: range of ratios (between 0 and 1 included) of
+        bars to compute attribute controls on. If ``None`` is given, the attribute
+        controls will be computed for all the bars. (default: ``None``)
     """
 
     def __init__(
         self,
         tokenizer: MusicTokenizer,
         files_paths: Sequence[Path],
+        tracks_idx_random_ratio_range: tuple[float, float] | None = None,
+        bars_idx_random_ratio_range: tuple[float, float] | None = None,
     ) -> None:
         self.tokenizer = tokenizer
         self.files_paths = files_paths
+        self.tracks_idx_random_ratio_range = (
+            tracks_idx_random_ratio_range if tracks_idx_random_ratio_range else []
+        )
+        self.bars_idx_random_ratio_range = (
+            bars_idx_random_ratio_range if bars_idx_random_ratio_range else []
+        )
         self.__iter_count = 0
 
     def load_file(self, path: Path) -> list[str]:
@@ -49,8 +64,31 @@ class TokTrainingIterator:
             score = Score(path)
         except SCORE_LOADING_EXCEPTION:
             return []
+
+        # Preprocess first to already have the appropriate tracks idx in case of deletes
+        score = self.tokenizer.preprocess_score(score)
+
+        # Randomly create attribute controls indexes
+        ac_indexes = None
+        if (
+            len(self.tracks_idx_random_ratio_range) > 0
+            or len(self.bars_idx_random_ratio_range) > 0
+        ):
+            ac_indexes = create_random_ac_indexes(
+                score,
+                self.tokenizer.attribute_controls,
+                self.tracks_idx_random_ratio_range,
+                self.bars_idx_random_ratio_range,
+            )
+
+        # Tokenize the file
         # Need to specify `encode_ids=False` as it might be already pretrained
-        tokseq = self.tokenizer(score, encode_ids=False)
+        tokseq = self.tokenizer(
+            score,
+            encode_ids=False,
+            no_preprocess_score=True,
+            attribute_controls_indexes=ac_indexes,
+        )
 
         # Split ids if requested
         if self.tokenizer.config.encode_ids_split in ["bar", "beat"]:
