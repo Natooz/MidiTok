@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 from warnings import warn
 
 from symusic import Note, Score, Tempo, TimeSignature, Track
@@ -10,6 +11,9 @@ from miditok.classes import Event, TokSequence
 from miditok.constants import MIDI_INSTRUMENTS, TIME_SIGNATURE
 from miditok.midi_tokenizer import MusicTokenizer
 from miditok.utils import compute_ticks_per_bar, compute_ticks_per_beat, get_bars_ticks
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
 
 
 class Octuple(MusicTokenizer):
@@ -62,6 +66,7 @@ class Octuple(MusicTokenizer):
         self.config.use_pitch_intervals = False
         self.config.delete_equal_successive_tempo_changes = True
         self.config.program_changes = False
+        self._disable_attribute_controls()
 
         # used in place of positional encoding
         if "max_bar_embedding" not in self.config.additional_params:
@@ -163,7 +168,12 @@ class Octuple(MusicTokenizer):
 
         return all_events
 
-    def _score_to_tokens(self, score: Score) -> TokSequence | list[TokSequence]:
+    def _score_to_tokens(
+        self,
+        score: Score,
+        attribute_controls_indexes: Mapping[int, Mapping[int, Sequence[int] | bool]]
+        | None = None,
+    ) -> TokSequence | list[TokSequence]:
         r"""
         Convert a **preprocessed** ``symusic.Score`` object to a sequence of tokens.
 
@@ -179,6 +189,7 @@ class Octuple(MusicTokenizer):
         :return: a :class:`miditok.TokSequence` if ``tokenizer.one_token_stream`` is
             ``True``, else a list of :class:`miditok.TokSequence` objects.
         """
+        del attribute_controls_indexes
         # Check bar embedding limit, update if needed
         bar_ticks = get_bars_ticks(score)
         if self.config.additional_params["max_bar_embedding"] < len(bar_ticks):

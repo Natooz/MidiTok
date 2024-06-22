@@ -58,6 +58,7 @@ Contents
    tokenizing_music_with_miditok
    configuration
    tokenizations
+   attribute_controls
    train
    hf_hub
    pytorch_data

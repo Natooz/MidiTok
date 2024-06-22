@@ -11,6 +11,7 @@ from torch import LongTensor
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
+from miditok.attribute_controls import create_random_ac_indexes
 from miditok.constants import SCORE_LOADING_EXCEPTION
 
 if TYPE_CHECKING:
@@ -115,6 +116,12 @@ class DatasetMIDI(_DatasetABC):
     :param pre_tokenize: whether to pre-tokenize the data files when creating the
         ``Dataset`` object. If this is enabled, the ``Dataset`` will tokenize all the
         files at its initialization and store the tokens in memory.
+    :param ac_tracks_random_ratio_range: range of ratios (between 0 and 1 included) of
+        tracks to compute attribute controls on. If ``None`` is given, the attribute
+        controls will be computed for all the tracks. (default: ``None``)
+    :param ac_bars_random_ratio_range: range of ratios (between 0 and 1 included) of
+        bars to compute attribute controls on. If ``None`` is given, the attribute
+        controls will be computed for all the bars. (default: ``None``)
     :param func_to_get_labels: a function to retrieve the label of a file. The method
         must take two positional arguments: the first is either the
         :class:`miditok.TokSequence` returned when tokenizing a file, the second is the
@@ -136,6 +143,8 @@ class DatasetMIDI(_DatasetABC):
         bos_token_id: int | None = None,
         eos_token_id: int | None = None,
         pre_tokenize: bool = False,
+        ac_tracks_random_ratio_range: tuple[float, float] | None = None,
+        ac_bars_random_ratio_range: tuple[float, float] | None = None,
         func_to_get_labels: Callable[
             [Score, TokSequence | list[TokSequence], Path],
             int | list[int] | LongTensor,
@@ -153,6 +162,8 @@ class DatasetMIDI(_DatasetABC):
         self.bos_token_id = bos_token_id
         self.eos_token_id = eos_token_id
         self.pre_tokenize = pre_tokenize
+        self.tracks_idx_random_ratio_range = ac_tracks_random_ratio_range
+        self.bars_idx_random_ratio_range = ac_bars_random_ratio_range
         self.func_to_get_labels = func_to_get_labels
         self.sample_key_name = sample_key_name
         self.labels_key_name = labels_key_name
@@ -228,8 +239,25 @@ class DatasetMIDI(_DatasetABC):
         return item
 
     def _tokenize_score(self, score: Score) -> TokSequence | list[TokSequence]:
+        # Preprocess the music file
+        score = self.tokenizer.preprocess_score(score)
+
+        # Randomly create attribute controls indexes
+        ac_indexes = None
+        if self.tracks_idx_random_ratio_range or self.bars_idx_random_ratio_range:
+            ac_indexes = create_random_ac_indexes(
+                score,
+                self.tokenizer.attribute_controls,
+                self.tracks_idx_random_ratio_range,
+                self.bars_idx_random_ratio_range,
+            )
+
         # Tokenize it
-        tokseq = self.tokenizer.encode(score)
+        tokseq = self.tokenizer.encode(
+            score,
+            no_preprocess_score=True,
+            attribute_controls_indexes=ac_indexes,
+        )
 
         # If tokenizing on the fly a multi-stream tokenizer, only keeps the first track
         if not self.pre_tokenize and not self.tokenizer.one_token_stream:

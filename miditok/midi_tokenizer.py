@@ -7,7 +7,7 @@ import math
 import sys
 import warnings
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from copy import deepcopy
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
@@ -45,6 +45,17 @@ from tokenizers import pre_tokenizers as _pre_tokenizers
 from tokenizers import trainers as _tok_trainers
 from tqdm import tqdm
 
+from .attribute_controls import (
+    BarAttributeControl,
+    BarNoteDensity,
+    BarNoteDuration,
+    BarOnsetPolyphony,
+    BarPitchClass,
+    TrackLevelNoteDuration,
+    TrackNoteDensity,
+    TrackOnsetPolyphony,
+    TrackRepetition,
+)
 from .classes import Event, TokenizerConfig, TokSequence
 from .constants import (
     ABC_FILES_EXTENSIONS,
@@ -74,6 +85,8 @@ from .utils import (
     compute_ticks_per_bar,
     convert_ids_tensors_to_list,
     detect_chords,
+    get_bars_ticks,
+    get_beats_ticks,
     get_score_programs,
     get_score_ticks_per_beat,
     is_track_empty,
@@ -90,6 +103,8 @@ from .utils.utils import (
 
 if TYPE_CHECKING:
     from symusic.core import TempoTickList
+
+    from .attribute_controls import AttributeControl
 
 
 class MusicTokenizer(ABC, HFHubMixin):
@@ -232,6 +247,20 @@ class MusicTokenizer(ABC, HFHubMixin):
         # loaded.
         if len(self.vocab) == 0:
             self.__create_vocabulary()
+
+        # Attribute controls
+        self.attribute_controls = []
+        if self.one_token_stream or self.is_multi_voc:
+            self._disable_attribute_controls()
+            warnings.warn(
+                "Attribute controls are not compatible with 'one_token_stream' "
+                "and multi-vocabulary tokenizers. Disabling them from the config.",
+                stacklevel=2,
+            )
+        else:
+            self._initialize_attribute_controls()
+
+        # Token type graph
         self.tokens_types_graph = self._create_token_types_graph()
         self._add_special_tokens_to_types_graph()
         self._token_types_indexes = {}
@@ -244,6 +273,58 @@ class MusicTokenizer(ABC, HFHubMixin):
         # called after setting the tokenizer's TokenizerConfig (.config). To be
         # customized by tokenizer classes.
         pass
+
+    def _initialize_attribute_controls(self) -> None:
+        if self.config.ac_polyphony_track:
+            self.add_attribute_control(
+                TrackOnsetPolyphony(
+                    self.config.ac_polyphony_min, self.config.ac_polyphony_max
+                )
+            )
+        if self.config.ac_polyphony_bar:
+            self.add_attribute_control(
+                BarOnsetPolyphony(
+                    self.config.ac_polyphony_min, self.config.ac_polyphony_max
+                )
+            )
+        if self.config.ac_pitch_class_bar:
+            self.add_attribute_control(BarPitchClass())
+        if self.config.ac_note_density_track:
+            self.add_attribute_control(
+                TrackNoteDensity(
+                    self.config.ac_note_density_track_min,
+                    self.config.ac_note_density_track_max,
+                )
+            )
+        if self.config.ac_note_density_bar:
+            self.add_attribute_control(
+                BarNoteDensity(self.config.ac_note_density_bar_max)
+            )
+        if self.config.ac_note_duration_bar:
+            self.add_attribute_control(BarNoteDuration())
+        if self.config.ac_note_duration_track:
+            self.add_attribute_control(TrackLevelNoteDuration())
+        if self.config.ac_repetition_track:
+            self.add_attribute_control(
+                TrackRepetition(
+                    self.config.ac_repetition_track_num_bins,
+                    self.config.ac_repetition_track_num_consec_bars,
+                    self.config.pitch_range,
+                )
+            )
+
+    def add_attribute_control(self, attribute_control: AttributeControl) -> None:
+        """
+        Add a :class:`miditok.attribute_control.AttributeControl` to the tokenizer.
+
+        The tokens of the attribute controls will also be added to the vocabulary.
+
+        :param attribute_control: :class:`miditok.attribute_control.AttributeControl` to
+            add to the tokenizer.
+        """
+        self.attribute_controls.append(attribute_control)
+        for token in attribute_control.tokens:
+            self.add_to_vocab(token)
 
     @property
     def pad_token_id(self) -> int:
@@ -1013,7 +1094,12 @@ class MusicTokenizer(ABC, HFHubMixin):
             if dur_idx_last is None:
                 break
 
-    def _score_to_tokens(self, score: Score) -> TokSequence | list[TokSequence]:
+    def _score_to_tokens(
+        self,
+        score: Score,
+        attribute_controls_indexes: Mapping[int, Mapping[int, Sequence[int] | bool]]
+        | None = None,
+    ) -> TokSequence | list[TokSequence]:
         r"""
         Convert a **preprocessed** ``symusic.Score`` object to a sequence of tokens.
 
@@ -1024,6 +1110,15 @@ class MusicTokenizer(ABC, HFHubMixin):
         events of each track are treated independently.
 
         :param score: the :class:`symusic.Score` object to convert.
+        :param attribute_controls_indexes: indices of the attribute controls to compute
+            and associated tracks and bars. This argument has to be provided as a
+            dictionary mapping track indices to dictionaries mapping attribute control
+            indices (indexing ``tokenizer.attribute_controls``) to a sequence of bar
+            indexes if the AC is "bar-level" or anything if it is "track-level".
+            Its structure is as:
+            ``{track_idx: {ac_idx: Any (track ac) | [bar_idx, ...] (bar ac)}}``
+            This argument is meant to be used when training a model in order to make it
+            learn to generate tokens accordingly to the attribute controls.
         :return: a :class:`miditok.TokSequence` if ``tokenizer.one_token_stream`` is
             ``True``, else a list of :class:`miditok.TokSequence` objects.
         """
@@ -1034,6 +1129,8 @@ class MusicTokenizer(ABC, HFHubMixin):
                 all_events.append([])
             else:
                 all_events = [[] for _ in range(len(score.tracks))]
+        if attribute_controls_indexes is None:
+            attribute_controls_indexes = {}
 
         # Global events (Tempo, TimeSignature)
         global_events = self._create_global_events(score)
@@ -1059,8 +1156,17 @@ class MusicTokenizer(ABC, HFHubMixin):
             ticks_per_beat = None
 
         # Adds track tokens
+        ticks_bars = get_bars_ticks(score)
+        ticks_beats = get_beats_ticks(score)
         for ti, track in enumerate(score.tracks):
-            track_events = self._create_track_events(track, ticks_per_beat)
+            track_events = self._create_track_events(
+                track,
+                ticks_per_beat,
+                score.ticks_per_quarter,
+                ticks_bars,
+                ticks_beats,
+                attribute_controls_indexes.get(ti, None),
+            )
             if self.one_token_stream:
                 all_events += track_events
             else:
@@ -1107,9 +1213,21 @@ class MusicTokenizer(ABC, HFHubMixin):
     def _sort_events(self, events: list[Event]) -> None:
         # Can be overridden by subclasses if required (MIDILike)
         events.sort(key=lambda e: e.time)
+        # Set Events of track-level attribute controls from -1 to 0 after sorting
+        if len(self.attribute_controls) > 0:
+            for event in events:
+                if not event.type_.startswith("ACTrack"):
+                    break
+                event.time = 0
 
     def _create_track_events(
-        self, track: Track, ticks_per_beat: np.ndarray = None
+        self,
+        track: Track,
+        ticks_per_beat: np.ndarray,
+        time_division: int,
+        ticks_bars: Sequence[int],
+        ticks_beats: Sequence[int],
+        attribute_controls_indexes: Mapping[int, Sequence[int] | bool] | None = None,
     ) -> list[Event]:
         r"""
         Extract the tokens/events from a track (``symusic.Track``).
@@ -1128,6 +1246,16 @@ class MusicTokenizer(ABC, HFHubMixin):
             each portion and the number of ticks per beat respectively.
             This argument is not required if the tokenizer is not using *Duration*,
             *PitchInterval* or *Chord* tokens. (default: ``None``)
+        :param time_division: time division in ticks per quarter note of the file.
+        :param ticks_bars: ticks indicating the beginning of each bar.
+        :param ticks_beats: ticks indicating the beginning of each beat.
+        :param attribute_controls_indexes: indices of the attribute controls to compute
+            This argument has to be provided as a dictionary mapping attribute control
+            indices (indexing ``tokenizer.attribute_controls``) to a sequence of
+            bar indexes if the AC is "bar-level" or anything if it is "track-level".
+            Its structure is as: ``{ac_idx: Any (track ac) | [bar_idx, ...] (bar ac)}``
+            This argument is meant to be used when training a model in order to make it
+            learn to generate tokens accordingly to the attribute controls.
         :return: sequence of corresponding ``Event``s.
         """
         if self.config.use_programs:
@@ -1144,6 +1272,22 @@ class MusicTokenizer(ABC, HFHubMixin):
         previous_note_onset = -max_time_interval - 1
         previous_pitch_onset = -128  # lowest at a given time
         previous_pitch_chord = -128  # for chord intervals
+
+        # Attribute controls
+        if attribute_controls_indexes:
+            for ac_idx, tracks_bars_idx in attribute_controls_indexes.items():
+                if (
+                    isinstance(self.attribute_controls[ac_idx], BarAttributeControl)
+                    and len(tracks_bars_idx) == 0
+                ):
+                    continue
+                events += self.attribute_controls[ac_idx].compute(
+                    track,
+                    time_division,
+                    ticks_bars,
+                    ticks_beats,
+                    tracks_bars_idx,
+                )
 
         # Add sustain pedal
         if self.config.use_sustain_pedals:
@@ -1437,6 +1581,8 @@ class MusicTokenizer(ABC, HFHubMixin):
         score: Score | Path,
         encode_ids: bool = True,
         no_preprocess_score: bool = False,
+        attribute_controls_indexes: Mapping[int, Mapping[int, Sequence[int] | bool]]
+        | None = None,
     ) -> TokSequence | list[TokSequence]:
         r"""
         Tokenize a music file (MIDI/abc), given as a ``symusic.Score`` or a file path.
@@ -1461,6 +1607,19 @@ class MusicTokenizer(ABC, HFHubMixin):
             preprocessed ``symusic.Score`` along with the tokens to not have to
             preprocess it twice as this method preprocesses it inplace.
             (default: ``False``)
+        :param attribute_controls_indexes: indices of the attribute controls to compute
+            and associated tracks and bars. This argument has to be provided as a
+            dictionary mapping track indices to dictionaries mapping attribute control
+            indices (indexing ``tokenizer.attribute_controls``) to a sequence of bar
+            indexes if the AC is "bar-level" or anything if it is "track-level".
+            Its structure is as:
+            ``{track_idx: {ac_idx: Any (track ac) | [bar_idx, ...] (bar ac)}}``
+            This argument is meant to be used when training a model in order to make it
+            learn to generate tokens accordingly to the attribute controls. For maximum
+            safety, it should be used with ``no_preprocess_score`` with an already
+            preprocessed ``symusic.Score`` in order to make sure that the provided
+            tracks indexes will remain correct as the preprocessing might delete or
+            merge tracks depending on the tokenizer's configuration.
         :return: a :class:`miditok.TokSequence` if ``tokenizer.one_token_stream`` is
             ``True``, else a list of :class:`miditok.TokSequence` objects.
         """
@@ -1473,7 +1632,7 @@ class MusicTokenizer(ABC, HFHubMixin):
             score = self.preprocess_score(score)
 
         # Tokenize it
-        tokens = self._score_to_tokens(score)
+        tokens = self._score_to_tokens(score, attribute_controls_indexes)
         # Add bar/beat ticks here to TokSeq as they need to be from preprocessed Score
         add_bar_beats_ticks_to_tokseq(tokens, score)
 
@@ -1813,6 +1972,17 @@ class MusicTokenizer(ABC, HFHubMixin):
         """
         raise NotImplementedError
 
+    def _disable_attribute_controls(self) -> None:
+        # To be called in `_tweak_config_before_creating_voc` by tokenizers classes
+        self.config.ac_polyphony_track = False
+        self.config.ac_polyphony_bar = False
+        self.config.ac_pitch_class_bar = False
+        self.config.ac_note_density_track = False
+        self.config.ac_note_density_bar = False
+        self.config.ac_note_duration_bar = False
+        self.config.ac_note_duration_track = False
+        self.config.ac_repetition_track = False
+
     @abstractmethod
     def _create_base_vocabulary(self) -> list[str | list[str]]:
         r"""
@@ -1824,6 +1994,9 @@ class MusicTokenizer(ABC, HFHubMixin):
         vocabulary as a dictionary. Special tokens have to be given when creating the
         tokenizer, and will be added to the vocabulary by
         :class:`miditok.MusicTokenizer`.
+
+        **Attribute control tokens are added when creating the tokenizer by the**
+        ``MusicTokenizer.add_attribute_control`` **method.**
 
         :return: the vocabulary as a list of string.
         """
@@ -1976,7 +2149,6 @@ class MusicTokenizer(ABC, HFHubMixin):
         special_token: bool = False,
         vocab_idx: int | None = None,
         byte_: str | None = None,
-        add_to_model: bool = False,
     ) -> None:
         r"""
         Add an event to the vocabulary. Its id will be the length of the vocab.
@@ -1990,8 +2162,6 @@ class MusicTokenizer(ABC, HFHubMixin):
             token is used to encode-decode ids with the tokenizer's model (BPE, Unigram,
             WordPiece). If None is given, it will default to ``chr(id_ + CHR_ID_START)``
             . (default: ``None``)
-        :param add_to_model: the token will be added to the model vocabulary
-            too. (default: ``None``)
         """
         token_str = token if isinstance(token, str) else str(token)
 
@@ -2020,7 +2190,7 @@ class MusicTokenizer(ABC, HFHubMixin):
                 byte_ = chr(id_ + CHR_ID_START)
             self._vocab_base_id_to_byte[id_] = byte_
             self._vocab_base_byte_to_token[byte_] = token
-            if self._model is not None and add_to_model:
+            if self._model is not None:
                 self._model.add_tokens([byte_])
 
     def _create_chords_tokens(self) -> list[str]:

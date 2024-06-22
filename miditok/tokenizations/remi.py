@@ -122,7 +122,10 @@ class REMI(MusicTokenizer):
                     ticks_per_pos = ticks_per_beat // self.config.max_num_pos_per_beat
                     break
         # Add the time events
-        for event in events:
+        for ei, event in enumerate(events):
+            if event.type_.startswith("ACTrack"):
+                all_events.append(event)
+                continue
             if event.time != previous_tick:
                 # (Rest)
                 if (
@@ -210,8 +213,9 @@ class REMI(MusicTokenizer):
                         )
 
                 # Position
-                if event.type_ != "TimeSig":
+                if event.type_ != "TimeSig" and not event.type_.startswith("ACBar"):
                     pos_index = (event.time - tick_at_current_bar) // ticks_per_pos
+                    # if event in TOKEN_TYPES_AC
                     all_events.append(
                         Event(
                             type_="Position",
@@ -242,6 +246,24 @@ class REMI(MusicTokenizer):
                 previous_tick -= 1
 
             all_events.append(event)
+            # Adds a Position token if the current event is a bar-level attribute
+            # control and the next one is at the same position, as the position token
+            # wasn't added previously.
+            if (
+                event.type_.startswith("ACBar")
+                and not events[ei + 1].type_.startswith("ACBar")
+                and event.time == events[ei + 1].time
+            ):
+                pos_index = (event.time - tick_at_current_bar) // ticks_per_pos
+                # if event in TOKEN_TYPES_AC
+                all_events.append(
+                    Event(
+                        type_="Position",
+                        value=pos_index,
+                        time=event.time,
+                        desc=event.time,
+                    )
+                )
 
             # Update max offset time of the notes encountered
             if event.type_ in {
@@ -530,6 +552,9 @@ class REMI(MusicTokenizer):
         vocabulary as a dictionary. Special tokens have to be given when creating the
         tokenizer, and will be added to the vocabulary by
         :class:`miditok.MusicTokenizer`.
+
+        **Attribute control tokens are added when creating the tokenizer by the**
+        ``MusicTokenizer.add_attribute_control`` **method.**
 
         :return: the vocabulary as a list of string.
         """

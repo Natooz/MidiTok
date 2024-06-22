@@ -137,6 +137,12 @@ class MIDILike(MusicTokenizer):
         # This could be removed if we find a way to insert NoteOff tokens before Chords
         if self.config.use_chords:
             events.sort(key=lambda e: (e.time, self._order(e)))
+            # Set Events of track-level attribute controls from -1 to 0 after sorting
+            if len(self.attribute_controls) > 0:
+                for event in events:
+                    if not event.type_.startswith("ACTrack"):
+                        break
+                    event.time = 0
         else:
             super()._sort_events(events)
 
@@ -431,6 +437,9 @@ class MIDILike(MusicTokenizer):
         vocabulary as a dictionary. Special tokens have to be given when creating the
         tokenizer, and will be added to the vocabulary by
         :class:`miditok.MusicTokenizer`.
+
+        **Attribute control tokens are added when creating the tokenizer by the**
+        ``MusicTokenizer.add_attribute_control`` **method.**
 
         :return: the vocabulary as a list of string.
         """

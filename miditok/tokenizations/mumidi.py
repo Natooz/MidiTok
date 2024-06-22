@@ -13,6 +13,8 @@ from miditok.midi_tokenizer import MusicTokenizer
 from miditok.utils import detect_chords, get_bars_ticks, get_score_ticks_per_beat
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
+
     import numpy as np
 
 
@@ -57,6 +59,7 @@ class MuMIDI(MusicTokenizer):
         self.config.use_pitch_intervals = True
         self.config.one_token_stream_for_programs = True
         self.config.program_changes = False
+        self._disable_attribute_controls()
 
         if "max_bar_embedding" not in self.config.additional_params:
             self.config.additional_params["max_bar_embedding"] = 60
@@ -91,7 +94,12 @@ class MuMIDI(MusicTokenizer):
         :return: the same events, with time events inserted.
         """
 
-    def _score_to_tokens(self, score: Score) -> TokSequence:
+    def _score_to_tokens(
+        self,
+        score: Score,
+        attribute_controls_indexes: Mapping[int, Mapping[int, Sequence[int] | bool]]
+        | None = None,
+    ) -> TokSequence:
         r"""
         Convert a **preprocessed** ``symusic.Score`` object to a sequence of tokens.
 
@@ -101,6 +109,7 @@ class MuMIDI(MusicTokenizer):
         :return: a :class:`miditok.TokSequence` if ``tokenizer.one_token_stream`` is
             ``True``, else a list of :class:`miditok.TokSequence` objects.
         """
+        del attribute_controls_indexes
         # Check bar embedding limit, update if needed
         bar_ticks = get_bars_ticks(score)
         if self.config.additional_params["max_bar_embedding"] < len(bar_ticks):

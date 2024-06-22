@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 from symusic import Note, Score, Track
 
@@ -9,6 +11,9 @@ from miditok.classes import Event, TokSequence
 from miditok.constants import MIDI_INSTRUMENTS
 from miditok.midi_tokenizer import MusicTokenizer
 from miditok.utils.utils import np_get_closest
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
 
 
 class Structured(MusicTokenizer):
@@ -39,8 +44,18 @@ class Structured(MusicTokenizer):
         self.config.use_pitch_bends = False
         self.config.use_pitch_intervals = False
         self.config.program_changes = False
+        self._disable_attribute_controls()
 
-    def _create_track_events(self, track: Track, _: None = None) -> list[Event]:
+    def _create_track_events(
+        self,
+        track: Track,
+        ticks_per_beat: np.ndarray | None = None,
+        time_division: int | None = None,
+        ticks_bars: Sequence[int] | None = None,
+        ticks_beats: Sequence[int] | None = None,
+        add_track_attribute_controls: bool = False,
+        bar_idx_attribute_controls: Sequence[int] | None = None,
+    ) -> list[Event]:
         r"""
         Extract the tokens/events from a track (``symusic.Track``).
 
@@ -50,11 +65,15 @@ class Structured(MusicTokenizer):
         then pitch values. This is done in** ``preprocess_score``.
 
         :param track: ``symusic.Track`` to extract events from.
-        :param _: in place of ``ticks_per_beat``, unused here as Structured do not
-            support time signatures, hence the ticks_per_beat value is always the same
-            and equal to the Score's time division.
         :return: sequence of corresponding ``Event``s.
         """
+        del (
+            time_division,
+            ticks_bars,
+            ticks_beats,
+            add_track_attribute_controls,
+            bar_idx_attribute_controls,
+        )
         # Make sure the notes are sorted first by their onset (start) times, second by
         # pitch: notes.sort(key=lambda x: (x.start, x.pitch)) done in preprocess_score
         program = track.program if not track.is_drum else -1
@@ -179,7 +198,12 @@ class Structured(MusicTokenizer):
 
         return all_events
 
-    def _score_to_tokens(self, score: Score) -> TokSequence | list[TokSequence]:
+    def _score_to_tokens(
+        self,
+        score: Score,
+        attribute_controls_indexes: Mapping[int, Mapping[int, Sequence[int] | bool]]
+        | None = None,
+    ) -> TokSequence | list[TokSequence]:
         r"""
         Convert a **preprocessed** ``symusic.Score`` object to a sequence of tokens.
 
@@ -201,6 +225,7 @@ class Structured(MusicTokenizer):
         :return: a :class:`miditok.TokSequence` if ``tokenizer.one_token_stream`` is
             ``True``, else a list of :class:`miditok.TokSequence` objects.
         """
+        del attribute_controls_indexes
         # Convert each track to tokens
         all_events = []
 
