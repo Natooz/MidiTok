@@ -51,8 +51,8 @@ from .attribute_controls import (
     BarNoteDuration,
     BarOnsetPolyphony,
     BarPitchClass,
-    TrackNoteDuration,
     TrackNoteDensity,
+    TrackNoteDuration,
     TrackOnsetPolyphony,
     TrackRepetition,
 )

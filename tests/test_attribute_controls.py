@@ -17,7 +17,6 @@ from .utils_tests import (
     MIDI_PATHS_ONE_TRACK,
     SEED,
     TRACKS_RANDOM_RATIO_RANGE,
-    TRAINING_MODELS,
     check_control_tokens_are_well_inserted,
 )
 
@@ -104,7 +103,7 @@ def test_controller_controls_computation(
 
 
 @pytest.mark.parametrize("tokenization", TOKENIZATIONS)
-@pytest.mark.parametrize("model",  ["BPE"])
+@pytest.mark.parametrize("model", ["BPE"])
 @pytest.mark.parametrize(
     "encode_ids_split",
     ["no", "bar", "beat"],

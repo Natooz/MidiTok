@@ -8,8 +8,8 @@ from .bar_attribute_controls import (
 )
 from .classes import AttributeControl, BarAttributeControl, create_random_ac_indexes
 from .track_attribute_controls import (
-    TrackNoteDuration,
     TrackNoteDensity,
+    TrackNoteDuration,
     TrackOnsetPolyphony,
     TrackRepetition,
 )

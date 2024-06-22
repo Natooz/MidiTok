@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 
 class AttributeControl(ABC):
-    """
+    r"""
     Attribute Control class, defining the possible values and their computation.
 
     **Note:** track-level attribute controls need to return :class:`miditok.Event`\s
