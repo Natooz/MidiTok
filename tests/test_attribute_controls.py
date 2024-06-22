@@ -104,7 +104,7 @@ def test_controller_controls_computation(
 
 
 @pytest.mark.parametrize("tokenization", TOKENIZATIONS)
-@pytest.mark.parametrize("model", ("BPE", ))
+@pytest.mark.parametrize("model",  ["BPE"])
 @pytest.mark.parametrize(
     "encode_ids_split",
     ["no", "bar", "beat"],
