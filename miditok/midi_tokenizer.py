@@ -51,7 +51,7 @@ from .attribute_controls import (
     BarNoteDuration,
     BarOnsetPolyphony,
     BarPitchClass,
-    TrackLevelNoteDuration,
+    TrackNoteDuration,
     TrackNoteDensity,
     TrackOnsetPolyphony,
     TrackRepetition,
@@ -303,7 +303,7 @@ class MusicTokenizer(ABC, HFHubMixin):
         if self.config.ac_note_duration_bar:
             self.add_attribute_control(BarNoteDuration())
         if self.config.ac_note_duration_track:
-            self.add_attribute_control(TrackLevelNoteDuration())
+            self.add_attribute_control(TrackNoteDuration())
         if self.config.ac_repetition_track:
             self.add_attribute_control(
                 TrackRepetition(

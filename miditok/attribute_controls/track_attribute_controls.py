@@ -82,7 +82,7 @@ class TrackOnsetPolyphony(AttributeControl):
         ]
 
 
-class TrackLevelNoteDuration(AttributeControl):
+class TrackNoteDuration(AttributeControl):
     """
     Note duration attribute control.
 

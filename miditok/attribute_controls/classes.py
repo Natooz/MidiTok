@@ -23,7 +23,7 @@ class AttributeControl(ABC):
     """
     Attribute Control class, defining the possible values and their computation.
 
-    **Note:** track-level attribute controls need to return :class:`miditok.Event`s
+    **Note:** track-level attribute controls need to return :class:`miditok.Event` objects
     with ``time`` attributes set to -1, as they need to be at the very first positions
     in the token sequence after sorting the list of events. Their times will be set to
     0 after sorting in ``MusicTokenizer._score_to_tokens``.
