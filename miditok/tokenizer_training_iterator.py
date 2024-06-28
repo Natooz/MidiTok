@@ -83,11 +83,17 @@ class TokTrainingIterator:
 
         # Tokenize the file
         # Need to specify `encode_ids=False` as it might be already pretrained
+        # For MMM, we make sure to have sequences separated per track
+        kwargs = {}
+        # can't use isinstance because of circular import
+        if type(self.tokenizer).__name__ == "MMM":
+            kwargs["concatenate_track_sequences"] = False
         tokseq = self.tokenizer(
             score,
             encode_ids=False,
             no_preprocess_score=True,
             attribute_controls_indexes=ac_indexes,
+            **kwargs,
         )
 
         # Split ids if requested
@@ -101,7 +107,7 @@ class TokTrainingIterator:
                     new_seqs += seq.split_per_bars()
                 else:
                     new_seqs += seq.split_per_beats()
-            tokseq = [seq for seq in new_seqs if len(seq) > 0]
+            tokseq = [seq for seq in new_seqs if len(seq) > 1]
 
         # Convert ids to bytes for training
         if isinstance(tokseq, TokSequence):
