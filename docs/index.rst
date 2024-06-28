@@ -76,5 +76,5 @@ Contents
    :hidden:
    :caption: Project Links
 
-   GitHub <https://github.com/Natooz/GitHub>
+   GitHub <https://github.com/Natooz/MidiTok>
    PyPi <https://pypi.org/project/miditok/>
