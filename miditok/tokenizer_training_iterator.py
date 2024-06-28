@@ -107,7 +107,7 @@ class TokTrainingIterator:
                     new_seqs += seq.split_per_bars()
                 else:
                     new_seqs += seq.split_per_beats()
-            tokseq = [seq for seq in new_seqs if len(seq) > 1]
+            tokseq = [seq for seq in new_seqs if len(seq) > 0]
 
         # Convert ids to bytes for training
         if isinstance(tokseq, TokSequence):
