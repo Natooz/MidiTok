@@ -362,9 +362,9 @@ def split_tokens_files_to_subsequences(
     :param out_dir: output directory to save the subsequences.
     :param min_seq_len: minimum sequence length.
     :param max_seq_len: maximum sequence length.
-    :param one_token_stream: give False if the token files contains multiple tracks,
-        i.e. the first dimension of the value of the "ids" entry corresponds to several
-        tracks. Otherwise, leave False. (default: True)
+    :param one_token_stream: provide ``False`` if the token files contains multiple
+        token streams, i.e. the first dimension of the value of the "ids" entry
+        corresponds to several tracks. Otherwise, leave ``True``. (default: ``True``)
     """
     out_dir.mkdir(parents=True, exist_ok=True)
 

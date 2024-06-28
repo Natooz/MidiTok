@@ -44,7 +44,9 @@ def get_labels_seq(score: Score, tokseq: miditok.TokSequence, _: Path) -> list[i
 @pytest.mark.parametrize(
     "tokenizer_cls", [miditok.TSD, miditok.Octuple], ids=["TSD", "Octuple"]
 )
-@pytest.mark.parametrize("one_token_stream", [True, False], ids=["1 strm", "n strm"])
+@pytest.mark.parametrize(
+    "one_token_stream_for_programs", [True, False], ids=["1 strm", "n strm"]
+)
 @pytest.mark.parametrize("split_files", [True, False], ids=["split", "no split"])
 @pytest.mark.parametrize("pre_tokenize", [True, False], ids=["pretok", "no pretok"])
 @pytest.mark.parametrize("ac_random_tracks_ratio", [None, (0.0, 1.0)])
@@ -54,7 +56,7 @@ def get_labels_seq(score: Score, tokseq: miditok.TokSequence, _: Path) -> list[i
 def test_dataset_midi(
     tmp_path: Path,
     tokenizer_cls: Callable,
-    one_token_stream: bool,
+    one_token_stream_for_programs: bool,
     split_files: bool,
     pre_tokenize: bool,
     ac_random_tracks_ratio: tuple[float, float] | None,
@@ -68,7 +70,9 @@ def test_dataset_midi(
     max_seq_len: int = 1000,
 ):
     config = miditok.TokenizerConfig(
-        use_programs=one_token_stream, max_bar_embedding=MAX_BAR_EMBEDDING
+        use_programs=True,
+        one_token_stream_for_programs=one_token_stream_for_programs,
+        max_bar_embedding=MAX_BAR_EMBEDDING,
     )
     tokenizer = tokenizer_cls(config)
 

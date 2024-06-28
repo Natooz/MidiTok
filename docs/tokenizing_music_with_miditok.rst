@@ -58,9 +58,11 @@ Tokens & TokSequence input / output format
 
 Depending on the tokenizer at use, the **format** of the tokens returned by the :py:func:`miditok.MusicTokenizer.encode` method may vary, as well as the expected format for the :py:func:`miditok.MusicTokenizer.decode` method. The format is given by the :py:func:`miditok.MusicTokenizer.io_format` property. For any tokenizer, the format is the same for both methods.
 
-The format is deduced from the :py:func:`miditok.MusicTokenizer.is_multi_voc` and ``one_token_stream`` tokenizer attributes. ``one_token_stream`` being ``True`` means that the tokenizer will convert a MIDI file into a single stream of tokens for all instrument tracks, otherwise it will convert each track to a distinct token sequence. :py:func:`miditok.MusicTokenizer.is_multi_voc` being True means that each token stream is a list of lists of tokens, of shape ``(T,C)`` for T time steps and C subtokens per time step.
+The format is deduced from the :py:func:`miditok.MusicTokenizer.is_multi_voc` and ``one_token_stream`` tokenizer attributes.
+``one_token_stream`` determined wether the tokenizer outputs a unique :class:`miditok.TokSequence` covering all the tracks of a music file or one :class:`miditok.TokSequence` per track. It is equal to ``tokenizer.config.one_token_stream_for_programs``, except for :class:`miditok.MMM` for which it is enabled while ``one_token_stream_for_programs`` is False.
+:py:func:`miditok.MusicTokenizer.is_multi_voc` being True means that each "token" within a :class:`miditok.TokSequence` is actually a list of ``C`` "sub-tokens", ``C`` being the number of sub-token classes.
 
-This results in four situations, where I is the number of tracks, T is the number of tokens (or time steps) and C the number of subtokens per time step:
+This results in four situations, where ``I`` (instrument) is the number of tracks, ``T`` (token) is the number of tokens and ``C`` (class) the number of subtokens per token step:
 
 * ``is_multi_voc`` and ``one_token_stream`` are both ``False``: ``[I,(T)]``;
 * ``is_multi_voc`` is ``False`` and ``one_token_stream`` is ``True``: ``(T)``;
@@ -71,10 +73,10 @@ This results in four situations, where I is the number of tracks, T is the numbe
 
 Some tokenizer examples to illustrate:
 
-* **TSD** without ``config.use_programs`` will not have multiple vocabularies and will treat each MIDI track as a unique stream of tokens, hence it will convert MIDI files to a list of :class:`miditok.TokSequence` objects, ``(I,T)`` format.
-* **TSD** with ``config.use_programs`` being True will convert all MIDI tracks to a single stream of tokens, hence one :class:`miditok.TokSequence` object, ``(T)`` format.
-* **CPWord** is a multi-voc tokenizer, without ``config.use_programs`` it will treat each MIDI track as a distinct stream of tokens, hence it will convert MIDI files to a list of :class:`miditok.TokSequence` objects with the ``(I,T,C)`` format.
-* **Octuple** is a multi-voc tokenizer and converts all MIDI track to a single stream of tokens, hence it will convert MIDI files to a :class:`miditok.TokSequence` object, ``(T,C)`` format.
+* **TSD** without ``config.use_programs`` will not have multiple vocabularies and will treat each track as a unique stream of tokens, hence it will convert music files to a list of :class:`miditok.TokSequence` objects, ``(I,T)`` format.
+* **TSD** with ``config.use_programs`` being True will convert all tracks to a single stream of tokens, hence one :class:`miditok.TokSequence` object, ``(T)`` format.
+* **CPWord** is a multi-voc tokenizer, without ``config.use_programs`` it will treat each track as a distinct stream of tokens, hence it will convert music files to a list of :class:`miditok.TokSequence` objects with the ``(I,T,C)`` format.
+* **Octuple** is a multi-voc tokenizer and converts all track to a single stream of tokens, hence it will convert music files to a :class:`miditok.TokSequence` object, ``(T,C)`` format.
 
 
 Magic methods
@@ -86,8 +88,8 @@ Magic methods
     :noindex:
 ..  code-block:: python
 
-    tokens = tokenizer(midi)
-    midi2 = tokenizer(tokens)
+    tokens = tokenizer(score)
+    score2 = tokenizer(tokens)
 
 .. autofunction:: miditok.MusicTokenizer.__getitem__
     :noindex:

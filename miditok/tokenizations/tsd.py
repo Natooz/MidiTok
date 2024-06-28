@@ -37,10 +37,6 @@ class TSD(MusicTokenizer):
     sequence will be decoded for the whole music.
     """
 
-    def _tweak_config_before_creating_voc(self) -> None:
-        if self.config.use_programs:
-            self.one_token_stream = True
-
     def _add_time_events(self, events: list[Event], time_division: int) -> list[Event]:
         r"""
         Create the time events from a list of global and track events.
@@ -147,7 +143,7 @@ class TSD(MusicTokenizer):
         :return: the ``symusic.Score`` object.
         """
         # Unsqueeze tokens in case of one_token_stream
-        if self.one_token_stream:  # ie single token seq
+        if self.config.one_token_stream_for_programs:  # ie single token seq
             tokens = [tokens]
         for i in range(len(tokens)):
             tokens[i] = tokens[i].tokens
@@ -170,7 +166,7 @@ class TSD(MusicTokenizer):
                 len(track.notes) == len(track.controls) == len(track.pitch_bends) == 0
             )
 
-        current_track = None  # only use in when one_token_stream is False
+        current_track = None  # used only when one_token_stream is False
         for si, seq in enumerate(tokens):
             # Set tracking variables
             current_tick = 0
@@ -182,7 +178,7 @@ class TSD(MusicTokenizer):
             ticks_per_beat = score.ticks_per_quarter
 
             # Set track / sequence program if needed
-            if not self.one_token_stream:
+            if not self.config.one_token_stream_for_programs:
                 is_drum = False
                 if programs is not None:
                     current_program, is_drum = programs[si]
@@ -233,7 +229,7 @@ class TSD(MusicTokenizer):
                         if vel_type == "Velocity" and dur_type == "Duration":
                             dur = self._tpb_tokens_to_ticks[ticks_per_beat][dur]
                             new_note = Note(current_tick, dur, pitch, int(vel))
-                            if self.one_token_stream:
+                            if self.config.one_token_stream_for_programs:
                                 check_inst(current_program)
                                 tracks[current_program].notes.append(new_note)
                             else:
@@ -248,7 +244,10 @@ class TSD(MusicTokenizer):
                         pass
                 elif tok_type == "Program":
                     current_program = int(tok_val)
-                    if not self.one_token_stream and self.config.program_changes:
+                    if (
+                        not self.config.one_token_stream_for_programs
+                        and self.config.program_changes
+                    ):
                         if current_program != -1:
                             current_track.program = current_program
                         else:
@@ -275,7 +274,7 @@ class TSD(MusicTokenizer):
                             # Add instrument if it doesn't exist, can happen for the
                             # first tokens
                             new_pedal = Pedal(current_tick, duration)
-                            if self.one_token_stream:
+                            if self.config.one_token_stream_for_programs:
                                 check_inst(pedal_prog)
                                 tracks[pedal_prog].pedals.append(new_pedal)
                             else:
@@ -291,7 +290,7 @@ class TSD(MusicTokenizer):
                             active_pedals[pedal_prog],
                             current_tick - active_pedals[pedal_prog],
                         )
-                        if self.one_token_stream:
+                        if self.config.one_token_stream_for_programs:
                             check_inst(pedal_prog)
                             tracks[pedal_prog].pedals.append(
                                 Pedal(
@@ -304,7 +303,7 @@ class TSD(MusicTokenizer):
                         del active_pedals[pedal_prog]
                 elif tok_type == "PitchBend":
                     new_pitch_bend = PitchBend(current_tick, int(tok_val))
-                    if self.one_token_stream:
+                    if self.config.one_token_stream_for_programs:
                         check_inst(current_program)
                         tracks[current_program].pitch_bends.append(new_pitch_bend)
                     else:
@@ -322,11 +321,13 @@ class TSD(MusicTokenizer):
                     previous_note_end = max(previous_note_end, current_tick)
 
             # Add current_inst to the score and handle notes still active
-            if not self.one_token_stream and not is_track_empty(current_track):
+            if not self.config.one_token_stream_for_programs and not is_track_empty(
+                current_track
+            ):
                 score.tracks.append(current_track)
 
         # Add global events to the score
-        if self.one_token_stream:
+        if self.config.one_token_stream_for_programs:
             score.tracks = list(tracks.values())
         score.tempos = tempo_changes
         score.time_signatures = time_signature_changes

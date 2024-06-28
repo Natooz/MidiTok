@@ -85,7 +85,7 @@ class Structured(MusicTokenizer):
         for note in track.notes:
             # In this case, we directly add TimeShift events here so we don't have to
             # call __add_time_note_events and avoid delay cause by event sorting
-            if not self.one_token_stream:
+            if not self.config.one_token_stream_for_programs:
                 time_shift_ticks = note.start - previous_tick
                 if time_shift_ticks != 0:
                     time_shift_ticks = int(
@@ -163,7 +163,9 @@ class Structured(MusicTokenizer):
         """
         all_events = []
         token_types_to_check = (
-            {"Program"} if self.one_token_stream else {"Pitch", "PitchDrum"}
+            {"Program"}
+            if self.config.one_token_stream_for_programs
+            else {"Pitch", "PitchDrum"}
         )
 
         # Add "TimeShift" tokens before each "Pitch" tokens
@@ -209,17 +211,13 @@ class Structured(MusicTokenizer):
 
         We override the parent method to handle the "non-program" case where
         *TimeShift* events have already been added by `_notes_to_events`.
-        The workflow of this method is as follows: the global events (*Tempo*,
-        *TimeSignature*...) and track events (*Pitch*, *Velocity*, *Pedal*...) are
-        gathered into a list, then the time events are added. If `one_token_stream` is
-        ``True``, all events of all tracks are treated all at once, otherwise the
-        events of each track are treated independently.
 
         The workflow of this method is as follows: the global events (*Tempo*,
         *TimeSignature*...) and track events (*Pitch*, *Velocity*, *Pedal*...) are
-        gathered into a list, then the time events are added. If `one_token_stream` is
-        ``True``, all events of all tracks are treated all at once, otherwise the
-        events of each track are treated independently.
+        gathered into a list, then the time events are added. If
+        ``config.one_token_stream_for_programs` is enabled, all events of all tracks
+        are treated all at once, otherwise the events of each track are treated
+        independently.
 
         :param score: the :class:`symusic.Score` object to convert.
         :return: a :class:`miditok.TokSequence` if ``tokenizer.one_token_stream`` is
@@ -230,17 +228,17 @@ class Structured(MusicTokenizer):
         all_events = []
 
         # Adds note tokens
-        if not self.one_token_stream and len(score.tracks) == 0:
+        if not self.config.one_token_stream_for_programs and len(score.tracks) == 0:
             all_events.append([])
         for track in score.tracks:
             note_events = self._create_track_events(track)
-            if self.one_token_stream:
+            if self.config.one_token_stream_for_programs:
                 all_events += note_events
             else:
                 all_events.append(note_events)
 
         # Add time events
-        if self.one_token_stream:
+        if self.config.one_token_stream_for_programs:
             if len(score.tracks) > 1:
                 all_events.sort(key=lambda x: x.time)
             all_events = self._add_time_events(all_events, score.ticks_per_quarter)
@@ -273,7 +271,7 @@ class Structured(MusicTokenizer):
         :return: the ``symusic.Score`` object.
         """
         # Unsqueeze tokens in case of one_token_stream
-        if self.one_token_stream:  # ie single token seq
+        if self.config.one_token_stream_for_programs:  # ie single token seq
             tokens = [tokens]
         for i in range(len(tokens)):
             tokens[i] = tokens[i].tokens
@@ -301,7 +299,7 @@ class Structured(MusicTokenizer):
         ticks_per_beat = score.ticks_per_quarter
         for si, seq in enumerate(tokens):
             # Set track / sequence program if needed
-            if not self.one_token_stream:
+            if not self.config.one_token_stream_for_programs:
                 current_tick = 0
                 is_drum = False
                 if programs is not None:
@@ -331,7 +329,7 @@ class Structured(MusicTokenizer):
                                 seq[ti + 2].split("_")[1]
                             ]
                             new_note = Note(current_tick, duration, pitch, vel)
-                            if self.one_token_stream:
+                            if self.config.one_token_stream_for_programs:
                                 check_inst(current_program)
                                 instruments[current_program].notes.append(new_note)
                             else:
@@ -345,10 +343,12 @@ class Structured(MusicTokenizer):
                     current_program = int(token_val)
 
             # Add current_inst to score and handle notes still active
-            if not self.one_token_stream and not is_track_empty(current_track):
+            if not self.config.one_token_stream_for_programs and not is_track_empty(
+                current_track
+            ):
                 score.tracks.append(current_track)
 
-        if self.one_token_stream:
+        if self.config.one_token_stream_for_programs:
             score.tracks = list(instruments.values())
 
         return score

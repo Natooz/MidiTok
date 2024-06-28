@@ -304,7 +304,7 @@ class REMI(MusicTokenizer):
         :return: the ``symusic.Score`` object.
         """
         # Unsqueeze tokens in case of one_token_stream
-        if self.one_token_stream:  # ie single token seq
+        if self.config.one_token_stream_for_programs:  # ie single token seq
             tokens = [tokens]
         for i in range(len(tokens)):
             tokens[i] = tokens[i].tokens
@@ -368,7 +368,7 @@ class REMI(MusicTokenizer):
             active_pedals = {}
 
             # Set track / sequence program if needed
-            if not self.one_token_stream:
+            if not self.config.one_token_stream_for_programs:
                 is_drum = False
                 if programs is not None:
                     current_program, is_drum = programs[si]
@@ -445,7 +445,7 @@ class REMI(MusicTokenizer):
                                 pitch,
                                 int(vel),
                             )
-                            if self.one_token_stream:
+                            if self.config.one_token_stream_for_programs:
                                 check_inst(current_program)
                                 tracks[current_program].notes.append(new_note)
                             else:
@@ -460,7 +460,10 @@ class REMI(MusicTokenizer):
                         pass
                 elif tok_type == "Program":
                     current_program = int(tok_val)
-                    if not self.one_token_stream and self.config.program_changes:
+                    if (
+                        not self.config.one_token_stream_for_programs
+                        and self.config.program_changes
+                    ):
                         if current_program != -1:
                             current_track.program = current_program
                         else:
@@ -500,7 +503,7 @@ class REMI(MusicTokenizer):
                             # Add instrument if it doesn't exist, can happen for the
                             # first tokens
                             new_pedal = Pedal(current_tick, duration)
-                            if self.one_token_stream:
+                            if self.config.one_token_stream_for_programs:
                                 check_inst(pedal_prog)
                                 tracks[pedal_prog].pedals.append(new_pedal)
                             else:
@@ -516,7 +519,7 @@ class REMI(MusicTokenizer):
                             active_pedals[pedal_prog],
                             current_tick - active_pedals[pedal_prog],
                         )
-                        if self.one_token_stream:
+                        if self.config.one_token_stream_for_programs:
                             check_inst(pedal_prog)
                             tracks[pedal_prog].pedals.append(new_pedal)
                         else:
@@ -524,18 +527,20 @@ class REMI(MusicTokenizer):
                         del active_pedals[pedal_prog]
                 elif tok_type == "PitchBend":
                     new_pitch_bend = PitchBend(current_tick, int(tok_val))
-                    if self.one_token_stream:
+                    if self.config.one_token_stream_for_programs:
                         check_inst(current_program)
                         tracks[current_program].pitch_bends.append(new_pitch_bend)
                     else:
                         current_track.pitch_bends.append(new_pitch_bend)
 
             # Add current_inst to score and handle notes still active
-            if not self.one_token_stream and not is_track_empty(current_track):
+            if not self.config.one_token_stream_for_programs and not is_track_empty(
+                current_track
+            ):
                 score.tracks.append(current_track)
 
         # Add global events to the score
-        if self.one_token_stream:
+        if self.config.one_token_stream_for_programs:
             score.tracks = list(tracks.values())
         score.tempos = tempo_changes
         score.time_signatures = time_signature_changes

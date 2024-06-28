@@ -162,7 +162,10 @@ def adapt_ref_score_before_tokenize(score: Score, tokenizer: MusicTokenizer) -> 
         # might be mixed up for notes with the same onset and duration values as the
         # tokens are decoded in a FIFO logic.
         # But before sorting, we need to merge the tracks if needed, and clip durations
-        if tokenizer.config.use_programs and tokenizer.one_token_stream:
+        if (
+            tokenizer.config.use_programs
+            and tokenizer.config.one_token_stream_for_programs
+        ):
             miditok.utils.merge_same_program_tracks(score.tracks)
 
         # If a max_duration is provided, we clip the durations of the notes before
@@ -233,7 +236,9 @@ def adapt_ref_score_for_tests_assertion(
     if tokenizer.config.use_tempos and tokenization in ["Octuple"]:
         if len(score.tracks) > 0:
             adapt_tempo_changes_times(
-                score.tracks if tokenizer.one_token_stream else score.tracks[:1],
+                score.tracks
+                if tokenizer.config.one_token_stream_for_programs
+                else score.tracks[:1],
                 score.tempos,
                 tokenizer.default_tempo,
             )

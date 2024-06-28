@@ -8,7 +8,6 @@ import sys
 import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from copy import deepcopy
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -128,8 +127,6 @@ class MusicTokenizer(ABC, HFHubMixin):
         tokenizer_config: TokenizerConfig = None,
         params: str | Path | None = None,
     ) -> None:
-        # Initialize params
-        self.config = deepcopy(tokenizer_config)
         # vocab of prime tokens, can be viewed as unique char / bytes
         self._vocab_base = {}
         # the other way, to decode id (int) -> token (str)
@@ -144,27 +141,33 @@ class MusicTokenizer(ABC, HFHubMixin):
         self._model = None
         # Used in _notes_to_events, especially MIDILike
         self._note_on_off = False
-        # Determines how the tokenizer will handle multiple tracks: either each track
-        # as a single independent token stream (False), or all the tracks as a single
-        # token stream (True).
-        self.one_token_stream = False
 
+        # Initialize config
         # Loading params, or initializing them from args
         if params is not None:
             # Will overwrite self.config
             self._load_from_json(params)
         # If no TokenizerConfig is given, we falls back to the default parameters
-        elif self.config is None:
+        elif tokenizer_config is None:
             self.config = TokenizerConfig()
+        else:
+            self.config = tokenizer_config
 
         # Tweak the tokenizer's configuration and / or attributes before creating the
         # vocabulary. This method is intended to be overridden by inheriting tokenizer
         # classes
         self._tweak_config_before_creating_voc()
 
-        # Set one_token_stream mode according to the config params
-        if self.config.use_programs:
-            self.one_token_stream = self.config.one_token_stream_for_programs
+        # Determines whether the tokenizer will produce a single sequence of tokens for
+        # all the tracks one token sequence per track. This is attribute is distinct
+        # from `config.one_token_stream_for_programs` as they might not be equal (e.g.
+        # MMM). `tokenizer.one_token_stream` is meant to be used for i/o format
+        # purposes whereas `config.one_token_stream_for_programs` is used for Score
+        # preprocessing (merging tracks or not) and tokenization (all tracks at once or
+        # treated separately).
+        self.one_token_stream = (
+            self.config.use_programs and self.config.one_token_stream_for_programs
+        )
 
         # Time Signatures
         # Need to be set before creating duration values/tokens.
@@ -250,11 +253,12 @@ class MusicTokenizer(ABC, HFHubMixin):
 
         # Attribute controls
         self.attribute_controls = []
-        if self.one_token_stream or self.is_multi_voc:
+        if self.config.one_token_stream_for_programs or self.is_multi_voc:
             self._disable_attribute_controls()
             warnings.warn(
-                "Attribute controls are not compatible with 'one_token_stream' "
-                "and multi-vocabulary tokenizers. Disabling them from the config.",
+                "Attribute controls are not compatible with "
+                "'config.one_token_stream_for_programs' and multi-vocabulary "
+                "tokenizers. Disabling them from the config.",
                 stacklevel=2,
             )
         else:
@@ -504,7 +508,7 @@ class MusicTokenizer(ABC, HFHubMixin):
         # Merge instruments of the same program / inst before preprocessing them.
         # This allows to avoid potential duplicated notes in some multitrack settings
         # This can however mess up chord detections.
-        if self.config.use_programs and self.one_token_stream:
+        if self.config.use_programs and self.config.one_token_stream_for_programs:
             merge_same_program_tracks(score.tracks)
 
         # Process time signature changes
@@ -1124,7 +1128,7 @@ class MusicTokenizer(ABC, HFHubMixin):
         """
         # Create events list
         all_events = []
-        if not self.one_token_stream:
+        if not self.config.one_token_stream_for_programs:
             if len(score.tracks) == 0:
                 all_events.append([])
             else:
@@ -1134,7 +1138,7 @@ class MusicTokenizer(ABC, HFHubMixin):
 
         # Global events (Tempo, TimeSignature)
         global_events = self._create_global_events(score)
-        if self.one_token_stream:
+        if self.config.one_token_stream_for_programs:
             all_events += global_events
         else:
             for i in range(len(all_events)):
@@ -1167,7 +1171,7 @@ class MusicTokenizer(ABC, HFHubMixin):
                 ticks_beats,
                 attribute_controls_indexes.get(ti, None),
             )
-            if self.one_token_stream:
+            if self.config.one_token_stream_for_programs:
                 all_events += track_events
             else:
                 all_events[ti] += track_events
@@ -1185,7 +1189,7 @@ class MusicTokenizer(ABC, HFHubMixin):
                         idx, Event("Program", program, 0, desc="ProgramNoteOff")
                     )
                 self._sort_events(all_events[ti])
-        if self.one_token_stream:
+        if self.config.one_token_stream_for_programs:
             self._sort_events(all_events)
             # Add ProgramChange (named Program) tokens if requested.
             if self.config.program_changes:
@@ -1195,7 +1199,7 @@ class MusicTokenizer(ABC, HFHubMixin):
             self._sort_events(all_events[0])
 
         # Add time events
-        if self.one_token_stream:
+        if self.config.one_token_stream_for_programs:
             all_events = self._add_time_events(all_events, score.ticks_per_quarter)
             tok_sequence = TokSequence(events=all_events)
             self.complete_sequence(tok_sequence)
@@ -3391,7 +3395,6 @@ class MusicTokenizer(ABC, HFHubMixin):
         """Return the serializable dictionary form of the tokenizer."""
         params = {
             "config": self.config.to_dict(serialize=True),
-            "one_token_stream": self.one_token_stream,
             "tokenization": self.__class__.__name__,
             "miditok_version": CURRENT_MIDITOK_VERSION,
             "symusic_version": CURRENT_SYMUSIC_VERSION,
@@ -3570,10 +3573,6 @@ class MusicTokenizer(ABC, HFHubMixin):
                     key = old_add_tokens_attr[key]
                 setattr(self.config, key, value)
                 continue
-            if key == "unique_track":
-                # For config files <= v2.1.1 before the attribute is renamed
-                self.one_token_stream = value
-                continue
             if key == "has_bpe":
                 # For config files < v3.0.3 before the attribute becomes a property
                 continue
@@ -3705,7 +3704,7 @@ class MusicTokenizer(ABC, HFHubMixin):
         if self.is_multi_voc:
             tmp.append("multi-voc")
         if len(tmp) > 0:
-            out_str += f"({', '.join(tmp)})"
+            out_str += f" ({', '.join(tmp)})"
 
         # Trained
         if self.is_trained:

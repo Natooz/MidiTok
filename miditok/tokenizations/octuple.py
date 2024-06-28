@@ -181,9 +181,10 @@ class Octuple(MusicTokenizer):
 
         The workflow of this method is as follows: the global events (*Tempo*,
         *TimeSignature*...) and track events (*Pitch*, *Velocity*, *Pedal*...) are
-        gathered into a list, then the time events are added. If `one_token_stream` is
-        ``True``, all events of all tracks are treated all at once, otherwise the
-        events of each track are treated independently.
+        gathered into a list, then the time events are added. If
+        ``config.one_token_stream_for_programs`` is enabled, all events of all tracks
+        are treated all at once, otherwise the events of each track are treated
+        independently.
 
         :param score: the :class:`symusic.Score` object to convert.
         :return: a :class:`miditok.TokSequence` if ``tokenizer.one_token_stream`` is
@@ -225,7 +226,7 @@ class Octuple(MusicTokenizer):
         :return: the ``symusic.Score`` object.
         """
         # Unsqueeze tokens in case of one_token_stream
-        if self.one_token_stream:  # ie single token seq
+        if self.config.one_token_stream_for_programs:  # ie single token seq
             tokens = [tokens]
         for i in range(len(tokens)):
             tokens[i] = tokens[i].tokens
@@ -269,7 +270,7 @@ class Octuple(MusicTokenizer):
             ticks_per_beat = self._tpb_per_ts[current_time_sig.denominator]
             ticks_per_pos = ticks_per_beat // self.config.max_num_pos_per_beat
             # Set track / sequence program if needed
-            if not self.one_token_stream:
+            if not self.config.one_token_stream_for_programs:
                 is_drum = False
                 if programs is not None:
                     current_program, is_drum = programs[si]
@@ -343,7 +344,7 @@ class Octuple(MusicTokenizer):
 
                 # Append the created note
                 new_note = Note(current_tick, duration, pitch, vel)
-                if self.one_token_stream:
+                if self.config.one_token_stream_for_programs:
                     check_inst(current_program)
                     tracks[current_program].notes.append(new_note)
                 else:
@@ -362,7 +363,9 @@ class Octuple(MusicTokenizer):
                         tempo_changes.append(Tempo(current_tick, tempo))
 
             # Add current_inst to the score and handle notes still active
-            if not self.one_token_stream and not is_track_empty(current_track):
+            if not self.config.one_token_stream_for_programs and not is_track_empty(
+                current_track
+            ):
                 score.tracks.append(current_track)
 
         # Delete mocked
@@ -377,7 +380,7 @@ class Octuple(MusicTokenizer):
             tempo_changes[0].time = 0
 
         # Add global events to the score
-        if self.one_token_stream:
+        if self.config.one_token_stream_for_programs:
             score.tracks = list(tracks.values())
         score.tempos = tempo_changes
         score.time_signatures = time_signature_changes

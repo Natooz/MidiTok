@@ -18,6 +18,8 @@ if TYPE_CHECKING:
 
     from symusic import Score
 
+    from miditok import TokenizerConfig
+
 
 class MMM(MusicTokenizer):
     r"""
@@ -39,14 +41,37 @@ class MMM(MusicTokenizer):
 
     **Note:** When decoding tokens with tempos, only the tempos of the first track
     will be decoded.
+
+    :param tokenizer_config: the tokenizer's configuration, as a
+        :class:`miditok.TokenizerConfig` object.
+    :param params: path to a tokenizer config file. This will override other arguments
+        and load the tokenizer based on the config file. This is particularly useful if
+        the tokenizer learned Byte Pair Encoding. (default: None)
     """
 
+    def __init__(
+        self,
+        tokenizer_config: TokenizerConfig = None,
+        params: str | Path | None = None,
+    ) -> None:
+        # Directly call super method
+        super().__init__(tokenizer_config, params)
+        # Set to True, whereas `config.one_token_stream_for_programs` is False
+        self.one_token_stream = True
+        # We don't need to specifically load the base_tokenizer from the config file as
+        # it can be entirely created from the `self` config file only and will only be
+        # used for the `_add_time_events`, `_sort_events`, `_tokens_to_score`,
+        # `_tokens_errors` and mirrored base vocabulary (created from config).
+
     def _tweak_config_before_creating_voc(self) -> None:
+        # The Programs are specified at the beginning of each track token sequence.
         self.config.use_programs = True
         self.config.program_changes = True
-        self.config.one_token_stream_for_programs = True
-
-        self.concatenate_track_sequences = True
+        # one_token_stream_for_programs is False so that the base_tokenizer treats each
+        # track independently ((I,T) io) but one_token_stream True (set in __init__)
+        # so that self (MMM)
+        # has a (T) io as it will concatenate the tracks token sequences.
+        self.config.one_token_stream_for_programs = False
 
         # Checks base tokenizer argument
         if "base_tokenizer" not in self.config.additional_params:
@@ -71,7 +96,6 @@ class MMM(MusicTokenizer):
 
         # Create base tokenizer
         base_tokenizer_config = self.config.copy()
-        base_tokenizer_config.one_token_stream_for_programs = False
         self.base_tokenizer = getattr(miditok, tokenizer_name)(base_tokenizer_config)
         self.base_tokenizer.config.use_programs = True
         self._note_on_off = self.base_tokenizer._note_on_off
@@ -141,76 +165,19 @@ class MMM(MusicTokenizer):
             learn to generate tokens accordingly to the attribute controls.
         :param concatenate_track_sequences: will concatenate the token sequences of each
             track after tokenizing them. (default: ``True``)
-        :return: a :class:`miditok.TokSequence` if ``tokenizer.one_token_stream`` is
+        :return: a :class:`miditok.TokSequence` if ``concatenate_track_sequences`` is
             ``True``, else a list of :class:`miditok.TokSequence` objects.
         """
-        self.concatenate_track_sequences = concatenate_track_sequences
-        return super().encode(
+        # Need to override to set this class attribute that will be used in
+        # `_score_to_tokens`.
+        sequences = super().encode(
             score,
             encode_ids,
             no_preprocess_score,
             attribute_controls_indexes,
         )
-
-    def preprocess_score(self, score: Score) -> Score:
-        r"""
-        Pre-process a ``symusic.Score`` object to resample its time and events values.
-
-        This method is called before parsing a Score's contents for tokenization.
-        Its notes attributes (times, pitches, velocities) will be downsampled and
-        sorted, duplicated notes removed, as well as tempos. Empty tracks (with no
-        note) will be removed from the ``symusic.Score`` object. Notes with pitches
-        outside ``self.config.pitch_range`` will be deleted.
-        This method is **not inplace** and performs no alteration on the provided
-        ``score`` object.
-
-        :param score: ``symusic.Score`` object to preprocess.
-        :return: the preprocessed ``score``.
-        """
-        # Overriding the parent method in MMM is required to make sure that the tracks
-        # with the same programs are not merged.
-        previous_value = self.one_token_stream
-        self.one_token_stream = False
-        score = super().preprocess_score(score)
-        self.one_token_stream = previous_value
-        return score
-
-    def _score_to_tokens(
-        self,
-        score: Score,
-        attribute_controls_indexes: Mapping[int, Mapping[int, Sequence[int] | bool]]
-        | None = None,
-    ) -> TokSequence | list[TokSequence]:
-        r"""
-        Convert a **preprocessed** ``symusic.Score`` object to a sequence of tokens.
-
-        We need to override the parent method to concatenate the tracks sequences.
-
-        The workflow of this method is as follows: the global events (*Tempo*,
-        *TimeSignature*...) and track events (*Pitch*, *Velocity*, *Pedal*...) are
-        gathered into a list, then the time events are added. If `one_token_stream` is
-        ``True``, all events of all tracks are treated all at once, otherwise the
-        events of each track are treated independently.
-
-        :param score: the :class:`symusic.Score` object to convert.
-        :param attribute_controls_indexes: indices of the attribute controls to compute
-            and associated tracks and bars. This argument has to be provided as a
-            dictionary mapping track indices to dictionaries mapping attribute control
-            indices (indexing ``tokenizer.attribute_controls``) to a sequence of bar
-            indexes if the AC is "bar-level" or anything if it is "track-level".
-            Its structure is as:
-            ``{track_idx: {ac_idx: Any (track ac) | [bar_idx, ...] (bar ac)}}``
-            This argument is meant to be used when training a model in order to make it
-            learn to generate tokens accordingly to the attribute controls.
-        :return: a :class:`miditok.TokSequence` if ``tokenizer.one_token_stream`` is
-            ``True``, else a list of :class:`miditok.TokSequence` objects.
-        """
-        self.one_token_stream = False
-        sequences = super()._score_to_tokens(score, attribute_controls_indexes)
-        self.one_token_stream = True
-
         # Concatenate the sequences
-        if self.concatenate_track_sequences:
+        if concatenate_track_sequences:
             return sum(sequences)
         return sequences
 
@@ -320,13 +287,7 @@ class MMM(MusicTokenizer):
 
         :return: the vocabulary as a list of string.
         """
-        # `_tweak_config_before_creating_voc` already called, this method returns the
-        # vocab of the base_tokenizer, without the special tokens as they will be
-        # re-added by the `__create_vocabulary` method.
-        base_voc = list(self.base_tokenizer.vocab.keys())
-        for special_token in self.config.special_tokens:
-            base_voc.remove(special_token)
-        return base_voc
+        return self.base_tokenizer._create_base_vocabulary()
 
     def _create_token_types_graph(self) -> dict[str, set[str]]:
         r"""
@@ -383,6 +344,7 @@ class MMM(MusicTokenizer):
             WordPiece). If None is given, it will default to ``chr(id_ + CHR_ID_START)``
             . (default: ``None``)
         """
+        # Overridden to make sure the vocabs of self and base_tokenizer remain identical
         self.base_tokenizer.add_to_vocab(
             token,
             special_token,
