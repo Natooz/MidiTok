@@ -404,7 +404,7 @@ class CPWord(MusicTokenizer):
         :return: the ``symusic.Score`` object.
         """
         # Unsqueeze tokens in case of one_token_stream
-        if self.one_token_stream:  # ie single token seq
+        if self.config.one_token_stream_for_programs:  # ie single token seq
             tokens = [tokens]
         for i in range(len(tokens)):
             tokens[i] = tokens[i].tokens
@@ -464,7 +464,7 @@ class CPWord(MusicTokenizer):
             ticks_per_beat = self._tpb_per_ts[current_time_sig.denominator]
             ticks_per_pos = ticks_per_beat // self.config.max_num_pos_per_beat
             # Set track / sequence program if needed
-            if not self.one_token_stream:
+            if not self.config.one_token_stream_for_programs:
                 current_tick = tick_at_last_ts_change = tick_at_current_bar = 0
                 current_bar = -1
                 bar_at_last_ts_change = 0
@@ -498,7 +498,7 @@ class CPWord(MusicTokenizer):
                     if self.config.use_programs:
                         current_program = int(compound_token[5].split("_")[1])
                     new_note = Note(current_tick, duration, pitch, vel)
-                    if self.one_token_stream:
+                    if self.config.one_token_stream_for_programs:
                         check_inst(current_program)
                         tracks[current_program].notes.append(new_note)
                     else:
@@ -583,7 +583,9 @@ class CPWord(MusicTokenizer):
                     previous_note_end = max(previous_note_end, current_tick)
 
             # Add current_inst to score and handle notes still active
-            if not self.one_token_stream and not is_track_empty(current_track):
+            if not self.config.one_token_stream_for_programs and not is_track_empty(
+                current_track
+            ):
                 score.tracks.append(current_track)
 
         # Delete mocked
@@ -598,7 +600,7 @@ class CPWord(MusicTokenizer):
             tempo_changes[0].time = 0
 
         # Add global events to score
-        if self.one_token_stream:
+        if self.config.one_token_stream_for_programs:
             score.tracks = list(tracks.values())
         score.tempos = tempo_changes
         score.time_signatures = time_signature_changes

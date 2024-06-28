@@ -199,7 +199,7 @@ class MIDILike(MusicTokenizer):
         :return: the ``symusic.Score`` object.
         """
         # Unsqueeze tokens in case of one_token_stream
-        if self.one_token_stream:  # ie single token seq
+        if self.config.one_token_stream_for_programs:  # ie single token seq
             tokens = [tokens]
         for i in range(len(tokens)):
             tokens[i] = tokens[i].tokens
@@ -230,7 +230,7 @@ class MIDILike(MusicTokenizer):
 
         def clear_active_notes() -> None:
             if max_duration is not None:
-                if self.one_token_stream:
+                if self.config.one_token_stream_for_programs:
                     for program, active_notes_ in active_notes.items():
                         for pitch_, note_ons in active_notes_.items():
                             for onset_tick, vel_ in note_ons:
@@ -269,7 +269,7 @@ class MIDILike(MusicTokenizer):
                     max_duration_str, ticks_per_beat
                 )
             # Set track / sequence program if needed
-            if not self.one_token_stream:
+            if not self.config.one_token_stream_for_programs:
                 is_drum = False
                 if programs is not None:
                     current_program, is_drum = programs[si]
@@ -331,14 +331,17 @@ class MIDILike(MusicTokenizer):
                         if max_duration is not None and duration > max_duration:
                             duration = max_duration
                         new_note = Note(note_onset_tick, duration, pitch, vel)
-                        if self.one_token_stream:
+                        if self.config.one_token_stream_for_programs:
                             check_inst(current_program)
                             tracks[current_program].notes.append(new_note)
                         else:
                             current_track.notes.append(new_note)
                 elif tok_type == "Program":
                     current_program = int(tok_val)
-                    if not self.one_token_stream and self.config.program_changes:
+                    if (
+                        not self.config.one_token_stream_for_programs
+                        and self.config.program_changes
+                    ):
                         if current_program != -1:
                             current_track.program = current_program
                         else:
@@ -369,7 +372,7 @@ class MIDILike(MusicTokenizer):
                             # Add instrument if it doesn't exist, can happen for the
                             # first tokens
                             new_pedal = Pedal(current_tick, duration)
-                            if self.one_token_stream:
+                            if self.config.one_token_stream_for_programs:
                                 check_inst(pedal_prog)
                                 tracks[pedal_prog].pedals.append(new_pedal)
                             else:
@@ -385,7 +388,7 @@ class MIDILike(MusicTokenizer):
                             active_pedals[pedal_prog],
                             current_tick - active_pedals[pedal_prog],
                         )
-                        if self.one_token_stream:
+                        if self.config.one_token_stream_for_programs:
                             check_inst(pedal_prog)
                             tracks[pedal_prog].pedals.append(
                                 Pedal(
@@ -398,14 +401,16 @@ class MIDILike(MusicTokenizer):
                         del active_pedals[pedal_prog]
                 elif tok_type == "PitchBend":
                     new_pitch_bend = PitchBend(current_tick, int(tok_val))
-                    if self.one_token_stream:
+                    if self.config.one_token_stream_for_programs:
                         check_inst(current_program)
                         tracks[current_program].pitch_bends.append(new_pitch_bend)
                     else:
                         current_track.pitch_bends.append(new_pitch_bend)
 
             # Add current_inst to score and handle notes still active
-            if not self.one_token_stream and not is_track_empty(current_track):
+            if not self.config.one_token_stream_for_programs and not is_track_empty(
+                current_track
+            ):
                 score.tracks.append(current_track)
                 clear_active_notes()
                 active_notes[current_track.program] = {
@@ -416,11 +421,11 @@ class MIDILike(MusicTokenizer):
                 }
 
         # Handle notes still active
-        if self.one_token_stream:
+        if self.config.one_token_stream_for_programs:
             clear_active_notes()
 
         # Add global events to the Score
-        if self.one_token_stream:
+        if self.config.one_token_stream_for_programs:
             score.tracks = list(tracks.values())
         score.tempos = tempo_changes
         score.time_signatures = time_signature_changes

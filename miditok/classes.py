@@ -493,9 +493,8 @@ class TokenizerConfig:
         ``symusic.Score`` in a single sequence of tokens. A ``Program`` token will
         prepend each ``Pitch``, ``NoteOn`` and ``NoteOff`` tokens to indicate their
         associated program / instrument. Note that this parameter is always set to True
-        for :ref:`MuMIDI` and :ref:`MMM`. Disabling will make the tokenizer not use
-        ``Programs``, but will allow to still have ``Program`` tokens in the vocabulary.
-        (default: ``True``)
+        for :ref:`MuMIDI`. If disabled, the tokenizer will still use ``Program`` tokens
+        but will tokenize each track independently. (default: ``True``)
     :param program_changes: to be used with ``use_programs``. If given ``True``, the
         tokenizer will place ``Program`` tokens whenever a note is being played by an
         instrument different from the last one. This mimics the ProgramChange MIDI
@@ -726,7 +725,10 @@ class TokenizerConfig:
 
         # Programs
         self.programs: Sequence[int] = programs
-        self.one_token_stream_for_programs = one_token_stream_for_programs
+        # These needs to be set to False if the tokenizer is not using programs
+        self.one_token_stream_for_programs = (
+            one_token_stream_for_programs and use_programs
+        )
         self.program_changes = program_changes and use_programs
 
         # Pitch as interval tokens

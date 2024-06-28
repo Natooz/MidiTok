@@ -17,6 +17,30 @@ MidiTok
         url={https://archives.ismir.net/ismir2021/latebreaking/000005.pdf},
     }
 
+Tokenizer Training / Byte Pair Encoding / TSD
+---------------------------------------------
+
+..  code-block:: bib
+
+    @inproceedings{fradet-etal-2023-byte,
+        title = "Byte Pair Encoding for Symbolic Music",
+        author = "Fradet, Nathan  and
+          Gutowski, Nicolas  and
+          Chhel, Fabien  and
+          Briot, Jean-Pierre",
+        editor = "Bouamor, Houda  and
+          Pino, Juan  and
+          Bali, Kalika",
+        booktitle = "Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing",
+        month = dec,
+        year = "2023",
+        address = "Singapore",
+        publisher = "Association for Computational Linguistics",
+        url = "https://aclanthology.org/2023.emnlp-main.123",
+        doi = "10.18653/v1/2023.emnlp-main.123",
+        pages = "2001--2020",
+    }
+
 REMI (Pop Music Transformer)
 ----------------------------
 
@@ -54,31 +78,6 @@ MIDI-Like (This Time with feeling)
         url={https://link.springer.com/article/10.1007/s00521-018-3758-9},
         publisher={Springer}
     }
-
-TSD (Byte Pair Encoding for Symbolic Music)
--------------------------------------------
-
-..  code-block:: bib
-
-    @inproceedings{fradet-etal-2023-byte,
-        title = "Byte Pair Encoding for Symbolic Music",
-        author = "Fradet, Nathan  and
-          Gutowski, Nicolas  and
-          Chhel, Fabien  and
-          Briot, Jean-Pierre",
-        editor = "Bouamor, Houda  and
-          Pino, Juan  and
-          Bali, Kalika",
-        booktitle = "Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing",
-        month = dec,
-        year = "2023",
-        address = "Singapore",
-        publisher = "Association for Computational Linguistics",
-        url = "https://aclanthology.org/2023.emnlp-main.123",
-        doi = "10.18653/v1/2023.emnlp-main.123",
-        pages = "2001--2020",
-    }
-
 
 Structured (Piano Inpainting Application)
 -----------------------------------------
