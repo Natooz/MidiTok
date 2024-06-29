@@ -408,7 +408,7 @@ class TokenizerConfig:
     :param use_programs: will use ``Program`` tokens to specify the instrument/MIDI
         program of the notes, if the tokenizer is compatible (:ref:`TSD`, :ref:`REMI`,
         :ref:`MIDI-Like`, :ref:`Structured` and :ref:`CPWord`). Use this parameter with
-        the ``programs``, ``one_token_stream_for_programs`` and `program_changes`
+        the ``programs``, ``one_token_stream_for_programs`` and ``program_changes``
         arguments. By default, it will prepend a ``Program`` tokens before each
         ``Pitch``/``NoteOn`` token to indicate its associated instrument, and will
         treat all the tracks of a file as a single sequence of tokens. :ref:`CPWord`,
@@ -880,7 +880,7 @@ class TokenizerConfig:
         Check two configs are equal.
 
         :param other: other config object to compare.
-        :return: `True` if all attributes are equal, `False` otherwise.
+        :return: ``True`` if all attributes are equal, ``False`` otherwise.
         """
         # We don't use the == operator as it yields False when comparing lists and
         # tuples containing the same elements. This method is not recursive and only

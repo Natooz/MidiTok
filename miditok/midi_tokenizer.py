@@ -333,9 +333,9 @@ class MusicTokenizer(ABC, HFHubMixin):
     @property
     def pad_token_id(self) -> int:
         """
-        Return the id of the padding token (`PAD_None`). It is usually 0.
+        Return the id of the padding token (``PAD_None``). It is usually 0.
 
-        :return: id of the padding token (`PAD_None`).
+        :return: id of the padding token (``PAD_None``).
         """
         return (
             self._vocab_base["PAD_None"]
@@ -1109,7 +1109,7 @@ class MusicTokenizer(ABC, HFHubMixin):
 
         The workflow of this method is as follows: the global events (*Tempo*,
         *TimeSignature*...) and track events (*Pitch*, *Velocity*, *Pedal*...) are
-        gathered into a list, then the time events are added. If `one_token_stream` is
+        gathered into a list, then the time events are added. If ``one_token_stream`` is
         ``True``, all events of all tracks are treated all at once, otherwise the
         events of each track are treated independently.
 
@@ -1524,7 +1524,7 @@ class MusicTokenizer(ABC, HFHubMixin):
 
     def _create_global_events(self, score: Score) -> list[Event]:
         r"""
-        Create the *global* music tokens: `Tempo` and `TimeSignature`.
+        Create the *global* music tokens: ``Tempo`` and ``TimeSignature``.
 
         :param score: ``symusic.Score`` to extract the events from.
         :return: list of ``miditok.classes.Event``.
@@ -3048,7 +3048,7 @@ class MusicTokenizer(ABC, HFHubMixin):
         The resulting json files will have an ``ids`` entry containing the token ids.
         The format of the ids will correspond to the format of the tokenizer
         (``tokenizer.io_format``). Note that the file tree of the source files, up to
-        the deepest common root directory if `files_paths` is given as a list of paths,
+        the deepest common root directory if ``files_paths`` is given as a list of paths,
         will be reproducing in ``out_dir``. The config of the tokenizer will be saved
         as a file named ``tokenizer_config_file_name`` (default: ``tokenizer.json``)
         in the ``out_dir`` directory.

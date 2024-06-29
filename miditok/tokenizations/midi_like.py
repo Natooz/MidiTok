@@ -25,18 +25,18 @@ class MIDILike(MusicTokenizer):
     (``config.additional_params["max_duration"]``) to be given as a tuple of three
     integers following ``(num_beats, num_frames, res_frames)``, the resolutions being
     in the frames per beat.
-    If you specify `use_programs` as `True` in the config file, the tokenizer will add
-    ``Program`` tokens before each `Pitch` tokens to specify its instrument, and will
+    If you specify ``use_programs`` as ``True`` in the config file, the tokenizer will add
+    ``Program`` tokens before each ``Pitch`` tokens to specify its instrument, and will
     treat all tracks as a single stream of tokens.
 
-    **Note:** as `MIDILike` uses *TimeShifts* events to move the time from note to
+    **Note:** as ``MIDILike`` uses *TimeShifts* events to move the time from note to
     note, it could be unsuited for tracks with long pauses. In such case, the
-    maximum *TimeShift* value will be used. Also, the `MIDILike` tokenizer might alter
+    maximum *TimeShift* value will be used. Also, the ``MIDILike`` tokenizer might alter
     the durations of overlapping notes. If two notes of the same instrument with the
     same pitch are overlapping, i.e. a first one is still being played when a second
     one is also played, the offset time of the first will be set to the onset time of
     the second. This is done to prevent unwanted duration alterations that could happen
-    in such case, as the `NoteOff` token associated to the first note will also end the
+    in such case, as the ``NoteOff`` token associated to the first note will also end the
     second one.
     **Note:** When decoding multiple token sequences (of multiple tracks), i.e. when
     ``config.use_programs`` is False, only the tempos and time signatures of the first

@@ -103,7 +103,7 @@ class MuMIDI(MusicTokenizer):
         r"""
         Convert a **preprocessed** ``symusic.Score`` object to a sequence of tokens.
 
-        MuMIDI has its own implementation and doesn't use `_add_time_events`.
+        MuMIDI has its own implementation and doesn't use ``_add_time_events``.
 
         :param score: the :class:`symusic.Score` object to convert.
         :return: a :class:`miditok.TokSequence` if ``tokenizer.one_token_stream`` is
