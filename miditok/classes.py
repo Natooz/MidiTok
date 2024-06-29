@@ -396,7 +396,7 @@ class TokenizerConfig:
         events. In multitrack setting, The value of each ``Pedal`` token will be equal
         to the program of the track. (default: ``False``)
     :param use_pitch_bends: will use ``PitchBend`` tokens. In multitrack setting, a
-        ``Program`` token will be added before each ``PitchBend` token.
+        ``Program`` token will be added before each ``PitchBend`` token.
         (default: ``False``)
     :param use_pitch_intervals: if given True, will represent the pitch of the notes
         with pitch intervals tokens. This way, successive and simultaneous notes will
@@ -472,8 +472,8 @@ class TokenizerConfig:
         durations you expect. (default: ``False``)
     :param pitch_bend_range: range of the pitch bend to consider, to be given as a
         tuple with the form ``(lowest_value, highest_value, num_of_values)``. There
-        will be ``num_of_values`` tokens equally spaced between ``lowest_value` and
-        `highest_value``. (default: ``(-8192, 8191, 32)``)
+        will be ``num_of_values`` tokens equally spaced between ``lowest_value`` and
+        ``highest_value``. (default: ``(-8192, 8191, 32)``)
     :param delete_equal_successive_time_sig_changes: setting this option True will
         delete identical successive time signature changes when preprocessing a music
         file after loading it. For examples, if a file has two time signature changes
