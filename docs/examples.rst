@@ -122,10 +122,11 @@ Creates a Dataset and a collator to be used with a PyTorch DataLoader to train a
     from miditok.pytorch_data import DatasetMIDI, DataCollator
     from torch.utils.data import DataLoader
 
+    tokenizer = REMI()  # using defaults parameters (constants.py)
     midi_paths = list(Path("path", "to", "dataset").glob("**/*.mid"))
     dataset = DatasetMIDI(
         files_paths=midi_paths,
-        tokenizer,
+        tokenizer=tokenizer,
         max_seq_len=1024,
         bos_token_id=tokenizer.pad_token_id,
         eos_token_id=tokenizer["BOS_None"],
