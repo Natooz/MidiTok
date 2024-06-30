@@ -124,7 +124,7 @@ def seq_len_splits(datasets_params: list[tuple[str, dict, str]]) -> None:
 
     Measures the average token sequence length (in base tokens) after splitting the
     token sequence of whole files into bars or beats.
-    These measures can be used to chose good `max_input_chars_per_word` values for
+    These measures can be used to chose good ``max_input_chars_per_word`` values for
     WordPiece.
 
     :param datasets_params: sets of data and tokenizers params.
@@ -339,7 +339,7 @@ def wordpiece_max_chars(
     """
     Measure the training, encoding and decoding times of WordPiece.
 
-    Measures are made with different `max_input_chars_per_word` values, datasets and
+    Measures are made with different ``max_input_chars_per_word`` values, datasets and
     sequence split to see their impact on training, encoding and decoding times.
     It also measures the ratio of "unknown" tokens resulting of ids encoding,
     measuring the proportion of data covered by these sets of parameters / data.

@@ -25,7 +25,7 @@ class Structured(MusicTokenizer):
     Token types always follow the same pattern: *Pitch* -> *Velocity* -> *Duration* ->
     *TimeShift*. The latter is set to 0 for simultaneous notes. To keep this property,
     no additional token can be inserted in MidiTok's implementation, except *Program*
-    that can optionally be added preceding `Pitch` tokens. If you specify
+    that can optionally be added preceding ``Pitch`` tokens. If you specify
     ``use_programs`` as ``True`` in the config file, the tokenizer will add *Program*
     tokens before each *Pitch* tokens to specify its instrument, and will treat all
     tracks as a single stream of tokens.
@@ -210,7 +210,7 @@ class Structured(MusicTokenizer):
         Convert a **preprocessed** ``symusic.Score`` object to a sequence of tokens.
 
         We override the parent method to handle the "non-program" case where
-        *TimeShift* events have already been added by `_notes_to_events`.
+        *TimeShift* events have already been added by ``_notes_to_events``.
 
         The workflow of this method is as follows: the global events (*Tempo*,
         *TimeSignature*...) and track events (*Pitch*, *Velocity*, *Pedal*...) are

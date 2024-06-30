@@ -28,7 +28,7 @@ In the case of music, newly learned tokens can represent whole notes (i.e. succe
 Reduced sequence lengths
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-Serializing music files in single "basic" attribute tokens naturally induces fairly long token sequences. As a note is made of at least three tokens (`Pitch`, `Velocity`, `Duration`/`NoteOff`, optionally `Program`), the resulting token sequence will have a number of tokens at least three times the number of notes.
+Serializing music files in single "basic" attribute tokens naturally induces fairly long token sequences. As a note is made of at least three tokens (``Pitch``, ``Velocity``, ``Duration``/``NoteOff``, optionally ``Program``), the resulting token sequence will have a number of tokens at least three times the number of notes.
 
 This is problematic as the time and space complexity of Transformer models grow quadratically with the input sequence length. Thus, the longer the sequence is, the more computations will be made and memory will be used.
 
@@ -63,7 +63,7 @@ Byte Pair Encoding (BPE)
 
 `BPE <https://en.wikipedia.org/wiki/Byte_pair_encoding>`_ is a compression algorithm that replaces the most recurrent token successions of a corpus, by newly created ones. It starts from a vocabulary containing tokens representing the initial alphabet of the modality of the data at hand, and iteratively counts the occurrences of each token successions, or bigrams, in the data, and merges the most recurrent one with a new token representing both of them, until the vocabulary reaches the desired size.
 
-For instance, in the character sequence ``aabaabaacaa``, the sub-sequence ``aa`` occurs three times and is the most recurrent one. Learning BPE on this sequence would replace ``aa`` with a new symbol, e.g., `d`, resulting in a compressed sequence ``dbdbdcd``. The latter can be reduced again by replacing the ``db`` subsequence, giving ``eedcd``. The vocabulary, which initially contained three characters (``a``, ``b`` and ``c``) now also contains ``d`` and ``e``. In practice BPE is learned on a corpus until the vocabulary reaches a target size.
+For instance, in the character sequence ``aabaabaacaa``, the sub-sequence ``aa`` occurs three times and is the most recurrent one. Learning BPE on this sequence would replace ``aa`` with a new symbol, e.g., ``d``, resulting in a compressed sequence ``dbdbdcd``. The latter can be reduced again by replacing the ``db`` subsequence, giving ``eedcd``. The vocabulary, which initially contained three characters (``a``, ``b`` and ``c``) now also contains ``d`` and ``e``. In practice BPE is learned on a corpus until the vocabulary reaches a target size.
 
 Today in the NLP field, BPE is used with many tokenizers to build their vocabulary, as `it allows to encode rare words and segmenting unknown or composed words as sequences of sub-word units <https://aclanthology.org/P16-1162/>`_. The base initial vocabulary is the set of all the unique characters present in the data, which compose the words that are automatically learned as tokens by the BPE algorithm.
 
