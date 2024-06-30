@@ -204,7 +204,7 @@ ignore = [
     "UP038",
 ]
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint.per-file-ignores]
 # S105:
 # we don't use passwords in MidiTok, only HF token for the interactions with the hub.
 # However we have a lot of variables with "token"(s) in their name, which would yield a

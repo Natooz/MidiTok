@@ -3048,10 +3048,10 @@ class MusicTokenizer(ABC, HFHubMixin):
         The resulting json files will have an ``ids`` entry containing the token ids.
         The format of the ids will correspond to the format of the tokenizer
         (``tokenizer.io_format``). Note that the file tree of the source files, up to
-        the deepest common root directory if ``files_paths`` is given as a list of paths,
-        will be reproducing in ``out_dir``. The config of the tokenizer will be saved
-        as a file named ``tokenizer_config_file_name`` (default: ``tokenizer.json``)
-        in the ``out_dir`` directory.
+        the deepest common root directory if ``files_paths`` is given as a list of
+        paths, will be reproducing in ``out_dir``. The config of the tokenizer will be
+        saved as a file named ``tokenizer_config_file_name`` (default:
+        ``tokenizer.json``) in the ``out_dir`` directory.
 
         :param files_paths: paths of the music files (MIDI, abc). It can also be a path
             to a directory, in which case this method will recursively find the MIDI and
