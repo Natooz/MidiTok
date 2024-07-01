@@ -22,9 +22,9 @@ from miditok.constants import (
 
 from .utils import (
     get_bars_ticks,
+    get_beats_ticks,
     get_deepest_common_subdir,
     get_num_notes_per_bar,
-    split_score_per_tracks,
 )
 
 if TYPE_CHECKING:
@@ -406,3 +406,107 @@ def _preprocess_time_signatures(score: Score, tokenizer: MusicTokenizer) -> None
         score.time_signatures = TimeSignatureTickList(
             [TimeSignature(0, *TIME_SIGNATURE)]
         )
+
+
+def split_score_per_ticks(
+    score: Score,
+    ticks: list[int],
+) -> list[Score]:
+    r"""
+    Split a ``symusic.Score`` into several smaller ``symusic.Score``\s.
+
+    The ``symusic.Score`` chunks will all start at tick 0.
+    Example: for a ``symusic.Score`` with an end tick at 1000, and a list of tick
+    ``[2000, 5000, 7000]``, this method will return a list of four ``symusic.Score``
+    which correspond respectively to the portions of the original Score from tick 0 to
+    2000, 2000 to 5000, 5000 to 7000 and 10000 to 10000.
+
+    :param score: ``symusic.Score`` object to split.
+    :param ticks: list of ticks to which the score will be split.
+    :return: a list of segmented ``symusic.Score`` objects.
+    """
+    score_chunks = []
+    score_end_tick = score.end() + 1  # to encompass the last events
+    ticks = ticks.copy()
+    if ticks[-1] != score_end_tick:
+        ticks.append(score_end_tick)
+
+    current_tick = 0
+    for tick_end in ticks:
+        score_chunks.append(
+            score.clip(current_tick, tick_end, clip_end=False).shift_time(-current_tick)
+        )
+        current_tick = tick_end
+
+    return score_chunks
+
+
+def split_score_per_beats(
+    score: Score, max_num_beats: int, min_num_beats: int = 1
+) -> list[Score]:
+    """
+    Split a ``symusic.Score`` into several smaller chunks per number of beats.
+
+    This method splits a ``symusic.Score`` into smaller chunks that contains
+    ``max_num_beats`` beats. The ``symusic.Score`` chunks will all start at tick 0.
+
+    :param score: ``symusic.Score`` object to split.
+    :param max_num_beats: maximum number of beats per segment.
+    :param min_num_beats: minimum number of beats per segment. This only applied to the
+        last segment of the input score. (default: ``1``)
+    :return: a list of ``symusic.Score`` chunks.
+    """
+    if min_num_beats < 1:
+        raise ValueError(_ := f"`min_num_beats` must be > 0 (got {min_num_beats}).")
+
+    ticks_split = []
+    beats_ticks = get_beats_ticks(score)
+    current_beat = 0
+    while current_beat < len(beats_ticks):
+        # Determine the number of beats for this section
+        num_beats = min(len(beats_ticks) - current_beat, max_num_beats)
+        if num_beats < min_num_beats:
+            break
+
+        # Extract the section
+        if (
+            num_beats != max_num_beats
+            or current_beat == len(beats_ticks) - max_num_beats
+        ):
+            # Will be the last iteration
+            tick_end = score.end() + 1
+        else:
+            tick_end = beats_ticks[current_beat + num_beats]
+        if tick_end > score.end():
+            break
+        ticks_split.append(tick_end)
+        current_beat += num_beats
+
+    return split_score_per_ticks(score, ticks_split)
+
+
+def split_score_per_tracks(score: Score) -> list[Score]:
+    """
+    Split a ``symusic.Score`` into several scores for each of its tracks.
+
+    The split scores will all start at tick 0.
+    Example: for a score with an end tick at 1000, and a list of tick
+    ``[2000, 5000, 7000]``, this method will return a list of four scores which
+    correspond respectively to the portions of the original score from tick 0 to 2000,
+    2000 to 5000, 5000 to 7000 and 10000 to 10000.
+
+    :param score: ``symusic.Score`` object to split.
+    :return: a list of split ``symusic.Score`` objects.
+    """
+    scores_split = []
+    for track in score.tracks:
+        score_split = Score(score.tpq)
+        score_split.tempos = score.tempos
+        score_split.time_signatures = score.time_signatures
+        score_split.key_signatures = score.key_signatures
+        score_split.lyrics = score.lyrics
+        score_split.markers = score.markers
+        score_split.tracks.append(track.copy())
+
+        scores_split.append(score_split)
+    return scores_split
