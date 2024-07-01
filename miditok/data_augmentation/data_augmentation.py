@@ -163,7 +163,9 @@ def _filter_offset_tuples_to_score(
     """
     # Get min and max pitches in the Score (except drum tracks)
     all_pitches = [
-        track.notes.numpy()["pitch"] for track in score.tracks if not track.is_drum
+        track.notes.numpy()["pitch"]
+        for track in score.tracks
+        if not track.is_drum and len(track.notes) > 0
     ]
     min_pitches = [np.min(pitches) for pitches in all_pitches]
     max_pitches = [np.max(pitches) for pitches in all_pitches]

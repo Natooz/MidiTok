@@ -213,26 +213,26 @@ class DatasetMIDI(_DatasetABC):
 
         # Tokenize on the fly
         else:
+            # The tokenization steps are outside the try bloc as if there are errors,
+            # we might want to catch them to fix them instead of skipping the iteration.
             try:
                 score = Score(self.files_paths[idx])
-                tseq = self._tokenize_score(score)
-                # If not one_token_stream, we only take the first track/sequence
-                token_ids = tseq.ids if self.tokenizer.one_token_stream else tseq[0].ids
-                if self.func_to_get_labels is not None:
-                    # tokseq can be given as a list of TokSequence to get the labels
-                    labels = self.func_to_get_labels(score, tseq, self.files_paths[idx])
-                    if not isinstance(labels, LongTensor):
-                        labels = LongTensor(
-                            [labels] if isinstance(labels, int) else labels
-                        )
             except SCORE_LOADING_EXCEPTION:
-                token_ids = None
+                item = {self.sample_key_name: None}
+                if self.func_to_get_labels is not None:
+                    item[self.labels_key_name] = labels
+                return item
 
-        item = {
-            self.sample_key_name: LongTensor(token_ids)
-            if token_ids is not None
-            else None
-        }
+            tseq = self._tokenize_score(score)
+            # If not one_token_stream, we only take the first track/sequence
+            token_ids = tseq.ids if self.tokenizer.one_token_stream else tseq[0].ids
+            if self.func_to_get_labels is not None:
+                # tokseq can be given as a list of TokSequence to get the labels
+                labels = self.func_to_get_labels(score, tseq, self.files_paths[idx])
+                if not isinstance(labels, LongTensor):
+                    labels = LongTensor([labels] if isinstance(labels, int) else labels)
+
+        item = {self.sample_key_name: LongTensor(token_ids)}
         if self.func_to_get_labels is not None:
             item[self.labels_key_name] = labels
 
