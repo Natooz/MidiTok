@@ -1175,19 +1175,6 @@ class MusicTokenizer(ABC, HFHubMixin):
                 all_events += track_events
             else:
                 all_events[ti] += track_events
-                if self.config.program_changes:
-                    # ProgramNoteOff desc to make sure it appears before Pedals and
-                    # everything else
-                    program = track.program if not track.is_drum else -1
-                    idx = 0
-                    while (
-                        idx < len(all_events)
-                        and all_events[ti][idx].type_ in TOKEN_TYPE_BEFORE_PC
-                    ):
-                        idx += 1
-                    all_events[ti].insert(
-                        idx, Event("Program", program, 0, desc="ProgramNoteOff")
-                    )
                 self._sort_events(all_events[ti])
         if self.config.one_token_stream_for_programs:
             self._sort_events(all_events)
@@ -1209,6 +1196,18 @@ class MusicTokenizer(ABC, HFHubMixin):
                 all_events[i] = self._add_time_events(
                     all_events[i], score.ticks_per_quarter
                 )
+                # Add program tokens at the beginning of the sequences if using
+                # "program_changes" and not in "one_token_stream" mode.
+                if self.config.program_changes and len(score.tracks) > 0:
+                    program = (
+                        score.tracks[i].program if not score.tracks[i].is_drum else -1
+                    )
+                    # If the first token is a "Track_Start" the program token is
+                    # inserted after
+                    all_events[i].insert(
+                        0 if all_events[i][0].type_ != "Track" else 1,
+                        Event("Program", program, 0),
+                    )
                 tok_sequence.append(TokSequence(events=all_events[i]))
                 self.complete_sequence(tok_sequence[-1])
 
