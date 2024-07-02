@@ -794,7 +794,7 @@ def get_beats_ticks(score: Score, only_notes_onsets: bool = False) -> list[int]:
 def _get_max_tick_only_onsets(score: Score) -> int:
     max_tick_tracks = [
         max(
-            track.notes.numpy()["time"][-1],  # only note onsets
+            track.notes.numpy()["time"][-1] if len(track.notes) > 0 else 0,
             track.controls.end(),
             track.pitch_bends.end(),
         )
