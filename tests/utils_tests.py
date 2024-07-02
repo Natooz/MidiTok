@@ -542,8 +542,8 @@ def check_control_tokens_are_well_inserted(
     if isinstance(tokenizer, miditok.MMM):
         tokens = tokenizer.split_tokseq_per_track(tokens, keep_track_tokens=True)
 
-    ticks_bars = get_bars_ticks(score)
-    ticks_beats = get_beats_ticks(score)
+    ticks_bars = get_bars_ticks(score, only_notes_onsets=True)
+    ticks_beats = get_beats_ticks(score, only_notes_onsets=True)
     for track_idx, acs in ac_indexes.items():
         for ac_idx, tracks_bars_idx in acs.items():
             controls = tokenizer.attribute_controls[ac_idx].compute(

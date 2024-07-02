@@ -192,7 +192,7 @@ class Octuple(MusicTokenizer):
         """
         del attribute_controls_indexes
         # Check bar embedding limit, update if needed
-        bar_ticks = get_bars_ticks(score)
+        bar_ticks = get_bars_ticks(score, only_notes_onsets=True)
         if self.config.additional_params["max_bar_embedding"] < len(bar_ticks):
             score = score.clip(
                 0, bar_ticks[self.config.additional_params["max_bar_embedding"]]

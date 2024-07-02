@@ -215,7 +215,7 @@ def create_random_ac_indexes(
             acs_bars_idx.append(i)
         else:
             acs_track_idx.append(i)
-    bar_ticks = np.array(get_bars_ticks(score))
+    bar_ticks = np.array(get_bars_ticks(score, only_notes_onsets=True))
 
     ac_indexes = {}
     for track_idx, track in enumerate(score.tracks):

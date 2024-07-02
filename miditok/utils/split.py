@@ -213,7 +213,7 @@ def split_score_per_note_density(
         raise ValueError(msg)
     if min_seq_len is None:
         min_seq_len = max_seq_len // 4
-    bar_ticks = get_bars_ticks(score)
+    bar_ticks = get_bars_ticks(score, only_notes_onsets=True)
     num_notes_per_bar = get_num_notes_per_bar(score)
     num_tokens_per_bar = [
         npb * average_num_tokens_per_note for npb in num_notes_per_bar
@@ -460,7 +460,7 @@ def split_score_per_beats(
         raise ValueError(_ := f"`min_num_beats` must be > 0 (got {min_num_beats}).")
 
     ticks_split = []
-    beats_ticks = get_beats_ticks(score)
+    beats_ticks = get_beats_ticks(score, only_notes_onsets=True)
     current_beat = 0
     while current_beat < len(beats_ticks):
         # Determine the number of beats for this section

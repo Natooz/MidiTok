@@ -681,7 +681,7 @@ def compute_ticks_per_bar(time_sig: TimeSignature, time_division: int) -> int:
     )
 
 
-def get_bars_ticks(score: Score) -> list[int]:
+def get_bars_ticks(score: Score, only_notes_onsets: bool = False) -> list[int]:
     """
     Compute the ticks of the bars of a ``symusic.Score``.
 
@@ -694,9 +694,11 @@ def get_bars_ticks(score: Score) -> list[int]:
     be ignored.
 
     :param score: ``symusic.Score`` to analyze.
+    :param only_notes_onsets: if enabled, bars at the end without any note onsets, i.e.
+        only active notes, will be ignored. (default: ``False``)
     :return: list of ticks for each bar.
     """
-    max_tick = score.end()
+    max_tick = _get_max_tick_only_onsets(score) if only_notes_onsets else score.end()
     if max_tick == 0:
         return [0]  # special case of empty file, we just list the first bar
 
@@ -733,7 +735,7 @@ def get_bars_ticks(score: Score) -> list[int]:
     return bars_ticks
 
 
-def get_beats_ticks(score: Score) -> list[int]:
+def get_beats_ticks(score: Score, only_notes_onsets: bool = False) -> list[int]:
     """
     Return the ticks of the beats of a ``symusic.Score``.
 
@@ -746,9 +748,11 @@ def get_beats_ticks(score: Score) -> list[int]:
     be ignored.
 
     :param score: ``symusic.Score`` to analyze.
+    :param only_notes_onsets: if enabled, bars at the end without any note onsets, i.e.
+        only active notes, will be ignored. (default: ``False``)
     :return: list of ticks for each beat.
     """
-    max_tick = score.end()
+    max_tick = _get_max_tick_only_onsets(score) if only_notes_onsets else score.end()
     if max_tick == 0:
         return [0]  # special case of empty file, we just list the first beat
 
@@ -787,6 +791,25 @@ def get_beats_ticks(score: Score) -> list[int]:
     return beat_ticks
 
 
+def _get_max_tick_only_onsets(score: Score) -> int:
+    max_tick_tracks = [
+        max(
+            track.notes.numpy()["time"][-1],  # only note onsets
+            track.controls.end(),
+            track.pitch_bends.end(),
+        )
+        for track in score.tracks
+    ]
+    return max(
+        score.tempos.end(),
+        score.time_signatures.end(),
+        score.key_signatures.end(),
+        score.lyrics.end(),
+        score.markers.end(),
+        max([0, *max_tick_tracks]),  # 0 in case there are no tracks
+    )
+
+
 def add_bar_beats_ticks_to_tokseq(
     tokseq: TokSequence | list[TokSequence],
     score: Score | None = None,
@@ -802,9 +825,9 @@ def add_bar_beats_ticks_to_tokseq(
     :param beat_ticks: ticks of the beats of the ``score``. Only used for recursivity.
     """
     if bar_ticks is None:
-        bar_ticks = get_bars_ticks(score)
+        bar_ticks = get_bars_ticks(score, only_notes_onsets=True)
     if beat_ticks is None:
-        beat_ticks = get_beats_ticks(score)
+        beat_ticks = get_beats_ticks(score, only_notes_onsets=True)
 
     # Recursively adds bars/beats ticks
     if isinstance(tokseq, list):
@@ -831,7 +854,7 @@ def get_num_notes_per_bar(
         return [] if tracks_indep else [0]
 
     # Get bar and note times
-    bar_ticks = get_bars_ticks(score)
+    bar_ticks = get_bars_ticks(score, only_notes_onsets=True)
     if bar_ticks[-1] != score.end():
         bar_ticks.append(score.end())
     tracks_times = [track.notes.numpy()["time"] for track in score.tracks]

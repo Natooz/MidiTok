@@ -315,7 +315,7 @@ def test_get_num_notes_per_bar(file_path: Path):
 def test_split_concat_score(file_path: Path, max_num_beats: int = 16):
     score = Score(file_path)
     score_splits = miditok.utils.split_score_per_beats(score, max_num_beats)
-    ticks_beat = miditok.utils.get_beats_ticks(score)
+    ticks_beat = miditok.utils.get_beats_ticks(score, only_notes_onsets=True)
 
     # Check there is the good number of split music files
     assert len(score_splits) == ceil(len(ticks_beat) / max_num_beats)

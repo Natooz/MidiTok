@@ -1160,8 +1160,8 @@ class MusicTokenizer(ABC, HFHubMixin):
             ticks_per_beat = None
 
         # Adds track tokens
-        ticks_bars = get_bars_ticks(score)
-        ticks_beats = get_beats_ticks(score)
+        ticks_bars = get_bars_ticks(score, only_notes_onsets=True)
+        ticks_beats = get_beats_ticks(score, only_notes_onsets=True)
         for ti, track in enumerate(score.tracks):
             track_events = self._create_track_events(
                 track,
