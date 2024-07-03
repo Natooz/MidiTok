@@ -706,9 +706,10 @@ def get_bars_ticks(score: Score, only_notes_onsets: bool = False) -> list[int]:
     time_sigs = copy(score.time_signatures)
     if len(time_sigs) == 0:
         time_sigs.append(TimeSignature(0, *TIME_SIGNATURE))
-    # Mock the last one to cover the last section in the loop below
-    if time_sigs[-1].time != max_tick:
-        time_sigs.append(TimeSignature(max_tick, *TIME_SIGNATURE))
+    # Mock the last one to cover the last section in the loop below in all cases, as it
+    # prevents the case in which the last time signature had an invalid numerator or
+    # denominator (that would have been skipped in the while loop below).
+    time_sigs.append(TimeSignature(max_tick, *TIME_SIGNATURE))
 
     # Section from tick 0 to first time sig is 4/4 if first time sig time is not 0
     if (
@@ -721,7 +722,7 @@ def get_bars_ticks(score: Score, only_notes_onsets: bool = False) -> list[int]:
         current_time_sig = TimeSignature(0, *TIME_SIGNATURE)
 
     # Compute bars, one time signature portion at a time
-    for time_signature in time_sigs:
+    for time_signature in time_sigs[1:]:  # there are at least two in the list
         if time_signature.denominator <= 0 or time_signature.numerator <= 0:
             continue
         ticks_per_bar = compute_ticks_per_bar(current_time_sig, score.ticks_per_quarter)
@@ -760,9 +761,10 @@ def get_beats_ticks(score: Score, only_notes_onsets: bool = False) -> list[int]:
     time_sigs = copy(score.time_signatures)
     if len(time_sigs) == 0:
         time_sigs.append(TimeSignature(0, *TIME_SIGNATURE))
-    # Mock the last one to cover the last section in the loop below
-    if time_sigs[-1].time != max_tick:
-        time_sigs.append(TimeSignature(max_tick, *TIME_SIGNATURE))
+    # Mock the last one to cover the last section in the loop below in all cases, as it
+    # prevents the case in which the last time signature had an invalid numerator or
+    # denominator (that would have been skipped in the while loop below).
+    time_sigs.append(TimeSignature(max_tick, *TIME_SIGNATURE))
 
     # Section from tick 0 to first time sig is 4/4 if first time sig time is not 0
     if (
@@ -775,7 +777,7 @@ def get_beats_ticks(score: Score, only_notes_onsets: bool = False) -> list[int]:
         current_time_sig = TimeSignature(0, *TIME_SIGNATURE)
 
     # Compute beats, one time signature portion at a time
-    for time_signature in time_sigs:
+    for time_signature in time_sigs[1:]:  # there are at least two in the list
         if time_signature.denominator <= 0 or time_signature.numerator <= 0:
             continue
         ticks_per_beat = compute_ticks_per_beat(
