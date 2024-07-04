@@ -328,7 +328,8 @@ class MusicTokenizer(ABC, HFHubMixin):
         """
         self.attribute_controls.append(attribute_control)
         for token in attribute_control.tokens:
-            self.add_to_vocab(token)
+            if token not in self.vocab:
+                self.add_to_vocab(token)
 
     @property
     def pad_token_id(self) -> int:
@@ -2178,7 +2179,14 @@ class MusicTokenizer(ABC, HFHubMixin):
             if token not in self.config.special_tokens:
                 self.config.special_tokens.append(token)
 
-        if vocab_idx is not None:
+        dict_vocab = self.vocab if vocab_idx is None else self.vocab[vocab_idx]
+        if token_str in dict_vocab:
+            token_id = dict_vocab[token_str]
+            warnings.warn(
+                f"Token {token_str} is already in the vocabulary at idx {token_id}.",
+                stacklevel=2,
+            )
+        elif vocab_idx is not None:
             self._vocab_base[vocab_idx][token_str] = len(self._vocab_base[vocab_idx])
             self.__vocab_base_inv[vocab_idx][len(self.__vocab_base_inv[vocab_idx])] = (
                 token_str
