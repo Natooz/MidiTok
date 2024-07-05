@@ -164,7 +164,7 @@ class TokSequence:
         """
         return self._split_per_ticks(self._ticks_beats)
 
-    def _split_per_ticks(self, ticks: list[int]) -> list[TokSequence]:
+    def _split_per_ticks(self, ticks: Sequence[int]) -> list[TokSequence]:
         idxs = [0]
         ti_prev = 0
         for bi in range(1, len(ticks)):

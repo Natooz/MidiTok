@@ -130,23 +130,19 @@ def are_tracks_equals(track1: Instrument, track2: Track) -> int:
 def are_tempos_equals(
     tempo_change1: miditoolkit.TempoChange, tempo_change2: symusic.Tempo
 ) -> bool:
-    if tempo_change1.time != tempo_change2.time or round(
+    return tempo_change1.time == tempo_change2.time and round(
         tempo_change1.tempo, 3
-    ) != round(tempo_change2.tempo, 3):
-        return False
-    return True
+    ) == round(tempo_change2.tempo, 3)
 
 
 def are_time_signatures_equals(
     time_sig1: miditoolkit.TimeSignature, time_sig2: symusic.TimeSignature
 ) -> bool:
-    if (
-        time_sig1.time != time_sig2.time
-        or time_sig1.numerator != time_sig2.numerator
-        or time_sig1.denominator != time_sig2.denominator
-    ):
-        return False
-    return True
+    return (
+        time_sig1.time == time_sig2.time
+        and time_sig1.numerator == time_sig2.numerator
+        and time_sig1.denominator == time_sig2.denominator
+    )
 
 
 def are_key_signatures_equals(
@@ -154,17 +150,13 @@ def are_key_signatures_equals(
 ) -> bool:
     # if key_sig1.time != key_sig2.time or key_sig1.key_number != key_sig2.key:
     # we don't test key signatures as they are decoded differently
-    if key_sig1.time != key_sig2.time:
-        return False
-    return True
+    return key_sig1.time == key_sig2.time
 
 
 def are_lyrics_or_markers_equals(
     lyric1: miditoolkit.Lyric, lyric2: symusic.core.TextMetaTick
 ) -> bool:
-    if lyric1.time != lyric2.time or lyric1.text != lyric2.text:
-        return False
-    return True
+    return lyric1.time == lyric2.time and lyric1.text == lyric2.text
 
 
 def are_midis_equals(midi_mtk: MidiFile, midi_sms: Score) -> bool:
