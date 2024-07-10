@@ -117,11 +117,11 @@ class DatasetMIDI(_DatasetABC):
         ``Dataset`` object. If this is enabled, the ``Dataset`` will tokenize all the
         files at its initialization and store the tokens in memory.
     :param ac_tracks_random_ratio_range: range of ratios (between 0 and 1 included) of
-        tracks to compute attribute controls on. If ``None`` is given, the attribute
-        controls will be computed for all the tracks. (default: ``None``)
+        tracks to compute attribute controls on. If ``None`` is given, no track
+        attribute control will be used. (default: ``None``)
     :param ac_bars_random_ratio_range: range of ratios (between 0 and 1 included) of
-        bars to compute attribute controls on. If ``None`` is given, the attribute
-        controls will be computed for all the bars. (default: ``None``)
+        bars to compute attribute controls on. If ``None`` is given, no bar attribute
+        control will be used. (default: ``None``)
     :param func_to_get_labels: a function to retrieve the label of a file. The method
         must take two positional arguments: the first is either the
         :class:`miditok.TokSequence` returned when tokenizing a file, the second is the
@@ -198,7 +198,7 @@ class DatasetMIDI(_DatasetABC):
 
         If the dataset is pre-tokenized, the method will return the token ids.
         Otherwise, it will tokenize the ``idx``th file on the fly. If the file to is
-        corrupted, the method will return an dictionary with ``None`` values.
+        corrupted, the method will return a dictionary with ``None`` values.
 
         :param idx: idx of the file/sample.
         :return: the token ids, with optionally the associated label.
