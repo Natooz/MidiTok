@@ -55,9 +55,13 @@ class MMM(MusicTokenizer):
         params: str | Path | None = None,
     ) -> None:
         # Directly call super method
+        # __in_init is used to not call the `add_to_vocab` method for the base_tokenizer
+        # when creating the vocab of the MMM object. The MMM
+        self.__in_init = True
         super().__init__(tokenizer_config, params)
         # Set to True, whereas `config.one_token_stream_for_programs` is False
         self.one_token_stream = True
+        self.__in_init = False
         # We don't need to specifically load the base_tokenizer from the config file as
         # it can be entirely created from the `self` config file only and will only be
         # used for the `_add_time_events`, `_sort_events`, `_tokens_to_score`,
@@ -345,10 +349,11 @@ class MMM(MusicTokenizer):
             . (default: ``None``)
         """
         # Overridden to make sure the vocabs of self and base_tokenizer remain identical
-        self.base_tokenizer.add_to_vocab(
-            token,
-            special_token,
-            vocab_idx,
-            byte_,
-        )
+        if not self.__in_init:
+            self.base_tokenizer.add_to_vocab(
+                token,
+                special_token,
+                vocab_idx,
+                byte_,
+            )
         super().add_to_vocab(token, special_token, vocab_idx, byte_)

@@ -62,7 +62,7 @@ TIME_SIGNATURE_RANGE_TESTS = TIME_SIGNATURE_RANGE
 TIME_SIGNATURE_RANGE_TESTS.update({2: [2, 3, 4]})
 TIME_SIGNATURE_RANGE_TESTS[4].append(8)
 TOKENIZER_CONFIG_KWARGS = {
-    "special_tokens": ["PAD", "BOS_None", "EOS", "EOS_test_None"],
+    "special_tokens": ["PAD", "BOS_None", "EOS", "EOS-test_None"],
     "beat_res": {(0, 4): 8, (4, 12): 4, (12, 16): 2},
     "beat_res_rest": {(0, 2): 4, (2, 12): 2},
     "num_tempos": 32,
