@@ -611,8 +611,6 @@ def miditoolkit_to_symusic(midi: MidiFile) -> Score:
         )
     for tempo in midi.tempo_changes:
         score.tempos.append(Tempo(tempo.time, tempo.tempo))
-    for lyric in midi.lyrics:
-        score.tracks[0].lyrics.append(TextMeta(lyric.time, lyric.text))
     for marker in midi.markers:
         score.markers.append(TextMeta(marker.time, marker.text))
 
@@ -644,6 +642,10 @@ def miditoolkit_to_symusic(midi: MidiFile) -> Score:
         track.pedals.sort()
 
         score.tracks.append(track)
+
+    if len(score.tracks) > 0 and len(midi.lyrics) > 0:
+        for lyric in midi.lyrics:
+            score.tracks[0].lyrics.append(TextMeta(lyric.time, lyric.text))
 
     return score
 
