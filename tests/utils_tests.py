@@ -245,6 +245,19 @@ def adapt_ref_score_for_tests_assertion(
         else:
             score.tempos = [Tempo(0, tokenizer.default_tempo)]
 
+    # If tokenizing each track independently without using Program tokens, the tokenizer
+    # will have no way to know the original program of each token sequence when decoding
+    # them. We thus resort to set the program of the original score to the default value
+    # (0, piano) to match the decoded Score. The content of the tracks (notes, controls)
+    # will still be checked.
+    if (
+        not tokenizer.config.one_token_stream_for_programs
+        and not tokenizer.config.use_programs
+    ):
+        for track in score.tracks:
+            track.program = 0
+            track.is_drum = False
+
     return score
 
 
@@ -388,10 +401,7 @@ def tokenize_and_check_equals(
     # Tokenize and detokenize
     adapt_ref_score_before_tokenize(score, tokenizer)
     tokens = tokenizer(score)
-    score_decoded = tokenizer(
-        tokens,
-        miditok.utils.get_score_programs(score) if len(score.tracks) > 0 else None,
-    )
+    score_decoded = tokenizer(tokens)
 
     # Post-process the reference and decoded Scores
     # We might need to resample the original preprocessed Score, as it has been

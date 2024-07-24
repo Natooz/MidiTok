@@ -274,6 +274,10 @@ class Octuple(MusicTokenizer):
                 is_drum = False
                 if programs is not None:
                     current_program, is_drum = programs[si]
+                elif self.config.use_programs and len(seq) > 0:
+                    current_program = int(seq[0][5].split("_")[1])
+                    if current_program == -1:
+                        is_drum, current_program = True, 0
                 current_track = Track(
                     program=current_program,
                     is_drum=is_drum,
@@ -294,8 +298,6 @@ class Octuple(MusicTokenizer):
                 # Note attributes
                 pitch = int(time_step[0].split("_")[1])
                 vel = int(time_step[1].split("_")[1])
-                if self.config.use_programs:
-                    current_program = int(time_step[5].split("_")[1])
 
                 # Time values
                 event_pos = int(time_step[3].split("_")[1])
@@ -345,6 +347,8 @@ class Octuple(MusicTokenizer):
                 # Append the created note
                 new_note = Note(current_tick, duration, pitch, vel)
                 if self.config.one_token_stream_for_programs:
+                    if self.config.use_programs:
+                        current_program = int(time_step[5].split("_")[1])
                     check_inst(current_program)
                     tracks[current_program].notes.append(new_note)
                 else:

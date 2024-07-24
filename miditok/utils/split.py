@@ -504,7 +504,6 @@ def split_score_per_tracks(score: Score) -> list[Score]:
         score_split.tempos = score.tempos
         score_split.time_signatures = score.time_signatures
         score_split.key_signatures = score.key_signatures
-        score_split.lyrics = score.lyrics
         score_split.markers = score.markers
         score_split.tracks.append(track.copy())
 
