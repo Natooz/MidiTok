@@ -8,7 +8,7 @@ import numpy as np
 from symusic import Note, Score, Track
 
 from miditok.classes import Event, TokSequence
-from miditok.constants import MIDI_INSTRUMENTS
+from miditok.constants import DEFAULT_VELOCITY, MIDI_INSTRUMENTS
 from miditok.midi_tokenizer import MusicTokenizer
 from miditok.utils.utils import np_get_closest
 
@@ -127,14 +127,15 @@ class Structured(MusicTokenizer):
                     desc=note.end,
                 )
             )
-            events.append(
-                Event(
-                    type_="Velocity",
-                    value=note.velocity,
-                    time=note.start,
-                    desc=f"{note.velocity}",
+            if self.config.use_velocities:
+                events.append(
+                    Event(
+                        type_="Velocity",
+                        value=note.velocity,
+                        time=note.start,
+                        desc=f"{note.velocity}",
+                    )
                 )
-            )
             dur = self._tpb_ticks_to_tokens[ticks_per_beat][note.duration]
             events.append(
                 Event(
@@ -276,6 +277,7 @@ class Structured(MusicTokenizer):
         for i in range(len(tokens)):
             tokens[i] = tokens[i].tokens
         score = Score(self.time_division)
+        dur_offset = 2 if self.config.use_velocities else 1
 
         # RESULTS
         instruments: dict[int, Track] = {}
@@ -327,16 +329,15 @@ class Structured(MusicTokenizer):
                     current_tick += self._tpb_tokens_to_ticks[ticks_per_beat][token_val]
                 elif token_type in {"Pitch", "PitchDrum"}:
                     try:
-                        if (
-                            seq[ti + 1].split("_")[0] == "Velocity"
-                            and seq[ti + 2].split("_")[0] == "Duration"
-                        ):
+                        if self.config.use_velocities:
+                            vel_type, vel = seq[ti + 1].split("_")
+                        else:
+                            vel_type, vel = "Velocity", DEFAULT_VELOCITY
+                        dur_type, dur = seq[ti + dur_offset].split("_")
+                        if vel_type == "Velocity" and dur_type == "Duration":
                             pitch = int(seq[ti].split("_")[1])
-                            vel = int(seq[ti + 1].split("_")[1])
-                            duration = self._tpb_tokens_to_ticks[ticks_per_beat][
-                                seq[ti + 2].split("_")[1]
-                            ]
-                            new_note = Note(current_tick, duration, pitch, vel)
+                            dur = self._tpb_tokens_to_ticks[ticks_per_beat][dur]
+                            new_note = Note(current_tick, dur, pitch, int(vel))
                             if self.config.one_token_stream_for_programs:
                                 check_inst(current_program)
                                 instruments[current_program].notes.append(new_note)

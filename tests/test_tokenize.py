@@ -67,7 +67,7 @@ for tokenization_ in ALL_TOKENIZATIONS:
         adjust_tok_params_for_tests(tokenization_, params_)
         TOK_PARAMS_ONE_TRACK.append((tokenization_, params_))
 
-_all_add_tokens = [
+_all_add_tokens = [  # TODO use_velocity / duration
     "use_rests",
     "use_tempos",
     "use_time_signatures",

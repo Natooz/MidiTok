@@ -8,7 +8,7 @@ from warnings import warn
 from symusic import Note, Score, Tempo, Track
 
 from miditok.classes import Event, TokSequence
-from miditok.constants import MIDI_INSTRUMENTS
+from miditok.constants import DEFAULT_VELOCITY, MIDI_INSTRUMENTS
 from miditok.midi_tokenizer import MusicTokenizer
 from miditok.utils import detect_chords, get_bars_ticks, get_score_ticks_per_beat
 
@@ -72,9 +72,10 @@ class MuMIDI(MusicTokenizer):
             "Program": 0,
             "BarPosEnc": 1,
             "PositionPosEnc": 2,
-            "Velocity": -2,
             "Duration": -1,
         }
+        if self.config.use_velocities:
+            self.vocab_types_idx["Velocity"] = -2
         if self.config.use_chords:
             self.vocab_types_idx["Chord"] = 0
         if self.config.use_rests:
@@ -245,32 +246,18 @@ class MuMIDI(MusicTokenizer):
             # Note
             duration = note.end - note.start
             dur_token = self._tpb_ticks_to_tokens[tpb][duration]
-            if not track.is_drum:
-                tokens.append(
-                    [
-                        Event(
-                            type_="Pitch",
-                            value=note.pitch,
-                            time=note.start,
-                            desc=track.program,
-                        ),
-                        f"Velocity_{note.velocity}",
-                        f"Duration_{dur_token}",
-                    ]
-                )
-            else:
-                tokens.append(
-                    [
-                        Event(
-                            type_="PitchDrum",
-                            value=note.pitch,
-                            time=note.start,
-                            desc=-1,
-                        ),
-                        f"Velocity_{note.velocity}",
-                        f"Duration_{dur_token}",
-                    ]
-                )
+            new_token = [
+                Event(
+                    type_="Pitch" if not track.is_drum else "PitchDrum",
+                    value=note.pitch,
+                    time=note.start,
+                    desc=track.program if not track.is_drum else -1,
+                ),
+                f"Duration_{dur_token}",
+            ]
+            if self.config.use_velocities:
+                new_token.insert(1, f"Velocity_{note.velocity}")
+            tokens.append(new_token)
 
         # Adds chord tokens if specified
         if self.config.use_chords and not track.is_drum:
@@ -341,7 +328,12 @@ class MuMIDI(MusicTokenizer):
                 except KeyError:
                     tracks[current_track] = []
             elif tok_type in {"Pitch", "PitchDrum"}:
-                vel, duration = (time_step[i].split("_")[1] for i in (-2, -1))
+                duration = time_step[-1].split("_")[1]
+                vel = (
+                    time_step[-2].split("_")[1]
+                    if self.config.use_velocities
+                    else DEFAULT_VELOCITY
+                )
                 if any(val == "None" for val in (vel, duration)):
                     continue
                 pitch = int(tok_val)
@@ -430,7 +422,8 @@ class MuMIDI(MusicTokenizer):
 
         # Velocity and Duration in last position
         # VELOCITY
-        vocab.append([f"Velocity_{i}" for i in self.velocities])
+        if self.config.use_velocities:
+            vocab.append([f"Velocity_{i}" for i in self.velocities])
 
         # DURATION
         vocab.append(

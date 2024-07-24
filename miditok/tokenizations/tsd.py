@@ -13,7 +13,7 @@ from symusic import (
 )
 
 from miditok.classes import Event, TokSequence
-from miditok.constants import MIDI_INSTRUMENTS, TIME_SIGNATURE
+from miditok.constants import DEFAULT_VELOCITY, MIDI_INSTRUMENTS, TIME_SIGNATURE
 from miditok.midi_tokenizer import MusicTokenizer
 from miditok.utils import compute_ticks_per_beat
 
@@ -148,6 +148,7 @@ class TSD(MusicTokenizer):
         for i in range(len(tokens)):
             tokens[i] = tokens[i].tokens
         score = Score(self.time_division)
+        dur_offset = 2 if self.config.use_velocities else 1
 
         # RESULTS
         tracks: dict[int, Track] = {}
@@ -232,8 +233,11 @@ class TSD(MusicTokenizer):
                     previous_pitch_chord[current_program] = pitch
 
                     try:
-                        vel_type, vel = seq[ti + 1].split("_")
-                        dur_type, dur = seq[ti + 2].split("_")
+                        if self.config.use_velocities:
+                            vel_type, vel = seq[ti + 1].split("_")
+                        else:
+                            vel_type, vel = "Velocity", DEFAULT_VELOCITY
+                        dur_type, dur = seq[ti + dur_offset].split("_")
                         if vel_type == "Velocity" and dur_type == "Duration":
                             dur = self._tpb_tokens_to_ticks[ticks_per_beat][dur]
                             new_note = Note(current_tick, dur, pitch, int(vel))

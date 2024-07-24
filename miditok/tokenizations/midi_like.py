@@ -5,7 +5,7 @@ from __future__ import annotations
 from symusic import Note, Pedal, PitchBend, Score, Tempo, TimeSignature, Track
 
 from miditok.classes import Event, TokSequence
-from miditok.constants import MIDI_INSTRUMENTS, TIME_SIGNATURE
+from miditok.constants import DEFAULT_VELOCITY, MIDI_INSTRUMENTS, TIME_SIGNATURE
 from miditok.midi_tokenizer import MusicTokenizer
 from miditok.utils import compute_ticks_per_beat
 
@@ -321,10 +321,14 @@ class MIDILike(MusicTokenizer):
 
                     # if NoteOn adds it to the queue with FIFO
                     if tok_type not in {"NoteOff", "DrumOff"}:
-                        if ti + 1 < len(seq):
-                            vel = int(seq[ti + 1].split("_")[1])
+                        if self.config.use_velocities:
+                            if ti + 1 < len(seq):
+                                active_notes[current_program][pitch].append(
+                                    (current_tick, int(seq[ti + 1].split("_")[1]))
+                                )
+                        else:
                             active_notes[current_program][pitch].append(
-                                (current_tick, vel)
+                                (current_tick, DEFAULT_VELOCITY)
                             )
                         previous_pitch_chord[current_program] = pitch
                         if tok_type != "PitchIntervalChord":

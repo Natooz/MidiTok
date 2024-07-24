@@ -62,6 +62,7 @@ from .constants import (
     USE_SUSTAIN_PEDALS,
     USE_TEMPOS,
     USE_TIME_SIGNATURE,
+    USE_VELOCITIES,
 )
 
 if TYPE_CHECKING:
@@ -367,6 +368,16 @@ class TokenizerConfig:
         note/musical events successions only occurring within bars or beats. Possible
         values for this argument are ``"bar"``, ``beat`` or ``no``. (default:
         ``bar``)
+    :param use_velocities: whether to use ``Velocity`` tokens. The velocity is a feature
+        from the MIDI protocol that corresponds to the force with which a note is
+        played. This information can be measured by MIDI devices and brings information
+        on the way a music is played. At playback, the velocity usually impacts the
+        volume at which notes are played. If you are not using MIDI files, using
+        velocity tokens will have no interest as the information is not present in the
+        data and the default velocity value will be used. Not using velocity tokens
+        allows to reduce the token sequence length. If you disable velocity tokens, the
+        tokenizer will set the velocity of notes decoded from tokens to 100 by default.
+        (default: ``True``)
     :param use_chords: will use ``Chord`` tokens, if the tokenizer is compatible. A
         ``Chord`` token indicates the presence of a chord at a certain time step.
         MidiTok uses a chord detection method based on onset times and duration. This
@@ -559,6 +570,7 @@ class TokenizerConfig:
         num_velocities: int = NUM_VELOCITIES,
         special_tokens: Sequence[str] = SPECIAL_TOKENS,
         encode_ids_split: Literal["bar", "beat", "no"] = ENCODE_IDS_SPLIT,
+        use_velocities: bool = USE_VELOCITIES,
         use_chords: bool = USE_CHORDS,
         use_rests: bool = USE_RESTS,
         use_tempos: bool = USE_TEMPOS,
@@ -665,6 +677,7 @@ class TokenizerConfig:
                 self.special_tokens.append(token)
 
         # Additional token types params, enabling additional token types
+        self.use_velocities = use_velocities
         self.use_chords: bool = use_chords
         self.use_rests: bool = use_rests
         self.use_tempos: bool = use_tempos

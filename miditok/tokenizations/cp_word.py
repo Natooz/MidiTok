@@ -8,7 +8,7 @@ import numpy as np
 from symusic import Note, Score, Tempo, TimeSignature, Track
 
 from miditok.classes import Event, TokSequence
-from miditok.constants import MIDI_INSTRUMENTS, TIME_SIGNATURE
+from miditok.constants import DEFAULT_VELOCITY, MIDI_INSTRUMENTS, TIME_SIGNATURE
 from miditok.midi_tokenizer import MusicTokenizer
 from miditok.utils import compute_ticks_per_bar, compute_ticks_per_beat
 
@@ -36,7 +36,7 @@ class CPWord(MusicTokenizer):
     * 0: Family;
     * 1: Bar/Position;
     * 2: Pitch;
-    * 3: Velocity;
+    * (3: Velocity);
     * 4: Duration;
     * (+ Optional) Program: associated with notes (pitch/velocity/duration) or chords;
     * (+ Optional) Chord: chords occurring with position tokens;
@@ -78,6 +78,8 @@ class CPWord(MusicTokenizer):
         self.config.program_changes = False
         self._disable_attribute_controls()
         token_types = ["Family", "Position", "Pitch", "Velocity", "Duration"]
+        if not self.config.use_velocities:
+            token_types.remove("Velocity")
         for add_tok_attr, add_token in [
             ("use_programs", "Program"),
             ("use_chords", "Chord"),
@@ -108,6 +110,7 @@ class CPWord(MusicTokenizer):
         :return: the same events, with time events inserted.
         """
         # Add time events
+        duration_offset = 2 if self.config.use_velocities else 1
         all_events = []
         current_bar = -1
         bar_at_last_ts_change = 0
@@ -272,8 +275,8 @@ class CPWord(MusicTokenizer):
                     self.__create_cp_token(
                         event.time,
                         pitch=event.value,
-                        vel=events[e + 1].value,
-                        dur=events[e + 2].value,
+                        vel=events[e + 1].value if self.config.use_velocities else None,
+                        dur=events[e + duration_offset].value,
                         program=current_program,
                         pitch_drum=event.type_ == "PitchDrum",
                     )
@@ -377,8 +380,9 @@ class CPWord(MusicTokenizer):
             pitch_token_name = "PitchDrum" if pitch_drum else "Pitch"
             cp_token[0].value = "Note"
             cp_token[2] = create_event(pitch_token_name, pitch)
-            cp_token[3] = create_event("Velocity", vel)
-            cp_token[4] = create_event("Duration", dur)
+            if self.config.use_velocities:
+                cp_token[3] = create_event("Velocity", vel)  # shouldn't be None
+            cp_token[self.vocab_types_idx["Duration"]] = create_event("Duration", dur)
             if program is not None:
                 cp_token[self.vocab_types_idx["Program"]] = create_event(
                     "Program", program
@@ -498,9 +502,13 @@ class CPWord(MusicTokenizer):
                     ):
                         continue
                     pitch = int(compound_token[2].split("_")[1])
-                    vel = int(compound_token[3].split("_")[1])
+                    vel = (
+                        int(compound_token[3].split("_")[1])
+                        if self.config.use_velocities
+                        else DEFAULT_VELOCITY
+                    )
                     duration = self._tpb_tokens_to_ticks[ticks_per_beat][
-                        compound_token[4].split("_")[1]
+                        compound_token[self.vocab_types_idx["Duration"]].split("_")[1]
                     ]
                     new_note = Note(current_tick, duration, pitch, vel)
                     if (
@@ -651,12 +659,13 @@ class CPWord(MusicTokenizer):
             ]
 
         # VELOCITY
-        vocab[3].append("Ignore_None")
-        vocab[3] += [f"Velocity_{i}" for i in self.velocities]
+        if self.config.use_velocities:
+            vocab[3].append("Ignore_None")
+            vocab[3] += [f"Velocity_{i}" for i in self.velocities]
 
         # DURATION
-        vocab[4].append("Ignore_None")
-        vocab[4] += [
+        vocab[self.vocab_types_idx["Duration"]].append("Ignore_None")
+        vocab[self.vocab_types_idx["Duration"]] += [
             f'Duration_{".".join(map(str, duration))}' for duration in self.durations
         ]
 

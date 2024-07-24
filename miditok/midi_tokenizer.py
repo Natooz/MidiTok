@@ -219,9 +219,12 @@ class MusicTokenizer(ABC, HFHubMixin):
 
         # Velocities
         # [1:] so that there is no velocity_0
-        self.velocities = np.linspace(
-            0, 127, self.config.num_velocities + 1, dtype=np.intc
-        )[1:]
+        if self.config.use_velocities:
+            self.velocities = np.linspace(
+                0, 127, self.config.num_velocities + 1, dtype=np.intc
+            )[1:]
+        else:
+            self.velocities = np.array([])
         self._first_beat_res = next(iter(self.config.beat_res.values()))
         for beat_range, res in self.config.beat_res.items():
             if 0 in beat_range:
@@ -676,9 +679,10 @@ class MusicTokenizer(ABC, HFHubMixin):
             return NoteTickList()
 
         # Compute new velocities
-        note_soa["velocity"] = np_get_closest(
-            self.velocities, np.array(note_soa["velocity"])
-        )
+        if self.config.use_velocities:
+            note_soa["velocity"] = np_get_closest(
+                self.velocities, np.array(note_soa["velocity"])
+            )
 
         # Adjust times if needed
         if resampling_factors is not None:
@@ -1444,15 +1448,16 @@ class MusicTokenizer(ABC, HFHubMixin):
                 )
 
             # Velocity
-            events.append(
-                Event(
-                    type_="Velocity",
-                    value=note.velocity,
-                    time=note.start,
-                    program=program,
-                    desc=f"{note.velocity}",
+            if self.config.use_velocities:
+                events.append(
+                    Event(
+                        type_="Velocity",
+                        value=note.velocity,
+                        time=note.start,
+                        program=program,
+                        desc=f"{note.velocity}",
+                    )
                 )
-            )
 
             # Duration / NoteOff
             if self._note_on_off:
@@ -2038,7 +2043,8 @@ class MusicTokenizer(ABC, HFHubMixin):
             vocab += [f"Pitch_{i}" for i in range(*self.config.pitch_range)]
 
         # Velocity
-        vocab += [f"Velocity_{i}" for i in self.velocities]
+        if self.config.use_velocities:
+            vocab += [f"Velocity_{i}" for i in self.velocities]
 
         # Duration
         if not self._note_on_off:
