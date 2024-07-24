@@ -398,12 +398,13 @@ class Structured(MusicTokenizer):
         :return: the token types transitions dictionary.
         """
         dic = {
-            "Pitch": {"Velocity"},
-            "PitchDrum": {"Velocity"},
-            "Velocity": {"Duration"},
+            "Pitch": {"Velocity" if self.config.use_velocities else "Duration"},
+            "PitchDrum": {"Velocity" if self.config.use_velocities else "Duration"},
             "Duration": {"TimeShift"},
             "TimeShift": {"Pitch", "PitchDrum"},
         }
+        if self.config.use_velocities:
+            dic["Velocity"] = {"Duration"}
         if self.config.use_programs:
             dic["Program"] = {"Pitch", "PitchDrum"}
             dic["TimeShift"] = {"Program"}

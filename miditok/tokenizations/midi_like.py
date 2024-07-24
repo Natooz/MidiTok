@@ -488,7 +488,7 @@ class MIDILike(MusicTokenizer):
 
         :return: the token types transitions dictionary.
         """
-        dic: dict[str, set[str]] = {"NoteOn": {"Velocity"}}
+        dic: dict[str, set[str]] = {}
 
         if self.config.use_programs:
             first_note_token_type = (
@@ -497,23 +497,35 @@ class MIDILike(MusicTokenizer):
             dic["Program"] = {"NoteOn", "NoteOff"}
         else:
             first_note_token_type = "NoteOn"
-        dic["Velocity"] = {first_note_token_type, "TimeShift"}
+        if self.config.use_velocities:
+            dic["NoteOn"] = {"Velocity"}
+            dic["Velocity"] = {first_note_token_type, "TimeShift"}
+            last_note_token_type = "Velocity"
+        else:
+            dic["NoteOn"] = {first_note_token_type, "TimeShift"}
+            last_note_token_type = "NoteOn"
         dic["NoteOff"] = {"NoteOff", first_note_token_type, "TimeShift"}
         dic["TimeShift"] = {"NoteOff", first_note_token_type, "TimeShift"}
         if self.config.use_pitch_intervals:
             for token_type in {"PitchIntervalTime", "PitchIntervalChord"}:
-                dic[token_type] = {"Velocity"}
+                dic[token_type] = {last_note_token_type}
+                if not self.config.use_velocities:
+                    dic[token_type] |= {
+                        "PitchIntervalTime",
+                        "PitchIntervalChord",
+                        "TimeShift",
+                    }
                 if (
                     self.config.use_programs
                     and self.config.one_token_stream_for_programs
                 ):
                     dic["Program"].add(token_type)
                 else:
-                    dic["Velocity"].add(token_type)
+                    dic[last_note_token_type].add(token_type)
                     dic["NoteOff"].add(token_type)
                     dic["TimeShift"].add(token_type)
         if self.config.program_changes:
-            for token_type in {"Velocity", "NoteOff"}:
+            for token_type in {last_note_token_type, "NoteOff"}:
                 dic[token_type].add("Program")
 
         if self.config.use_chords:

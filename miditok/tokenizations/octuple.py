@@ -145,7 +145,9 @@ class Octuple(MusicTokenizer):
                 current_tempo = event.value
             elif event.type_ == "Program":
                 current_program = event.value
-            elif event.type_ in {"Pitch", "PitchDrum"} and e + 2 < len(events):
+            elif event.type_ in {"Pitch", "PitchDrum"} and e + duration_offset < len(
+                events
+            ):
                 pitch_token_name = (
                     "PitchDrum" if event.type_ == "PitchDrum" else "Pitch"
                 )
@@ -287,7 +289,9 @@ class Octuple(MusicTokenizer):
                 if programs is not None:
                     current_program, is_drum = programs[si]
                 elif self.config.use_programs and len(seq) > 0:
-                    current_program = int(seq[0][5].split("_")[1])
+                    current_program = int(
+                        seq[0][self.vocab_types_idx["Program"]].split("_")[1]
+                    )
                     if current_program == -1:
                         is_drum, current_program = True, 0
                 current_track = Track(

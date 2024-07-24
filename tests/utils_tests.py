@@ -262,7 +262,7 @@ def adapt_ref_score_for_tests_assertion(
 
 
 def scores_notes_equals(
-    score1: Score, score2: Score
+    score1: Score, score2: Score, check_velocities: bool = True
 ) -> list[tuple[int, str, list[tuple[str, Note | int, int]]]]:
     """
     Check that the notes from two Scores are all equal.
@@ -271,6 +271,7 @@ def scores_notes_equals(
 
     :param score1: first ``symusic.Score``.
     :param score2: second ``symusic.Score``.
+    :param check_velocities: whether to check velocities of notes.
     :return: list of errors.
     """
     if len(score1.tracks) != len(score2.tracks):
@@ -280,33 +281,33 @@ def scores_notes_equals(
         if track1.program != track2.program or track1.is_drum != track2.is_drum:
             errors.append((0, "program", []))
             continue
-        track_errors = tracks_notes_equals(track1, track2)
+        track_errors = tracks_notes_equals(track1, track2, check_velocities)
         if len(track_errors) > 0:
             errors.append((track1.program, track1.name, track_errors))
     return errors
 
 
 def tracks_notes_equals(
-    track1: Track, track2: Track
+    track1: Track, track2: Track, check_velocities: bool = True
 ) -> list[tuple[str, Note | int, int]]:
     if len(track1.notes) != len(track2.notes):
         return [("len", len(track2.notes), len(track1.notes))]
     errors = []
     for note1, note2 in zip(track1.notes, track2.notes):
-        err = notes_equals(note1, note2)
+        err = notes_equals(note1, note2, check_velocities)
         if err != "":
             errors.append((err, note2, getattr(note1, err)))
     return errors
 
 
-def notes_equals(note1: Note, note2: Note) -> str:
+def notes_equals(note1: Note, note2: Note, check_velocity: bool = True) -> str:
     if note1.start != note2.start:
         return "start"
     if note1.end != note2.end:
         return "end"
     if note1.pitch != note2.pitch:
         return "pitch"
-    if note1.velocity != note2.velocity:
+    if check_velocity and note1.velocity != note2.velocity:
         return "velocity"
     return ""
 
@@ -327,6 +328,7 @@ def tempos_equals(tempos1: TempoTickList, tempos2: TempoTickList) -> bool:
 def check_scores_equals(
     score1: Score,
     score2: Score,
+    check_velocities: bool = True,
     check_tempos: bool = True,
     check_time_signatures: bool = True,
     check_pedals: bool = True,
@@ -337,7 +339,7 @@ def check_scores_equals(
     types_of_errors = []
 
     # Checks notes and add markers if errors
-    errors = scores_notes_equals(score1, score2)
+    errors = scores_notes_equals(score1, score2, check_velocities)
     if len(errors) > 0:
         has_errors = True
         for e, track_err in enumerate(errors):
@@ -417,6 +419,7 @@ def tokenize_and_check_equals(
     scores_equals = check_scores_equals(
         score,
         score_decoded,
+        check_velocities=tokenizer.config.use_velocities,
         check_tempos=tokenizer.config.use_tempos and tokenization != "MuMIDI",
         check_time_signatures=tokenizer.config.use_time_signatures,
         check_pedals=tokenizer.config.use_sustain_pedals,

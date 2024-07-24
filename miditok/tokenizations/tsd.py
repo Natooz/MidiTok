@@ -393,13 +393,18 @@ class TSD(MusicTokenizer):
             dic["Program"] = {"Pitch"}
         else:
             first_note_token_type = "Pitch"
-        dic["Pitch"] = {"Velocity"}
-        dic["Velocity"] = {"Duration"}
+        if self.config.use_velocities:
+            dic["Pitch"] = {"Velocity"}
+            dic["Velocity"] = {"Duration"}
+        else:
+            dic["Pitch"] = {"Duration"}
         dic["Duration"] = {first_note_token_type, "TimeShift"}
         dic["TimeShift"] = {first_note_token_type, "TimeShift"}
         if self.config.use_pitch_intervals:
             for token_type in ("PitchIntervalTime", "PitchIntervalChord"):
-                dic[token_type] = {"Velocity"}
+                dic[token_type] = {
+                    "Velocity" if self.config.use_velocities else "Duration"
+                }
                 if (
                     self.config.use_programs
                     and self.config.one_token_stream_for_programs

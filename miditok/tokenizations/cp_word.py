@@ -13,6 +13,7 @@ from miditok.midi_tokenizer import MusicTokenizer
 from miditok.utils import compute_ticks_per_bar, compute_ticks_per_beat
 
 _ADD_TOK_ATTRIBUTES = [
+    "use_velocities",
     "use_programs",
     "use_chords",
     "use_rests",
@@ -270,7 +271,9 @@ class CPWord(MusicTokenizer):
 
             # Convert event to CP Event
             # Update max offset time of the notes encountered
-            if event.type_ in {"Pitch", "PitchDrum"} and e + 2 < len(events):
+            if event.type_ in {"Pitch", "PitchDrum"} and e + duration_offset < len(
+                events
+            ):
                 all_events.append(
                     self.__create_cp_token(
                         event.time,
@@ -349,7 +352,6 @@ class CPWord(MusicTokenizer):
 
         cp_token = [
             Event(type_="Family", value="Metric", time=time, desc=desc),
-            Event(type_="Ignore", value="None", time=time, desc=desc),
             Event(type_="Ignore", value="None", time=time, desc=desc),
             Event(type_="Ignore", value="None", time=time, desc=desc),
             Event(type_="Ignore", value="None", time=time, desc=desc),
@@ -479,7 +481,11 @@ class CPWord(MusicTokenizer):
                 elif self.config.use_programs:
                     for compound_token in seq:
                         if compound_token[0].split("_")[1] == "Note":
-                            current_program = int(compound_token[5].split("_")[1])
+                            current_program = int(
+                                compound_token[self.vocab_types_idx["Program"]].split(
+                                    "_"
+                                )[1]
+                            )
                             if current_program == -1:
                                 is_drum, current_program = True, 0
                             break
@@ -495,7 +501,11 @@ class CPWord(MusicTokenizer):
             for compound_token in seq:
                 token_family = compound_token[0].split("_")[1]
                 if token_family == "Note":
-                    pad_range_idx = 6 if self.config.use_programs else 5
+                    pad_range_idx = 4
+                    if self.config.use_velocities:
+                        pad_range_idx += 1
+                    if self.config.use_programs:
+                        pad_range_idx += 1
                     if any(
                         tok.split("_")[1] == "None"
                         for tok in compound_token[2:pad_range_idx]
@@ -515,7 +525,11 @@ class CPWord(MusicTokenizer):
                         self.config.one_token_stream_for_programs
                         and self.config.use_programs
                     ):
-                        current_program = int(compound_token[5].split("_")[1])
+                        current_program = int(
+                            compound_token[self.vocab_types_idx["Program"]].split("_")[
+                                1
+                            ]
+                        )
                         check_inst(current_program)
                         tracks[current_program].notes.append(new_note)
                     else:
@@ -637,10 +651,9 @@ class CPWord(MusicTokenizer):
 
         :return: the vocabulary as a list of string.
         """
-        vocab = [[] for _ in range(5)]
+        vocab = [[] for _ in range(4)]
 
-        vocab[0].append("Family_Metric")
-        vocab[0].append("Family_Note")
+        vocab[0] = ["Family_Metric", "Family_Note"]
 
         # POSITION
         # self.time_division is equal to the maximum possible ticks/beat value.
@@ -662,6 +675,7 @@ class CPWord(MusicTokenizer):
         if self.config.use_velocities:
             vocab[3].append("Ignore_None")
             vocab[3] += [f"Velocity_{i}" for i in self.velocities]
+            vocab.append([])  # for durations
 
         # DURATION
         vocab[self.vocab_types_idx["Duration"]].append("Ignore_None")

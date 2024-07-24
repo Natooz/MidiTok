@@ -68,6 +68,7 @@ for tokenization_ in ALL_TOKENIZATIONS:
         TOK_PARAMS_ONE_TRACK.append((tokenization_, params_))
 
 _all_add_tokens = [  # TODO use_velocity / duration
+    "use_velocities",
     "use_rests",
     "use_tempos",
     "use_time_signatures",
@@ -79,10 +80,15 @@ tokenizations_add_tokens = {
     "MIDILike": _all_add_tokens,
     "REMI": _all_add_tokens,
     "TSD": _all_add_tokens,
-    "CPWord": ["use_rests", "use_tempos", "use_time_signatures"],
-    "Octuple": ["use_tempos"],
-    "MuMIDI": ["use_tempos"],
-    "MMM": ["use_tempos", "use_time_signatures", "use_pitch_intervals"],
+    "CPWord": ["use_velocities", "use_rests", "use_tempos", "use_time_signatures"],
+    "Octuple": ["use_velocities", "use_tempos"],
+    "MuMIDI": ["use_velocities", "use_tempos"],
+    "MMM": [
+        "use_velocities",
+        "use_tempos",
+        "use_time_signatures",
+        "use_pitch_intervals",
+    ],
 }
 # Parametrize additional tokens
 TOK_PARAMS_ONE_TRACK_HARD = []
