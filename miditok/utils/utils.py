@@ -488,7 +488,6 @@ def merge_scores(scores: Sequence[Score]) -> Score:
         score.tempos.extend(score_split.tempos)
         score.time_signatures.extend(score_split.time_signatures)
         score.key_signatures.extend(score_split.key_signatures)
-        score.lyrics.extend(score_split.lyrics)
         score.markers.extend(score_split.markers)
 
     # sorting is done by Symusic automatically
@@ -612,8 +611,6 @@ def miditoolkit_to_symusic(midi: MidiFile) -> Score:
         )
     for tempo in midi.tempo_changes:
         score.tempos.append(Tempo(tempo.time, tempo.tempo))
-    for lyric in midi.lyrics:
-        score.lyrics.append(TextMeta(lyric.time, lyric.text))
     for marker in midi.markers:
         score.markers.append(TextMeta(marker.time, marker.text))
 
@@ -645,6 +642,10 @@ def miditoolkit_to_symusic(midi: MidiFile) -> Score:
         track.pedals.sort()
 
         score.tracks.append(track)
+
+    if len(score.tracks) > 0 and len(midi.lyrics) > 0:
+        for lyric in midi.lyrics:
+            score.tracks[0].lyrics.append(TextMeta(lyric.time, lyric.text))
 
     return score
 
@@ -797,17 +798,21 @@ def _get_max_tick_only_onsets(score: Score) -> int:
     max_tick_tracks = [
         max(
             track.notes.numpy()["time"][-1] if len(track.notes) > 0 else 0,
-            track.controls.end(),
-            track.pitch_bends.end(),
+            track.controls.numpy()["time"][-1] if len(track.controls) > 0 else 0,
+            track.pitch_bends.numpy()["time"][-1] if len(track.pitch_bends) > 0 else 0,
+            track.lyrics[-1].time if len(track.lyrics) > 0 else 0,
         )
         for track in score.tracks
     ]
     return max(
-        score.tempos.end(),
-        score.time_signatures.end(),
-        score.key_signatures.end(),
-        score.lyrics.end(),
-        score.markers.end(),
+        score.tempos.numpy()["time"][-1] if len(score.tempos) > 0 else 0,
+        score.time_signatures.numpy()["time"][-1]
+        if len(score.time_signatures) > 0
+        else 0,
+        score.key_signatures.numpy()["time"][-1]
+        if len(score.key_signatures) > 0
+        else 0,
+        score.markers[-1].time if len(score.markers) > 0 else 0,
         max([0, *max_tick_tracks]),  # 0 in case there are no tracks
     )
 
@@ -969,7 +974,6 @@ def concat_scores(scores: Sequence[Score], end_ticks: Sequence[int]) -> Score:
         score_concat.tempos.extend(score.tempos)
         score_concat.time_signatures.extend(score.time_signatures)
         score_concat.key_signatures.extend(score.key_signatures)
-        score_concat.lyrics.extend(score.lyrics)
         score_concat.markers.extend(score.markers)
 
         # Concatenate track messages (except for the first Score)
@@ -980,6 +984,7 @@ def concat_scores(scores: Sequence[Score], end_ticks: Sequence[int]) -> Score:
             score_concat.tracks[ti].controls.extend(track.controls)
             score_concat.tracks[ti].pitch_bends.extend(track.pitch_bends)
             score_concat.tracks[ti].pedals.extend(track.pedals)
+            score_concat.tracks[ti].lyrics.extend(track.lyrics)
 
     return score_concat
 

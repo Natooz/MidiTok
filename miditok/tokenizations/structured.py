@@ -304,6 +304,14 @@ class Structured(MusicTokenizer):
                 is_drum = False
                 if programs is not None:
                     current_program, is_drum = programs[si]
+                elif self.config.use_programs:
+                    for token in seq:
+                        tok_type, tok_val = token.split("_")
+                        if tok_type.startswith("Program"):
+                            current_program = int(tok_val)
+                            if current_program == -1:
+                                is_drum, current_program = True, 0
+                            break
                 current_track = Track(
                     program=current_program,
                     is_drum=is_drum,

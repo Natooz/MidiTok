@@ -192,13 +192,14 @@ def are_midis_equals(midi_mtk: MidiFile, midi_sms: Score) -> bool:
         for ts1, ts2 in zip(midi_mtk.time_signature_changes, midi_sms.time_signatures):
             if not are_time_signatures_equals(ts1, ts2):
                 err += 1
-    if len(midi_mtk.lyrics) != len(midi_sms.lyrics):
+    # Not testing lyrics anymore as symusic contain them at the track level
+    """if len(midi_mtk.lyrics) != len(midi_sms.lyrics):
         print(f"expected {len(midi_mtk.lyrics)} lyrics, got {len(midi_sms.lyrics)}")
         err += abs(len(midi_mtk.lyrics) - len(midi_sms.lyrics))
     else:
         for lyrics1, lyrics2 in zip(midi_mtk.lyrics, midi_sms.lyrics):
             if not are_lyrics_or_markers_equals(lyrics1, lyrics2):
-                err += 1
+                err += 1"""
     if len(midi_mtk.markers) != len(midi_sms.markers):
         print(f"expected {len(midi_mtk.markers)} markers, got {len(midi_sms.markers)}")
         err += abs(len(midi_mtk.markers) - len(midi_sms.markers))

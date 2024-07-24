@@ -472,6 +472,13 @@ class CPWord(MusicTokenizer):
                 is_drum = False
                 if programs is not None:
                     current_program, is_drum = programs[si]
+                elif self.config.use_programs:
+                    for compound_token in seq:
+                        if compound_token[0].split("_")[1] == "Note":
+                            current_program = int(compound_token[5].split("_")[1])
+                            if current_program == -1:
+                                is_drum, current_program = True, 0
+                            break
                 current_track = Track(
                     program=current_program,
                     is_drum=is_drum,
@@ -495,10 +502,12 @@ class CPWord(MusicTokenizer):
                     duration = self._tpb_tokens_to_ticks[ticks_per_beat][
                         compound_token[4].split("_")[1]
                     ]
-                    if self.config.use_programs:
-                        current_program = int(compound_token[5].split("_")[1])
                     new_note = Note(current_tick, duration, pitch, vel)
-                    if self.config.one_token_stream_for_programs:
+                    if (
+                        self.config.one_token_stream_for_programs
+                        and self.config.use_programs
+                    ):
+                        current_program = int(compound_token[5].split("_")[1])
                         check_inst(current_program)
                         tracks[current_program].notes.append(new_note)
                     else:
