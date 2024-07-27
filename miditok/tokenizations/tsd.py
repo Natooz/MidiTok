@@ -416,7 +416,7 @@ class TSD(MusicTokenizer):
         elif self.config.using_note_duration_tokens:
             dic["Pitch"] = {"Duration"}
         else:
-            dic["Pitch"] = {first_note_token_type}
+            dic["Pitch"] = {first_note_token_type, "TimeShift"}
         if self.config.using_note_duration_tokens:
             dic["Duration"] = {first_note_token_type, "TimeShift"}
         dic["TimeShift"] = {first_note_token_type, "TimeShift"}
@@ -431,6 +431,7 @@ class TSD(MusicTokenizer):
                         first_note_token_type,
                         "PitchIntervalTime",
                         "PitchIntervalChord",
+                        "TimeShift",
                     }
                 )
                 if (
@@ -489,7 +490,14 @@ class TSD(MusicTokenizer):
             dic["TimeShift"].add("Pedal")
             if self.config.sustain_pedal_duration:
                 dic["Pedal"] = {"Duration"}
-                dic["Duration"].add("Pedal")
+                if self.config.using_note_duration_tokens:
+                    dic["Duration"].add("Pedal")
+                elif self.config.use_velocities:
+                    dic["Duration"] = {first_note_token_type, "TimeShift"}
+                    dic["Velocity"].add("Pedal")
+                else:
+                    dic["Duration"] = {first_note_token_type, "TimeShift"}
+                    dic["Pitch"].add("Pedal")
             else:
                 dic["PedalOff"] = {
                     "Pedal",

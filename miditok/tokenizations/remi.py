@@ -645,7 +645,7 @@ class REMI(MusicTokenizer):
         elif self.config.using_note_duration_tokens:
             dic["Pitch"] = {"Duration"}
         else:
-            dic["Pitch"] = {first_note_token_type}
+            dic["Pitch"] = {first_note_token_type, "Bar", "Position"}
         if self.config.using_note_duration_tokens:
             dic["Duration"] = {first_note_token_type, "Position", "Bar"}
         dic["Bar"] = {"Position", "Bar"}
@@ -661,6 +661,8 @@ class REMI(MusicTokenizer):
                         first_note_token_type,
                         "PitchIntervalTime",
                         "PitchIntervalChord",
+                        "Bar",
+                        "Position",
                     }
                 )
                 if (
@@ -724,7 +726,14 @@ class REMI(MusicTokenizer):
             dic["Position"].add("Pedal")
             if self.config.sustain_pedal_duration:
                 dic["Pedal"] = {"Duration"}
-                dic["Duration"].add("Pedal")
+                if self.config.using_note_duration_tokens:
+                    dic["Duration"].add("Pedal")
+                elif self.config.use_velocities:
+                    dic["Duration"] = {first_note_token_type, "Bar", "Position"}
+                    dic["Velocity"].add("Pedal")
+                else:
+                    dic["Duration"] = {first_note_token_type, "Bar", "Position"}
+                    dic["Pitch"].add("Pedal")
             else:
                 dic["PedalOff"] = {
                     "Pedal",

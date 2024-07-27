@@ -10,7 +10,7 @@ import pytest
 from symusic import Score
 
 import miditok
-from miditok.constants import SCORE_LOADING_EXCEPTION
+from miditok.constants import SCORE_LOADING_EXCEPTION, USE_NOTE_DURATION_PROGRAMS
 
 from .utils_tests import (
     ABC_PATHS,
@@ -67,8 +67,9 @@ for tokenization_ in ALL_TOKENIZATIONS:
         adjust_tok_params_for_tests(tokenization_, params_)
         TOK_PARAMS_ONE_TRACK.append((tokenization_, params_))
 
-_all_add_tokens = [  # TODO use_velocity / duration
+_all_add_tokens = [
     "use_velocities",
+    "use_note_duration_programs",
     "use_rests",
     "use_tempos",
     "use_time_signatures",
@@ -80,11 +81,18 @@ tokenizations_add_tokens = {
     "MIDILike": _all_add_tokens,
     "REMI": _all_add_tokens,
     "TSD": _all_add_tokens,
-    "CPWord": ["use_velocities", "use_rests", "use_tempos", "use_time_signatures"],
-    "Octuple": ["use_velocities", "use_tempos"],
-    "MuMIDI": ["use_velocities", "use_tempos"],
+    "CPWord": [
+        "use_velocities",
+        "use_note_duration_programs",
+        "use_rests",
+        "use_tempos",
+        "use_time_signatures",
+    ],
+    "Octuple": ["use_velocities", "use_note_duration_programs", "use_tempos"],
+    "MuMIDI": ["use_velocities", "use_note_duration_programs", "use_tempos"],
     "MMM": [
         "use_velocities",
+        "use_note_duration_programs",
         "use_tempos",
         "use_time_signatures",
         "use_pitch_intervals",
@@ -104,7 +112,11 @@ for tokenization_ in ALL_TOKENIZATIONS:
     for bin_combination in bin_combinations:
         params_ = deepcopy(default_params)
         for param, bin_val in zip(add_tokens, bin_combination):
-            params_[param] = bool(int(bin_val))
+            bool_val = bool(int(bin_val))
+            if param == "use_note_duration_programs":
+                params_[param] = USE_NOTE_DURATION_PROGRAMS if bool_val else []
+            else:
+                params_[param] = bool_val
         if tokenization_ == "MMM":
             for tokenization__ in MMM_BASE_TOKENIZATIONS:
                 params__ = params_.copy()
