@@ -14,6 +14,7 @@ from miditok.utils import compute_ticks_per_bar, compute_ticks_per_beat
 
 _ADD_TOK_ATTRIBUTES = [
     "use_velocities",
+    "using_note_duration_tokens",
     "use_programs",
     "use_chords",
     "use_rests",
@@ -38,7 +39,7 @@ class CPWord(MusicTokenizer):
     * 1: Bar/Position;
     * 2: Pitch;
     * (3: Velocity);
-    * 4: Duration;
+    * (4: Duration);
     * (+ Optional) Program: associated with notes (pitch/velocity/duration) or chords;
     * (+ Optional) Chord: chords occurring with position tokens;
     * (+ Optional) Rest: rest acting as a TimeShift token;
@@ -73,15 +74,29 @@ class CPWord(MusicTokenizer):
                 "not have time signature changes occurring during rests.",
                 stacklevel=2,
             )
+
+        # Durations are enabled for all programs or none
+        if any(
+            p not in self.config.use_note_duration_programs
+            for p in self.config.programs
+        ):
+            self.config.use_note_duration_programs = self.config.programs
+            warnings.warn(
+                "Setting note duration programs to `tokenizer.config.programs`."
+                "CPWord only allows to use note duration tokens for either all "
+                "programs or none.",
+                stacklevel=2,
+            )
+
         self.config.use_sustain_pedals = False
         self.config.use_pitch_bends = False
         self.config.use_pitch_intervals = False
         self.config.program_changes = False
         self._disable_attribute_controls()
-        token_types = ["Family", "Position", "Pitch", "Velocity", "Duration"]
-        if not self.config.use_velocities:
-            token_types.remove("Velocity")
+        token_types = ["Family", "Position", "Pitch"]
         for add_tok_attr, add_token in [
+            ("use_velocities", "Velocity"),
+            ("using_note_duration_tokens", "Duration"),
             ("use_programs", "Program"),
             ("use_chords", "Chord"),
             ("use_rests", "Rest"),
@@ -111,7 +126,11 @@ class CPWord(MusicTokenizer):
         :return: the same events, with time events inserted.
         """
         # Add time events
-        duration_offset = 2 if self.config.use_velocities else 1
+        duration_offset = 0
+        if self.config.use_velocities:
+            duration_offset += 1
+        if self.config.using_note_duration_tokens:
+            duration_offset += 1
         all_events = []
         current_bar = -1
         bar_at_last_ts_change = 0
@@ -279,7 +298,9 @@ class CPWord(MusicTokenizer):
                         event.time,
                         pitch=event.value,
                         vel=events[e + 1].value if self.config.use_velocities else None,
-                        dur=events[e + duration_offset].value,
+                        dur=events[e + duration_offset].value
+                        if self.config.using_note_duration_tokens
+                        else None,
                         program=current_program,
                         pitch_drum=event.type_ == "PitchDrum",
                     )
@@ -319,8 +340,8 @@ class CPWord(MusicTokenizer):
             0. *Family*
             1. *Bar*/*Position*
             2. *Pitch*
-            3. *Velocity*
-            4. *Duration*
+            (3. *Velocity*)
+            (4. *Duration*)
             (5. *Program*) optional, with notes (pitch/velocity/duration) or chords
             (6. *Chord*) optional, chords occurring with position tokens
             (7. *Rest*) optional, rest acting as a TimeShift token
@@ -354,7 +375,6 @@ class CPWord(MusicTokenizer):
             Event(type_="Family", value="Metric", time=time, desc=desc),
             Event(type_="Ignore", value="None", time=time, desc=desc),
             Event(type_="Ignore", value="None", time=time, desc=desc),
-            Event(type_="Ignore", value="None", time=time, desc=desc),
         ]
         cp_token += [
             create_event("Ignore", "None")
@@ -384,7 +404,10 @@ class CPWord(MusicTokenizer):
             cp_token[2] = create_event(pitch_token_name, pitch)
             if self.config.use_velocities:
                 cp_token[3] = create_event("Velocity", vel)  # shouldn't be None
-            cp_token[self.vocab_types_idx["Duration"]] = create_event("Duration", dur)
+            if dur:
+                cp_token[self.vocab_types_idx["Duration"]] = create_event(
+                    "Duration", dur
+                )
             if program is not None:
                 cp_token[self.vocab_types_idx["Program"]] = create_event(
                     "Program", program
@@ -501,8 +524,10 @@ class CPWord(MusicTokenizer):
             for compound_token in seq:
                 token_family = compound_token[0].split("_")[1]
                 if token_family == "Note":
-                    pad_range_idx = 4
+                    pad_range_idx = 3
                     if self.config.use_velocities:
+                        pad_range_idx += 1
+                    if self.config.using_note_duration_tokens:
                         pad_range_idx += 1
                     if self.config.use_programs:
                         pad_range_idx += 1
@@ -517,9 +542,16 @@ class CPWord(MusicTokenizer):
                         if self.config.use_velocities
                         else DEFAULT_VELOCITY
                     )
-                    duration = self._tpb_tokens_to_ticks[ticks_per_beat][
-                        compound_token[self.vocab_types_idx["Duration"]].split("_")[1]
-                    ]
+                    if self.config.using_note_duration_tokens:
+                        duration = self._tpb_tokens_to_ticks[ticks_per_beat][
+                            compound_token[self.vocab_types_idx["Duration"]].split("_")[
+                                1
+                            ]
+                        ]
+                    else:
+                        duration = int(
+                            self.config.default_note_duration * ticks_per_beat
+                        )
                     new_note = Note(current_tick, duration, pitch, vel)
                     if (
                         self.config.one_token_stream_for_programs
@@ -651,21 +683,24 @@ class CPWord(MusicTokenizer):
 
         :return: the vocabulary as a list of string.
         """
-        vocab = [[] for _ in range(4)]
-
-        vocab[0] = ["Family_Metric", "Family_Note"]
+        vocab = [["Family_Metric", "Family_Note"]]
 
         # POSITION
         # self.time_division is equal to the maximum possible ticks/beat value.
         max_num_beats = max(ts[0] for ts in self.time_signatures)
         num_positions = self.config.max_num_pos_per_beat * max_num_beats
-        vocab[1].append("Ignore_None")
-        vocab[1].append("Bar_None")
-        vocab[1] += [f"Position_{i}" for i in range(num_positions)]
+        vocab.append(
+            [
+                "Ignore_None",
+                "Bar_None",
+                *[f"Position_{i}" for i in range(num_positions)],
+            ]
+        )
 
         # PITCH
-        vocab[2].append("Ignore_None")
-        vocab[2] += [f"Pitch_{i}" for i in range(*self.config.pitch_range)]
+        vocab.append(
+            ["Ignore_None", *[f"Pitch_{i}" for i in range(*self.config.pitch_range)]]
+        )
         if self.config.use_pitchdrum_tokens:
             vocab[2] += [
                 f"PitchDrum_{i}" for i in range(*self.config.drums_pitch_range)
@@ -673,15 +708,19 @@ class CPWord(MusicTokenizer):
 
         # VELOCITY
         if self.config.use_velocities:
-            vocab[3].append("Ignore_None")
-            vocab[3] += [f"Velocity_{i}" for i in self.velocities]
-            vocab.append([])  # for durations
+            vocab.append(["Ignore_None", *[f"Velocity_{i}" for i in self.velocities]])
 
         # DURATION
-        vocab[self.vocab_types_idx["Duration"]].append("Ignore_None")
-        vocab[self.vocab_types_idx["Duration"]] += [
-            f'Duration_{".".join(map(str, duration))}' for duration in self.durations
-        ]
+        if self.config.using_note_duration_tokens:
+            vocab.append(
+                [
+                    "Ignore_None",
+                    *[
+                        f'Duration_{".".join(map(str, duration))}'
+                        for duration in self.durations
+                    ],
+                ]
+            )
 
         # PROGRAM
         if self.config.use_programs:

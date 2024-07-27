@@ -50,6 +50,8 @@ MidiTok offers to include additional tokens on music information. You can specif
 ¹: using both time signatures and rests with :class:`miditok.CPWord` might result in time alterations, as the time signature changes are carried with the Bar tokens which can be skipped during period of rests.
 ²: using time signatures with :class:`miditok.Octuple` might result in time alterations, as the time signature changes are carried with the note onsets. An example is shown below.
 
+Alternatively, **Velocity** and **Duration** tokens are optional and are enabled by default for all tokenizers.
+
 .. image:: /assets/Octuple_TS_Rest/original.png
   :width: 800
   :alt: Original MIDI sample preprocessed / downsampled

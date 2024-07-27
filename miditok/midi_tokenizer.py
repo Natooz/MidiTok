@@ -25,7 +25,6 @@ from symusic import (
     Track,
 )
 from symusic.core import (
-    NoteTickList,
     PedalTickList,
     PitchBendTickList,
     ScoreTick,
@@ -559,9 +558,8 @@ class MusicTokenizer(ABC, HFHubMixin):
 
             # Preprocesses notes
             if len(score.tracks[t].notes) > 0:
-                score.tracks[t].notes = self._preprocess_notes(
-                    score.tracks[t].notes,
-                    score.tracks[t].is_drum,
+                self._preprocess_notes(
+                    score.tracks[t],
                     tpq_resampling_factors,
                     ticks_per_beat,
                 )
@@ -623,23 +621,20 @@ class MusicTokenizer(ABC, HFHubMixin):
 
     def _preprocess_notes(
         self,
-        notes: NoteTickList,
-        is_drums: bool,
+        track: Track,
         resampling_factors: np.ndarray = None,
         ticks_per_beat: np.ndarray = None,
         min_duration: int = 1,
-    ) -> NoteTickList:
+    ) -> None:
         r"""
-        Resample the note velocities, remove notes outside of pitch range.
+        Resample inplace the note velocities, remove notes outside of pitch range.
 
         Note durations will be clipped to the maximum duration that can be handled by
         the tokenizer. This is done to prevent having incorrect offset values when
         computing rests. Notes with pitches outside of self.pitch_range will be
         deleted.
 
-        :param notes: notes to preprocess.
-        :param is_drums: specifies if the track is drums, as the notes pitches may be
-            filtered differently.
+        :param track: track containing the notes to resample.
         :param resampling_factors: sections of resampling factors, when we need to
             adjust the times of events to a specific ticks/beat value. This is required
             when the file has time signatures with different denominators. The factors
@@ -657,12 +652,12 @@ class MusicTokenizer(ABC, HFHubMixin):
         :param min_duration: minimum duration (in tick) to set to notes that have
             durations of 0 ticks after resampling. (default: ``1``)
         """
-        note_soa = notes.numpy()
+        note_soa = track.notes.numpy()
 
         # Delete notes outside of pitch range
         pitch_range = (
             self.config.drums_pitch_range
-            if is_drums and self.config.use_pitchdrum_tokens
+            if track.is_drum and self.config.use_pitchdrum_tokens
             else self.config.pitch_range
         )
         idx_out_of_pitch_range = np.where(
@@ -676,7 +671,7 @@ class MusicTokenizer(ABC, HFHubMixin):
             for key in note_soa:
                 note_soa[key] = note_soa[key][mask]
         if len(note_soa["time"]) == 0:
-            return NoteTickList()
+            return
 
         # Compute new velocities
         if self.config.use_velocities:
@@ -695,13 +690,17 @@ class MusicTokenizer(ABC, HFHubMixin):
             )
 
         # Resample duration values if NoteOff, otherwise adjust to the vocab
-        if not self._note_on_off and ticks_per_beat is not None:
-            self._adjust_durations(note_soa, ticks_per_beat)
-        elif resampling_factors is not None:
-            note_soa["duration"] = self._adjust_time_to_tpb(
-                note_soa["duration"], resampling_factors, min_duration
-            )
-            self._adjust_offset_spanning_across_time_sig(note_soa, resampling_factors)
+        program = -1 if track.is_drum else track.program
+        if program in self.config.use_note_duration_programs:
+            if not self._note_on_off and ticks_per_beat is not None:
+                self._adjust_durations(note_soa, ticks_per_beat)
+            elif resampling_factors is not None:
+                note_soa["duration"] = self._adjust_time_to_tpb(
+                    note_soa["duration"], resampling_factors, min_duration
+                )
+                self._adjust_offset_spanning_across_time_sig(
+                    note_soa, resampling_factors
+                )
 
         # Symusic automatically sorts the notes by (time, duration, pitch) keys when
         # reading a music file. We hence don't need to sort the notes.
@@ -721,7 +720,7 @@ class MusicTokenizer(ABC, HFHubMixin):
             notes_new.sort(key=lambda n: (n.time, n.pitch, n.duration, n.velocity))
             remove_duplicated_notes(notes_new)
 
-        return notes_new
+        track.notes = notes_new
 
     def _preprocess_tempos(
         self,
@@ -1266,10 +1265,8 @@ class MusicTokenizer(ABC, HFHubMixin):
             learn to generate tokens accordingly to the attribute controls.
         :return: sequence of corresponding ``Event``s.
         """
-        if self.config.use_programs:
-            program = track.program if not track.is_drum else -1
-        else:
-            program = 0
+        program = track.program if not track.is_drum else -1
+        use_durations = program in self.config.use_note_duration_programs
         events = []
         # max_time_interval is adjusted depending on the time signature denom / tpb
         max_time_interval = 0
@@ -1305,7 +1302,7 @@ class MusicTokenizer(ABC, HFHubMixin):
                 events.append(
                     Event(
                         "Pedal",
-                        program if self.config.use_programs else 0,
+                        program,
                         pedal.time,
                         program,
                     )
@@ -1460,44 +1457,45 @@ class MusicTokenizer(ABC, HFHubMixin):
                 )
 
             # Duration / NoteOff
-            if self._note_on_off:
-                if self.config.use_programs and not self.config.program_changes:
+            if use_durations:
+                if self._note_on_off:
+                    if self.config.use_programs and not self.config.program_changes:
+                        events.append(
+                            Event(
+                                type_="Program",
+                                value=program,
+                                time=note.end,
+                                program=program,
+                                desc="ProgramNoteOff",
+                            )
+                        )
                     events.append(
                         Event(
-                            type_="Program",
-                            value=program,
+                            type_="DrumOff"
+                            if self.config.use_pitchdrum_tokens and track.is_drum
+                            else "NoteOff",
+                            value=note.pitch,
                             time=note.end,
                             program=program,
-                            desc="ProgramNoteOff",
+                            desc=note.end,
                         )
                     )
-                events.append(
-                    Event(
-                        type_="DrumOff"
-                        if self.config.use_pitchdrum_tokens and track.is_drum
-                        else "NoteOff",
-                        value=note.pitch,
-                        time=note.end,
-                        program=program,
-                        desc=note.end,
+                else:
+                    # `while` as there might not be any note in the next section
+                    while note.time >= ticks_per_beat[tpb_idx, 0]:
+                        tpb_idx += 1
+                    dur = self._tpb_ticks_to_tokens[ticks_per_beat[tpb_idx, 1]][
+                        note.duration
+                    ]
+                    events.append(
+                        Event(
+                            type_="Duration",
+                            value=dur,
+                            time=note.start,
+                            program=program,
+                            desc=f"{note.duration} ticks",
+                        )
                     )
-                )
-            else:
-                # `while` as there might not be any note in the next section
-                while note.time >= ticks_per_beat[tpb_idx, 0]:
-                    tpb_idx += 1
-                dur = self._tpb_ticks_to_tokens[ticks_per_beat[tpb_idx, 1]][
-                    note.duration
-                ]
-                events.append(
-                    Event(
-                        type_="Duration",
-                        value=dur,
-                        time=note.start,
-                        program=program,
-                        desc=f"{note.duration} ticks",
-                    )
-                )
 
         return events
 
@@ -2037,7 +2035,8 @@ class MusicTokenizer(ABC, HFHubMixin):
         # NoteOn + NoteOff
         if self._note_on_off:
             vocab += [f"NoteOn_{i}" for i in range(*self.config.pitch_range)]
-            vocab += [f"NoteOff_{i}" for i in range(*self.config.pitch_range)]
+            if len(self.config.use_note_duration_programs) > 0:
+                vocab += [f"NoteOff_{i}" for i in range(*self.config.pitch_range)]
         # Pitch + Duration (later done after velocity)
         else:
             vocab += [f"Pitch_{i}" for i in range(*self.config.pitch_range)]
@@ -2047,7 +2046,9 @@ class MusicTokenizer(ABC, HFHubMixin):
             vocab += [f"Velocity_{i}" for i in self.velocities]
 
         # Duration
-        if not self._note_on_off:
+        if (
+            not self._note_on_off and self.config.using_note_duration_tokens
+        ) or self.config.sustain_pedal_duration:
             vocab += [
                 f"Duration_{'.'.join(map(str, duration))}"
                 for duration in self.durations

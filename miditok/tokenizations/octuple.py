@@ -27,10 +27,10 @@ class Octuple(MusicTokenizer):
     Each pooled token will be a list of the form (index: Token type):
 
     * 0: Pitch/PitchDrum;
-    * 1: Duration;
-    * 2: Position;
-    * 3: Bar;
+    * 1: Position;
+    * 2: Bar;
     * (+ Optional) Velocity;
+    * (+ Optional) Duration;
     * (+ Optional) Program;
     * (+ Optional) Tempo;
     * (+ Optional) TimeSignature.
@@ -68,13 +68,28 @@ class Octuple(MusicTokenizer):
         self.config.program_changes = False
         self._disable_attribute_controls()
 
+        # Durations are enabled for all programs or none
+        if any(
+            p not in self.config.use_note_duration_programs
+            for p in self.config.programs
+        ):
+            self.config.use_note_duration_programs = self.config.programs
+            warn(
+                "Setting note duration programs to `tokenizer.config.programs`."
+                "Octuple only allows to use note duration tokens for either all "
+                "programs or none.",
+                stacklevel=2,
+            )
+
         # used in place of positional encoding
         if "max_bar_embedding" not in self.config.additional_params:
             self.config.additional_params["max_bar_embedding"] = 60
 
-        token_types = ["Pitch", "Duration", "Position", "Bar"]
+        token_types = ["Pitch", "Position", "Bar"]
         if self.config.use_velocities:
             token_types.append("Velocity")
+        if self.config.using_note_duration_tokens:
+            token_types.append("Duration")
         if self.config.use_programs:
             token_types.append("Program")
         if self.config.use_tempos:
@@ -101,7 +116,11 @@ class Octuple(MusicTokenizer):
         :return: the same events, with time events inserted.
         """
         # Add time events
-        duration_offset = 2 if self.config.use_velocities else 1
+        duration_offset = 0
+        if self.config.use_velocities:
+            duration_offset += 1
+        if self.config.using_note_duration_tokens:
+            duration_offset += 1
         all_events = []
         current_bar = 0
         current_bar_from_ts_time = 0
@@ -110,7 +129,7 @@ class Octuple(MusicTokenizer):
         previous_tick = 0
         current_time_sig = TIME_SIGNATURE
         current_tempo = self.default_tempo
-        current_program = None
+        current_program = 0
         ticks_per_bar = compute_ticks_per_bar(
             TimeSignature(0, *current_time_sig), time_division
         )
@@ -153,11 +172,6 @@ class Octuple(MusicTokenizer):
                 )
                 new_event = [
                     Event(type_=pitch_token_name, value=event.value, time=event.time),
-                    Event(
-                        type_="Duration",
-                        value=events[e + duration_offset].value,
-                        time=event.time,
-                    ),
                     Event(type_="Position", value=current_pos, time=event.time),
                     Event(type_="Bar", value=current_bar, time=event.time),
                 ]
@@ -166,6 +180,14 @@ class Octuple(MusicTokenizer):
                         Event(
                             type_="Velocity", value=events[e + 1].value, time=event.time
                         ),
+                    )
+                if self.config.using_note_duration_tokens:
+                    new_event.append(
+                        Event(
+                            type_="Duration",
+                            value=events[e + duration_offset].value,
+                            time=event.time,
+                        )
                     )
                 if self.config.use_programs:
                     new_event.append(Event("Program", current_program))
@@ -304,7 +326,17 @@ class Octuple(MusicTokenizer):
 
             # Decode tokens
             for time_step in seq:
-                num_tok_to_check = 6 if self.config.use_programs else 5
+                num_tok_to_check = 3
+                for attr in ("use_velocities", "use_programs"):
+                    if getattr(self.config, attr):
+                        num_tok_to_check += 1
+                if self.config.use_programs:
+                    current_program = int(
+                        time_step[self.vocab_types_idx["Program"]].split("_")[1]
+                    )
+
+                if self.config.using_note_duration_tokens:
+                    num_tok_to_check += 1
                 if any(
                     tok.split("_")[1] == "None" for tok in time_step[:num_tok_to_check]
                 ):
@@ -320,8 +352,8 @@ class Octuple(MusicTokenizer):
                 )
 
                 # Time values
-                event_pos = int(time_step[2].split("_")[1])
-                event_bar = int(time_step[3].split("_")[1])
+                event_pos = int(time_step[1].split("_")[1])
+                event_bar = int(time_step[2].split("_")[1])
                 current_tick = (
                     tick_at_last_ts_change
                     + (event_bar - bar_at_last_ts_change) * ticks_per_bar
@@ -360,17 +392,16 @@ class Octuple(MusicTokenizer):
                         )
 
                 # Note duration
-                duration = self._tpb_tokens_to_ticks[ticks_per_beat][
-                    time_step[1].split("_")[1]
-                ]
+                if self.config.using_note_duration_tokens:
+                    duration = self._tpb_tokens_to_ticks[ticks_per_beat][
+                        time_step[self.vocab_types_idx["Duration"]].split("_")[1]
+                    ]
+                else:
+                    duration = int(self.config.default_note_duration * ticks_per_beat)
 
                 # Append the created note
                 new_note = Note(current_tick, duration, pitch, vel)
                 if self.config.one_token_stream_for_programs:
-                    if self.config.use_programs:
-                        current_program = int(
-                            time_step[self.vocab_types_idx["Program"]].split("_")[1]
-                        )
                     check_inst(current_program)
                     tracks[current_program].notes.append(new_note)
                 else:
@@ -433,11 +464,6 @@ class Octuple(MusicTokenizer):
                 f"PitchDrum_{i}" for i in range(*self.config.drums_pitch_range)
             ]
 
-        # DURATION
-        vocab.append(
-            [f'Duration_{".".join(map(str, duration))}' for duration in self.durations]
-        )
-
         # POSITION
         # self.time_division is equal to the maximum possible ticks/beat value.
         max_num_beats = max(ts[0] for ts in self.time_signatures)
@@ -457,6 +483,15 @@ class Octuple(MusicTokenizer):
         # VELOCITY
         if self.config.use_velocities:
             vocab.append([f"Velocity_{i}" for i in self.velocities])
+
+        # DURATION
+        if self.config.using_note_duration_tokens:
+            vocab.append(
+                [
+                    f'Duration_{".".join(map(str, duration))}'
+                    for duration in self.durations
+                ]
+            )
 
         # PROGRAM
         if self.config.use_programs:
@@ -511,8 +546,8 @@ class Octuple(MusicTokenizer):
                 err += 1
                 continue
             has_error = False
-            bar_value = int(token[3].split("_")[1])
-            pos_value = int(token[2].split("_")[1])
+            bar_value = int(token[2].split("_")[1])
+            pos_value = int(token[1].split("_")[1])
             pitch_value = int(token[0].split("_")[1])
             if self.config.use_programs:
                 current_program = int(

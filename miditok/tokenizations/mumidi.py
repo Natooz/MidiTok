@@ -61,6 +61,19 @@ class MuMIDI(MusicTokenizer):
         self.config.program_changes = False
         self._disable_attribute_controls()
 
+        # Durations are enabled for all programs or none
+        if any(
+            p not in self.config.use_note_duration_programs
+            for p in self.config.programs
+        ):
+            self.config.use_note_duration_programs = self.config.programs
+            warn(
+                "Setting note duration programs to `tokenizer.config.programs`."
+                "MuMIDI only allows to use note duration tokens for either all "
+                "programs or none.",
+                stacklevel=2,
+            )
+
         if "max_bar_embedding" not in self.config.additional_params:
             self.config.additional_params["max_bar_embedding"] = 60
 
@@ -72,10 +85,13 @@ class MuMIDI(MusicTokenizer):
             "Program": 0,
             "BarPosEnc": 1,
             "PositionPosEnc": 2,
-            "Duration": -1,
         }
         if self.config.use_velocities:
-            self.vocab_types_idx["Velocity"] = -2
+            self.vocab_types_idx["Velocity"] = -1
+        if self.config.using_note_duration_tokens:
+            self.vocab_types_idx["Duration"] = -1
+            if self.config.use_velocities:
+                self.vocab_types_idx["Velocity"] = -2
         if self.config.use_chords:
             self.vocab_types_idx["Chord"] = 0
         if self.config.use_rests:
@@ -245,7 +261,6 @@ class MuMIDI(MusicTokenizer):
         for note in track.notes:
             # Note
             duration = note.end - note.start
-            dur_token = self._tpb_ticks_to_tokens[tpb][duration]
             new_token = [
                 Event(
                     type_="Pitch" if not track.is_drum else "PitchDrum",
@@ -253,10 +268,12 @@ class MuMIDI(MusicTokenizer):
                     time=note.start,
                     desc=track.program if not track.is_drum else -1,
                 ),
-                f"Duration_{dur_token}",
             ]
             if self.config.use_velocities:
-                new_token.insert(1, f"Velocity_{note.velocity}")
+                new_token.append(f"Velocity_{note.velocity}")
+            if self.config.using_note_duration_tokens:
+                dur_token = self._tpb_ticks_to_tokens[tpb][duration]
+                new_token.append(f"Duration_{dur_token}")
             tokens.append(new_token)
 
         # Adds chord tokens if specified
@@ -328,17 +345,22 @@ class MuMIDI(MusicTokenizer):
                 except KeyError:
                     tracks[current_track] = []
             elif tok_type in {"Pitch", "PitchDrum"}:
-                duration = time_step[-1].split("_")[1]
                 vel = (
-                    time_step[-2].split("_")[1]
+                    time_step[self.vocab_types_idx["Velocity"]].split("_")[1]
                     if self.config.use_velocities
                     else DEFAULT_VELOCITY
+                )
+                duration = (
+                    time_step[-1].split("_")[1]
+                    if self.config.using_note_duration_tokens
+                    else int(self.config.default_note_duration * ticks_per_beat)
                 )
                 if any(val == "None" for val in (vel, duration)):
                     continue
                 pitch = int(tok_val)
                 vel = int(vel)
-                duration = self._tpb_tokens_to_ticks[ticks_per_beat][duration]
+                if isinstance(duration, str):
+                    duration = self._tpb_tokens_to_ticks[ticks_per_beat][duration]
 
                 tracks[current_track].append(Note(current_tick, duration, pitch, vel))
 
@@ -426,9 +448,13 @@ class MuMIDI(MusicTokenizer):
             vocab.append([f"Velocity_{i}" for i in self.velocities])
 
         # DURATION
-        vocab.append(
-            [f'Duration_{".".join(map(str, duration))}' for duration in self.durations]
-        )
+        if self.config.using_note_duration_tokens:
+            vocab.append(
+                [
+                    f'Duration_{".".join(map(str, duration))}'
+                    for duration in self.durations
+                ]
+            )
 
         return vocab
 

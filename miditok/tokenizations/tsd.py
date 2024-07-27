@@ -198,6 +198,9 @@ class TSD(MusicTokenizer):
                     if current_program == -1
                     else MIDI_INSTRUMENTS[current_program]["name"],
                 )
+            current_track_use_duration = (
+                current_program in self.config.use_note_duration_programs
+            )
 
             # Decode tokens
             for ti, token in enumerate(seq):
@@ -237,9 +240,16 @@ class TSD(MusicTokenizer):
                             vel_type, vel = seq[ti + 1].split("_")
                         else:
                             vel_type, vel = "Velocity", DEFAULT_VELOCITY
-                        dur_type, dur = seq[ti + dur_offset].split("_")
+                        if current_track_use_duration:
+                            dur_type, dur = seq[ti + dur_offset].split("_")
+                        else:
+                            dur_type = "Duration"
+                            dur = int(
+                                self.config.default_note_duration * ticks_per_beat
+                            )
                         if vel_type == "Velocity" and dur_type == "Duration":
-                            dur = self._tpb_tokens_to_ticks[ticks_per_beat][dur]
+                            if isinstance(dur, str):
+                                dur = self._tpb_tokens_to_ticks[ticks_per_beat][dur]
                             new_note = Note(current_tick, dur, pitch, int(vel))
                             if self.config.one_token_stream_for_programs:
                                 check_inst(current_program)
@@ -256,6 +266,9 @@ class TSD(MusicTokenizer):
                         pass
                 elif tok_type == "Program":
                     current_program = int(tok_val)
+                    current_track_use_duration = (
+                        current_program in self.config.use_note_duration_programs
+                    )
                     if (
                         not self.config.one_token_stream_for_programs
                         and self.config.program_changes
@@ -395,26 +408,52 @@ class TSD(MusicTokenizer):
             first_note_token_type = "Pitch"
         if self.config.use_velocities:
             dic["Pitch"] = {"Velocity"}
-            dic["Velocity"] = {"Duration"}
-        else:
+            dic["Velocity"] = (
+                {"Duration"}
+                if self.config.using_note_duration_tokens
+                else {first_note_token_type, "TimeShift"}
+            )
+        elif self.config.using_note_duration_tokens:
             dic["Pitch"] = {"Duration"}
-        dic["Duration"] = {first_note_token_type, "TimeShift"}
+        else:
+            dic["Pitch"] = {first_note_token_type}
+        if self.config.using_note_duration_tokens:
+            dic["Duration"] = {first_note_token_type, "TimeShift"}
         dic["TimeShift"] = {first_note_token_type, "TimeShift"}
         if self.config.use_pitch_intervals:
             for token_type in ("PitchIntervalTime", "PitchIntervalChord"):
-                dic[token_type] = {
-                    "Velocity" if self.config.use_velocities else "Duration"
-                }
+                dic[token_type] = (
+                    {"Velocity"}
+                    if self.config.use_velocities
+                    else {"Duration"}
+                    if self.config.using_note_duration_tokens
+                    else {
+                        first_note_token_type,
+                        "PitchIntervalTime",
+                        "PitchIntervalChord",
+                    }
+                )
                 if (
                     self.config.use_programs
                     and self.config.one_token_stream_for_programs
                 ):
                     dic["Program"].add(token_type)
                 else:
-                    dic["Duration"].add(token_type)
+                    if self.config.using_note_duration_tokens:
+                        dic["Duration"].add(token_type)
+                    elif self.config.use_velocities:
+                        dic["Velocity"].add(token_type)
+                    else:
+                        dic["Pitch"].add(token_type)
                     dic["TimeShift"].add(token_type)
         if self.config.program_changes:
-            dic["Duration"].add("Program")
+            dic[
+                "Duration"
+                if self.config.using_note_duration_tokens
+                else "Velocity"
+                if self.config.use_velocities
+                else first_note_token_type
+            ].add("Program")
 
         if self.config.use_chords:
             dic["Chord"] = {first_note_token_type}
@@ -509,7 +548,13 @@ class TSD(MusicTokenizer):
 
         if self.config.use_rests:
             dic["Rest"] = {"Rest", first_note_token_type, "TimeShift"}
-            dic["Duration"].add("Rest")
+            dic[
+                "Duration"
+                if self.config.using_note_duration_tokens
+                else "Velocity"
+                if self.config.use_velocities
+                else first_note_token_type
+            ].add("Rest")
             if self.config.use_chords:
                 dic["Rest"] |= {"Chord"}
             if self.config.use_tempos:

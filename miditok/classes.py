@@ -33,6 +33,7 @@ from .constants import (
     CHORD_MAPS,
     CHORD_TOKENS_WITH_ROOT_NOTE,
     CHORD_UNKNOWN,
+    DEFAULT_NOTE_DURATION,
     DELETE_EQUAL_SUCCESSIVE_TEMPO_CHANGES,
     DELETE_EQUAL_SUCCESSIVE_TIME_SIG_CHANGES,
     DRUM_PITCH_RANGE,
@@ -54,6 +55,7 @@ from .constants import (
     TEMPO_RANGE,
     TIME_SIGNATURE_RANGE,
     USE_CHORDS,
+    USE_NOTE_DURATION_PROGRAMS,
     USE_PITCH_BENDS,
     USE_PITCH_INTERVALS,
     USE_PITCHDRUM_TOKENS,
@@ -378,6 +380,16 @@ class TokenizerConfig:
         allows to reduce the token sequence length. If you disable velocity tokens, the
         tokenizer will set the velocity of notes decoded from tokens to 100 by default.
         (default: ``True``)
+    :param use_note_duration_programs: list of the MIDI programs (i.e. instruments) for
+        which the note durations are be tokenized. The durations of the notes of the
+        tracks with these programs will be tokenized as ``Duration_x.x.x`` tokens
+        succeeding their associated ``Pitch``/``NoteOn`` tokens.
+        **Note for rests:** ``Rest`` tokens are compatible when note `Duration` tokens
+        are enabled. If you intend to use rests without enabling ``Program`` tokens
+        (``use_programs``), this parameter should be left unchanged (i.e. using
+        ``Duration`` tokens for all programs). If you intend to use rests while using
+        ``Program`` tokens, all the programs in this parameter should also be in the
+        ``programs`` parameter. (default: all programs from -1 (drums) to 127 included)
     :param use_chords: will use ``Chord`` tokens, if the tokenizer is compatible. A
         ``Chord`` token indicates the presence of a chord at a certain time step.
         MidiTok uses a chord detection method based on onset times and duration. This
@@ -432,6 +444,10 @@ class TokenizerConfig:
         to discrete drum elements (bass drum, high tom, cymbals...) which are unrelated
         to the pitch value of other instruments/programs. Using dedicated tokens for
         drums allow to disambiguate this, and is thus recommended. (default: ``True``)
+    :param default_note_duration: default duration in beats to set for notes for which
+        the duration is not tokenized. This parameter is used when decoding tokens to
+        set the duration value of notes within tracks with programs not in the
+        ``use_note_duration_programs`` configuration parameter. (default: ``0.5``)
     :param beat_res_rest: the beat resolution of ``Rest`` tokens. It follows the same
         data pattern as the ``beat_res`` argument, however the maximum resolution for
         rests cannot be higher than the highest "global" resolution (``beat_res``).
@@ -496,9 +512,10 @@ class TokenizerConfig:
         recurrence of this information. Leave it ``False`` if you want to have
         recurrent ``TimeSig`` tokens, that you might inject yourself by adding
         ``symusic.TimeSignature`` objects to a ``symusic.Score``. (default: ``False``)
-    :param programs: sequence of MIDI programs to use. Note that ``-1`` is used and
-        reserved for drums tracks. (default: ``list(range(-1, 128))``, from -1 to 127
-        included)
+    :param programs: sequence of MIDI programs to use. ``-1`` is used and reserved for
+        drums tracks. If ``use_programs`` is enabled, the tracks with programs outside
+        of this list will be ignored during tokenization.
+        (default: ``list(range(-1, 128))``, from -1 to 127 included)
     :param one_token_stream_for_programs: when using programs (``use_programs``), this
         parameters will make the tokenizer serialize all the tracks of a
         ``symusic.Score`` in a single sequence of tokens. A ``Program`` token will
@@ -571,6 +588,7 @@ class TokenizerConfig:
         special_tokens: Sequence[str] = SPECIAL_TOKENS,
         encode_ids_split: Literal["bar", "beat", "no"] = ENCODE_IDS_SPLIT,
         use_velocities: bool = USE_VELOCITIES,
+        use_note_duration_programs: Sequence[int] = USE_NOTE_DURATION_PROGRAMS,
         use_chords: bool = USE_CHORDS,
         use_rests: bool = USE_RESTS,
         use_tempos: bool = USE_TEMPOS,
@@ -580,6 +598,7 @@ class TokenizerConfig:
         use_programs: bool = USE_PROGRAMS,
         use_pitch_intervals: bool = USE_PITCH_INTERVALS,
         use_pitchdrum_tokens: bool = USE_PITCHDRUM_TOKENS,
+        default_note_duration: int | float = DEFAULT_NOTE_DURATION,
         beat_res_rest: dict[tuple[int, int], int] = BEAT_RES_REST,
         chord_maps: dict[str, tuple] = CHORD_MAPS,
         chord_tokens_with_root_note: bool = CHORD_TOKENS_WITH_ROOT_NOTE,
@@ -677,7 +696,8 @@ class TokenizerConfig:
                 self.special_tokens.append(token)
 
         # Additional token types params, enabling additional token types
-        self.use_velocities = use_velocities
+        self.use_velocities: bool = use_velocities
+        self.use_note_duration_programs: set[int] = set(use_note_duration_programs)
         self.use_chords: bool = use_chords
         self.use_rests: bool = use_rests
         self.use_tempos: bool = use_tempos
@@ -685,8 +705,43 @@ class TokenizerConfig:
         self.use_sustain_pedals: bool = use_sustain_pedals
         self.use_pitch_bends: bool = use_pitch_bends
         self.use_programs: bool = use_programs
-        self.use_pitch_intervals = use_pitch_intervals
-        self.use_pitchdrum_tokens = use_pitchdrum_tokens
+        self.use_pitch_intervals: bool = use_pitch_intervals
+        self.use_pitchdrum_tokens: bool = use_pitchdrum_tokens
+
+        # Duration
+        self.default_note_duration = default_note_duration
+
+        # Programs
+        self.programs: set[int] = set(programs)
+        # These needs to be set to False if the tokenizer is not using programs
+        self.one_token_stream_for_programs = (
+            one_token_stream_for_programs and use_programs
+        )
+        self.program_changes = program_changes and use_programs
+
+        # Check for rest compatibility with duration tokens
+        if self.use_rests and len(self.use_note_duration_programs) < 129:
+            msg = (
+                "Disabling rests tokens. `Rest` tokens are compatible when note "
+                "`Duration` tokens are enabled."
+            )
+            if not self.use_programs:
+                self.use_rests = False
+                warnings.warn(
+                    msg + " Your configuration explicitly disable `Program` (allowing"
+                    "to tokenize any track) while disabling note `Duration` "
+                    "tokens for some programs.",
+                    stacklevel=2,
+                )
+
+            elif any(p not in self.use_note_duration_programs for p in self.programs):
+                self.use_rests = False
+                warnings.warn(
+                    msg + "You enabled `Program` tokens while disabling note duration "
+                    " tokens for programs (`use_note_duration_programs`) outside "
+                    "of the supported `programs`.",
+                    stacklevel=2,
+                )
 
         # Rest params
         self.beat_res_rest: dict[tuple[int, int], int] = beat_res_rest
@@ -731,18 +786,10 @@ class TokenizerConfig:
         )
 
         # Sustain pedal params
-        self.sustain_pedal_duration = sustain_pedal_duration
+        self.sustain_pedal_duration = sustain_pedal_duration and self.use_sustain_pedals
 
         # Pitch bend params
         self.pitch_bend_range = pitch_bend_range
-
-        # Programs
-        self.programs: Sequence[int] = programs
-        # These needs to be set to False if the tokenizer is not using programs
-        self.one_token_stream_for_programs = (
-            one_token_stream_for_programs and use_programs
-        )
-        self.program_changes = program_changes and use_programs
 
         # Pitch as interval tokens
         self.max_pitch_interval = max_pitch_interval
@@ -794,6 +841,16 @@ class TokenizerConfig:
         """
         return max(self.beat_res.values())
 
+    @property
+    def using_note_duration_tokens(self) -> bool:
+        """
+        Return whether the configuration allows to use note duration tokens.
+
+        :return: whether the configuration allows to use note duration tokens for at
+            least one program.
+        """
+        return len(self.use_note_duration_programs) > 0
+
     @classmethod
     def from_dict(cls, input_dict: dict[str, Any], **kwargs) -> TokenizerConfig:
         r"""
@@ -838,6 +895,8 @@ class TokenizerConfig:
                 self.__serialize_dict(value)
             elif isinstance(value, ndarray):
                 dict_[key] = value.tolist()
+            elif isinstance(value, set):
+                dict_[key] = list(value)
 
     def save_to_json(self, out_path: Path) -> None:
         r"""

@@ -77,6 +77,7 @@ class Structured(MusicTokenizer):
         # Make sure the notes are sorted first by their onset (start) times, second by
         # pitch: notes.sort(key=lambda x: (x.start, x.pitch)) done in preprocess_score
         program = track.program if not track.is_drum else -1
+        use_durations = program in self.config.use_note_duration_programs
         events = []
 
         # Creates the Note On, Note Off and Velocity events
@@ -136,15 +137,16 @@ class Structured(MusicTokenizer):
                         desc=f"{note.velocity}",
                     )
                 )
-            dur = self._tpb_ticks_to_tokens[ticks_per_beat][note.duration]
-            events.append(
-                Event(
-                    type_="Duration",
-                    value=dur,
-                    time=note.start,
-                    desc=f"{note.duration} ticks",
+            if use_durations:
+                dur = self._tpb_ticks_to_tokens[ticks_per_beat][note.duration]
+                events.append(
+                    Event(
+                        type_="Duration",
+                        value=dur,
+                        time=note.start,
+                        desc=f"{note.duration} ticks",
+                    )
                 )
-            )
             previous_tick = note.start
 
         return events
@@ -321,6 +323,9 @@ class Structured(MusicTokenizer):
                     if current_program == -1
                     else MIDI_INSTRUMENTS[current_program]["name"],
                 )
+            current_track_use_duration = (
+                current_program in self.config.use_note_duration_programs
+            )
 
             # Decode tokens
             for ti, token in enumerate(seq):
@@ -333,10 +338,17 @@ class Structured(MusicTokenizer):
                             vel_type, vel = seq[ti + 1].split("_")
                         else:
                             vel_type, vel = "Velocity", DEFAULT_VELOCITY
-                        dur_type, dur = seq[ti + dur_offset].split("_")
+                        if current_track_use_duration:
+                            dur_type, dur = seq[ti + dur_offset].split("_")
+                        else:
+                            dur_type = "Duration"
+                            dur = int(
+                                self.config.default_note_duration * ticks_per_beat
+                            )
                         if vel_type == "Velocity" and dur_type == "Duration":
                             pitch = int(seq[ti].split("_")[1])
-                            dur = self._tpb_tokens_to_ticks[ticks_per_beat][dur]
+                            if isinstance(dur, str):
+                                dur = self._tpb_tokens_to_ticks[ticks_per_beat][dur]
                             new_note = Note(current_tick, dur, pitch, int(vel))
                             if self.config.one_token_stream_for_programs:
                                 check_inst(current_program)
@@ -350,6 +362,9 @@ class Structured(MusicTokenizer):
                         pass
                 elif token_type == "Program":
                     current_program = int(token_val)
+                    current_track_use_duration = (
+                        current_program in self.config.use_note_duration_programs
+                    )
 
             # Add current_inst to score and handle notes still active
             if not self.config.one_token_stream_for_programs and not is_track_empty(
@@ -398,13 +413,28 @@ class Structured(MusicTokenizer):
         :return: the token types transitions dictionary.
         """
         dic = {
-            "Pitch": {"Velocity" if self.config.use_velocities else "Duration"},
-            "PitchDrum": {"Velocity" if self.config.use_velocities else "Duration"},
-            "Duration": {"TimeShift"},
+            "Pitch": {
+                "Velocity"
+                if self.config.use_velocities
+                else "Duration"
+                if self.config.using_note_duration_tokens
+                else "TimeShift"
+            },
+            "PitchDrum": {
+                "Velocity"
+                if self.config.use_velocities
+                else "Duration"
+                if self.config.using_note_duration_tokens
+                else "TimeShift"
+            },
             "TimeShift": {"Pitch", "PitchDrum"},
         }
         if self.config.use_velocities:
-            dic["Velocity"] = {"Duration"}
+            dic["Velocity"] = {
+                "Duration" if self.config.using_note_duration_tokens else "TimeShift"
+            }
+        if self.config.using_note_duration_tokens:
+            dic["Duration"] = {"TimeShift"}
         if self.config.use_programs:
             dic["Program"] = {"Pitch", "PitchDrum"}
             dic["TimeShift"] = {"Program"}
