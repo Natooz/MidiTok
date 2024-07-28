@@ -19,7 +19,12 @@ from symusic import (
 
 import miditok
 from miditok.attribute_controls import BarAttributeControl
-from miditok.constants import CHORD_MAPS, TIME_SIGNATURE, TIME_SIGNATURE_RANGE
+from miditok.constants import (
+    CHORD_MAPS,
+    TIME_SIGNATURE,
+    TIME_SIGNATURE_RANGE,
+    USE_NOTE_DURATION_PROGRAMS,
+)
 from miditok.utils import get_bars_ticks, get_beats_ticks
 
 if TYPE_CHECKING:
@@ -262,7 +267,10 @@ def adapt_ref_score_for_tests_assertion(
 
 
 def scores_notes_equals(
-    score1: Score, score2: Score
+    score1: Score,
+    score2: Score,
+    check_velocities: bool,
+    use_note_duration_programs: Sequence[int],
 ) -> list[tuple[int, str, list[tuple[str, Note | int, int]]]]:
     """
     Check that the notes from two Scores are all equal.
@@ -271,6 +279,9 @@ def scores_notes_equals(
 
     :param score1: first ``symusic.Score``.
     :param score2: second ``symusic.Score``.
+    :param check_velocities: whether to check velocities of notes.
+    :param use_note_duration_programs: programs for which the note durations are
+        tokenized. This is used to determine whether to assert note durations equality.
     :return: list of errors.
     """
     if len(score1.tracks) != len(score2.tracks):
@@ -280,33 +291,51 @@ def scores_notes_equals(
         if track1.program != track2.program or track1.is_drum != track2.is_drum:
             errors.append((0, "program", []))
             continue
-        track_errors = tracks_notes_equals(track1, track2)
+        if len(track1.notes) != len(track2.notes):
+            errors.append((0, "num notes", []))
+            continue
+        track_program = -1 if track1.is_drum else track1.program
+        using_note_durations = track_program in use_note_duration_programs
+        # Need to set the note durations of the first track to the durations of the
+        # second and sort the notes. Without duration tokens, the order of the notes
+        # may be altered as during preprocessing they are order by pitch and duration.
+        if not using_note_durations:
+            notes2 = track2.notes.numpy()
+            notes2["duration"] = track1.notes.numpy()["duration"]
+            track1.notes = Note.from_numpy(**notes2)
+            track1.notes.sort(key=lambda n: (n.time, n.pitch, n.duration, n.velocity))
+        track_errors = tracks_notes_equals(
+            track1, track2, check_velocities, using_note_durations
+        )
         if len(track_errors) > 0:
             errors.append((track1.program, track1.name, track_errors))
     return errors
 
 
 def tracks_notes_equals(
-    track1: Track, track2: Track
+    track1: Track,
+    track2: Track,
+    check_velocities: bool = True,
+    check_durations: bool = True,
 ) -> list[tuple[str, Note | int, int]]:
-    if len(track1.notes) != len(track2.notes):
-        return [("len", len(track2.notes), len(track1.notes))]
     errors = []
     for note1, note2 in zip(track1.notes, track2.notes):
-        err = notes_equals(note1, note2)
+        err = notes_equals(note1, note2, check_velocities, check_durations)
         if err != "":
             errors.append((err, note2, getattr(note1, err)))
     return errors
 
 
-def notes_equals(note1: Note, note2: Note) -> str:
+def notes_equals(
+    note1: Note, note2: Note, check_velocity: bool = True, check_duration: bool = True
+) -> str:
     if note1.start != note2.start:
         return "start"
-    if note1.end != note2.end:
+    if check_duration and note1.end != note2.end:
         return "end"
     if note1.pitch != note2.pitch:
         return "pitch"
-    if note1.velocity != note2.velocity:
+    if check_velocity and note1.velocity != note2.velocity:
         return "velocity"
     return ""
 
@@ -327,6 +356,8 @@ def tempos_equals(tempos1: TempoTickList, tempos2: TempoTickList) -> bool:
 def check_scores_equals(
     score1: Score,
     score2: Score,
+    check_velocities: bool = True,
+    use_note_duration_programs: Sequence[int] = USE_NOTE_DURATION_PROGRAMS,
     check_tempos: bool = True,
     check_time_signatures: bool = True,
     check_pedals: bool = True,
@@ -337,11 +368,13 @@ def check_scores_equals(
     types_of_errors = []
 
     # Checks notes and add markers if errors
-    errors = scores_notes_equals(score1, score2)
+    errors = scores_notes_equals(
+        score1, score2, check_velocities, use_note_duration_programs
+    )
     if len(errors) > 0:
         has_errors = True
         for e, track_err in enumerate(errors):
-            if track_err[-1][0][0] != "len":
+            if track_err[1] != "num_notes":
                 for err, note, exp in track_err[-1]:
                     score2.markers.append(
                         TextMeta(
@@ -417,6 +450,8 @@ def tokenize_and_check_equals(
     scores_equals = check_scores_equals(
         score,
         score_decoded,
+        check_velocities=tokenizer.config.use_velocities,
+        use_note_duration_programs=tokenizer.config.use_note_duration_programs,
         check_tempos=tokenizer.config.use_tempos and tokenization != "MuMIDI",
         check_time_signatures=tokenizer.config.use_time_signatures,
         check_pedals=tokenizer.config.use_sustain_pedals,
