@@ -15,7 +15,12 @@ from symusic import (
 )
 
 from miditok.classes import Event, TokenizerConfig, TokSequence
-from miditok.constants import MIDI_INSTRUMENTS, TIME_SIGNATURE, USE_BAR_END_TOKENS
+from miditok.constants import (
+    DEFAULT_VELOCITY,
+    MIDI_INSTRUMENTS,
+    TIME_SIGNATURE,
+    USE_BAR_END_TOKENS,
+)
 from miditok.midi_tokenizer import MusicTokenizer
 from miditok.utils import compute_ticks_per_bar, compute_ticks_per_beat
 
@@ -309,6 +314,7 @@ class REMI(MusicTokenizer):
         for i in range(len(tokens)):
             tokens[i] = tokens[i].tokens
         score = Score(self.time_division)
+        dur_offset = 2 if self.config.use_velocities else 1
 
         # RESULTS
         tracks: dict[int, Track] = {}
@@ -372,6 +378,14 @@ class REMI(MusicTokenizer):
                 is_drum = False
                 if programs is not None:
                     current_program, is_drum = programs[si]
+                elif self.config.use_programs:
+                    for token in seq:
+                        tok_type, tok_val = token.split("_")
+                        if tok_type.startswith("Program"):
+                            current_program = int(tok_val)
+                            if current_program == -1:
+                                is_drum, current_program = True, 0
+                            break
                 current_track = Track(
                     program=current_program,
                     is_drum=is_drum,
@@ -379,6 +393,9 @@ class REMI(MusicTokenizer):
                     if current_program == -1
                     else MIDI_INSTRUMENTS[current_program]["name"],
                 )
+            current_track_use_duration = (
+                current_program in self.config.use_note_duration_programs
+            )
 
             # Decode tokens
             for ti, token in enumerate(seq):
@@ -435,10 +452,20 @@ class REMI(MusicTokenizer):
                     previous_pitch_chord[current_program] = pitch
 
                     try:
-                        vel_type, vel = seq[ti + 1].split("_")
-                        dur_type, dur = seq[ti + 2].split("_")
+                        if self.config.use_velocities:
+                            vel_type, vel = seq[ti + 1].split("_")
+                        else:
+                            vel_type, vel = "Velocity", DEFAULT_VELOCITY
+                        if current_track_use_duration:
+                            dur_type, dur = seq[ti + dur_offset].split("_")
+                        else:
+                            dur_type = "Duration"
+                            dur = int(
+                                self.config.default_note_duration * ticks_per_beat
+                            )
                         if vel_type == "Velocity" and dur_type == "Duration":
-                            dur = self._tpb_tokens_to_ticks[ticks_per_beat][dur]
+                            if isinstance(dur, str):
+                                dur = self._tpb_tokens_to_ticks[ticks_per_beat][dur]
                             new_note = Note(
                                 current_tick,
                                 dur,
@@ -460,6 +487,9 @@ class REMI(MusicTokenizer):
                         pass
                 elif tok_type == "Program":
                     current_program = int(tok_val)
+                    current_track_use_duration = (
+                        current_program in self.config.use_note_duration_programs
+                    )
                     if (
                         not self.config.one_token_stream_for_programs
                         and self.config.program_changes
@@ -605,24 +635,57 @@ class REMI(MusicTokenizer):
             dic["Program"] = {"Pitch"}
         else:
             first_note_token_type = "Pitch"
-        dic["Pitch"] = {"Velocity"}
-        dic["Velocity"] = {"Duration"}
-        dic["Duration"] = {first_note_token_type, "Position", "Bar"}
+        if self.config.use_velocities:
+            dic["Pitch"] = {"Velocity"}
+            dic["Velocity"] = (
+                {"Duration"}
+                if self.config.using_note_duration_tokens
+                else {first_note_token_type, "Position", "Bar"}
+            )
+        elif self.config.using_note_duration_tokens:
+            dic["Pitch"] = {"Duration"}
+        else:
+            dic["Pitch"] = {first_note_token_type, "Bar", "Position"}
+        if self.config.using_note_duration_tokens:
+            dic["Duration"] = {first_note_token_type, "Position", "Bar"}
         dic["Bar"] = {"Position", "Bar"}
         dic["Position"] = {first_note_token_type}
         if self.config.use_pitch_intervals:
             for token_type in ("PitchIntervalTime", "PitchIntervalChord"):
-                dic[token_type] = {"Velocity"}
+                dic[token_type] = (
+                    {"Velocity"}
+                    if self.config.use_velocities
+                    else {"Duration"}
+                    if self.config.using_note_duration_tokens
+                    else {
+                        first_note_token_type,
+                        "PitchIntervalTime",
+                        "PitchIntervalChord",
+                        "Bar",
+                        "Position",
+                    }
+                )
                 if (
                     self.config.use_programs
                     and self.config.one_token_stream_for_programs
                 ):
                     dic["Program"].add(token_type)
                 else:
-                    dic["Duration"].add(token_type)
+                    if self.config.using_note_duration_tokens:
+                        dic["Duration"].add(token_type)
+                    elif self.config.use_velocities:
+                        dic["Velocity"].add(token_type)
+                    else:
+                        dic["Pitch"].add(token_type)
                     dic["Position"].add(token_type)
         if self.config.program_changes:
-            dic["Duration"].add("Program")
+            dic[
+                "Duration"
+                if self.config.using_note_duration_tokens
+                else "Velocity"
+                if self.config.use_velocities
+                else first_note_token_type
+            ].add("Program")
             # The first bar may be empty but the Program token will still be present
             if self.config.additional_params["use_bar_end_tokens"]:
                 dic["Program"].add("Bar")
@@ -663,7 +726,14 @@ class REMI(MusicTokenizer):
             dic["Position"].add("Pedal")
             if self.config.sustain_pedal_duration:
                 dic["Pedal"] = {"Duration"}
-                dic["Duration"].add("Pedal")
+                if self.config.using_note_duration_tokens:
+                    dic["Duration"].add("Pedal")
+                elif self.config.use_velocities:
+                    dic["Duration"] = {first_note_token_type, "Bar", "Position"}
+                    dic["Velocity"].add("Pedal")
+                else:
+                    dic["Duration"] = {first_note_token_type, "Bar", "Position"}
+                    dic["Pitch"].add("Pedal")
             else:
                 dic["PedalOff"] = {
                     "Pedal",
@@ -723,7 +793,13 @@ class REMI(MusicTokenizer):
 
         if self.config.use_rests:
             dic["Rest"] = {"Rest", first_note_token_type, "Position", "Bar"}
-            dic["Duration"].add("Rest")
+            dic[
+                "Duration"
+                if self.config.using_note_duration_tokens
+                else "Velocity"
+                if self.config.use_velocities
+                else first_note_token_type
+            ].add("Rest")
             if self.config.use_chords:
                 dic["Rest"] |= {"Chord"}
             if self.config.use_tempos:

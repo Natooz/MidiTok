@@ -38,7 +38,7 @@ classifiers = [
 ]
 dependencies = [
     "numpy>=1.19",
-    "symusic>=0.4.3",  # TODO 0.5.0
+    "symusic>=0.5.0",
     "tqdm",
     "tokenizers>=0.13.0",
     "huggingface_hub>=0.16.4",

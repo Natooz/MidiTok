@@ -335,7 +335,6 @@ def test_split_concat_score(file_path: Path, max_num_beats: int = 16):
     # We do not test tempos, time signatures and key signature as they are duplicated
     # in score_concat (same consecutive ones for each chunk).
     assert score.tracks == score_concat.tracks
-    assert score.lyrics == score_concat.lyrics
     assert score.markers == score_concat.markers
 
 
@@ -352,7 +351,6 @@ def test_split_score_per_tracks(file_path: Path):
         score_split.tempos = []
         score_split.time_signatures = []
         score_split.key_signatures = []
-        score_split.lyrics = []
         score_split.markers = []
     score_merged = miditok.utils.merge_scores(score_splits)
 
