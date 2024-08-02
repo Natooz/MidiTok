@@ -33,6 +33,8 @@ PITCH_RANGE = (21, 109)
 BEAT_RES = {(0, 4): 8, (4, 12): 4}  # samples per beat
 # number of velocity bins, velocities values from 0 to 127 will be quantized
 NUM_VELOCITIES = 32
+# tpq microtiming resolution, in case USE_MICROTMING is True
+RES_MICROTIMING = 480
 # default special tokens
 BOS_TOKEN_NAME = "BOS"
 EOS_TOKEN_NAME = "EOS"
@@ -41,6 +43,7 @@ MANDATORY_SPECIAL_TOKENS = ["PAD"]
 
 # Additional/Optional tokens
 USE_VELOCITIES = True
+USE_MICROTIMING = False
 USE_CHORDS = False
 USE_RESTS = False
 USE_TEMPOS = False

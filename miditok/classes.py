@@ -65,6 +65,8 @@ from .constants import (
     USE_TEMPOS,
     USE_TIME_SIGNATURE,
     USE_VELOCITIES,
+    USE_MICROTIMING,
+    RES_MICROTIMING
 )
 
 if TYPE_CHECKING:
@@ -588,6 +590,8 @@ class TokenizerConfig:
         special_tokens: Sequence[str] = SPECIAL_TOKENS,
         encode_ids_split: Literal["bar", "beat", "no"] = ENCODE_IDS_SPLIT,
         use_velocities: bool = USE_VELOCITIES,
+        use_microtiming: bool = USE_MICROTIMING,
+        res_microtiming: int = RES_MICROTIMING,
         use_note_duration_programs: Sequence[int] = USE_NOTE_DURATION_PROGRAMS,
         use_chords: bool = USE_CHORDS,
         use_rests: bool = USE_RESTS,
@@ -673,6 +677,8 @@ class TokenizerConfig:
         # Global parameters
         self.pitch_range: tuple[int, int] = pitch_range
         self.beat_res: dict[tuple[int, int], int] = beat_res
+        self.use_microtiming: bool = use_microtiming
+        self.res_microtiming: int = res_microtiming
         self.num_velocities: int = num_velocities
         self.remove_duplicated_notes = remove_duplicated_notes
         self.encode_ids_split = encode_ids_split
@@ -697,6 +703,7 @@ class TokenizerConfig:
 
         # Additional token types params, enabling additional token types
         self.use_velocities: bool = use_velocities
+        
         self.use_note_duration_programs: set[int] = set(use_note_duration_programs)
         self.use_chords: bool = use_chords
         self.use_rests: bool = use_rests
@@ -839,6 +846,10 @@ class TokenizerConfig:
 
         :return: maximum number of positions per ticks covered by the config.
         """
+        if self.use_microtiming:
+            print(f"USING MICROTMING: {self.res_microtiming}")
+            return self.res_microtiming
+
         return max(self.beat_res.values())
 
     @property
