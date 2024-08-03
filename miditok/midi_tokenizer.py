@@ -25,6 +25,7 @@ from symusic import (
     Track,
 )
 from symusic.core import (
+    NoteTickList,
     PedalTickList,
     PitchBendTickList,
     ScoreTick,
@@ -671,6 +672,7 @@ class MusicTokenizer(ABC, HFHubMixin):
             for key in note_soa:
                 note_soa[key] = note_soa[key][mask]
         if len(note_soa["time"]) == 0:
+            track.notes = NoteTickList()
             return
 
         # Compute new velocities
