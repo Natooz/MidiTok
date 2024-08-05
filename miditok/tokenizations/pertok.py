@@ -10,6 +10,8 @@ from symusic import Note, Score, TimeSignature, Track
 from miditok.classes import Event, TokenizerConfig, TokSequence
 from miditok.constants import MIDI_INSTRUMENTS
 from miditok.midi_tokenizer import MusicTokenizer
+from miditok.utils import compute_ticks_per_beat
+from miditok.constants import TIME_SIGNATURE
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -85,14 +87,24 @@ class PerTok(MusicTokenizer):
         self.test_vocab = self.vocab
 
     def _tweak_config_before_creating_voc(self) -> None:
+        # self.max_mt_shift = (
+        #     self.config.additional_params["max_microtiming_shift"]
+        #     * self.config.additional_params["granularity"]
+        # )
+        
+        # Microtiming
+        # TPQ value of maximum range of microtiming tokens
+        self.use_microtiming = self.config.use_microtiming
+        
         self.max_mt_shift = (
-            self.config.additional_params["max_microtiming_shift"]
-            * self.config.additional_params["granularity"]
+            self.config.max_microtiming_shift 
+            * self.config.res_microtiming
         )
+        
 
-        self.use_duration = self.config.additional_params["use_duration"]
-        self.use_velocity = self.config.additional_params["use_velocity"]
-        self.use_microtiming = self.config.additional_params["use_microtiming"]
+        #self.use_duration = self.config.additional_params["use_duration"]
+        self.use_velocity = self.config.use_velocities
+        
 
         self.config.use_chords = False
         self.config.use_rests = False
@@ -112,7 +124,7 @@ class PerTok(MusicTokenizer):
             NDArray: Array of available timeshift values
 
         """
-        self.tpq = self.config.additional_params["granularity"]
+        self.tpq = self.config.res_microtiming
         tick_values = [0]
 
         for value in self.durations:
@@ -123,61 +135,63 @@ class PerTok(MusicTokenizer):
 
         return np.array(sorted(set(tick_values)))
 
+    #TODO: Is this functin necessary with new Durations implementation?
     def _create_durations_tuples(self) -> list[tuple[int, int, int]]:
         durations = set()
-
-        for beat_grid in self.config.additional_params["beat_grids"]:
-            start, end, resolution = beat_grid
+        
+        for beat_range, resolution in self.config.beat_res.items():
+            start, end = beat_range
             for beat in range(start, end):
                 for subdiv in range(resolution):
                     if not (beat == 0 and subdiv == 0):
                         durations.add((beat, subdiv, resolution))
+
         return list(durations)
 
-    def preprocess_score(self, score: Score) -> Score:
-        """
-        Change the symusic score resolution to the tokenizer's granularity.
+    # def preprocess_score(self, score: Score) -> Score:
+    #     """
+    #     Change the symusic score resolution to the tokenizer's granularity.
 
-        Args:
-        ----
-            score (Score): Symusic score
+    #     Args:
+    #     ----
+    #         score (Score): Symusic score
 
-        Returns:
-        -------
-            Score: Symusic score that has the correct resolution
+    #     Returns:
+    #     -------
+    #         Score: Symusic score that has the correct resolution
 
-        """
-        # Manually set our score granularity here, e.g. 480 ticks per quarter note
-        new_tpq = self.config.additional_params["granularity"]
-        if score.ticks_per_quarter != new_tpq:
-            score = score.resample(new_tpq, min_dur=1)
+    #     """
+    #     # Manually set our score granularity here, e.g. 480 ticks per quarter note
+    #     new_tpq = self.config.res_microtiming
+    #     if score.ticks_per_quarter != new_tpq:
+    #         score = score.resample(new_tpq, min_dur=1)
 
-        ticks_per_beat = None
-        tpq_resampling_factors = None
+    #     ticks_per_beat = None
+    #     tpq_resampling_factors = None
 
-        # Preprocess track events
-        for t in range(len(score.tracks) - 1, -1, -1):
-            if len(score.tracks[t].notes) == 0:
-                del score.tracks[t]
-                continue
-            # Preprocesses notes
-            score.tracks[t].notes = self._preprocess_notes(
-                score.tracks[t].notes,
-                score.tracks[t].is_drum,
-                tpq_resampling_factors,
-                ticks_per_beat,
-            )
+    #     # Preprocess track events
+    #     for t in range(len(score.tracks) - 1, -1, -1):
+    #         if len(score.tracks[t].notes) == 0:
+    #             del score.tracks[t]
+    #             continue
+    #         # Preprocesses notes
+    #         score.tracks[t].notes = self._preprocess_notes(
+    #             score.tracks[t].notes,
+    #             score.tracks[t].is_drum,
+    #             tpq_resampling_factors,
+    #             ticks_per_beat,
+    #         )
 
-            if len(score.tracks[t].notes) == 0:
-                del score.tracks[t]
+    #         if len(score.tracks[t].notes) == 0:
+    #             del score.tracks[t]
 
-        # A bit hacky but, if not included, create one of 4/4
-        if len(score.time_signatures) == 0:
-            score.time_signatures.append(
-                TimeSignature(time=0, numerator=4, denominator=4)
-            )
+    #     # A bit hacky but, if not included, create one of 4/4
+    #     if len(score.time_signatures) == 0:
+    #         score.time_signatures.append(
+    #             TimeSignature(time=0, numerator=4, denominator=4)
+    #         )
 
-        return score
+    #     return score
 
     def get_closest_array_value(
         self, value: int | float, array: NDArray
@@ -197,168 +211,308 @@ class PerTok(MusicTokenizer):
         """
         return array[np.abs(array - value).argmin()]
 
-    def _create_track_events(self, track: Track, _: None = None) -> list[Event]:
+    
+
+    # def _score_to_tokens(
+    #     self,
+    #     score: Score,
+    #     attribute_controls_indexes: Mapping[int, Mapping[int, Sequence[int] | bool]]
+    #     | None = None,
+    # ) -> TokSequence | list[TokSequence]:
+    #     # Convert a **preprocessed** score object to a sequence of tokens.
+    #     # Convert each track to tokens
+    #     all_events = []
+    #     if attribute_controls_indexes is None:
+    #         attribute_controls_indexes = {}
+
+    #     # Adds note tokens
+    #     if not self.one_token_stream and len(score.tracks) == 0:
+    #         all_events.append([])
+    #     for track in score.tracks:
+    #         note_events = self._create_track_events(track)
+    #         if self.one_token_stream:
+    #             all_events += note_events
+    #         else:
+    #             all_events.append(note_events)
+
+    #     if self.one_token_stream:
+    #         tok_sequence = TokSequence(events=all_events)
+    #         self.complete_sequence(tok_sequence)
+    #     else:
+    #         tok_sequence = []
+    #         for i in range(len(all_events)):
+    #             tok_sequence.append(TokSequence(events=all_events[i]))
+    #             self.complete_sequence(tok_sequence[-1])
+
+    #     return tok_sequence
+
+
+
+    def _create_base_vocabulary(self) -> list[str]:
+        vocab = ["BAR_None"]
+
+        # NoteOn/NoteOff/Velocity
+        self.timeshift_tick_values = self.create_timeshift_tick_values()
+        self._add_note_tokens_to_vocab_list(vocab)
+
+        # Timeshift
+        vocab += [
+            f"TimeShift_{timeshift!s}" for timeshift in self.timeshift_tick_values
+        ]
+
+        #if self.use_duration:
+        if any(self.config.use_note_duration_programs):
+            vocab += [
+                f"Duration_{timeshift!s}" for timeshift in self.timeshift_tick_values
+            ]
+
+        # Microtiming
+        if self.use_microtiming:
+            mt_bins = self.config.res_microtiming["num_microtiming_bins"]
+            self.microtiming_tick_values = np.linspace(
+                -self.max_mt_shift, self.max_mt_shift, mt_bins + 1, dtype=np.intc
+            )
+
+            vocab += [
+                f"MicroTiming_{microtiming!s}"
+                for microtiming in self.microtiming_tick_values
+            ]
+
+        self._add_additional_tokens_to_vocab_list(vocab)
+
+        return vocab
+
+    def _add_note_tokens_to_vocab_list(self, vocab: list[str]) -> None:
+        vocab += [f"Pitch_{i}" for i in range(*self.config.pitch_range)]
+        if self.use_velocity:
+            vocab += [f"Velocity_{i}" for i in self.velocities]
+
+    def _create_token_types_graph(self) -> dict[str, list[str]]:
         r"""
-        Extract the tokens/events from a track (``symusic.Track``).
+        Return a graph/dictionary of the possible token types successions.
 
-        Concerned events are: *Pitch*, *Velocity*, *Duration*, *NoteOn*, *NoteOff* and
-        optionally *Chord*, *Pedal* and *PitchBend*.
-        **If the tokenizer is using pitch intervals, the notes must be sorted by time
-        then pitch values. This is done in** ``preprocess_score``.
-
-        :param track: ``symusic.Track`` to extract events from.
-        :param _: in place of ``ticks_per_beat``, unused here as Structured do not
-            support time signatures, hence the ticks_per_beat value is always the same
-            and equal to the score's time division.
-        :return: sequence of corresponding ``Event``s.
+        :return: the token types transitions dictionary.
         """
-        # Make sure the notes are sorted first by their onset (start) times, second by
-        # pitch: notes.sort(key=lambda x: (x.start, x.pitch)) done in score_to_tokens
-        events = []
+        dic = {
+            "Pitch": {"Velocity"},
+            "PitchDrum": {"Velocity"},
+            "Velocity": {"Duration"},
+            "Duration": {"TimeShift"},
+            "TimeShift": {"Pitch", "PitchDrum"},
+        }
 
-        # Creates the Note On, Note Off and Velocity events
-        global_time = 0
-        n_bars = -1
-        add_ts_tokens = False
+        if self.config.use_programs:
+            dic["Program"] = {"Pitch", "PitchDrum"}
+            dic["TimeShift"] = {"Program"}
 
-        # TODO: Right now hardcoded for 4/4 ; how to change this?
-        ticks_per_bar = self.tpq * 4
+        return dic
 
-        for note in track.notes:
-            # Check if next notes time is in another bar;
-            # if so, add 'bar' tokens and keep advancing clock
-            while note.time // ticks_per_bar > n_bars:
-                n_bars += 1
-                global_time = n_bars * ticks_per_bar
-                events.append(
-                    Event(
-                        type_="BAR",
-                        time=global_time,
-                        desc=f"{global_time} bar",
-                        value="None",
-                    )
-                )
-
-            time_delta = note.start - global_time
-            closest_timeshift = int(
-                self.get_closest_array_value(
-                    value=time_delta, array=self.timeshift_tick_values
-                )
-            )
-
-            # Timeshift
-            if closest_timeshift != 0:
-                events.append(
-                    Event(
-                        type_="TimeShift",
-                        time=note.start,
-                        desc=f"{closest_timeshift} timeshift",
-                        value=closest_timeshift,
-                    )
-                )
-                add_ts_tokens = True
-
-            # Pitch
-            pitch_token_name = (
-                "PitchDrum"
-                if track.is_drum and self.config.use_pitchdrum_tokens
-                else "Pitch"
-            )
-            events.append(
-                Event(
-                    type_=pitch_token_name,
-                    value=note.pitch,
-                    time=note.start,
-                    desc=note.end,
-                )
-            )
-
-            if self.use_duration:
-                closest_duration = self.get_closest_array_value(
-                    value=note.duration, array=self.timeshift_tick_values
-                )
-                events.append(
-                    Event(
-                        type_="Duration",
-                        value=closest_duration,
-                        time=note.start,
-                        desc=f"duration {note.duration}",
-                    )
-                )
-
-            # Velocity
-            if self.use_velocity:
-                events.append(
-                    Event(
-                        type_="Velocity",
-                        value=note.velocity,
-                        time=note.start,
-                        desc=f"{note.velocity}",
-                    )
-                )
-
-            # Microtiming
-            if self.use_microtiming:
-                microtiming = time_delta - closest_timeshift
-                closest_microtiming = int(
-                    self.get_closest_array_value(
-                        value=microtiming, array=self.microtiming_tick_values
-                    )
-                )
-                events.append(
-                    Event(
-                        type_="MicroTiming",
-                        value=closest_microtiming,
-                        time=note.start,
-                        desc=f"{closest_microtiming} microtiming shift",
-                    )
-                )
-
-            if add_ts_tokens:
-                global_time += closest_timeshift
-                add_ts_tokens = False
-
-        # Add a 'Bar' token at the end
-        events.append(
-            Event(
-                type_="BAR", time=global_time, desc=f"{global_time} bar", value="None"
-            )
-        )
-
-        return events
-
-    def _score_to_tokens(
-        self,
-        score: Score,
-        attribute_controls_indexes: Mapping[int, Mapping[int, Sequence[int] | bool]]
-        | None = None,
-    ) -> TokSequence | list[TokSequence]:
-        # Convert a **preprocessed** score object to a sequence of tokens.
-        # Convert each track to tokens
+    def _add_time_events(self, events: list[Event], time_division: int) -> None:
+        
+        """
+        NOTES
+        time_division = score.ticks_per_quarter
+        """
+        print("--ADD TIME EVENTS--")
+        # Add time events
         all_events = []
-        if attribute_controls_indexes is None:
-            attribute_controls_indexes = {}
+        previous_tick = 0
+        previous_note_end = 0
+        ticks_per_beat = compute_ticks_per_beat(TIME_SIGNATURE[1], time_division)
+        
 
-        # Adds note tokens
-        if not self.one_token_stream and len(score.tracks) == 0:
-            all_events.append([])
-        for track in score.tracks:
-            note_events = self._create_track_events(track)
-            if self.one_token_stream:
-                all_events += note_events
-            else:
-                all_events.append(note_events)
+        
+        for event in events:
+            # No time shift
+            if event.time != previous_tick:
+                print(f"event time: {event.time}")
+                print(f"prev tick: {previous_tick}")
+                # TODO: Okay to skip rests? Not used in PerTok
+                
+                time_delta = event.time = previous_tick
+                closest_timeshift = int(
+                    self.get_closest_array_value(
+                        value=time_delta, array=self.timeshift_tick_values
+                    )
+                )
+                
+                print(f"closets ts: {closest_timeshift}")
+                
+                if closest_timeshift != 0:
+                    all_events.append(
+                        Event(
+                            type_="TimeShift",
+                            value=closest_timeshift,
+                            time=previous_tick,
+                            desc=f"{closest_timeshift} timeshift",
+                        )
+                    )
+                
+                # Microtiming
+                if self.use_microtiming: #TODO: Replace with real arg
+                    microtiming = time_delta - closest_timeshift
+                    closest_microtiming = int(
+                        self.get_closest_array_value(
+                            value=microtiming, array=self.microtiming_tick_values
+                        )
+                    )
+                    all_events.append(
+                        Event(
+                            type_="MicroTiming",
+                            value=closest_microtiming,
+                            time=previous_tick,
+                            desc=f"{closest_microtiming} microtiming shift",
+                        )
+                    )
+                    
+                    # Update with 'quantized' timeshift value
+                previous_tick += closest_timeshift
+            
+            if event.type_ == "TimeSig":
+                ticks_per_beat = compute_ticks_per_beat(
+                    int(event.value.split("/")[1]), time_division
+                )
+            
+            all_events.append(event)
+                
+        for event in all_events:
+            print(event)
+        return all_events
+                
+                
+            
+    # def _create_track_events(self, track: Track, _: None = None) -> list[Event]:
+    #     # GET RID OF THIS
+    #     r"""
+    #     Extract the tokens/events from a track (``symusic.Track``).
 
-        if self.one_token_stream:
-            tok_sequence = TokSequence(events=all_events)
-            self.complete_sequence(tok_sequence)
-        else:
-            tok_sequence = []
-            for i in range(len(all_events)):
-                tok_sequence.append(TokSequence(events=all_events[i]))
-                self.complete_sequence(tok_sequence[-1])
+    #     Concerned events are: *Pitch*, *Velocity*, *Duration*, *NoteOn*, *NoteOff* and
+    #     optionally *Chord*, *Pedal* and *PitchBend*.
+    #     **If the tokenizer is using pitch intervals, the notes must be sorted by time
+    #     then pitch values. This is done in** ``preprocess_score``.
 
-        return tok_sequence
+    #     :param track: ``symusic.Track`` to extract events from.
+    #     :param _: in place of ``ticks_per_beat``, unused here as Structured do not
+    #         support time signatures, hence the ticks_per_beat value is always the same
+    #         and equal to the score's time division.
+    #     :return: sequence of corresponding ``Event``s.
+    #     """
+    #     # Make sure the notes are sorted first by their onset (start) times, second by
+    #     # pitch: notes.sort(key=lambda x: (x.start, x.pitch)) done in score_to_tokens
+    #     events = []
+
+    #     # Creates the Note On, Note Off and Velocity events
+    #     global_time = 0
+    #     n_bars = -1
+    #     add_ts_tokens = False
+
+    #     # TODO: Right now hardcoded for 4/4 ; how to change this?
+    #     ticks_per_bar = self.tpq * 4
+
+    #     for note in track.notes:
+    #         # Check if next notes time is in another bar;
+    #         # if so, add 'bar' tokens and keep advancing clock
+    #         while note.time // ticks_per_bar > n_bars:
+    #             n_bars += 1
+    #             global_time = n_bars * ticks_per_bar
+    #             events.append(
+    #                 Event(
+    #                     type_="BAR",
+    #                     time=global_time,
+    #                     desc=f"{global_time} bar",
+    #                     value="None",
+    #                 )
+    #             )
+
+    #         time_delta = note.start - global_time
+    #         closest_timeshift = int(
+    #             self.get_closest_array_value(
+    #                 value=time_delta, array=self.timeshift_tick_values
+    #             )
+    #         )
+
+    #         # Timeshift
+    #         if closest_timeshift != 0:
+    #             events.append(
+    #                 Event(
+    #                     type_="TimeShift",
+    #                     time=note.start,
+    #                     desc=f"{closest_timeshift} timeshift",
+    #                     value=closest_timeshift,
+    #                 )
+    #             )
+    #             add_ts_tokens = True
+
+    #         # Pitch
+    #         pitch_token_name = (
+    #             "PitchDrum"
+    #             if track.is_drum and self.config.use_pitchdrum_tokens
+    #             else "Pitch"
+    #         )
+    #         events.append(
+    #             Event(
+    #                 type_=pitch_token_name,
+    #                 value=note.pitch,
+    #                 time=note.start,
+    #                 desc=note.end,
+    #             )
+    #         )
+
+    #         if self.use_duration:
+    #             closest_duration = self.get_closest_array_value(
+    #                 value=note.duration, array=self.timeshift_tick_values
+    #             )
+    #             events.append(
+    #                 Event(
+    #                     type_="Duration",
+    #                     value=closest_duration,
+    #                     time=note.start,
+    #                     desc=f"duration {note.duration}",
+    #                 )
+    #             )
+
+    #         # Velocity
+    #         if self.use_velocity:
+    #             events.append(
+    #                 Event(
+    #                     type_="Velocity",
+    #                     value=note.velocity,
+    #                     time=note.start,
+    #                     desc=f"{note.velocity}",
+    #                 )
+    #             )
+
+    #         # Microtiming
+    #         if self.use_microtiming:
+    #             microtiming = time_delta - closest_timeshift
+    #             closest_microtiming = int(
+    #                 self.get_closest_array_value(
+    #                     value=microtiming, array=self.microtiming_tick_values
+    #                 )
+    #             )
+    #             events.append(
+    #                 Event(
+    #                     type_="MicroTiming",
+    #                     value=closest_microtiming,
+    #                     time=note.start,
+    #                     desc=f"{closest_microtiming} microtiming shift",
+    #                 )
+    #             )
+
+    #         if add_ts_tokens:
+    #             global_time += closest_timeshift
+    #             add_ts_tokens = False
+
+    #     # Add a 'Bar' token at the end
+    #     events.append(
+    #         Event(
+    #             type_="BAR", time=global_time, desc=f"{global_time} bar", value="None"
+    #         )
+    #     )
+
+    #     return events
+        
+        
 
     def _tokens_to_score(
         self,
@@ -476,72 +630,3 @@ class PerTok(MusicTokenizer):
             score.tracks = list(instruments.values())
 
         return score
-
-    def _create_base_vocabulary(self) -> list[str]:
-        vocab = ["BAR_None"]
-
-        # NoteOn/NoteOff/Velocity
-        self.timeshift_tick_values = self.create_timeshift_tick_values()
-        self._add_note_tokens_to_vocab_list(vocab)
-
-        # Timeshift
-        vocab += [
-            f"TimeShift_{timeshift!s}" for timeshift in self.timeshift_tick_values
-        ]
-
-        if self.use_duration:
-            vocab += [
-                f"Duration_{timeshift!s}" for timeshift in self.timeshift_tick_values
-            ]
-
-        # Microtiming
-        if self.use_microtiming:
-            mt_bins = self.config.additional_params["num_microtiming_bins"]
-            self.microtiming_tick_values = np.linspace(
-                -self.max_mt_shift, self.max_mt_shift, mt_bins + 1, dtype=np.intc
-            )
-
-            vocab += [
-                f"MicroTiming_{microtiming!s}"
-                for microtiming in self.microtiming_tick_values
-            ]
-
-        self._add_additional_tokens_to_vocab_list(vocab)
-
-        return vocab
-
-    def _add_note_tokens_to_vocab_list(self, vocab: list[str]) -> None:
-        vocab += [f"Pitch_{i}" for i in range(*self.config.pitch_range)]
-        if self.use_velocity:
-            vocab += [f"Velocity_{i}" for i in self.velocities]
-
-    def _create_token_types_graph(self) -> dict[str, list[str]]:
-        r"""
-        Return a graph/dictionary of the possible token types successions.
-
-        :return: the token types transitions dictionary.
-        """
-        dic = {
-            "Pitch": {"Velocity"},
-            "PitchDrum": {"Velocity"},
-            "Velocity": {"Duration"},
-            "Duration": {"TimeShift"},
-            "TimeShift": {"Pitch", "PitchDrum"},
-        }
-
-        if self.config.use_programs:
-            dic["Program"] = {"Pitch", "PitchDrum"}
-            dic["TimeShift"] = {"Program"}
-
-        return dic
-
-    def _add_time_events(self, events: list[Event], time_division: int) -> None:
-        """
-        Do not use this method.
-
-        Args:
-        ----
-            events (list[Event]): None
-            time_division (int): None
-
-        """

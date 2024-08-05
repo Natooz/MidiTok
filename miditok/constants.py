@@ -35,6 +35,7 @@ BEAT_RES = {(0, 4): 8, (4, 12): 4}  # samples per beat
 NUM_VELOCITIES = 32
 # tpq microtiming resolution, in case USE_MICROTMING is True
 RES_MICROTIMING = 480
+MAX_MICROTIMING_SHIFT = 0.125
 # default special tokens
 BOS_TOKEN_NAME = "BOS"
 EOS_TOKEN_NAME = "EOS"

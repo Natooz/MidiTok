@@ -66,7 +66,8 @@ from .constants import (
     USE_TIME_SIGNATURE,
     USE_VELOCITIES,
     USE_MICROTIMING,
-    RES_MICROTIMING
+    RES_MICROTIMING,
+    MAX_MICROTIMING_SHIFT
 )
 
 if TYPE_CHECKING:
@@ -590,8 +591,9 @@ class TokenizerConfig:
         special_tokens: Sequence[str] = SPECIAL_TOKENS,
         encode_ids_split: Literal["bar", "beat", "no"] = ENCODE_IDS_SPLIT,
         use_velocities: bool = USE_VELOCITIES,
-        use_microtiming: bool = USE_MICROTIMING,
-        res_microtiming: int = RES_MICROTIMING,
+        use_microtiming: bool = USE_MICROTIMING, # NEW
+        res_microtiming: int = RES_MICROTIMING, # NEW
+        max_microtiming_shift: int = MAX_MICROTIMING_SHIFT,
         use_note_duration_programs: Sequence[int] = USE_NOTE_DURATION_PROGRAMS,
         use_chords: bool = USE_CHORDS,
         use_rests: bool = USE_RESTS,
@@ -679,6 +681,7 @@ class TokenizerConfig:
         self.beat_res: dict[tuple[int, int], int] = beat_res
         self.use_microtiming: bool = use_microtiming
         self.res_microtiming: int = res_microtiming
+        self.max_microtiming_shift: float = max_microtiming_shift
         self.num_velocities: int = num_velocities
         self.remove_duplicated_notes = remove_duplicated_notes
         self.encode_ids_split = encode_ids_split
@@ -837,7 +840,7 @@ class TokenizerConfig:
         self.ac_repetition_track_num_consec_bars = ac_repetition_track_num_consec_bars
 
         # Additional params
-        self.additional_params = kwargs
+        #self.res_microtiming = kwargs
 
     @property
     def max_num_pos_per_beat(self) -> int:

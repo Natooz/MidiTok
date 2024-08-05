@@ -470,6 +470,7 @@ class MusicTokenizer(ABC, HFHubMixin):
         # A copy of the time signatures is made here to make inplace operations without
         # modifying the provided Score object. This copy will be set to the copy of the
         # score after resampling it.
+        print("--PREPROCESS SCORE--")
         time_signatures_copy = score.time_signatures.copy()
         if self.config.use_time_signatures:
             self._filter_unsupported_time_signatures(time_signatures_copy)
@@ -1130,6 +1131,7 @@ class MusicTokenizer(ABC, HFHubMixin):
         :return: a :class:`miditok.TokSequence` if ``tokenizer.one_token_stream`` is
             ``True``, else a list of :class:`miditok.TokSequence` objects.
         """
+        print("--SCORE TO TOKENS--")
         # Create events list
         all_events = []
         if not self.config.one_token_stream_for_programs:
@@ -1265,6 +1267,7 @@ class MusicTokenizer(ABC, HFHubMixin):
             learn to generate tokens accordingly to the attribute controls.
         :return: sequence of corresponding ``Event``s.
         """
+        print("--CREATE TRACK EVENTS--")
         program = track.program if not track.is_drum else -1
         use_durations = program in self.config.use_note_duration_programs
         events = []
@@ -1630,6 +1633,7 @@ class MusicTokenizer(ABC, HFHubMixin):
         :return: a :class:`miditok.TokSequence` if ``tokenizer.one_token_stream`` is
             ``True``, else a list of :class:`miditok.TokSequence` objects.
         """
+        print(f"--ENCODE--")
         # Load the file if a path was given
         if not isinstance(score, ScoreTick):
             score = Score(score)
