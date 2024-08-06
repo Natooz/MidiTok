@@ -41,6 +41,7 @@ from .constants import (
     LOG_TEMPOS,
     MANDATORY_SPECIAL_TOKENS,
     MAX_PITCH_INTERVAL,
+    MICROTIMING_RESOLUTION,
     NUM_TEMPOS,
     NUM_VELOCITIES,
     ONE_TOKEN_STREAM_FOR_PROGRAMS,
@@ -55,6 +56,7 @@ from .constants import (
     TEMPO_RANGE,
     TIME_SIGNATURE_RANGE,
     USE_CHORDS,
+    USE_MICROTIMINGS,
     USE_NOTE_DURATION_PROGRAMS,
     USE_PITCH_BENDS,
     USE_PITCH_INTERVALS,
@@ -94,6 +96,7 @@ class Event:
     time: int = -1
     program: int = 0
     desc: str | int = 0
+    time_high_res: int | None = None  # for microtiming TODO is it really useful?
 
     def __str__(self) -> str:
         """
@@ -444,6 +447,7 @@ class TokenizerConfig:
         to discrete drum elements (bass drum, high tom, cymbals...) which are unrelated
         to the pitch value of other instruments/programs. Using dedicated tokens for
         drums allow to disambiguate this, and is thus recommended. (default: ``True``)
+    :param use_microtimings: whether to use ``Microtiming`` tokens. TODO complete docs
     :param default_note_duration: default duration in beats to set for notes for which
         the duration is not tokenized. This parameter is used when decoding tokens to
         set the duration value of notes within tracks with programs not in the
@@ -455,6 +459,9 @@ class TokenizerConfig:
         and ``Position``). If in a given situation, ``Rest`` tokens cannot represent
         time with the exact precision, other time times will complement them.
         (default: ``{(0, 1): 8, (1, 2): 4, (2, 12): 2}``)
+    :param microtiming_resolution: resolution expressed in positions/samples per beat
+        to use for microtiming tokens. It has to be greater than the maximum resolution
+        provided in the ``beat`` argument. (default: ``32``)
     :param chord_maps: list of chord maps, to be given as a dictionary where keys are
         chord qualities (e.g. "maj") and values pitch maps as tuples of integers (e.g.
         ``(0, 4, 7)``). You can use ``miditok.constants.CHORD_MAPS`` as an example.
@@ -598,8 +605,10 @@ class TokenizerConfig:
         use_programs: bool = USE_PROGRAMS,
         use_pitch_intervals: bool = USE_PITCH_INTERVALS,
         use_pitchdrum_tokens: bool = USE_PITCHDRUM_TOKENS,
+        use_microtimings: bool = USE_MICROTIMINGS,
         default_note_duration: int | float = DEFAULT_NOTE_DURATION,
         beat_res_rest: dict[tuple[int, int], int] = BEAT_RES_REST,
+        microtiming_resolution: int = MICROTIMING_RESOLUTION,
         chord_maps: dict[str, tuple] = CHORD_MAPS,
         chord_tokens_with_root_note: bool = CHORD_TOKENS_WITH_ROOT_NOTE,
         chord_unknown: tuple[int, int] = CHORD_UNKNOWN,
@@ -707,6 +716,7 @@ class TokenizerConfig:
         self.use_programs: bool = use_programs
         self.use_pitch_intervals: bool = use_pitch_intervals
         self.use_pitchdrum_tokens: bool = use_pitchdrum_tokens
+        self.use_microtimings: bool = use_microtimings
 
         # Duration
         self.default_note_duration = default_note_duration
@@ -756,6 +766,19 @@ class TokenizerConfig:
                     f"{max_rest_res} was given."
                 )
                 raise ValueError(msg)
+
+        # Microtiming params
+        if (
+            self.use_microtimings
+            and microtiming_resolution <= self.max_num_pos_per_beat
+        ):
+            msg = (
+                f"The `microtiming_resolution` ({microtiming_resolution} provided) must"
+                " be greater than the maximum beat resolution values defined in "
+                f"`beat_res` ({self.max_num_pos_per_beat})."
+            )
+            raise ValueError(msg)
+        self.microtiming_resolution = microtiming_resolution
 
         # Chord params
         self.chord_maps: dict[str, tuple] = chord_maps
@@ -839,7 +862,11 @@ class TokenizerConfig:
 
         :return: maximum number of positions per ticks covered by the config.
         """
-        return max(self.beat_res.values())
+        return (
+            self.microtiming_resolution
+            if self.use_microtimings
+            else max(self.beat_res.values())
+        )
 
     @property
     def using_note_duration_tokens(self) -> bool:

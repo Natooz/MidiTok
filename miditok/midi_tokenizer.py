@@ -1168,6 +1168,9 @@ class MusicTokenizer(ABC, HFHubMixin):
         # Adds track tokens
         ticks_bars = get_bars_ticks(score, only_notes_onsets=True)
         ticks_beats = get_beats_ticks(score, only_notes_onsets=True)
+        resampling_factors_for_chords = self._get_score_resampling_factor(
+            score, lowest_resolution=True
+        )
         for ti, track in enumerate(score.tracks):
             track_events = self._create_track_events(
                 track,
@@ -1175,6 +1178,7 @@ class MusicTokenizer(ABC, HFHubMixin):
                 score.ticks_per_quarter,
                 ticks_bars,
                 ticks_beats,
+                resampling_factors_for_chords,
                 attribute_controls_indexes.get(ti, None),
             )
             if self.config.one_token_stream_for_programs:
@@ -1236,6 +1240,7 @@ class MusicTokenizer(ABC, HFHubMixin):
         time_division: int,
         ticks_bars: Sequence[int],
         ticks_beats: Sequence[int],
+        resampling_factors: np.ndarray,
         attribute_controls_indexes: Mapping[int, Sequence[int] | bool] | None = None,
     ) -> list[Event]:
         r"""
@@ -1258,6 +1263,9 @@ class MusicTokenizer(ABC, HFHubMixin):
         :param time_division: time division in ticks per quarter note of the file.
         :param ticks_bars: ticks indicating the beginning of each bar.
         :param ticks_beats: ticks indicating the beginning of each beat.
+        :param resampling_factors: resampling factors. This is only used in cases where
+            the tokenizer uses microtiming and chord tokens, in order to detect the
+            chords based on the base (low) time resolution.
         :param attribute_controls_indexes: indices of the attribute controls to compute
             This argument has to be provided as a dictionary mapping attribute control
             indices (indexing ``tokenizer.attribute_controls``) to a sequence of
@@ -1350,8 +1358,18 @@ class MusicTokenizer(ABC, HFHubMixin):
 
         # Add chords
         if self.config.use_chords and not track.is_drum:
+            if self.config.use_microtimings:
+                # If using micro-timings, we need to detect notes with times that have
+                # been resampled to the low time resolution.
+                notes_for_chords = track.notes
+                notes_for_chords["time"] = self._adjust_time_to_tpb(
+                    notes_for_chords["time"], resampling_factors
+                )
+            else:
+                notes_for_chords = track.notes
+
             chords = detect_chords(
-                track.notes,
+                notes_for_chords,
                 ticks_per_beat,
                 chord_maps=self.config.chord_maps,
                 program=program,
@@ -1368,16 +1386,35 @@ class MusicTokenizer(ABC, HFHubMixin):
 
         # Creates the Note On, Note Off and Velocity events
         tpb_idx = 0
-        for note in track.notes:
+        offset_times_low_res = None
+        if self.config.use_microtimings:
+            low_res = max(self.config.beat_res.values())
+            notes_soa = track.notes.numpy()
+            times_low_res = np.round(notes_soa["time"] / low_res) * low_res
+            if self._note_on_off:
+                offset_times_low_res = (
+                    np.round(notes_soa["time"] + notes_soa["duration"] / low_res)
+                    * low_res
+                )
+        else:
+            times_low_res = None
+        for ni, note in enumerate(track.notes):
+            if self.config.microtiming_resolution:
+                note_time = times_low_res[ni]
+                offset_time = offset_times_low_res[ni]
+                micro_timing = note.time - note_time
+            else:
+                note_time, micro_timing, offset_time = note.time, None, note.end
             # Program
             if self.config.use_programs and not self.config.program_changes:
                 events.append(
                     Event(
                         type_="Program",
                         value=program,
-                        time=note.start,
+                        time=note_time,
                         program=program,
-                        desc=note.end,
+                        desc=offset_time,
+                        time_high_res=note.time,
                     )
                 )
 
@@ -1385,15 +1422,15 @@ class MusicTokenizer(ABC, HFHubMixin):
             add_absolute_pitch_token = True
             if self.config.use_pitch_intervals and not track.is_drum:
                 # Adjust max_time_interval if needed
-                if note.time >= ticks_per_beat[tpb_idx, 0]:
+                if note_time >= ticks_per_beat[tpb_idx, 0]:
                     tpb_idx += 1
                     max_time_interval = (
                         ticks_per_beat[tpb_idx, 1]
                         * self.config.pitch_intervals_max_time_dist
                     )
-                if note.start != previous_note_onset:
+                if note_time != previous_note_onset:
                     if (
-                        note.start - previous_note_onset <= max_time_interval
+                        note_time - previous_note_onset <= max_time_interval
                         and abs(note.pitch - previous_pitch_onset)
                         <= self.config.max_pitch_interval
                     ):
@@ -1401,9 +1438,10 @@ class MusicTokenizer(ABC, HFHubMixin):
                             Event(
                                 type_="PitchIntervalTime",
                                 value=note.pitch - previous_pitch_onset,
-                                time=note.start,
+                                time=note_time,
                                 program=program,
-                                desc=note.end,
+                                desc=offset_time,
+                                time_high_res=note.time,
                             )
                         )
                         add_absolute_pitch_token = False
@@ -1417,9 +1455,10 @@ class MusicTokenizer(ABC, HFHubMixin):
                             Event(
                                 type_="PitchIntervalChord",
                                 value=note.pitch - previous_pitch_chord,
-                                time=note.start,
+                                time=note_time,
                                 program=program,
-                                desc=note.end,
+                                desc=offset_time,
+                                time_high_res=note.time,
                             )
                         )
                         add_absolute_pitch_token = False
@@ -1428,7 +1467,7 @@ class MusicTokenizer(ABC, HFHubMixin):
                         # interval starting from the current note to the next one.
                         previous_pitch_onset = note.pitch
                     previous_pitch_chord = note.pitch
-                previous_note_onset = note.start
+                previous_note_onset = note_time
 
             # Pitch / NoteOn
             if add_absolute_pitch_token:
@@ -1440,9 +1479,10 @@ class MusicTokenizer(ABC, HFHubMixin):
                     Event(
                         type_=note_token_name,
                         value=note.pitch,
-                        time=note.start,
+                        time=note_time,
                         program=program,
-                        desc=note.end,
+                        desc=offset_time,
+                        time_high_res=note.time,
                     )
                 )
 
@@ -1452,9 +1492,10 @@ class MusicTokenizer(ABC, HFHubMixin):
                     Event(
                         type_="Velocity",
                         value=note.velocity,
-                        time=note.start,
+                        time=note_time,
                         program=program,
                         desc=f"{note.velocity}",
+                        time_high_res=note.time,
                     )
                 )
 
@@ -1466,9 +1507,10 @@ class MusicTokenizer(ABC, HFHubMixin):
                             Event(
                                 type_="Program",
                                 value=program,
-                                time=note.end,
+                                time=offset_time,
                                 program=program,
                                 desc="ProgramNoteOff",
+                                time_high_res=note.end,
                             )
                         )
                     events.append(
@@ -1477,14 +1519,15 @@ class MusicTokenizer(ABC, HFHubMixin):
                             if self.config.use_pitchdrum_tokens and track.is_drum
                             else "NoteOff",
                             value=note.pitch,
-                            time=note.end,
+                            time=offset_time,
                             program=program,
-                            desc=note.end,
+                            desc=offset_time,
+                            time_high_res=note.end,
                         )
                     )
                 else:
                     # `while` as there might not be any note in the next section
-                    while note.time >= ticks_per_beat[tpb_idx, 0]:
+                    while note_time >= ticks_per_beat[tpb_idx, 0]:
                         tpb_idx += 1
                     dur = self._tpb_ticks_to_tokens[ticks_per_beat[tpb_idx, 1]][
                         note.duration
@@ -1493,11 +1536,23 @@ class MusicTokenizer(ABC, HFHubMixin):
                         Event(
                             type_="Duration",
                             value=dur,
-                            time=note.start,
+                            time=note_time,
                             program=program,
                             desc=f"{note.duration} ticks",
+                            time_high_res=note.time,
                         )
                     )
+            if self.config.use_microtimings:
+                events.append(
+                    Event(
+                        type_="Microtiming",
+                        value=micro_timing,
+                        time=note_time,
+                        program=program,
+                        desc=f"{note.duration} ticks",
+                        time_high_res=note.time,
+                    )
+                )
 
         return events
 
@@ -1538,25 +1593,33 @@ class MusicTokenizer(ABC, HFHubMixin):
 
         # First adds time signature tokens if specified
         if self.config.use_time_signatures:
+            times = score.time_signatures.numpy()["time"]
+            if self.config.use_microtimings:
+                low_res = max(self.config.beat_res.values())
+                times = np.round(times / low_res) * low_res
             events += [
                 Event(
                     type_="TimeSig",
                     value=f"{time_sig.numerator}/{time_sig.denominator}",
-                    time=time_sig.time,
+                    time=times[ti],
                 )
-                for time_sig in score.time_signatures
+                for ti, time_sig in enumerate(score.time_signatures)
             ]
 
         # Adds tempo events if specified
         if self.config.use_tempos:
+            times = score.tempos.numpy()["time"]
+            if self.config.use_microtimings:
+                low_res = max(self.config.beat_res.values())
+                times = np.round(times / low_res) * low_res
             events += [
                 Event(
                     type_="Tempo",
                     value=round(tempo.tempo, 2),  # req to handle c++ values
-                    time=tempo.time,
+                    time=times[ti],
                     desc=tempo.tempo,
                 )
-                for tempo in score.tempos
+                for ti, tempo in enumerate(score.tempos)
             ]
 
         return events
@@ -2056,6 +2119,16 @@ class MusicTokenizer(ABC, HFHubMixin):
                 for duration in self.durations
             ]
 
+        # Microtiming
+        if self.config.use_microtimings:
+            vocab += [
+                f"Microtiming_{i}"
+                for i in range(
+                    -self.config.microtiming_resolution,
+                    self.config.microtiming_resolution + 1,
+                )
+            ]
+
     def _add_additional_tokens_to_vocab_list(self, vocab: list[str]) -> None:
         # PitchInterval
         if self.config.use_pitch_intervals:
@@ -2344,7 +2417,9 @@ class MusicTokenizer(ABC, HFHubMixin):
             for denom in self.config.time_signature_range
         }
 
-    def _get_score_resampling_factor(self, score: Score) -> np.ndarray:
+    def _get_score_resampling_factor(
+        self, score: Score, lowest_resolution: bool = False
+    ) -> np.ndarray:
         """
         Compute the portions of numbers of ticks in a beat in a ``symusic.Score``.
 
@@ -2354,16 +2429,23 @@ class MusicTokenizer(ABC, HFHubMixin):
         **The time signatures must be sorted by time.**
 
         :param score: ``symusic.Score`` to analyze.
+        :param lowest_resolution:
         :return: ticks per beat values as a numpy array.
         """
+        if lowest_resolution:
+            if self.config.use_time_signatures:
+                max_ts_denom = max(ts.denominator for ts in score.time_signatures)
+                new_tpq = int(self.config.max_num_pos_per_beat * max_ts_denom / 4)
+            else:
+                new_tpq = self.config.max_num_pos_per_beat
+        else:
+            new_tpq = self.config.max_num_pos_per_beat
+
         resampling_factors = [
             [
                 score.time_signatures[tsi + 1].time,
                 score.ticks_per_quarter
-                // (
-                    self.config.max_num_pos_per_beat
-                    * (score.time_signatures[tsi].denominator / 4)
-                ),
+                // (new_tpq * (score.time_signatures[tsi].denominator / 4)),
             ]
             for tsi in range(len(score.time_signatures) - 1)
         ]
@@ -2373,10 +2455,7 @@ class MusicTokenizer(ABC, HFHubMixin):
             [
                 score.end() + 1,
                 score.ticks_per_quarter
-                // (
-                    self.config.max_num_pos_per_beat
-                    * (score.time_signatures[-1].denominator / 4)
-                ),
+                // (new_tpq * (score.time_signatures[-1].denominator / 4)),
             ]
         )
 
