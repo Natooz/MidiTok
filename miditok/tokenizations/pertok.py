@@ -87,14 +87,10 @@ class PerTok(MusicTokenizer):
         self.test_vocab = self.vocab
 
     def _tweak_config_before_creating_voc(self) -> None:
-        # self.max_mt_shift = (
-        #     self.config.additional_params["max_microtiming_shift"]
-        #     * self.config.additional_params["granularity"]
-        # )
-        
+
         # Microtiming
         # TPQ value of maximum range of microtiming tokens
-        self.use_microtiming = self.config.use_microtiming
+        self.use_microtiming = self.config.use_microtiming = True
         
         self.max_mt_shift = (
             self.config.max_microtiming_shift 
@@ -124,7 +120,7 @@ class PerTok(MusicTokenizer):
             NDArray: Array of available timeshift values
 
         """
-        self.tpq = self.config.res_microtiming
+        self.tpq = self.config.max_num_pos_per_beat
         tick_values = [0]
 
         for value in self.durations:
@@ -135,18 +131,30 @@ class PerTok(MusicTokenizer):
 
         return np.array(sorted(set(tick_values)))
 
-    #TODO: Is this functin necessary with new Durations implementation?
     def _create_durations_tuples(self) -> list[tuple[int, int, int]]:
-        durations = set()
+        durations = []
+        tpq = self.config.max_num_pos_per_beat
         
         for beat_range, resolution in self.config.beat_res.items():
+            #start, end = (x * tpq for x in beat_range)
+            #duration_chunk = resolution // tpq
             start, end = beat_range
             for beat in range(start, end):
                 for subdiv in range(resolution):
                     if not (beat == 0 and subdiv == 0):
-                        durations.add((beat, subdiv, resolution))
+                        subres = (tpq//resolution * subdiv) if subdiv != 0 else 0
+                        durations.append((beat, subres, tpq))
 
-        return list(durations)
+        self.min_timeshift = min([(beat*res + subres) for beat, subres, res in durations])
+        
+        # for beat_range, resolution in self.config.beat_res.items():
+        #     start, end = beat_range
+        #     for beat in range(start, end):
+        #         for subdiv in range(resolution):
+        #             if not (beat == 0 and subdiv == 0):
+        #                 durations.add((beat, subdiv, resolution))
+
+        return durations
 
     # def preprocess_score(self, score: Score) -> Score:
     #     """
@@ -211,6 +219,8 @@ class PerTok(MusicTokenizer):
         """
         return array[np.abs(array - value).argmin()]
 
+    def get_closest_duration_tuple(self, target):
+        return min(self.durations, key=lambda x: abs(((x[0]*x[-1]+x[1]) - target)))
     
 
     # def _score_to_tokens(
@@ -256,19 +266,26 @@ class PerTok(MusicTokenizer):
         self._add_note_tokens_to_vocab_list(vocab)
 
         # Timeshift
+        # vocab += [
+        #     f"TimeShift_{timeshift!s}" for timeshift in self.timeshift_tick_values
+        # ]
+        
+        # TimeShift
         vocab += [
-            f"TimeShift_{timeshift!s}" for timeshift in self.timeshift_tick_values
+            f"TimeShift_{self.duration_tuple_to_str(duration)}" for duration in self.durations
         ]
 
-        #if self.use_duration:
+        # Duration
         if any(self.config.use_note_duration_programs):
             vocab += [
-                f"Duration_{timeshift!s}" for timeshift in self.timeshift_tick_values
+                f"Duration_{self.duration_tuple_to_str(duration)}" for duration in self.durations
             ]
+        
+        
 
         # Microtiming
         if self.use_microtiming:
-            mt_bins = self.config.res_microtiming["num_microtiming_bins"]
+            mt_bins = self.config.num_microtiming_bins
             self.microtiming_tick_values = np.linspace(
                 -self.max_mt_shift, self.max_mt_shift, mt_bins + 1, dtype=np.intc
             )
@@ -306,7 +323,30 @@ class PerTok(MusicTokenizer):
             dic["TimeShift"] = {"Program"}
 
         return dic
-
+    
+    def duration_tuple_to_str(self, duration_tuple):
+       return ".".join(str(x) for x in duration_tuple)
+    
+    def _create_duration_event(
+        self,
+        note: Note,
+        program,
+        ticks_per_beat: np.ndarray,
+        tpb_idx
+    ) -> Event:
+        
+        
+        duration_tuple = self.get_closest_duration_tuple(note.duration)
+        duration = ".".join(str(x) for x in duration_tuple)
+        
+        return Event(
+            type_="Duration",
+            value=duration,
+            time=note.start,
+            program=program,
+            desc=f"duration {note.duration}"
+        )
+                
     def _add_time_events(self, events: list[Event], time_division: int) -> None:
         
         """
@@ -320,63 +360,56 @@ class PerTok(MusicTokenizer):
         previous_note_end = 0
         ticks_per_beat = compute_ticks_per_beat(TIME_SIGNATURE[1], time_division)
         
-
         
+
         for event in events:
-            # No time shift
-            if event.time != previous_tick:
-                print(f"event time: {event.time}")
-                print(f"prev tick: {previous_tick}")
+            print(f"event: {event}")
+
+            time_delta = event.time - previous_tick
+
+            # Pitch Shift
+            # Only should be placed before 'Pitch' events
+            if time_delta >= self.min_timeshift and event.type_ == "Pitch":
                 # TODO: Okay to skip rests? Not used in PerTok
                 
-                time_delta = event.time = previous_tick
-                closest_timeshift = int(
-                    self.get_closest_array_value(
-                        value=time_delta, array=self.timeshift_tick_values
+                ts_tuple = self.get_closest_duration_tuple(note.duration)
+                ts = ".".join(str(x) for x in ts_tuple)
+                
+                all_events.append(
+                    Event(
+                        type_="TimeShift",
+                        value=ts_tuple,
+                        time=previous_tick,
+                        desc=f"timeshift {ts}",
                     )
                 )
-                
-                print(f"closets ts: {closest_timeshift}")
-                
-                if closest_timeshift != 0:
-                    all_events.append(
-                        Event(
-                            type_="TimeShift",
-                            value=closest_timeshift,
-                            time=previous_tick,
-                            desc=f"{closest_timeshift} timeshift",
-                        )
-                    )
-                
-                # Microtiming
-                if self.use_microtiming: #TODO: Replace with real arg
-                    microtiming = time_delta - closest_timeshift
-                    closest_microtiming = int(
-                        self.get_closest_array_value(
-                            value=microtiming, array=self.microtiming_tick_values
-                        )
-                    )
-                    all_events.append(
-                        Event(
-                            type_="MicroTiming",
-                            value=closest_microtiming,
-                            time=previous_tick,
-                            desc=f"{closest_microtiming} microtiming shift",
-                        )
-                    )
-                    
-                    # Update with 'quantized' timeshift value
                 previous_tick += closest_timeshift
-            
+
+            # Time Signature
             if event.type_ == "TimeSig":
                 ticks_per_beat = compute_ticks_per_beat(
                     int(event.value.split("/")[1]), time_division
                 )
             
             all_events.append(event)
+            
+            # Microtiming
+            if self.use_microtiming:
+                microtiming = time_delta - closest_timeshift
+                closest_microtiming = int(
+                    self.get_closest_array_value(
+                        value=microtiming, array=self.microtiming_tick_values
+                    )
+                )
+                all_events.append(
+                    Event(
+                        type_="MicroTiming",
+                        value=closest_microtiming,
+                        time=previous_tick,
+                        desc=f"{closest_microtiming} microtiming",
+                    )
+                )
                 
-        for event in all_events:
-            print(event)
         return all_events
                 
                 

@@ -67,7 +67,8 @@ from .constants import (
     USE_VELOCITIES,
     USE_MICROTIMING,
     RES_MICROTIMING,
-    MAX_MICROTIMING_SHIFT
+    MAX_MICROTIMING_SHIFT,
+    NUM_MICROTIMING_BINS
 )
 
 if TYPE_CHECKING:
@@ -594,6 +595,7 @@ class TokenizerConfig:
         use_microtiming: bool = USE_MICROTIMING, # NEW
         res_microtiming: int = RES_MICROTIMING, # NEW
         max_microtiming_shift: int = MAX_MICROTIMING_SHIFT,
+        num_microtiming_bins: int = NUM_MICROTIMING_BINS,
         use_note_duration_programs: Sequence[int] = USE_NOTE_DURATION_PROGRAMS,
         use_chords: bool = USE_CHORDS,
         use_rests: bool = USE_RESTS,
@@ -679,12 +681,15 @@ class TokenizerConfig:
         # Global parameters
         self.pitch_range: tuple[int, int] = pitch_range
         self.beat_res: dict[tuple[int, int], int] = beat_res
-        self.use_microtiming: bool = use_microtiming
-        self.res_microtiming: int = res_microtiming
-        self.max_microtiming_shift: float = max_microtiming_shift
         self.num_velocities: int = num_velocities
         self.remove_duplicated_notes = remove_duplicated_notes
         self.encode_ids_split = encode_ids_split
+        
+        # Microtiming
+        self.use_microtiming: bool = use_microtiming
+        self.res_microtiming: int = res_microtiming
+        self.max_microtiming_shift: float = max_microtiming_shift
+        self.num_microtiming_bins: int = num_microtiming_bins
 
         # Special tokens
         self.special_tokens: list[str] = []
@@ -849,8 +854,8 @@ class TokenizerConfig:
 
         :return: maximum number of positions per ticks covered by the config.
         """
+        # If using Microtiming, the entire sequence needs to be processed at full resolution
         if self.use_microtiming:
-            print(f"USING MICROTMING: {self.res_microtiming}")
             return self.res_microtiming
 
         return max(self.beat_res.values())

@@ -489,6 +489,7 @@ class MusicTokenizer(ABC, HFHubMixin):
                 [TimeSignature(0, *TIME_SIGNATURE)]
             )
             new_tpq = self.config.max_num_pos_per_beat
+            print(f"new tpq: {new_tpq}")
 
         # Resample time if needed (not inplace) and attribute preprocessed time sig.
         if score.ticks_per_quarter != new_tpq:
@@ -556,7 +557,6 @@ class MusicTokenizer(ABC, HFHubMixin):
             ) or (self.config.use_programs and program not in self.config.programs):
                 del score.tracks[t]
                 continue
-
             # Preprocesses notes
             if len(score.tracks[t].notes) > 0:
                 self._preprocess_notes(
@@ -693,7 +693,7 @@ class MusicTokenizer(ABC, HFHubMixin):
         # Resample duration values if NoteOff, otherwise adjust to the vocab
         program = -1 if track.is_drum else track.program
         if program in self.config.use_note_duration_programs:
-            if not self._note_on_off and ticks_per_beat is not None:
+            if not self._note_on_off and ticks_per_beat is not None and not self.config.use_microtiming:
                 self._adjust_durations(note_soa, ticks_per_beat)
             elif resampling_factors is not None:
                 note_soa["duration"] = self._adjust_time_to_tpb(
@@ -1216,7 +1216,9 @@ class MusicTokenizer(ABC, HFHubMixin):
                     )
                 tok_sequence.append(TokSequence(events=all_events[i]))
                 self.complete_sequence(tok_sequence[-1])
-
+        print(f"\n--FINAL TOK SEQUENCE--")
+        for tok in tok_sequence[0].tokens:
+            print(f"\n{tok}")
         return tok_sequence
 
     def _sort_events(self, events: list[Event]) -> None:
@@ -1461,6 +1463,7 @@ class MusicTokenizer(ABC, HFHubMixin):
 
             # Duration / NoteOff
             if use_durations:
+                #TODO: Should this first part be in the duration fn?
                 if self._note_on_off:
                     if self.config.use_programs and not self.config.program_changes:
                         events.append(
@@ -1484,24 +1487,37 @@ class MusicTokenizer(ABC, HFHubMixin):
                         )
                     )
                 else:
-                    # `while` as there might not be any note in the next section
-                    while note.time >= ticks_per_beat[tpb_idx, 0]:
-                        tpb_idx += 1
-                    dur = self._tpb_ticks_to_tokens[ticks_per_beat[tpb_idx, 1]][
-                        note.duration
-                    ]
-                    events.append(
-                        Event(
-                            type_="Duration",
-                            value=dur,
-                            time=note.start,
-                            program=program,
-                            desc=f"{note.duration} ticks",
-                        )
+                    duration_event = self._create_duration_event(
+                        note, program, ticks_per_beat, tpb_idx
                     )
+                    events.append(duration_event)
+            
+            if self.config.use_microtiming:
+                
 
         return events
-
+    
+    def _create_duration_event(
+        self,
+        note: Note,
+        program: int,
+        ticks_per_beat: np.ndarray,
+        tpb_idx: int
+    ) -> Event:
+        
+        while note.time >= ticks_per_beat[tpb_idx, 0]:
+            tpb_idx += 1
+        dur = self._tpb_ticks_to_tokens[ticks_per_beat[tpb_idx, 1]][
+            note.duration
+        ]
+        return Event(
+            type_="Duration",
+            value=dur,
+            time=note.start,
+            program=program,
+            desc=f"{note.duration} ticks",
+        )
+        
     @staticmethod
     def _insert_program_change_events(events: list[Event]) -> None:
         """
