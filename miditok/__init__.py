@@ -16,6 +16,7 @@ from .tokenizations import (
     MIDILike,
     MuMIDI,
     Octuple,
+    PerTok,
     Structured,
 )
 from .tokenizer_training_iterator import TokTrainingIterator
@@ -34,6 +35,7 @@ __all__ = [
     "CPWord",
     "MuMIDI",
     "MMM",
+    "PerTok",
     "utils",
     "data_augmentation",
 ]

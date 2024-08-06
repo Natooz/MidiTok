@@ -91,6 +91,12 @@ MMM
 .. autoclass:: miditok.MMM
     :show-inheritance:
 
+PerTok
+------------------------
+
+.. autoclass:: miditok.PerTok
+    :show-inheritance:
+
 
 Create yours
 ------------------------

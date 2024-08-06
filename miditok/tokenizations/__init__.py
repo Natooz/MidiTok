@@ -11,6 +11,7 @@ from .midi_like import MIDILike
 from .mmm import MMM
 from .mumidi import MuMIDI
 from .octuple import Octuple
+from .pertok import PerTok
 from .remi import REMI
 from .structured import Structured
 from .tsd import TSD
@@ -24,4 +25,5 @@ __all__ = [
     "CPWord",
     "MuMIDI",
     "MMM",
+    "PerTok",
 ]

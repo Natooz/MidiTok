@@ -33,6 +33,11 @@ PITCH_RANGE = (21, 109)
 BEAT_RES = {(0, 4): 8, (4, 12): 4}  # samples per beat
 # number of velocity bins, velocities values from 0 to 127 will be quantized
 NUM_VELOCITIES = 32
+# tpq microtiming resolution, in case USE_MICROTMING is True
+USE_MICROTIMING = False
+RES_MICROTIMING = 480
+MAX_MICROTIMING_SHIFT = 0.125
+NUM_MICROTIMING_BINS = 30
 # default special tokens
 BOS_TOKEN_NAME = "BOS"
 EOS_TOKEN_NAME = "EOS"
@@ -50,6 +55,7 @@ USE_PITCH_BENDS = False
 USE_PROGRAMS = False
 USE_PITCHDRUM_TOKENS = True
 USE_NOTE_DURATION_PROGRAMS = list(range(-1, 128))
+USE_MICROTIMINGS = False
 
 # Pitch as intervals
 USE_PITCH_INTERVALS = False
@@ -58,6 +64,22 @@ PITCH_INTERVALS_MAX_TIME_DIST = 1
 
 # Rest params
 BEAT_RES_REST = {(0, 1): 8, (1, 2): 4, (2, 12): 2}
+
+# Microtiming params
+MICROTIMING_RESOLUTION = 24
+MICROTIMING_COMPATIBLE_TOKEN_TYPES = {
+    "Program",
+    "Pitch",
+    "PitchDrum",
+    "PitchIntervalTime",
+    "PitchIntervalChord",
+    "NoteOn",
+    "NoteOff",
+    "DrumOff",
+    "Pedal",
+    "PedalOff",
+    "PitchBend",
+}  # Velocity and Duration not necessary as they follow Pitch/NoteOn
 
 # Chord params
 # "chord_unknown" specifies the range of number of notes that can form "unknown" chords
