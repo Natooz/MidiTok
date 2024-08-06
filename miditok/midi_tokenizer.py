@@ -1411,7 +1411,7 @@ class MusicTokenizer(ABC, HFHubMixin):
         else:
             times_low_res = None
         for ni, note in enumerate(track.notes):
-            if self.config.microtiming_resolution:
+            if self.config.use_microtimings:
                 note_time = times_low_res[ni]
                 offset_time = offset_times_low_res[ni]
                 micro_timing = note.time - note_time
