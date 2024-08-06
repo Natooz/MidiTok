@@ -463,6 +463,7 @@ class REMI(MusicTokenizer):
                             dur = int(
                                 self.config.default_note_duration * ticks_per_beat
                             )
+                        # TODO decode microtiming here
                         if vel_type == "Velocity" and dur_type == "Duration":
                             if isinstance(dur, str):
                                 dur = self._tpb_tokens_to_ticks[ticks_per_beat][dur]
@@ -526,6 +527,7 @@ class REMI(MusicTokenizer):
                         int(tok_val) if self.config.use_programs else current_program
                     )
                     if self.config.sustain_pedal_duration and ti + 1 < len(seq):
+                        # TODO decode microtiming
                         if seq[ti + 1].split("_")[0] == "Duration":
                             duration = self._tpb_tokens_to_ticks[ticks_per_beat][
                                 seq[ti + 1].split("_")[1]
@@ -545,6 +547,7 @@ class REMI(MusicTokenizer):
                         int(tok_val) if self.config.use_programs else current_program
                     )
                     if pedal_prog in active_pedals:
+                        # TODO decode microtiming if necessary
                         new_pedal = Pedal(
                             active_pedals[pedal_prog],
                             current_tick - active_pedals[pedal_prog],
@@ -556,6 +559,7 @@ class REMI(MusicTokenizer):
                             current_track.pedals.append(new_pedal)
                         del active_pedals[pedal_prog]
                 elif tok_type == "PitchBend":
+                    # TODO decode microtiming if necessary
                     new_pitch_bend = PitchBend(current_tick, int(tok_val))
                     if self.config.one_token_stream_for_programs:
                         check_inst(current_program)

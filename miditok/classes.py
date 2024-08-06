@@ -96,7 +96,6 @@ class Event:
     time: int = -1
     program: int = 0
     desc: str | int = 0
-    time_high_res: int | None = None  # for microtiming TODO is it really useful?
 
     def __str__(self) -> str:
         """

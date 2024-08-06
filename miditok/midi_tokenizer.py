@@ -1307,20 +1307,28 @@ class MusicTokenizer(ABC, HFHubMixin):
         # Add sustain pedal
         if self.config.use_sustain_pedals:
             tpb_idx = 0
-            for pedal in track.pedals:
+            pedals_soa = track.pedals.numpy()
+            times = pedals_soa["time"]
+            offset_times = pedals_soa["time"] + pedals_soa["duration"]
+            if self.config.use_microtimings:
+                low_res = max(self.config.beat_res.values())
+                times = np.round(times / low_res) * low_res
+                if not self.config.sustain_pedal_duration:
+                    offset_times = np.round(offset_times / low_res) * low_res
+            for idx, pedal in enumerate(track.pedals):
                 # If not using programs, the default value is 0
                 events.append(
                     Event(
                         "Pedal",
                         program,
-                        pedal.time,
+                        times[idx],
                         program,
                     )
                 )
                 # PedalOff or Duration
                 if self.config.sustain_pedal_duration:
                     # `while` here as there might not be any note in the next section
-                    while pedal.time >= ticks_per_beat[tpb_idx, 0]:
+                    while times[idx] >= ticks_per_beat[tpb_idx, 0]:
                         tpb_idx += 1
                     dur = self._tpb_ticks_to_tokens[ticks_per_beat[tpb_idx, 1]][
                         pedal.duration
@@ -1329,30 +1337,34 @@ class MusicTokenizer(ABC, HFHubMixin):
                         Event(
                             "Duration",
                             dur,
-                            pedal.time,
+                            times[idx],
                             program,
                             "PedalDuration",
                         )
                     )
                 else:
-                    events.append(Event("PedalOff", program, pedal.end, program))
+                    events.append(
+                        Event("PedalOff", program, offset_times[idx], program)
+                    )
 
         # Add pitch bend
         if self.config.use_pitch_bends:
-            for pitch_bend in track.pitch_bends:
+            times = track.pitch_bends.numpy()["time"]
+            if self.config.use_microtimings:
+                low_res = max(self.config.beat_res.values())
+                times = np.round(times / low_res) * low_res
+            for idx, pitch_bend in enumerate(track.pitch_bends):
                 if self.config.use_programs and not self.config.program_changes:
                     events.append(
                         Event(
                             "Program",
                             program,
-                            pitch_bend.time,
+                            times[idx],
                             program,
                             "ProgramPitchBend",
                         )
                     )
-                events.append(
-                    Event("PitchBend", pitch_bend.value, pitch_bend.time, program)
-                )
+                events.append(Event("PitchBend", pitch_bend.value, times[idx], program))
 
         # Control changes (in the future, and handle pedals redundancy)
 
@@ -1414,7 +1426,6 @@ class MusicTokenizer(ABC, HFHubMixin):
                         time=note_time,
                         program=program,
                         desc=offset_time,
-                        time_high_res=note.time,
                     )
                 )
 
@@ -1441,7 +1452,6 @@ class MusicTokenizer(ABC, HFHubMixin):
                                 time=note_time,
                                 program=program,
                                 desc=offset_time,
-                                time_high_res=note.time,
                             )
                         )
                         add_absolute_pitch_token = False
@@ -1458,7 +1468,6 @@ class MusicTokenizer(ABC, HFHubMixin):
                                 time=note_time,
                                 program=program,
                                 desc=offset_time,
-                                time_high_res=note.time,
                             )
                         )
                         add_absolute_pitch_token = False
@@ -1482,7 +1491,6 @@ class MusicTokenizer(ABC, HFHubMixin):
                         time=note_time,
                         program=program,
                         desc=offset_time,
-                        time_high_res=note.time,
                     )
                 )
 
@@ -1495,7 +1503,6 @@ class MusicTokenizer(ABC, HFHubMixin):
                         time=note_time,
                         program=program,
                         desc=f"{note.velocity}",
-                        time_high_res=note.time,
                     )
                 )
 
@@ -1510,7 +1517,6 @@ class MusicTokenizer(ABC, HFHubMixin):
                                 time=offset_time,
                                 program=program,
                                 desc="ProgramNoteOff",
-                                time_high_res=note.end,
                             )
                         )
                     events.append(
@@ -1522,7 +1528,6 @@ class MusicTokenizer(ABC, HFHubMixin):
                             time=offset_time,
                             program=program,
                             desc=offset_time,
-                            time_high_res=note.end,
                         )
                     )
                 else:
@@ -1539,7 +1544,6 @@ class MusicTokenizer(ABC, HFHubMixin):
                             time=note_time,
                             program=program,
                             desc=f"{note.duration} ticks",
-                            time_high_res=note.time,
                         )
                     )
             if self.config.use_microtimings:
@@ -1550,7 +1554,6 @@ class MusicTokenizer(ABC, HFHubMixin):
                         time=note_time,
                         program=program,
                         desc=f"{note.duration} ticks",
-                        time_high_res=note.time,
                     )
                 )
 
