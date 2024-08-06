@@ -25,15 +25,20 @@ class DataCollator:
     :param pad_on_left: if given True, it will pad the sequences on the left. This
         can be required when using some libraries expecting padding on left, for
         example when generating with Hugging Face Transformers. (default: ``False``)
-    :param copy_inputs_as_labels: will add a labels entry (``inputs_kwarg_name``) to
-        the batch (or replace the existing one), which is a copy to the input entry
-        (``labels_kwarg_name``). (default: ``False``)
+    :param copy_inputs_as_labels: will add a labels entry (``labels_kwarg_name``) to
+        the batch (or replace the existing one), which is a copy to the input entry:
+        ``decoder_inputs_kwarg_name`` if present in the batch else
+        ``labels_kwarg_name``. (default: ``False``)
     :param shift_labels: will shift inputs and labels for autoregressive
         training/teacher forcing. (default: ``False``)
     :param labels_pad_idx: padding id for labels. (default: -100)
     :param inputs_kwarg_name: name of dict / kwarg key for inputs.
         (default: ``"input_ids"``)
     :param labels_kwarg_name: name of dict / kwarg key for inputs.
+        (default: ``"labels"``)
+    :param decoder_inputs_kwarg_name: name of dict / kwarg key for decoder inputs.
+        This key is intended to be used for encoder-decoder (seq2seq) models, for the
+        decoder inputs while ``inputs_kwarg_name`` is for the encoder inputs.
         (default: ``"labels"``)
     """
 
@@ -46,6 +51,7 @@ class DataCollator:
         labels_pad_idx: int = -100,
         inputs_kwarg_name: str = "input_ids",
         labels_kwarg_name: str = "labels",
+        decoder_inputs_kwarg_name: str = "decoder_input_ids",
     ) -> None:
         self.pad_token = pad_token_id
         self.pad_on_left = pad_on_left
@@ -54,6 +60,7 @@ class DataCollator:
         self.labels_pad_idx = labels_pad_idx
         self.inputs_kwarg_name = inputs_kwarg_name
         self.labels_kwarg_name = labels_kwarg_name
+        self.decoder_inputs_kwarg_name = decoder_inputs_kwarg_name
 
     def __call__(self, batch: list[Mapping[str, Any]]) -> Mapping[str, LongTensor]:
         """
@@ -65,31 +72,33 @@ class DataCollator:
             tensors.
         """
         out_batch = {}
-        x, y = None, None
+        inputs = [None, None, None]  # x, x_dec, y
 
         # Figure out inputs
-        if self.inputs_kwarg_name in batch[0]:
-            x = [
-                sample[self.inputs_kwarg_name]
-                for sample in batch
-                if sample[self.inputs_kwarg_name] is not None
-                and len(sample[self.inputs_kwarg_name]) > 0
-            ]
+        for i, key in enumerate(
+            (
+                self.inputs_kwarg_name,
+                self.decoder_inputs_kwarg_name,
+                self.labels_kwarg_name,
+            )
+        ):
+            if key in batch[0]:
+                inputs[i] = [
+                    sample[key]
+                    for sample in batch
+                    if sample[key] is not None and len(sample[key]) > 0
+                ]
+        x, x_dec, y = inputs
 
-        # Figure out labels
-        if self.labels_kwarg_name in batch[0]:
-            y = [
-                sample[self.labels_kwarg_name]
-                for si, sample in enumerate(batch)
-                if sample[self.labels_kwarg_name] is not None
-                and len(batch[si][self.inputs_kwarg_name]) > 0  # x
-            ]
-        elif self.copy_inputs_as_labels:
-            y = deepcopy(x)
+        # Copy labels, decoder input has priority over x
+        if y is None and self.copy_inputs_as_labels:
+            y = deepcopy(x_dec if x_dec is not None else x)
 
         # Pad inputs / convert to Tensors
         if x is not None:
             x = _pad_batch(x, self.pad_token, self.pad_on_left)
+        if x_dec is not None:
+            x_dec = _pad_batch(x_dec, self.pad_token, self.pad_on_left)
         if y is not None:
             # If labels are sequences of tokens
             if y[0].dim() > 0:
@@ -99,7 +108,10 @@ class DataCollator:
 
         # Shift labels, otherwise it's handled by models
         if self.shift_labels:
-            x = x[:, :-1]
+            if x_dec is not None:
+                x_dec = x_dec[:, :-1]
+            else:
+                x = x[:, :-1]
             if y[0].dim() > 0:
                 y = y[:, 1:]
             else:
@@ -113,6 +125,8 @@ class DataCollator:
         # Add inputs / labels to output batch
         if x is not None:
             out_batch[self.inputs_kwarg_name] = x
+        if x_dec is not None:
+            out_batch[self.decoder_inputs_kwarg_name] = x_dec
         if y is not None:
             out_batch[self.labels_kwarg_name] = y
 
@@ -122,6 +136,11 @@ class DataCollator:
             if attention_mask.dim() == 3:
                 attention_mask = attention_mask[..., 0]  # (N,T,Z) --> (N,T)
             out_batch["attention_mask"] = attention_mask
+        if x_dec is not None:
+            attention_mask = (x_dec != self.pad_token).int()
+            if attention_mask.dim() == 3:
+                attention_mask = attention_mask[..., 0]  # (N,T,Z) --> (N,T)
+            out_batch["decoder_attention_mask"] = attention_mask
 
         return out_batch
 

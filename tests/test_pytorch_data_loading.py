@@ -184,17 +184,47 @@ def test_collator():
         max(seq_lengths) - 1,
     ]
 
+    # Encoder and decoder input ids
+    batch_from_dataloader = [
+        {
+            "input_ids": randint(0, 300, (seq_len,)),
+            "decoder_input_ids": randint(0, 300, (seq_len,)),
+        }
+        for seq_len in seq_lengths
+    ]
+    batch_collated = collator(batch_from_dataloader)
+    # seq_len - 1 as we shift labels
+    assert list(batch_collated["input_ids"].size()) == [
+        len(seq_lengths),
+        max(seq_lengths),
+    ]
+    assert list(batch_collated["decoder_input_ids"].size()) == [
+        len(seq_lengths),
+        max(seq_lengths) - 1,
+    ]
+
     # This time with labels already in batch and embed pooling, padding right
     collator.pad_on_left = False
     batch_from_dataloader = [
         {
             "input_ids": randint(0, 300, (seq_len, 5)),
+            "decoder_input_ids": randint(0, 300, (seq_len, 5)),
             "labels": randint(0, 300, (seq_len, 5)),
         }
         for seq_len in seq_lengths
     ]
     batch_collated = collator(batch_from_dataloader)
     assert list(batch_collated["input_ids"].size()) == [
+        len(seq_lengths),
+        max(seq_lengths),
+        5,
+    ]
+    assert list(batch_collated["decoder_input_ids"].size()) == [
+        len(seq_lengths),
+        max(seq_lengths) - 1,
+        5,
+    ]
+    assert list(batch_collated["labels"].size()) == [
         len(seq_lengths),
         max(seq_lengths) - 1,
         5,
