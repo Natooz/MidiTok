@@ -145,15 +145,9 @@ class PerTok(MusicTokenizer):
                         subres = (tpq//resolution * subdiv) if subdiv != 0 else 0
                         durations.append((beat, subres, tpq))
 
-        self.min_timeshift = min([(beat*res + subres) for beat, subres, res in durations])
+        # [120, 220, 330] -> timeshift of '25' should result in no timeshift (only microtime)
+        self.min_timeshift = int(min([(beat*res + subres) for beat, subres, res in durations]) * 0.5)
         
-        # for beat_range, resolution in self.config.beat_res.items():
-        #     start, end = beat_range
-        #     for beat in range(start, end):
-        #         for subdiv in range(resolution):
-        #             if not (beat == 0 and subdiv == 0):
-        #                 durations.add((beat, subdiv, resolution))
-
         return durations
 
     # def preprocess_score(self, score: Score) -> Score:
@@ -352,50 +346,77 @@ class PerTok(MusicTokenizer):
         """
         NOTES
         time_division = score.ticks_per_quarter
+        
+        1. Check time of next event (with memory of previous)
+        2. Check if a bar(s) token is needed
+            - 
+        
+        
         """
         print("--ADD TIME EVENTS--")
         # Add time events
         all_events = []
         previous_tick = 0
-        previous_note_end = 0
+        #previous_note_end = 0
         ticks_per_beat = compute_ticks_per_beat(TIME_SIGNATURE[1], time_division)
-        
-        
-
+        ticks_per_bar = ticks_per_beat * TIME_SIGNATURE[0]
+        curr_bar = 0
+  
         for event in events:
-            print(f"event: {event}")
-
-            time_delta = event.time - previous_tick
-
-            # Pitch Shift
-            # Only should be placed before 'Pitch' events
-            if time_delta >= self.min_timeshift and event.type_ == "Pitch":
-                # TODO: Okay to skip rests? Not used in PerTok
-                
-                ts_tuple = self.get_closest_duration_tuple(note.duration)
-                ts = ".".join(str(x) for x in ts_tuple)
+            
+            # Bar
+            bar_time = previous_tick
+            while event.time > ((curr_bar+1) * ticks_per_bar - self.min_timeshift):
+                bar_time += ticks_per_bar - (bar_time % ticks_per_bar) # tpq=220, time=20, so add 200 to get to next bar
                 
                 all_events.append(
                     Event(
-                        type_="TimeShift",
-                        value=ts_tuple,
-                        time=previous_tick,
-                        desc=f"timeshift {ts}",
+                        type_="BAR",
+                        value=None,
+                        time=bar_time,
+                        desc=f"Bar {bar_time}"
                     )
                 )
-                previous_tick += closest_timeshift
-
+                
+                curr_bar += 1
+                previous_tick = curr_bar * ticks_per_bar
+            
+            
             # Time Signature
             if event.type_ == "TimeSig":
                 ticks_per_beat = compute_ticks_per_beat(
                     int(event.value.split("/")[1]), time_division
                 )
+                ticks_per_bar = ticks_per_beat * int(event.value.split("/")[0])
+
+
+            time_delta = event.time - previous_tick
+            timeshift = 0
+            
+            # Pitch Shift
+            # Only should be placed before 'Pitch' events
+            if time_delta >= self.min_timeshift and event.type_ == "Pitch":
+                
+                ts_tuple = self.get_closest_duration_tuple(time_delta)
+                ts = ".".join(str(x) for x in ts_tuple)
+                
+                all_events.append(
+                    Event(
+                        type_="TimeShift",
+                        value=ts,
+                        time=event.time,
+                        desc=f"timeshift {ts}",
+                    )
+                )
+                timeshift = ts_tuple[0] * ts_tuple[-1] + ts_tuple[1]
+                previous_tick += timeshift
             
             all_events.append(event)
             
             # Microtiming
-            if self.use_microtiming:
-                microtiming = time_delta - closest_timeshift
+            # Right now hard-coded to come only after 'Pitch' tokens
+            if self.use_microtiming and event.type_ == "Pitch":
+                microtiming = time_delta - timeshift
                 closest_microtiming = int(
                     self.get_closest_array_value(
                         value=microtiming, array=self.microtiming_tick_values
@@ -405,13 +426,263 @@ class PerTok(MusicTokenizer):
                     Event(
                         type_="MicroTiming",
                         value=closest_microtiming,
-                        time=previous_tick,
+                        time=event.time,
                         desc=f"{closest_microtiming} microtiming",
                     )
                 )
-                
+
         return all_events
+    
+    def _tokens_to_score(
+        self,
+        tokens: TokSequence | list[TokSequence],
+        programs: list[tuple[int, bool]] | None = None,
+    ) -> Score:
+        r"""
+        Convert tokens (:class:`miditok.TokSequence`) into a ``symusic.Score``.
+
+        This is an internal method called by ``self.decode``, intended to be
+        implemented by classes inheriting :class:`miditok.MusicTokenizer`.
+
+        :param tokens: tokens to convert. Can be either a list of
+            :class:`miditok.TokSequence` or a list of :class:`miditok.TokSequence`s.
+        :param programs: programs of the tracks. If none is given, will default to
+            piano, program 0. (default: ``None``)
+        :return: the ``symusic.Score`` object.
+        """
+        # Unsqueeze tokens in case of one_token_stream
+        if self.config.one_token_stream_for_programs:  # ie single token seq
+            tokens = [tokens]
+        for i in range(len(tokens)):
+            tokens[i] = tokens[i].tokens
+        score = Score(self.time_division)
+        
+        mt_offset = 1 if self.use_microtiming else 0
+        vel_offset = (mt_offset + 1) if self.use_velocity else mt_offset
+        dur_offset = vel_offset + 1
+        
+        
+        # RESULTS
+        tracks: dict[int, Track] = {}
+        tempo_changes, time_signature_changes = [], []
+
+        def check_inst(prog: int) -> None:
+            if prog not in tracks:
+                tracks[prog] = Track(
+                    program=0 if prog == -1 else prog,
+                    is_drum=prog == -1,
+                    name="Drums" if prog == -1 else MIDI_INSTRUMENTS[prog]["name"],
+                )
+
+        def is_track_empty(track: Track) -> bool:
+            return (
+                len(track.notes) == len(track.controls) == len(track.pitch_bends) == 0
+            )
+
+        current_track = None  # used only when one_token_stream is False
+        for si, seq in enumerate(tokens):
+            # Set tracking variables
+            current_tick = 0
+            curr_bar = 0
+            current_program = 0
+            previous_note_end = 0
+            previous_pitch_onset = {prog: -128 for prog in self.config.programs}
+            previous_pitch_chord = {prog: -128 for prog in self.config.programs}
+            active_pedals = {}
+            ticks_per_beat = score.ticks_per_quarter
+            ticks_per_bar = ticks_per_beat * TIME_SIGNATURE[0]
+
+            # Set track / sequence program if needed
+            if not self.config.one_token_stream_for_programs:
+                is_drum = False
+                if programs is not None:
+                    current_program, is_drum = programs[si]
+                elif self.config.use_programs:
+                    for token in seq:
+                        tok_type, tok_val = token.split("_")
+                        if tok_type.startswith("Program"):
+                            current_program = int(tok_val)
+                            if current_program == -1:
+                                is_drum, current_program = True, 0
+                            break
+                current_track = Track(
+                    program=current_program,
+                    is_drum=is_drum,
+                    name="Drums"
+                    if current_program == -1
+                    else MIDI_INSTRUMENTS[current_program]["name"],
+                )
+            current_track_use_duration = (
+                current_program in self.config.use_note_duration_programs
+            )
+
+            # Decode tokens
+            for ti, token in enumerate(seq):
+                tok_type, tok_val = token.split("_")
                 
+                if tok_type == "BAR":
+                    curr_bar += 1
+                    current_tick += (ticks_per_bar * curr_bar) - current_tick
+                elif tok_type == "TimeShift":
+                    current_tick += self._tpb_tokens_to_ticks[ticks_per_beat][tok_val]
+                elif tok_type == "Rest":
+                    current_tick = max(previous_note_end, current_tick)
+                    current_tick += self._tpb_rests_to_ticks[ticks_per_beat][tok_val]
+                elif tok_type in [
+                    "Pitch",
+                    "PitchDrum",
+                    "PitchIntervalTime",
+                    "PitchIntervalChord",
+                ]:
+                    if tok_type in {"Pitch", "PitchDrum"}:
+                        pitch = int(tok_val)
+                    elif tok_type == "PitchIntervalTime":
+                        pitch = previous_pitch_onset[current_program] + int(tok_val)
+                    else:  # PitchIntervalChord
+                        pitch = previous_pitch_chord[current_program] + int(tok_val)
+                    if (
+                        not self.config.pitch_range[0]
+                        <= pitch
+                        <= self.config.pitch_range[1]
+                    ):
+                        continue
+
+                    # We update previous_pitch_onset and previous_pitch_chord even if
+                    # the try fails.
+                    if tok_type != "PitchIntervalChord":
+                        previous_pitch_onset[current_program] = pitch
+                    previous_pitch_chord[current_program] = pitch
+
+                    try:
+                        if self.use_microtiming:
+                            mt_type, mt = seq[ti + mt_offset].split("_")
+                            mt = int(mt)
+                        else:
+                            mt_type, mt = "MicroTiming", 0
+                        if self.config.use_velocities:
+                            vel_type, vel = seq[ti + vel_offset].split("_")
+                        else:
+                            vel_type, vel = "Velocity", DEFAULT_VELOCITY
+                        if current_track_use_duration:
+                            dur_type, dur = seq[ti + dur_offset].split("_")
+                        else:
+                            dur_type = "Duration"
+                            dur = int(
+                                self.config.default_note_duration * ticks_per_beat
+                            )
+                        if mt_type == "MicroTiming" and vel_type == "Velocity" and dur_type == "Duration":
+                            if isinstance(dur, str):
+                                dur = self._tpb_tokens_to_ticks[ticks_per_beat][dur]
+                            mt += current_tick
+                            new_note = Note(mt, dur, pitch, int(vel))
+                            if self.config.one_token_stream_for_programs:
+                                check_inst(current_program)
+                                tracks[current_program].notes.append(new_note)
+                            else:
+                                current_track.notes.append(new_note)
+                            previous_note_end = max(
+                                previous_note_end, current_tick + dur
+                            )
+                    except IndexError:
+                        # A well constituted sequence should not raise an exception
+                        # However with generated sequences this can happen, or if the
+                        # sequence isn't finished
+                        pass
+                elif tok_type == "Program":
+                    current_program = int(tok_val)
+                    current_track_use_duration = (
+                        current_program in self.config.use_note_duration_programs
+                    )
+                    if (
+                        not self.config.one_token_stream_for_programs
+                        and self.config.program_changes
+                    ):
+                        if current_program != -1:
+                            current_track.program = current_program
+                        else:
+                            current_track.program = 0
+                            current_track.is_drum = True
+                elif tok_type == "Tempo" and si == 0:
+                    tempo_changes.append(Tempo(current_tick, float(tok_val)))
+                elif tok_type == "TimeSig":
+                    num, den = self._parse_token_time_signature(tok_val)
+                    if si == 0:
+                        time_signature_changes.append(
+                            TimeSignature(current_tick, num, den)
+                        )
+                    ticks_per_beat = self._tpb_per_ts[den]
+                    ticks_per_bar = ticks_per_beat * num
+                elif tok_type == "Pedal":
+                    pedal_prog = (
+                        int(tok_val) if self.config.use_programs else current_program
+                    )
+                    if self.config.sustain_pedal_duration and ti + 1 < len(seq):
+                        if seq[ti + 1].split("_")[0] == "Duration":
+                            duration = self._tpb_tokens_to_ticks[ticks_per_beat][
+                                seq[ti + 1].split("_")[1]
+                            ]
+                            # Add instrument if it doesn't exist, can happen for the
+                            # first tokens
+                            new_pedal = Pedal(current_tick, duration)
+                            if self.config.one_token_stream_for_programs:
+                                check_inst(pedal_prog)
+                                tracks[pedal_prog].pedals.append(new_pedal)
+                            else:
+                                current_track.pedals.append(new_pedal)
+                    elif pedal_prog not in active_pedals:
+                        active_pedals[pedal_prog] = current_tick
+                elif tok_type == "PedalOff":
+                    pedal_prog = (
+                        int(tok_val) if self.config.use_programs else current_program
+                    )
+                    if pedal_prog in active_pedals:
+                        new_pedal = Pedal(
+                            active_pedals[pedal_prog],
+                            current_tick - active_pedals[pedal_prog],
+                        )
+                        if self.config.one_token_stream_for_programs:
+                            check_inst(pedal_prog)
+                            tracks[pedal_prog].pedals.append(
+                                Pedal(
+                                    active_pedals[pedal_prog],
+                                    current_tick - active_pedals[pedal_prog],
+                                )
+                            )
+                        else:
+                            current_track.pedals.append(new_pedal)
+                        del active_pedals[pedal_prog]
+                elif tok_type == "PitchBend":
+                    new_pitch_bend = PitchBend(current_tick, int(tok_val))
+                    if self.config.one_token_stream_for_programs:
+                        check_inst(current_program)
+                        tracks[current_program].pitch_bends.append(new_pitch_bend)
+                    else:
+                        current_track.pitch_bends.append(new_pitch_bend)
+
+                if tok_type in [
+                    "Program",
+                    "Tempo",
+                    "TimeSig",
+                    "Pedal",
+                    "PedalOff",
+                    "PitchBend",
+                    "Chord",
+                ]:
+                    previous_note_end = max(previous_note_end, current_tick)
+
+            # Add current_inst to the score and handle notes still active
+            if not self.config.one_token_stream_for_programs and not is_track_empty(
+                current_track
+            ):
+                score.tracks.append(current_track)
+
+        # Add global events to the score
+        if self.config.one_token_stream_for_programs:
+            score.tracks = list(tracks.values())
+        score.tempos = tempo_changes
+        score.time_signatures = time_signature_changes
+
+        return score
                 
             
     # def _create_track_events(self, track: Track, _: None = None) -> list[Event]:
@@ -547,119 +818,154 @@ class PerTok(MusicTokenizer):
         
         
 
-    def _tokens_to_score(
-        self,
-        tokens: TokSequence or list[TokSequence],
-        programs: list[tuple[int, bool]] or None = None,
-    ) -> Score:
-        # Unsqueeze tokens in case of one_token_stream
-        if self.one_token_stream:  # ie single token seq
-            tokens = [tokens]
-        for i in range(len(tokens)):
-            tokens[i] = tokens[i].tokens
-        score = Score(self.tpq)
+    # def _tokens_to_score(
+    #     self,
+    #     tokens: TokSequence or list[TokSequence],
+    #     programs: list[tuple[int, bool]] or None = None,
+    # ) -> Score:
+    #     r"""
+    #     Convert tokens (:class:`miditok.TokSequence`) into a ``symusic.Score``.
 
-        # RESULTS
-        instruments: dict[int, Track] = {}
+    #     This is an internal method called by ``self.decode``, intended to be
+    #     implemented by classes inheriting :class:`miditok.MusicTokenizer`.
 
-        def check_inst(prog: int) -> None:
-            if prog not in instruments:
-                instruments[prog] = Track(
-                    program=0 if prog == -1 else prog,
-                    is_drum=prog == -1,
-                    name="Drums" if prog == -1 else MIDI_INSTRUMENTS[prog]["name"],
-                )
+    #     :param tokens: tokens to convert. Can be either a list of
+    #         :class:`miditok.TokSequence` or a list of :class:`miditok.TokSequence`s.
+    #     :param programs: programs of the tracks. If none is given, will default to
+    #         piano, program 0. (default: ``None``)
+    #     :return: the ``symusic.Score`` object.
+    #     """
+        
+    #     # Unsqueeze tokens in case of one_token_stream
+    #     if self.one_token_stream:  # ie single token seq
+    #         tokens = [tokens]
+    #     for i in range(len(tokens)):
+    #         tokens[i] = tokens[i].tokens
+    #     score = Score(self.tpq)
 
-        current_program = 0
-        global_time = 0
-        n_bars = -1
-        ticks_per_bar = self.tpq * 4
+    #     # RESULTS
+    #     tracks: dict[int, Track] = {}
+    #     tempo_changes, time_signature_changes = [], []
 
-        for si, seq in enumerate(tokens):
-            # Set track / sequence program if needed
-            if not self.one_token_stream:
-                global_time = 0
-                n_bars = -1
-                is_drum = False
-                if programs is not None:
-                    current_program, is_drum = programs[si]
-                current_instrument = Track(
-                    program=current_program,
-                    is_drum=is_drum,
-                    name=(
-                        "Drums"
-                        if current_program == -1
-                        else MIDI_INSTRUMENTS[current_program]["name"]
-                    ),
-                )
+    #     def check_inst(prog: int) -> None:
+    #         if prog not in tracks:
+    #             tracks[prog] = Track(
+    #                 program=0 if prog == -1 else prog,
+    #                 is_drum=prog == -1,
+    #                 name="Drums" if prog == -1 else MIDI_INSTRUMENTS[prog]["name"],
+    #             )
+                
+    #     def is_track_empty(track: Track) -> bool:
+    #         return (
+    #             len(track.notes) == len(track.controls) == len(track.pitch_bends) == 0
+    #         )
 
-            for ti, token in enumerate(seq):
-                token_type, token_val = token.split("_")
-                # Advance clock forward to beginning of next bar
-                if token_type == "BAR":
-                    n_bars += 1
-                    global_time += (ticks_per_bar * n_bars) - global_time
+        
+    #     current_track = None
+    #     # ticks_per_bar = self.tpq * 4
 
-                elif token_type == "TimeShift":
-                    global_time += int(token_val)
+    #     for si, seq in enumerate(tokens):
+    #         # Set tracking variables
+    #         global_time = 0
+    #         n_bars = 0
+    #         current_program = 0
+        
+    #         if not self.config.one_token_stream_for_programs:
+    #             is_drum = False
+    #             if programs is not None:
+    #                 current_program, is_drum = programs[si]
+    #             elif self.config.use_programs:
+    #                 for token in seq:
+    #                     tok_type, tok_val = token.split("_")
+    #                     if tok_type.startswith("Program"):
+    #                         current_program = int(tok_val)
+    #                         if current_program == -1:
+    #                             is_drum, current_program = True, 0
+    #                         break
+    #             current_track = Track(
+    #                 program=current_program,
+    #                 is_drum=is_drum,
+    #                 name="Drums"
+    #                 if current_program == -1
+    #                 else MIDI_INSTRUMENTS[current_program]["name"],
+    #             )
+    #         current_track_use_duration = (
+    #             current_program in self.config.use_note_duration_programs
+    #         )
+            
+    #         # Decode tokens
+    #         for ti, token in enumerate(seq):
+    #             tok_type, tok_val = token.split("_")
+    #             # Advance clock forward to beginning of next bar
+    #             if tok_type == "BAR":
+    #                 n_bars += 1
+    #                 global_time += (ticks_per_bar * n_bars) - global_time
 
-                elif token_type in ["Pitch", "PitchDrum"]:
-                    try:
-                        counter = ti
-                        pitch = int(seq[counter].split("_")[1])
+    #             elif tok_type == "TimeShift":
+    #                 global_time += self._tpb_tokens_to_ticks[ticks_per_beat][tok_val] #int(token_val)
 
-                        # Duration
-                        if self.use_duration and (
-                            seq[counter + 1].split("_")[0] == "Duration"
-                        ):
-                            counter += 1
-                            duration = int(seq[counter].split("_")[1])
-                        else:
-                            duration = int(self.tpq)
+    #             elif tok_type in [
+    #                 "Pitch",
+    #                 "PitchDrum",
+    #                 "PitchIntervalTime",
+    #                 "PitchIntervalChord",
+    #             ]:
+    #                 try:
+    #                     counter = ti
+    #                     pitch = int(seq[counter].split("_")[1])
 
-                        # Velocity
-                        if (
-                            self.use_velocity
-                            and seq[counter + 1].split("_")[0] == "Velocity"
-                        ):
-                            counter += 1
-                            velocity = int(seq[counter].split("_")[1])
-                        else:
-                            velocity = 100
+    #                     # Duration
+    #                     if current_track_use_duration and (
+    #                         seq[counter + 1].split("_")[0] == "Duration"
+    #                     ):
+    #                         counter += 1
+    #                         duration = int(seq[counter].split("_")[1])
+    #                     else:
+    #                         duration = int(self.tpq)
 
-                        # Microtiming
-                        if (
-                            self.use_microtiming
-                            and seq[counter + 1].split("_")[0] == "MicroTiming"
-                        ):
-                            counter += 1
-                            microtiming = int(seq[counter].split("_")[1])
-                        else:
-                            microtiming = 0
+    #                     # Velocity
+    #                     if (
+    #                         self.use_velocity
+    #                         and seq[counter + 1].split("_")[0] == "Velocity"
+    #                     ):
+    #                         counter += 1
+    #                         velocity = int(seq[counter].split("_")[1])
+    #                     else:
+    #                         velocity = 100
 
-                        time = max(int(global_time + microtiming), 0)
-                        new_note = Note(time, duration, pitch, velocity)
-                        if self.one_token_stream:
-                            check_inst(current_program)
-                            instruments[current_program].notes.append(new_note)
-                        else:
-                            current_instrument.notes.append(new_note)
+    #                     # Microtiming
+    #                     if (
+    #                         self.use_microtiming
+    #                         and seq[counter + 1].split("_")[0] == "MicroTiming"
+    #                     ):
+    #                         counter += 1
+    #                         microtiming = int(seq[counter].split("_")[1])
+    #                     else:
+    #                         microtiming = 0
 
-                    except IndexError:
-                        # A well constituted sequence should not raise an exception,
-                        # however with generated sequences this can happen, or if the
-                        # sequence isn't finished
-                        pass
+    #                     time = max(int(global_time + microtiming), 0)
+    #                     new_note = Note(time, duration, pitch, velocity)
+    #                     if self.one_token_stream:
+    #                         check_inst(current_program)
+    #                         tracks[current_program].notes.append(new_note)
+    #                     else:
+    #                         current_track.notes.append(new_note)
 
-                elif token_type == "Program":
-                    current_program = int(token_val)
+    #                 except IndexError:
+    #                     # A well constituted sequence should not raise an exception,
+    #                     # however with generated sequences this can happen, or if the
+    #                     # sequence isn't finished
+    #                     pass
 
-            # Add current_inst to score and handle notes still active
-            if not self.one_token_stream:
-                score.tracks.append(current_instrument)
+    #             elif tok_type == "Program":
+    #                 current_program = int(tok_val)
 
-        # create scoreFile
-        if self.one_token_stream:
-            score.tracks = list(instruments.values())
+    #         # Add current_inst to score and handle notes still active
+    #         if not self.one_token_stream:
+    #             score.tracks.append(current_track)
 
-        return score
+    #     # create scoreFile
+    #     if self.one_token_stream:
+    #         score.tracks = list(tracks.values())
+
+    #     return score

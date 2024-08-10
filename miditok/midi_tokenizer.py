@@ -489,7 +489,6 @@ class MusicTokenizer(ABC, HFHubMixin):
                 [TimeSignature(0, *TIME_SIGNATURE)]
             )
             new_tpq = self.config.max_num_pos_per_beat
-            print(f"new tpq: {new_tpq}")
 
         # Resample time if needed (not inplace) and attribute preprocessed time sig.
         if score.ticks_per_quarter != new_tpq:
@@ -1216,9 +1215,7 @@ class MusicTokenizer(ABC, HFHubMixin):
                     )
                 tok_sequence.append(TokSequence(events=all_events[i]))
                 self.complete_sequence(tok_sequence[-1])
-        print(f"\n--FINAL TOK SEQUENCE--")
-        for tok in tok_sequence[0].tokens:
-            print(f"\n{tok}")
+                
         return tok_sequence
 
     def _sort_events(self, events: list[Event]) -> None:
@@ -1492,7 +1489,7 @@ class MusicTokenizer(ABC, HFHubMixin):
                     )
                     events.append(duration_event)
             
-            if self.config.use_microtiming:
+            #if self.config.use_microtiming:
                 
 
         return events
