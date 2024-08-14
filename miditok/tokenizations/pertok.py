@@ -66,30 +66,27 @@ class PerTok(MusicTokenizer):
         tokenizer_config: TokenizerConfig = None,
         params: str or Path or None = None,
     ) -> None:
+        
         super().__init__(tokenizer_config, params)
-        self.test_vocab = self.vocab
+        if self.config.res_microtiming is None:
+            raise ValueError("Tokenizer config must have a value for res_microtiming")
 
     def _tweak_config_before_creating_voc(self) -> None:
 
-        # Microtiming
         # TPQ value of maximum range of microtiming tokens
-        self.use_microtiming = self.config.use_microtiming = True
+        self.use_microtiming = self.config.additional_params['use_microtiming']
         
+        if self.use_microtiming:
+            mt_keys = ['max_microtiming_shift', 'num_microtiming_bins']
+            if missing := set(mt_keys) - set(self.config.additional_params.keys()):
+                raise ValueError(
+                    f"TokenizerConfig is missing required keys: {', '.join(missing)}"
+                )
+            
         self.max_mt_shift = (
-            self.config.max_microtiming_shift 
+            self.config.additional_params['max_microtiming_shift']
             * self.config.res_microtiming
         )
-        
-        self.use_velocity = self.config.use_velocities
-        
-        self.config.use_chords = False
-        self.config.use_rests = False
-        self.config.use_tempos = False
-        self.config.use_time_signatures = False
-        self.config.use_sustain_pedals = False
-        self.config.use_pitch_bends = False
-        self.config.use_pitch_intervals = False
-        self.config.program_changes = False
 
     def create_timeshift_tick_values(self) -> NDArray:
         """
@@ -131,19 +128,6 @@ class PerTok(MusicTokenizer):
     def get_closest_array_value(
         self, value: int | float, array: NDArray
     ) -> int | float:
-        """
-        Find the closest value from a given numpy array.
-
-        Args:
-        ----
-            value (float | int): The input value to query
-            array (NDArray): Numpy array of possible values
-
-        Returns:
-        -------
-            int | float: The closest value to the input
-
-        """
         return array[np.abs(array - value).argmin()]
 
     def get_closest_duration_tuple(self, target):
@@ -151,7 +135,7 @@ class PerTok(MusicTokenizer):
 
 
     def _create_base_vocabulary(self) -> list[str]:
-        vocab = ["BAR_None"]
+        vocab = ["Bar_None"]
 
         # NoteOn/NoteOff/Velocity
         self.timeshift_tick_values = self.create_timeshift_tick_values()
@@ -169,8 +153,8 @@ class PerTok(MusicTokenizer):
             ]
         
         # Microtiming
-        if self.use_microtiming:
-            mt_bins = self.config.num_microtiming_bins
+        if self.config.additional_params['use_microtiming']:
+            mt_bins = self.config.additional_params['num_microtiming_bins']
             self.microtiming_tick_values = np.linspace(
                 -self.max_mt_shift, self.max_mt_shift, mt_bins + 1, dtype=np.intc
             )
@@ -180,14 +164,8 @@ class PerTok(MusicTokenizer):
                 for microtiming in self.microtiming_tick_values
             ]
 
-        self._add_additional_tokens_to_vocab_list(vocab)
 
-        return vocab
-
-    def _add_note_tokens_to_vocab_list(self, vocab: list[str]) -> None:
-        vocab += [f"Pitch_{i}" for i in range(*self.config.pitch_range)]
-        if self.use_velocity:
-            vocab += [f"Velocity_{i}" for i in self.velocities]
+        return list(dict.fromkeys(vocab))
 
     def _create_token_types_graph(self) -> dict[str, list[str]]:
         r"""
@@ -251,7 +229,7 @@ class PerTok(MusicTokenizer):
                 
                 all_events.append(
                     Event(
-                        type_="BAR",
+                        type_="Bar",
                         value=None,
                         time=bar_time,
                         desc=f"Bar {bar_time}"
@@ -338,7 +316,7 @@ class PerTok(MusicTokenizer):
         score = Score(self.time_division)
         
         mt_offset = 1 if self.use_microtiming else 0
-        vel_offset = (mt_offset + 1) if self.use_velocity else mt_offset
+        vel_offset = (mt_offset + 1) if self.config.use_velocities else mt_offset
         dur_offset = vel_offset + 1
         
         
@@ -400,7 +378,7 @@ class PerTok(MusicTokenizer):
             for ti, token in enumerate(seq):
                 tok_type, tok_val = token.split("_")
                 
-                if tok_type == "BAR":
+                if tok_type == "Bar":
                     curr_bar += 1
                     current_tick += (ticks_per_bar * curr_bar) - current_tick
                 elif tok_type == "TimeShift":

@@ -691,8 +691,9 @@ class MusicTokenizer(ABC, HFHubMixin):
         # Resample duration values if NoteOff, otherwise adjust to the vocab
         program = -1 if track.is_drum else track.program
         if program in self.config.use_note_duration_programs:
-            if not self._note_on_off and ticks_per_beat is not None and not self.config.use_microtiming:
-                self._adjust_durations(note_soa, ticks_per_beat)
+            if not self._note_on_off and ticks_per_beat is not None:
+                if self.config.res_microtiming is not None:
+                    self._adjust_durations(note_soa, ticks_per_beat)
             elif resampling_factors is not None:
                 note_soa["duration"] = self._adjust_time_to_tpb(
                     note_soa["duration"], resampling_factors, min_duration
@@ -1481,13 +1482,14 @@ class MusicTokenizer(ABC, HFHubMixin):
                         )
                     )
                 else:
-                    duration_event = self._create_duration_event(
-                        note, program, ticks_per_beat, tpb_idx
+                    events.append(
+                        self._create_duration_event(
+                            note, 
+                            program, 
+                            ticks_per_beat, 
+                            tpb_idx
+                        )
                     )
-                    events.append(duration_event)
-            
-            #if self.config.use_microtiming:
-                
 
         return events
     

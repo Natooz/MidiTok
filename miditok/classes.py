@@ -65,10 +65,7 @@ from .constants import (
     USE_TEMPOS,
     USE_TIME_SIGNATURE,
     USE_VELOCITIES,
-    USE_MICROTIMING,
     RES_MICROTIMING,
-    MAX_MICROTIMING_SHIFT,
-    NUM_MICROTIMING_BINS
 )
 
 if TYPE_CHECKING:
@@ -592,10 +589,7 @@ class TokenizerConfig:
         special_tokens: Sequence[str] = SPECIAL_TOKENS,
         encode_ids_split: Literal["bar", "beat", "no"] = ENCODE_IDS_SPLIT,
         use_velocities: bool = USE_VELOCITIES,
-        use_microtiming: bool = USE_MICROTIMING, # NEW
-        res_microtiming: int = RES_MICROTIMING, # NEW
-        max_microtiming_shift: int = MAX_MICROTIMING_SHIFT,
-        num_microtiming_bins: int = NUM_MICROTIMING_BINS,
+        res_microtiming: int = RES_MICROTIMING,
         use_note_duration_programs: Sequence[int] = USE_NOTE_DURATION_PROGRAMS,
         use_chords: bool = USE_CHORDS,
         use_rests: bool = USE_RESTS,
@@ -686,10 +680,7 @@ class TokenizerConfig:
         self.encode_ids_split = encode_ids_split
         
         # Microtiming
-        self.use_microtiming: bool = use_microtiming
         self.res_microtiming: int = res_microtiming
-        self.max_microtiming_shift: float = max_microtiming_shift
-        self.num_microtiming_bins: int = num_microtiming_bins
 
         # Special tokens
         self.special_tokens: list[str] = []
@@ -845,7 +836,7 @@ class TokenizerConfig:
         self.ac_repetition_track_num_consec_bars = ac_repetition_track_num_consec_bars
 
         # Additional params
-        #self.res_microtiming = kwargs
+        self.additional_params = kwargs
 
     @property
     def max_num_pos_per_beat(self) -> int:
@@ -855,7 +846,7 @@ class TokenizerConfig:
         :return: maximum number of positions per ticks covered by the config.
         """
         # If using Microtiming, the entire sequence needs to be processed at full resolution
-        if self.use_microtiming:
+        if self.res_microtiming is not None:
             return self.res_microtiming
 
         return max(self.beat_res.values())

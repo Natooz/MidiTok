@@ -34,10 +34,7 @@ BEAT_RES = {(0, 4): 8, (4, 12): 4}  # samples per beat
 # number of velocity bins, velocities values from 0 to 127 will be quantized
 NUM_VELOCITIES = 32
 # tpq microtiming resolution, in case USE_MICROTMING is True
-USE_MICROTIMING = False
 RES_MICROTIMING = 480
-MAX_MICROTIMING_SHIFT = 0.125
-NUM_MICROTIMING_BINS = 30
 # default special tokens
 BOS_TOKEN_NAME = "BOS"
 EOS_TOKEN_NAME = "EOS"
