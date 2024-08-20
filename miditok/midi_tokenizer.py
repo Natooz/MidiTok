@@ -490,23 +490,7 @@ class MusicTokenizer(ABC, HFHubMixin):
             new_tpq = self.config.max_num_pos_per_beat
 
         # Resample time if needed (not inplace) and attribute preprocessed time sig.
-        if score.ticks_per_quarter != new_tpq:
-            # Times of time signatures copy need to be resampled too
-            time_signatures_soa = time_signatures_copy.numpy()
-            time_signatures_soa["time"] = (
-                time_signatures_soa["time"] * (new_tpq / score.ticks_per_quarter)
-            ).astype(np.int32)
-
-            score = score.resample(new_tpq, min_dur=1)
-            score.time_signatures = TimeSignature.from_numpy(
-                **time_signatures_soa,
-            )
-        # Otherwise we do a copy in order to make sure no inplace operation is performed
-        # on the provided Score object.
-        # We make a copy here instead of at beginning as resample also makes a copy.
-        else:
-            score = score.copy()
-            score.time_signatures = time_signatures_copy
+        score = self._resample_score(score, new_tpq, time_signatures_copy)
 
         # Merge instruments of the same program / inst before preprocessing them.
         # This allows to avoid potential duplicated notes in some multitrack settings
@@ -592,6 +576,36 @@ class MusicTokenizer(ABC, HFHubMixin):
         # not used by MidiTok (yet)
 
         return score
+    
+    def _resample_score(
+        self, 
+        score: Score,
+        new_tpq: int, 
+        time_signatures_copy: TimeSignatureTickList
+    ) -> Score:
+        
+        if score.ticks_per_quarter != new_tpq:
+            # Times of time signatures copy need to be resampled too
+            time_signatures_soa = time_signatures_copy.numpy()
+            time_signatures_soa["time"] = (
+                time_signatures_soa["time"] * (new_tpq / score.ticks_per_quarter)
+            ).astype(np.int32)
+
+            score = score.resample(new_tpq, min_dur=1)
+            score.time_signatures = TimeSignature.from_numpy(
+                **time_signatures_soa,
+            )
+        # Otherwise we do a copy in order to make sure no inplace operation is performed
+        # on the provided Score object.
+        # We make a copy here instead of at beginning as resample also makes a copy.
+        else:
+            score = score.copy()
+            score.time_signatures = time_signatures_copy
+        
+        return score
+        
+        
+        
 
     def _filter_unsupported_time_signatures(
         self, time_signatures: TimeSignatureTickList
@@ -692,7 +706,6 @@ class MusicTokenizer(ABC, HFHubMixin):
         program = -1 if track.is_drum else track.program
         if program in self.config.use_note_duration_programs:
             if not self._note_on_off and ticks_per_beat is not None:
-                if self.config.res_microtiming is not None:
                     self._adjust_durations(note_soa, ticks_per_beat)
             elif resampling_factors is not None:
                 note_soa["duration"] = self._adjust_time_to_tpb(

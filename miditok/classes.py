@@ -65,7 +65,6 @@ from .constants import (
     USE_TEMPOS,
     USE_TIME_SIGNATURE,
     USE_VELOCITIES,
-    RES_MICROTIMING,
 )
 
 if TYPE_CHECKING:
@@ -589,7 +588,6 @@ class TokenizerConfig:
         special_tokens: Sequence[str] = SPECIAL_TOKENS,
         encode_ids_split: Literal["bar", "beat", "no"] = ENCODE_IDS_SPLIT,
         use_velocities: bool = USE_VELOCITIES,
-        res_microtiming: int = RES_MICROTIMING,
         use_note_duration_programs: Sequence[int] = USE_NOTE_DURATION_PROGRAMS,
         use_chords: bool = USE_CHORDS,
         use_rests: bool = USE_RESTS,
@@ -678,9 +676,6 @@ class TokenizerConfig:
         self.num_velocities: int = num_velocities
         self.remove_duplicated_notes = remove_duplicated_notes
         self.encode_ids_split = encode_ids_split
-        
-        # Microtiming
-        self.res_microtiming: int = res_microtiming
 
         # Special tokens
         self.special_tokens: list[str] = []
@@ -845,9 +840,6 @@ class TokenizerConfig:
 
         :return: maximum number of positions per ticks covered by the config.
         """
-        # If using Microtiming, the entire sequence needs to be processed at full resolution
-        if self.res_microtiming is not None:
-            return self.res_microtiming
 
         return max(self.beat_res.values())
 
