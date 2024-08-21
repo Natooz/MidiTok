@@ -539,6 +539,7 @@ class MusicTokenizer(ABC, HFHubMixin):
             ) or (self.config.use_programs and program not in self.config.programs):
                 del score.tracks[t]
                 continue
+
             # Preprocesses notes
             if len(score.tracks[t].notes) > 0:
                 self._preprocess_notes(
@@ -576,22 +577,22 @@ class MusicTokenizer(ABC, HFHubMixin):
         # not used by MidiTok (yet)
 
         return score
-    
+
     def _resample_score(
-        self, 
+        self,
         score: Score,
-        new_tpq: int, 
-        time_signatures_copy: TimeSignatureTickList
+        _new_tpq: int,
+        _time_signatures_copy: TimeSignatureTickList
     ) -> Score:
-        
-        if score.ticks_per_quarter != new_tpq:
+
+        if score.ticks_per_quarter != _new_tpq:
             # Times of time signatures copy need to be resampled too
-            time_signatures_soa = time_signatures_copy.numpy()
+            time_signatures_soa = _time_signatures_copy.numpy()
             time_signatures_soa["time"] = (
-                time_signatures_soa["time"] * (new_tpq / score.ticks_per_quarter)
+                time_signatures_soa["time"] * (_new_tpq / score.ticks_per_quarter)
             ).astype(np.int32)
 
-            score = score.resample(new_tpq, min_dur=1)
+            score = score.resample(_new_tpq, min_dur=1)
             score.time_signatures = TimeSignature.from_numpy(
                 **time_signatures_soa,
             )
@@ -600,12 +601,12 @@ class MusicTokenizer(ABC, HFHubMixin):
         # We make a copy here instead of at beginning as resample also makes a copy.
         else:
             score = score.copy()
-            score.time_signatures = time_signatures_copy
-        
+            score.time_signatures = _time_signatures_copy
+
         return score
-        
-        
-        
+
+
+
 
     def _filter_unsupported_time_signatures(
         self, time_signatures: TimeSignatureTickList
@@ -706,7 +707,7 @@ class MusicTokenizer(ABC, HFHubMixin):
         program = -1 if track.is_drum else track.program
         if program in self.config.use_note_duration_programs:
             if not self._note_on_off and ticks_per_beat is not None:
-                    self._adjust_durations(note_soa, ticks_per_beat)
+                self._adjust_durations(note_soa, ticks_per_beat)
             elif resampling_factors is not None:
                 note_soa["duration"] = self._adjust_time_to_tpb(
                     note_soa["duration"], resampling_factors, min_duration
@@ -1227,7 +1228,7 @@ class MusicTokenizer(ABC, HFHubMixin):
                     )
                 tok_sequence.append(TokSequence(events=all_events[i]))
                 self.complete_sequence(tok_sequence[-1])
-                
+
         return tok_sequence
 
     def _sort_events(self, events: list[Event]) -> None:
@@ -1471,7 +1472,6 @@ class MusicTokenizer(ABC, HFHubMixin):
 
             # Duration / NoteOff
             if use_durations:
-                #TODO: Should this first part be in the duration fn?
                 if self._note_on_off:
                     if self.config.use_programs and not self.config.program_changes:
                         events.append(
@@ -1497,36 +1497,36 @@ class MusicTokenizer(ABC, HFHubMixin):
                 else:
                     events.append(
                         self._create_duration_event(
-                            note, 
-                            program, 
-                            ticks_per_beat, 
-                            tpb_idx
+                            note=note,
+                            _program=program,
+                            _ticks_per_beat=ticks_per_beat,
+                            _tpb_idx=tpb_idx
                         )
                     )
 
         return events
-    
+
     def _create_duration_event(
         self,
         note: Note,
-        program: int,
-        ticks_per_beat: np.ndarray,
-        tpb_idx: int
+        _program: int,
+        _ticks_per_beat: np.ndarray,
+        _tpb_idx: int
     ) -> Event:
-        
-        while note.time >= ticks_per_beat[tpb_idx, 0]:
-            tpb_idx += 1
-        dur = self._tpb_ticks_to_tokens[ticks_per_beat[tpb_idx, 1]][
+
+        while note.time >= _ticks_per_beat[_tpb_idx, 0]:
+            _tpb_idx += 1
+        dur = self._tpb_ticks_to_tokens[_ticks_per_beat[_tpb_idx, 1]][
             note.duration
         ]
         return Event(
             type_="Duration",
             value=dur,
             time=note.start,
-            program=program,
+            program=_program,
             desc=f"{note.duration} ticks",
         )
-        
+
     @staticmethod
     def _insert_program_change_events(events: list[Event]) -> None:
         """

@@ -697,7 +697,6 @@ class TokenizerConfig:
 
         # Additional token types params, enabling additional token types
         self.use_velocities: bool = use_velocities
-        
         self.use_note_duration_programs: set[int] = set(use_note_duration_programs)
         self.use_chords: bool = use_chords
         self.use_rests: bool = use_rests
@@ -840,7 +839,6 @@ class TokenizerConfig:
 
         :return: maximum number of positions per ticks covered by the config.
         """
-
         return max(self.beat_res.values())
 
     @property
