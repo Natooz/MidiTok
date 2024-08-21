@@ -59,6 +59,7 @@ class PerTok(MusicTokenizer):
     max_microtiming_shift: Maximum timeshift in microtiming tokens
     num_microtiming_bins: Total number of microtiming tokens
 
+
     """
 
     def __init__(
@@ -70,13 +71,20 @@ class PerTok(MusicTokenizer):
         if "ticks_per_quarter" not in self.config.additional_params:
             msg = "Tokenizer config must have a value for ticks_per_quarter"
             raise ValueError(msg)
+        if "ticks_per_quarter" not in self.config.additional_params:
+            msg = "Tokenizer config must have a value for ticks_per_quarter"
+            raise ValueError(msg)
 
     def _tweak_config_before_creating_voc(self) -> None:
         self.tpq = self.config.additional_params["ticks_per_quarter"]
 
+        self.tpq = self.config.additional_params["ticks_per_quarter"]
+
         # TPQ value of maximum range of microtiming tokens
         self.use_microtiming = self.config.additional_params["use_microtiming"]
+        self.use_microtiming = self.config.additional_params["use_microtiming"]
         if self.use_microtiming:
+            mt_keys = ["max_microtiming_shift", "num_microtiming_bins"]
             mt_keys = ["max_microtiming_shift", "num_microtiming_bins"]
             if missing := set(mt_keys) - set(self.config.additional_params.keys()):
                 msg = f"TokenizerConfig is missing required keys: {', '.join(missing)}"
