@@ -579,12 +579,8 @@ class MusicTokenizer(ABC, HFHubMixin):
         return score
 
     def _resample_score(
-        self,
-        score: Score,
-        _new_tpq: int,
-        _time_signatures_copy: TimeSignatureTickList
+        self, score: Score, _new_tpq: int, _time_signatures_copy: TimeSignatureTickList
     ) -> Score:
-
         if score.ticks_per_quarter != _new_tpq:
             # Times of time signatures copy need to be resampled too
             time_signatures_soa = _time_signatures_copy.numpy()
@@ -604,9 +600,6 @@ class MusicTokenizer(ABC, HFHubMixin):
             score.time_signatures = _time_signatures_copy
 
         return score
-
-
-
 
     def _filter_unsupported_time_signatures(
         self, time_signatures: TimeSignatureTickList
@@ -1500,25 +1493,18 @@ class MusicTokenizer(ABC, HFHubMixin):
                             note=note,
                             _program=program,
                             _ticks_per_beat=ticks_per_beat,
-                            _tpb_idx=tpb_idx
+                            _tpb_idx=tpb_idx,
                         )
                     )
 
         return events
 
     def _create_duration_event(
-        self,
-        note: Note,
-        _program: int,
-        _ticks_per_beat: np.ndarray,
-        _tpb_idx: int
+        self, note: Note, _program: int, _ticks_per_beat: np.ndarray, _tpb_idx: int
     ) -> Event:
-
         while note.time >= _ticks_per_beat[_tpb_idx, 0]:
             _tpb_idx += 1
-        dur = self._tpb_ticks_to_tokens[_ticks_per_beat[_tpb_idx, 1]][
-            note.duration
-        ]
+        dur = self._tpb_ticks_to_tokens[_ticks_per_beat[_tpb_idx, 1]][note.duration]
         return Event(
             type_="Duration",
             value=dur,
