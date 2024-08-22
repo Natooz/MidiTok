@@ -5,8 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import numpy as np
-from symusic import Note, Score, TimeSignature, Track
-from symusic.core import Pedal, PitchBend, Tempo, TimeSignatureTickList
+from symusic import Note, Pedal, PitchBend, Score, Tempo, TimeSignature, Track
 
 from miditok.classes import Event, TokenizerConfig, TokSequence
 from miditok.constants import DEFAULT_VELOCITY, MIDI_INSTRUMENTS, TIME_SIGNATURE
@@ -17,49 +16,65 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from numpy.typing import NDArray
+    from symusic.core import TimeSignatureTickList
 
 
 class PerTok(MusicTokenizer):
     r"""
     PerTok: Performance Tokenizer.
 
-    Designed to capture the full spectrum of rhythmic values (16ths, 32nds,
-    various denominations of triplets/etc.) in addition to velocity
-    and microtiming performance characteristics.
+    Created by Lemonaide
+    https://www.lemonaide.ai/
+
+    Designed to capture the full spectrum of rhythmic values
+    (16ths, 32nds, various denominations of triplets/etc.)
+    in addition to velocity and microtiming performance characteristics.
     It aims to achieve this while minimizing both vocabulary size and sequence length.
-    Each note is characterized by 4-5 tokens:
 
-    Timeshift (expressed in absolute ticks at score granularity*)
+    Notes are encoded by 2-5 tokens:
+
+    TimeShift
     Pitch
-    Velocity
-    Microtiming (also in score granularity)
-    Optional: Duration (removed for drums to reduce seq. length)
+    Velocity (optional)
+    MicroTiming (optional)
+    Duration (optional)
 
-    *'Timeshift' tokens are expressed as the quantized time value, as one would expect
-    in a sheet music score.
-    E.g. at 480 ticks per quarter note, a 16th note would be
-    expressed as 'Timeshift_120'.
-    The microtiming shift is then characterized as the subtle deviation from
-    this quantized value.
-    E.g. for a slightly delayed 1/8th note:
-    'Timeshift_240', 'Pitch_60', 'Velocity_100', 'Microtiming_12'
+    'Timeshift' tokens are expressed as the nearest quantized value
+    based upon 'beat_res' parameters.
+    The microtiming shift is then characterized as the remainder from
+    this quantized value. Timeshift and MicroTiming are represented
+    in the full ticks-per-quarter (tpq) resolution, e.g. 480 tpq.
 
     Additionally, 'Bar' tokens are inserted at the start of each new measure.
-    This helps further reduceseq. length and
-    theoretically reduces the 'timing drift' models can develop at longer seq. lengths.
+    This helps further reduce seq. length and
+    potentially reduces the 'timing drift'
+    models can develop at longer seq. lengths.
 
     New TokenizerConfig Options:
 
-    beat_grids: now allows multiple overlapping values
-    use_duration: include duration tokens
-    use_velocity: include velocity tokens
-    use_microtiming: include microtiming tokens
-    granularity: Granularity of rhythm as measured per quarter note,
-    e.g. 480 ticks-per-quarter (tpq).
-    max_microtiming_shift: Maximum timeshift in microtiming tokens
-    num_microtiming_bins: Total number of microtiming tokens
+    beat_res: now allows multiple, overlapping values
+    ticks_per_quarter: resolution of the MIDI timing data
+    use_microtiming: inclusion of MicroTiming tokens
+    max_microtiming_shift: float value of the farthest distance of MicroTiming shifts
+    num_microtiming_bins: total number of MicroTiming tokens
 
+    Example Tokenizer Config:
 
+    TOKENIZER_PARAMS = {
+    "pitch_range": (21, 109),
+    "beat_res": {(0, 4): 4, (0, 4): 3},
+    "special_tokens": ["PAD", "BOS", "EOS", "MASK"],
+    "use_chords": False,
+    "use_rests": False,
+    "use_tempos": False,
+    "use_time_signatures": True,
+    "use_programs": False,
+    "use_microtiming": True,
+    "ticks_per_quarter": 320,
+    "max_microtiming_shift": 0.125,
+    "num_microtiming_bins": 30,
+    }
+    config = TokenizerConfig(**TOKENIZER_PARAMS)
     """
 
     def __init__(
@@ -85,7 +100,6 @@ class PerTok(MusicTokenizer):
         self.use_microtiming = self.config.additional_params["use_microtiming"]
         if self.use_microtiming:
             mt_keys = ["max_microtiming_shift", "num_microtiming_bins"]
-            mt_keys = ["max_microtiming_shift", "num_microtiming_bins"]
             if missing := set(mt_keys) - set(self.config.additional_params.keys()):
                 msg = f"TokenizerConfig is missing required keys: {', '.join(missing)}"
                 raise ValueError(msg)
@@ -94,7 +108,45 @@ class PerTok(MusicTokenizer):
             self.config.additional_params["max_microtiming_shift"] * self.tpq
         )
 
-    # Functions that override parent MusicTokenizer class
+    def _create_base_vocabulary(self) -> list[str]:
+        vocab = ["Bar_None"]
+
+        # NoteOn/NoteOff/Velocity
+        self.timeshift_tick_values = self.create_timeshift_tick_values()
+        self._add_note_tokens_to_vocab_list(vocab)
+
+        # TimeShift
+        vocab += [
+            f"TimeShift_{self._duration_tuple_to_str(duration)}"
+            for duration in self.durations
+        ]
+
+        # Duration
+        if any(self.config.use_note_duration_programs):
+            vocab += [
+                f"Duration_{self._duration_tuple_to_str(duration)}"
+                for duration in self.durations
+            ]
+
+        # Microtiming
+        if self.config.additional_params["use_microtiming"]:
+            mt_bins = self.config.additional_params["num_microtiming_bins"]
+            self.microtiming_tick_values = np.linspace(
+                -self.max_mt_shift, self.max_mt_shift, mt_bins + 1, dtype=np.intc
+            )
+
+            vocab += [
+                f"MicroTiming_{microtiming!s}"
+                for microtiming in self.microtiming_tick_values
+            ]
+
+        return list(dict.fromkeys(vocab))
+
+    # Methods to override base MusicTokenizer versions
+    # To handle MicroTiming and multiple beat_res resolutions
+    # This is accomplished by removing the downsampling methods
+    # As a result, many time-based methods need to be redesigned
+
     def _resample_score(
         self, score: Score, _new_tpq: int, _time_signatures_copy: TimeSignatureTickList
     ) -> Score:
@@ -107,6 +159,20 @@ class PerTok(MusicTokenizer):
         self, notes_pedals_soa: dict[str, np.ndarray], ticks_per_beat: np.ndarray
     ) -> None:
         pass
+
+    def _create_duration_event(
+        self, note: Note, _program: int, _ticks_per_beat: np.ndarray, _tpb_idx: int
+    ) -> Event:
+        duration_tuple = self._get_closest_duration_tuple(note.duration)
+        duration = ".".join(str(x) for x in duration_tuple)
+
+        return Event(
+            type_="Duration",
+            value=duration,
+            time=note.start,
+            program=_program,
+            desc=f"duration {note.duration}",
+        )
 
     def create_timeshift_tick_values(self) -> NDArray:
         """
@@ -159,74 +225,6 @@ class PerTok(MusicTokenizer):
 
     def _duration_tuple_to_str(self, duration_tuple: tuple[int, int, int]) -> str:
         return ".".join(str(x) for x in duration_tuple)
-
-    def _create_base_vocabulary(self) -> list[str]:
-        vocab = ["Bar_None"]
-
-        # NoteOn/NoteOff/Velocity
-        self.timeshift_tick_values = self.create_timeshift_tick_values()
-        self._add_note_tokens_to_vocab_list(vocab)
-
-        # TimeShift
-        vocab += [
-            f"TimeShift_{self._duration_tuple_to_str(duration)}"
-            for duration in self.durations
-        ]
-
-        # Duration
-        if any(self.config.use_note_duration_programs):
-            vocab += [
-                f"Duration_{self._duration_tuple_to_str(duration)}"
-                for duration in self.durations
-            ]
-
-        # Microtiming
-        if self.config.additional_params["use_microtiming"]:
-            mt_bins = self.config.additional_params["num_microtiming_bins"]
-            self.microtiming_tick_values = np.linspace(
-                -self.max_mt_shift, self.max_mt_shift, mt_bins + 1, dtype=np.intc
-            )
-
-            vocab += [
-                f"MicroTiming_{microtiming!s}"
-                for microtiming in self.microtiming_tick_values
-            ]
-
-        return list(dict.fromkeys(vocab))
-
-    def _create_token_types_graph(self) -> dict[str, list[str]]:
-        r"""
-        Return a graph/dictionary of the possible token types successions.
-
-        :return: the token types transitions dictionary.
-        """
-        dic = {
-            "Pitch": {"Velocity"},
-            "PitchDrum": {"Velocity"},
-            "Velocity": {"Duration"},
-            "Duration": {"TimeShift"},
-            "TimeShift": {"Pitch", "PitchDrum"},
-        }
-
-        if self.config.use_programs:
-            dic["Program"] = {"Pitch", "PitchDrum"}
-            dic["TimeShift"] = {"Program"}
-
-        return dic
-
-    def _create_duration_event(
-        self, note: Note, _program: int, _ticks_per_beat: np.ndarray, _tpb_idx: int
-    ) -> Event:
-        duration_tuple = self._get_closest_duration_tuple(note.duration)
-        duration = ".".join(str(x) for x in duration_tuple)
-
-        return Event(
-            type_="Duration",
-            value=duration,
-            time=note.start,
-            program=_program,
-            desc=f"duration {note.duration}",
-        )
 
     def _add_time_events(self, events: list[Event], time_division: int) -> None:
         # Add time events
@@ -556,3 +554,23 @@ class PerTok(MusicTokenizer):
         score.time_signatures = time_signature_changes
 
         return score
+
+    def _create_token_types_graph(self) -> dict[str, list[str]]:
+        r"""
+        Return a graph/dictionary of the possible token types successions.
+
+        :return: the token types transitions dictionary.
+        """
+        dic = {
+            "Pitch": {"Velocity"},
+            "PitchDrum": {"Velocity"},
+            "Velocity": {"Duration"},
+            "Duration": {"TimeShift"},
+            "TimeShift": {"Pitch", "PitchDrum"},
+        }
+
+        if self.config.use_programs:
+            dic["Program"] = {"Pitch", "PitchDrum"}
+            dic["TimeShift"] = {"Program"}
+
+        return dic
