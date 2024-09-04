@@ -514,7 +514,7 @@ class MusicTokenizer(ABC, HFHubMixin):
         if not self._note_on_off or (
             self.config.use_sustain_pedals and self.config.sustain_pedal_duration
         ):
-            if self.config.use_time_signatures:
+            if self.config.use_time_signatures and len(score.time_signatures) > 0:
                 ticks_per_beat = get_score_ticks_per_beat(score)
             else:
                 ticks_per_beat = np.array([[score.end(), score.ticks_per_quarter]])
@@ -1163,7 +1163,7 @@ class MusicTokenizer(ABC, HFHubMixin):
             or self.config.use_chords
             or self.config.use_pitch_intervals
         ):
-            if self.config.use_time_signatures:
+            if self.config.use_time_signatures and len(score.time_signatures) > 0:
                 ticks_per_beat = get_score_ticks_per_beat(score)
             else:
                 ticks_per_beat = np.array([[score.end(), self.time_division]])

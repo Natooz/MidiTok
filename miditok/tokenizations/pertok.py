@@ -10,7 +10,6 @@ from symusic import Note, Pedal, PitchBend, Score, Tempo, TimeSignature, Track
 from miditok.classes import Event, TokenizerConfig, TokSequence
 from miditok.constants import DEFAULT_VELOCITY, MIDI_INSTRUMENTS, TIME_SIGNATURE
 from miditok.midi_tokenizer import MusicTokenizer
-from miditok.utils import compute_ticks_per_beat
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -87,6 +86,18 @@ class PerTok(MusicTokenizer):
             msg = "Tokenizer config must have a value for ticks_per_quarter"
             raise ValueError(msg)
 
+        # Events which will use a "MicroTiming" token
+        self.microtime_events = [
+            "Pitch",
+            "Pedal",
+            "PedalOff",
+            "PitchIntervalChord",
+            "PitchBend",
+            "Chord",
+            "PitchDrum",
+            "Program",
+        ]
+
     def _tweak_config_before_creating_voc(self) -> None:
         self.tpq = self.config.additional_params["ticks_per_quarter"]
         self.use_microtiming = self.config.additional_params["use_microtiming"]
@@ -131,6 +142,9 @@ class PerTok(MusicTokenizer):
                 f"MicroTiming_{microtiming!s}"
                 for microtiming in self.microtiming_tick_values
             ]
+
+            # Add additional tokens
+        self._add_additional_tokens_to_vocab_list(vocab)
 
         return list(dict.fromkeys(vocab))
 
@@ -179,7 +193,6 @@ class PerTok(MusicTokenizer):
 
         for value in self.durations:
             beat, subdiv, resolution = value
-
             tick_value = int((beat + (subdiv / resolution)) * self.tpq)
             tick_values.append(tick_value)
 
@@ -218,12 +231,11 @@ class PerTok(MusicTokenizer):
     def _duration_tuple_to_str(self, duration_tuple: tuple[int, int, int]) -> str:
         return ".".join(str(x) for x in duration_tuple)
 
-    def _add_time_events(self, events: list[Event], time_division: int) -> None:
+    def _add_time_events(self, events: list[Event], _time_division: int) -> list[Event]:
         # Add time events
         all_events = []
         previous_tick = 0
-        ticks_per_beat = compute_ticks_per_beat(TIME_SIGNATURE[1], time_division)
-        ticks_per_bar = ticks_per_beat * TIME_SIGNATURE[0]
+        ticks_per_bar = self.tpq * TIME_SIGNATURE[0]
         curr_bar = 0
 
         for event in events:
@@ -245,17 +257,18 @@ class PerTok(MusicTokenizer):
 
             # Time Signature
             if event.type_ == "TimeSig":
-                ticks_per_beat = compute_ticks_per_beat(
-                    int(event.value.split("/")[1]), time_division
-                )
-                ticks_per_bar = ticks_per_beat * int(event.value.split("/")[0])
+                num, den = self._parse_token_time_signature(event.value)
+                ticks_per_bar = den / 4 * num * self.tpq
 
             time_delta = event.time - previous_tick
             timeshift = 0
 
             # Time Shift
             # Only should be placed before 'Pitch' events
-            if time_delta >= self.min_timeshift and event.type_ == "Pitch":
+            if (
+                time_delta >= self.min_timeshift
+                and event.type_ in self.microtime_events
+            ):
                 ts_tuple = self._get_closest_duration_tuple(time_delta)
                 ts = ".".join(str(x) for x in ts_tuple)
 
@@ -274,7 +287,8 @@ class PerTok(MusicTokenizer):
 
             # Microtiming
             # Right now hard-coded to come only after 'Pitch' tokens
-            if self.use_microtiming and event.type_ == "Pitch":
+            # TODO: Check with Nathan on the PitchInterval logic below
+            if self.use_microtiming and event.type_ in self.microtime_events:
                 microtiming = time_delta - timeshift
                 closest_microtiming = int(
                     self._get_closest_array_value(
@@ -337,6 +351,7 @@ class PerTok(MusicTokenizer):
             )
 
         current_track = None  # used only when one_token_stream is False
+        ticks_per_beat = score.ticks_per_quarter
         for si, seq in enumerate(tokens):
             # Set tracking variables
             current_tick = 0
@@ -346,7 +361,6 @@ class PerTok(MusicTokenizer):
             previous_pitch_onset = {prog: -128 for prog in self.config.programs}
             previous_pitch_chord = {prog: -128 for prog in self.config.programs}
             active_pedals = {}
-            ticks_per_beat = score.ticks_per_quarter
             ticks_per_bar = ticks_per_beat * TIME_SIGNATURE[0]
 
             # Set track / sequence program if needed
@@ -382,10 +396,6 @@ class PerTok(MusicTokenizer):
                     current_tick += (ticks_per_bar * curr_bar) - current_tick
                 elif tok_type == "TimeShift":
                     current_tick += self._convert_durations_to_ticks(tok_val)
-                    # current_tick += self._tpb_tokens_to_ticks[ticks_per_beat][tok_val]
-                elif tok_type == "Rest":
-                    current_tick = max(previous_note_end, current_tick)
-                    current_tick += self._tpb_rests_to_ticks[ticks_per_beat][tok_val]
                 elif tok_type in [
                     "Pitch",
                     "PitchDrum",
@@ -437,15 +447,13 @@ class PerTok(MusicTokenizer):
                                 dur = self._convert_durations_to_ticks(dur)
                                 # dur = self._tpb_tokens_to_ticks[ticks_per_beat][dur]
                             mt += current_tick
-                            new_note = Note(mt, dur, pitch, int(vel))
+                            new_note = Note(int(mt), dur, pitch, int(vel))
                             if self.config.one_token_stream_for_programs:
                                 check_inst(current_program)
                                 tracks[current_program].notes.append(new_note)
                             else:
                                 current_track.notes.append(new_note)
-                            previous_note_end = max(
-                                previous_note_end, current_tick + dur
-                            )
+                            previous_note_end = max(previous_note_end, mt + dur)
                     except IndexError:
                         # A well constituted sequence should not raise an exception
                         # However with generated sequences this can happen, or if the
@@ -469,12 +477,12 @@ class PerTok(MusicTokenizer):
                     tempo_changes.append(Tempo(current_tick, float(tok_val)))
                 elif tok_type == "TimeSig":
                     num, den = self._parse_token_time_signature(tok_val)
+                    ticks_per_bar = den / 4 * num * ticks_per_beat
                     if si == 0:
                         time_signature_changes.append(
-                            TimeSignature(current_tick, num, den)
+                            TimeSignature(int(current_tick), num, den)
                         )
-                    ticks_per_beat = self._tpb_per_ts[den]
-                    ticks_per_bar = ticks_per_beat * num
+
                 elif tok_type == "Pedal":
                     pedal_prog = (
                         int(tok_val) if self.config.use_programs else current_program
@@ -543,26 +551,23 @@ class PerTok(MusicTokenizer):
         if self.config.one_token_stream_for_programs:
             score.tracks = list(tracks.values())
         score.tempos = tempo_changes
+        if time_signature_changes is None:
+            num, den = TIME_SIGNATURE
+            time_signature_changes.append(TimeSignature(0, num, den))
         score.time_signatures = time_signature_changes
 
         return score
 
-    def _create_token_types_graph(self) -> dict[str, list[str]]:
+    def _tokens_errors(self, _tokens: list[str | list[str]]) -> int:
+        return 0
+
+    def _create_token_types_graph(self) -> dict[str, set[str]]:
         r"""
         Return a graph/dictionary of the possible token types successions.
 
         :return: the token types transitions dictionary.
         """
-        dic = {
-            "Pitch": {"Velocity"},
-            "PitchDrum": {"Velocity"},
-            "Velocity": {"Duration"},
-            "Duration": {"TimeShift"},
-            "TimeShift": {"Pitch", "PitchDrum"},
-        }
+        # Bar, TimeSig, TimeShift, Pitch, MT, Velocity, Duration
 
-        if self.config.use_programs:
-            dic["Program"] = {"Pitch", "PitchDrum"}
-            dic["TimeShift"] = {"Program"}
-
+        dic: dict[str, set[str]] = {}
         return dic
