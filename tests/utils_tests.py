@@ -343,7 +343,7 @@ def tracks_notes_equals(
     track2: Track,
     check_velocities: bool = True,
     check_durations: bool = True,
-    use_time_range: bool = True,
+    use_time_range: bool = False,
     max_time_range: int = 220,
 ) -> list[tuple[str, Note | int, int]]:
     if not use_time_range:
