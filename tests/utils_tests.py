@@ -30,7 +30,7 @@ from miditok.utils import get_bars_ticks, get_beats_ticks
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from symusic.core import TempoTickList
+    from symusic.core import NoteTickList, TempoTickList
 
     from miditok import MusicTokenizer, TokSequence
 
@@ -125,6 +125,26 @@ def adjust_tok_params_for_tests(tokenization: str, params: dict[str, Any]) -> No
         and params.get("use_rests", False)
     ):
         params["use_rests"] = False
+    # PerTok needs a number of separate args
+    elif tokenization == "PerTok":
+        params["beat_res"] = {(0, 128): 4, (0, 32): 3}
+        params["use_microtiming"] = True
+        params["ticks_per_quarter"] = 220
+
+        # params["beat_res"] = {(0, 16): 4}
+        # params["use_microtiming"] = False
+        # params["ticks_per_quarter"] = 16
+
+        params["max_microtiming_shift"] = 0.25
+        params["num_microtiming_bins"] = 110
+        params["use_rests"] = False
+        params["use_sustain_pedals"] = False
+        params["use_bar_end_tokens"] = False
+        params["use_tempos"] = False
+        params["use_time_signatures"] = True
+        params["use_pitch_bends"] = False
+        params["use_pitchdrum_tokens"] = False
+        params["use_pitch_intervals"] = False
 
 
 def sort_score(score: Score, sort_tracks: bool = True) -> None:
@@ -271,6 +291,7 @@ def scores_notes_equals(
     score2: Score,
     check_velocities: bool,
     use_note_duration_programs: Sequence[int],
+    use_time_range: bool = False,
 ) -> list[tuple[int, str, list[tuple[str, Note | int, int]]]]:
     """
     Check that the notes from two Scores are all equal.
@@ -289,7 +310,7 @@ def scores_notes_equals(
     errors = []
     for track1, track2 in zip(score1.tracks, score2.tracks):
         if track1.program != track2.program or track1.is_drum != track2.is_drum:
-            errors.append((0, "program", []))
+            errors.append((0, "program", [track1.program, track2.program]))
             continue
         if len(track1.notes) != len(track2.notes):
             errors.append((0, "num notes", []))
@@ -305,7 +326,12 @@ def scores_notes_equals(
             track1.notes = Note.from_numpy(**notes2)
             track1.notes.sort(key=lambda n: (n.time, n.pitch, n.duration, n.velocity))
         track_errors = tracks_notes_equals(
-            track1, track2, check_velocities, using_note_durations
+            track1,
+            track2,
+            check_velocities,
+            using_note_durations,
+            use_time_range,
+            max_time_range=int(score1.ticks_per_quarter * 0.5),
         )
         if len(track_errors) > 0:
             errors.append((track1.program, track1.name, track_errors))
@@ -317,17 +343,84 @@ def tracks_notes_equals(
     track2: Track,
     check_velocities: bool = True,
     check_durations: bool = True,
+    use_time_range: bool = False,
+    max_time_range: int = 220,
+) -> list[tuple[str, Note | int, int]]:
+    if not use_time_range:
+        errors = []
+        for note1, note2 in zip(track1.notes, track2.notes):
+            err = notes_equals(
+                note1,
+                note2,
+                check_velocities,
+                check_durations,
+            )
+            if err != "":
+                errors.append((err, note2, getattr(note1, err)))
+        return errors
+    # Sliding window search of nearby notes for hires tokenizers
+    return notes_in_sliding_window_equals(
+        track1.notes,
+        track2.notes,
+        check_velocities=check_velocities,
+        check_durations=check_durations,
+        max_time_range=max_time_range,
+    )
+
+
+def notes_in_sliding_window_equals(
+    notes_1: NoteTickList,
+    notes_2: NoteTickList,
+    check_velocities: bool = True,
+    check_durations: bool = True,
+    max_time_range: int = 120,
 ) -> list[tuple[str, Note | int, int]]:
     errors = []
-    for note1, note2 in zip(track1.notes, track2.notes):
-        err = notes_equals(note1, note2, check_velocities, check_durations)
-        if err != "":
-            errors.append((err, note2, getattr(note1, err)))
+    for idx, note_1 in enumerate(notes_1):
+        potential_notes = get_notes_in_range(idx=idx, note_list=notes_2, window_size=25)
+        potential_notes = [
+            note for note in potential_notes if note.pitch == note_1.pitch
+        ]
+        if potential_notes is None:
+            errors.append(("pitch", notes_2[idx], note_1.pitch))
+            continue
+
+        if not any(
+            (abs(note_1.start - note_2.start) < max_time_range)
+            for note_2 in potential_notes
+        ):
+            errors.append(("start", notes_2[idx], note_1.start))
+            continue
+
+        if check_durations and not any(
+            (abs(note_1.end - note_2.end) < max_time_range)
+            for note_2 in potential_notes
+        ):
+            errors.append(("end", notes_2[idx], note_1.end))
+            continue
+
+        if check_velocities and not any(
+            (note_1.velocity == note_2.velocity) for note_2 in potential_notes
+        ):
+            errors.append(("velocity", notes_2[idx], note_1.velocity))
+            continue
+
     return errors
 
 
+def get_notes_in_range(
+    idx: int, note_list: NoteTickList, window_size: int = 5
+) -> NoteTickList:
+    start = max(0, idx - window_size)
+    end = min(len(note_list) - 1, idx + window_size)
+    return note_list[start : end + 1]
+
+
 def notes_equals(
-    note1: Note, note2: Note, check_velocity: bool = True, check_duration: bool = True
+    note1: Note,
+    note2: Note,
+    check_velocity: bool = True,
+    check_duration: bool = True,
 ) -> str:
     if note1.start != note2.start:
         return "start"
@@ -363,14 +456,21 @@ def check_scores_equals(
     check_pedals: bool = True,
     check_pitch_bends: bool = True,
     log_prefix: str = "",
+    use_time_ranges: bool = False,
+    max_time_range: int = 120,
 ) -> bool:
     has_errors = False
     types_of_errors = []
 
     # Checks notes and add markers if errors
     errors = scores_notes_equals(
-        score1, score2, check_velocities, use_note_duration_programs
+        score1,
+        score2,
+        check_velocities,
+        use_note_duration_programs,
+        use_time_ranges,
     )
+
     if len(errors) > 0:
         has_errors = True
         for e, track_err in enumerate(errors):
@@ -389,9 +489,16 @@ def check_scores_equals(
     # Check pedals
     if check_pedals:
         for inst1, inst2 in zip(score1.tracks, score2.tracks):
-            if inst1.pedals != inst2.pedals:
+            if not use_time_ranges and inst1.pedals != inst2.pedals:
                 types_of_errors.append("PEDALS")
                 break
+            inst1_pedals, inst2_pedals = inst1.pedals, inst2.pedals
+            for pedal_0, pedal_1 in zip(inst1_pedals, inst2_pedals):
+                if (pedal_0.time - pedal_1.time) > max_time_range or (
+                    pedal_0.duration - pedal_1.duration
+                ) > max_time_range:
+                    types_of_errors.append("PEDALS")
+                    break
 
     # Check pitch bends
     if check_pitch_bends:
@@ -412,8 +519,15 @@ def check_scores_equals(
         types_of_errors.append("TEMPOS")
 
     # Checks time signatures
-    if check_time_signatures and score1.time_signatures != score2.time_signatures:
-        types_of_errors.append("TIME SIGNATURES")
+    if check_time_signatures:
+        if not use_time_ranges and score1.time_signatures != score2.time_signatures:
+            types_of_errors.append("TIME SIGNATURES")
+        elif use_time_ranges:
+            time_sigs1, time_sigs2 = score1.time_signatures, score2.time_signatures
+            for time_sig1, time_sig2 in zip(time_sigs1, time_sigs2):
+                if abs(time_sig1.time - time_sig2.time) > max_time_range:
+                    types_of_errors.append("TIME SIGNATURES")
+                    break
 
     # Prints types of errors
     has_errors = has_errors or len(types_of_errors) > 0
@@ -430,6 +544,7 @@ def tokenize_and_check_equals(
 ) -> tuple[Score, Score, bool]:
     tokenization = type(tokenizer).__name__
     log_prefix = f"{file_name} / {tokenization}"
+    use_time_ranges = bool(tokenization in ["PerTok"])
 
     # Tokenize and detokenize
     adapt_ref_score_before_tokenize(score, tokenizer)
@@ -443,6 +558,9 @@ def tokenize_and_check_equals(
     score = adapt_ref_score_for_tests_assertion(score, tokenizer)
     if score.ticks_per_quarter != score_decoded.ticks_per_quarter:
         score = score.resample(tpq=score_decoded.ticks_per_quarter)
+    # if not use_time_ranges:
+    #     sort_score(score)
+    #     sort_score(score_decoded)
     sort_score(score)
     sort_score(score_decoded)
 
@@ -457,6 +575,7 @@ def tokenize_and_check_equals(
         check_pedals=tokenizer.config.use_sustain_pedals,
         check_pitch_bends=tokenizer.config.use_pitch_bends,
         log_prefix=log_prefix,
+        use_time_ranges=use_time_ranges,
     )
 
     # Checks types and values conformity following the rules
