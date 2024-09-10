@@ -32,11 +32,11 @@ class PerTok(MusicTokenizer):
 
     Notes are encoded by 2-5 tokens:
 
-    TimeShift
-    Pitch
-    Velocity (optional)
-    MicroTiming (optional)
-    Duration (optional)
+    * TimeShift
+    * Pitch
+    * Velocity (optional)
+    * MicroTiming (optional)
+    * Duration (optional)
 
     'Timeshift' tokens are expressed as the nearest quantized value
     based upon 'beat_res' parameters.
