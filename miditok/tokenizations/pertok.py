@@ -32,48 +32,49 @@ class PerTok(MusicTokenizer):
 
     Notes are encoded by 2-5 tokens:
 
-    * TimeShift
-    * Pitch
-    * Velocity (optional)
-    * MicroTiming (optional)
-    * Duration (optional)
+    * TimeShift;
+    * Pitch;
+    * Velocity (optional);
+    * MicroTiming (optional);
+    * Duration (optional).
 
-    'Timeshift' tokens are expressed as the nearest quantized value
-    based upon 'beat_res' parameters.
+    *Timeshift* tokens are expressed as the nearest quantized value
+    based upon *beat_res* parameters.
     The microtiming shift is then characterized as the remainder from
     this quantized value. Timeshift and MicroTiming are represented
     in the full ticks-per-quarter (tpq) resolution, e.g. 480 tpq.
 
-    Additionally, 'Bar' tokens are inserted at the start of each new measure.
-    This helps further reduce seq. length and
-    potentially reduces the 'timing drift'
+    Additionally, *Bar* tokens are inserted at the start of each new measure.
+    This helps further reduce seq. length and potentially reduces the timing drift
     models can develop at longer seq. lengths.
 
     New TokenizerConfig Options:
 
-    beat_res: now allows multiple, overlapping values
-    ticks_per_quarter: resolution of the MIDI timing data
-    use_microtiming: inclusion of MicroTiming tokens
-    max_microtiming_shift: float value of the farthest distance of MicroTiming shifts
-    num_microtiming_bins: total number of MicroTiming tokens
+    * beat_res: now allows multiple, overlapping values;
+    * ticks_per_quarter: resolution of the MIDI timing data;
+    * use_microtiming: inclusion of MicroTiming tokens;
+    * max_microtiming_shift: float value of the farthest distance of MicroTiming shifts;
+    * num_microtiming_bins: total number of MicroTiming tokens.
 
     Example Tokenizer Config:
 
-    TOKENIZER_PARAMS = {
-    "pitch_range": (21, 109),
-    "beat_res": {(0, 4): 4, (0, 4): 3},
-    "special_tokens": ["PAD", "BOS", "EOS", "MASK"],
-    "use_chords": False,
-    "use_rests": False,
-    "use_tempos": False,
-    "use_time_signatures": True,
-    "use_programs": False,
-    "use_microtiming": True,
-    "ticks_per_quarter": 320,
-    "max_microtiming_shift": 0.125,
-    "num_microtiming_bins": 30,
-    }
-    config = TokenizerConfig(**TOKENIZER_PARAMS)
+    .. code-block:: python
+
+        TOKENIZER_PARAMS = {
+        "pitch_range": (21, 109),
+        "beat_res": {(0, 4): 4, (0, 4): 3},
+        "special_tokens": ["PAD", "BOS", "EOS", "MASK"],
+        "use_chords": False,
+        "use_rests": False,
+        "use_tempos": False,
+        "use_time_signatures": True,
+        "use_programs": False,
+        "use_microtiming": True,
+        "ticks_per_quarter": 320,
+        "max_microtiming_shift": 0.125,
+        "num_microtiming_bins": 30,
+        }
+        config = TokenizerConfig(**TOKENIZER_PARAMS)
     """
 
     def __init__(

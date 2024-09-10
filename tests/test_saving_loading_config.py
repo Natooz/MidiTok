@@ -24,6 +24,10 @@ ADDITIONAL_TOKENS_TEST = {
     "num_tempos": 32,
     "tempo_range": (40, 250),
     "base_tokenizer": "TSD",
+    "use_microtiming": True,
+    "ticks_per_quarter": 480,
+    "max_microtiming_shift": 0.25,
+    "num_microtiming_bins": 110,
 }
 
 TOK_PARAMS_MULTITRACK = []
@@ -41,6 +45,11 @@ for tokenization_ in ALL_TOKENIZATIONS:
         params_["base_tokenizer"] = "TSD"
     elif tokenization_ in ["Octuple", "MuMIDI"]:
         params_["max_bar_embedding"] = MAX_BAR_EMBEDDING
+    elif tokenization_ in ["PerTok"]:
+        params_["use_microtiming"] = True
+        params_["ticks_per_quarter"] = 220
+        params_["max_microtiming_shift"] = 0.25
+        params_["num_microtiming_bins"] = 110
     TOK_PARAMS_MULTITRACK.append((tokenization_, params_))
 
     if tokenization_ in tokenizations_non_one_stream:
