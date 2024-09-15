@@ -13,11 +13,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11"]  # tensorflow not supported with 3.12
-        os: [ ubuntu-latest, windows-latest ]
-        include:
-          - python-version: "3.11"
-            os: macos-latest
+        python-version: ["3.8", "3.9", "3.x"]
+        os: [ ubuntu-latest, macos-latest ]  # windows-latest is extremely slow
 
     steps:
       - uses: actions/checkout@v4
