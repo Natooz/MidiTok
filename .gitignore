@@ -2,12 +2,8 @@
 **/*.DS_STORE
 # Python precompiled files
 *.pyc
-# Builds dir
-dist/
 # PyCharm config files
 .idea/
-# PyCharm Virtual Environment
-venv/
 
 # personal test file
 test.py
@@ -183,3 +179,5 @@ cython_debug/
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+
+.aider*
