@@ -7,7 +7,7 @@ from time import sleep
 from typing import TYPE_CHECKING
 
 import pytest
-from huggingface_hub.utils._errors import HfHubHTTPError
+from huggingface_hub.utils import HfHubHTTPError
 
 import miditok
 
