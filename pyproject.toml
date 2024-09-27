@@ -82,6 +82,11 @@ exclude = [
     ".venv",
 ]
 
+[tool.pytest.ini_options]
+testpaths = [
+    "tests",
+]
+
 [tool.coverage.report]
 exclude_also = [
     "def __repr__",
