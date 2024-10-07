@@ -102,6 +102,7 @@ MidiTok implements the tokenizations: (links to original papers)
 * [Octuple](https://aclanthology.org/2021.findings-acl.70)
 * [MuMIDI](https://dl.acm.org/doi/10.1145/3394171.3413721)
 * [MMM](https://arxiv.org/abs/2008.06048)
+* [PerTok](https://www.arxiv.org/abs/2410.02060)
 
 You can find short presentations in the [documentation](https://miditok.readthedocs.io/en/latest/tokenizations.html).
 
