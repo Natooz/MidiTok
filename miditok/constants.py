@@ -50,7 +50,6 @@ USE_PITCH_BENDS = False
 USE_PROGRAMS = False
 USE_PITCHDRUM_TOKENS = True
 USE_NOTE_DURATION_PROGRAMS = list(range(-1, 128))
-ADD_TRAILING_BARS = False
 
 # Pitch as intervals
 USE_PITCH_INTERVALS = False
@@ -139,6 +138,7 @@ AC_REPETITION_TRACK_NUM_BINS = 10
 # Tokenizers specific parameters
 MMM_COMPATIBLE_TOKENIZERS = {"TSD", "REMI", "MIDILike"}
 USE_BAR_END_TOKENS = False  # REMI
+ADD_TRAILING_BARS = False  # REMI
 
 # Defaults values when writing new files
 TEMPO = 120

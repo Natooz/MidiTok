@@ -28,7 +28,6 @@ from .constants import (
     AC_REPETITION_TRACK,
     AC_REPETITION_TRACK_NUM_BINS,
     AC_REPETITION_TRACK_NUM_CONSEC_BARS,
-    ADD_TRAILING_BARS,
     BEAT_RES,
     BEAT_RES_REST,
     CHORD_MAPS,
@@ -577,12 +576,6 @@ class TokenizerConfig:
         ``10``)
     :param ac_repetition_track_num_consec_bars: number of successive bars to
         compare the repetition similarity between bars. (default: ``4``)
-    :param add_trailing_bars: will add tokens for trailing empty Bars, if they are
-        present in source symbolic music data. Applicable to (:ref:`REMI`, since other
-        tokenizations handle bars / times and notes altogether ). This flag is very
-        useful in applications where we need bijection between Bars is source and
-        tokenized representations, same lengths, anacrusis detection etc.
-        False by default, thus trailing bars are omitted.
     :param kwargs: additional parameters that will be saved in
         ``config.additional_params``.
     """
@@ -646,7 +639,6 @@ class TokenizerConfig:
         ac_repetition_track: bool = AC_REPETITION_TRACK,
         ac_repetition_track_num_bins: int = AC_REPETITION_TRACK_NUM_BINS,
         ac_repetition_track_num_consec_bars: int = AC_REPETITION_TRACK_NUM_CONSEC_BARS,
-        add_trailing_bars: bool = ADD_TRAILING_BARS,
         **kwargs,
     ) -> None:
         # Checks
@@ -838,7 +830,6 @@ class TokenizerConfig:
         self.ac_repetition_track_num_consec_bars = ac_repetition_track_num_consec_bars
 
         # Additional params
-        self.add_trailing_bars = add_trailing_bars
         self.additional_params = kwargs
 
     @property

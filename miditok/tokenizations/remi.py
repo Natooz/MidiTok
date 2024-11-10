@@ -16,6 +16,7 @@ from symusic import (
 
 from miditok.classes import Event, TokenizerConfig, TokSequence
 from miditok.constants import (
+    ADD_TRAILING_BARS,
     DEFAULT_VELOCITY,
     MIDI_INSTRUMENTS,
     TIME_SIGNATURE,
@@ -55,9 +56,18 @@ class REMI(MusicTokenizer):
 
     :param tokenizer_config: the tokenizer's configuration, as a
         :class:`miditok.classes.TokenizerConfig` object.
+        REMI accepts additional_params for tokenizer configuration:
+        | - max_bar_embedding (desciption below);
+        | - use_bar_end_tokens -- if set will add Bar_End tokens at the end of each Bar;
+        | - add_trailing_bars -- will add tokens for trailing empty Bars, if they are
+        present in source symbolic music data. Applicable to :ref:`REMI`. This flag is
+        very useful in applications where we need bijection between Bars is source and
+        tokenized representations, same lengths, anacrusis detection etc.
+        False by default, thus trailing bars are omitted.
     :param max_bar_embedding: Maximum number of bars ("Bar_0", "Bar_1",...,
         "Bar_{num_bars-1}"). If None passed, creates "Bar_None" token only in
-        vocabulary for Bar token.
+        vocabulary for Bar token. Has less priority than setting this parameter via
+        TokenizerConfig additional_params
     :param params: path to a tokenizer config file. This will override other arguments
         and load the tokenizer based on the config file. This is particularly useful
         if the tokenizer learned Byte Pair Encoding. (default: None)
@@ -84,6 +94,8 @@ class REMI(MusicTokenizer):
             self.config.additional_params["max_bar_embedding"] = None
         if "use_bar_end_tokens" not in self.config.additional_params:
             self.config.additional_params["use_bar_end_tokens"] = USE_BAR_END_TOKENS
+        if "add_trailing_bars" not in self.config.additional_params:
+            self.config.additional_params["add_trailing_bars"] = ADD_TRAILING_BARS
 
     def _compute_ticks_per_pos(self, ticks_per_beat: int) -> int:
         return ticks_per_beat // self.config.max_num_pos_per_beat
@@ -304,7 +316,10 @@ class REMI(MusicTokenizer):
             # Update max offset time of the notes encountered
             previous_note_end = self._previous_note_end_update(event, previous_note_end)
 
-        if previous_note_end > previous_tick and self.config.add_trailing_bars:
+        if (
+            previous_note_end > previous_tick
+            and self.config.additional_params["add_trailing_bars"]
+        ):
             # there are some trailing bars
             current_bar, tick_at_current_bar = self._add_new_bars(
                 previous_note_end,
