@@ -321,7 +321,7 @@ class REMI(MusicTokenizer):
             and self.config.additional_params["add_trailing_bars"]
         ):
             # there are some trailing bars
-            current_bar, tick_at_current_bar = self._add_new_bars(
+            _ = self._add_new_bars(
                 previous_note_end,
                 event.type_,
                 all_events,
@@ -334,7 +334,8 @@ class REMI(MusicTokenizer):
             )
         return all_events
 
-    def _previous_note_end_update(self, event: Event, previous_note_end: int) -> int:
+    @staticmethod
+    def _previous_note_end_update(event: Event, previous_note_end: int) -> int:
         r"""
         Calculate max offset time of the notes encountered.
 
