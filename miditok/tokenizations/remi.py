@@ -360,9 +360,8 @@ class REMI(MusicTokenizer):
             event_time = event.time
         return max(previous_note_end, event_time)
 
-    def _units_between(
-        self, start_tick: int, end_tick: int, ticks_per_unit: int
-    ) -> int:
+    @staticmethod
+    def _units_between(start_tick: int, end_tick: int, ticks_per_unit: int) -> int:
         return (end_tick - start_tick) // ticks_per_unit
 
     def _tokens_to_score(
