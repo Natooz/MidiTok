@@ -138,6 +138,7 @@ AC_REPETITION_TRACK_NUM_BINS = 10
 # Tokenizers specific parameters
 MMM_COMPATIBLE_TOKENIZERS = {"TSD", "REMI", "MIDILike"}
 USE_BAR_END_TOKENS = False  # REMI
+ADD_TRAILING_BARS = False  # REMI
 
 # Defaults values when writing new files
 TEMPO = 120
