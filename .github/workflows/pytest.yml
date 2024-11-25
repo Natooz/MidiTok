@@ -42,7 +42,7 @@ jobs:
           HF_TOKEN_HUB_TESTS: ${{ secrets.HF_TOKEN_HUB_TESTS }}
 
       - name: Codecov
-        uses: codecov/codecov-action@v5.0.2
+        uses: codecov/codecov-action@v5.0.7
 
   build:
     runs-on: ubuntu-latest
