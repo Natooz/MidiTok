@@ -7,11 +7,10 @@ from dataclasses import replace
 from time import time
 from typing import TYPE_CHECKING
 
-import pytest
-from tqdm import tqdm
-
 import miditok
+import pytest
 from miditok.constants import DEFAULT_TOKENIZER_FILE_NAME
+from tqdm import tqdm
 
 from .utils_tests import (
     MIDI_PATHS_ONE_TRACK,

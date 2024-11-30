@@ -5,9 +5,8 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import TYPE_CHECKING, Any
 
-import pytest
-
 import miditok
+import pytest
 
 from .utils_tests import ALL_TOKENIZATIONS, MAX_BAR_EMBEDDING, MIDI_PATHS_MULTITRACK
 

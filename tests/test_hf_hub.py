@@ -6,10 +6,9 @@ import warnings
 from time import sleep
 from typing import TYPE_CHECKING
 
+import miditok
 import pytest
 from huggingface_hub.utils import HfHubHTTPError
-
-import miditok
 
 if TYPE_CHECKING:
     from pathlib import Path

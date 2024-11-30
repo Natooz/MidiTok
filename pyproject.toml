@@ -4,11 +4,11 @@ build-backend = "hatchling.build"
 
 [project]
 name = "miditok"
-version = "3.0.4"
+version = "3.0.5"
 description = "MIDI / symbolic music tokenizers for Deep Learning models."
 readme = {file = "README.md", content-type = "text/markdown"}
 license = {file = "LICENSE"}
-requires-python = ">=3.8.0"
+requires-python = ">=3.9"
 authors = [
     { name = "Nathan Fradet" },
 ]
@@ -29,11 +29,11 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Operating System :: OS Independent",
 ]
 dependencies = [
@@ -65,13 +65,8 @@ Repository = "https://github.com/Natooz/MidiTok.git"
 Documentation = "https://miditok.readthedocs.io"
 Issues = "https://github.com/Natooz/MidiTok/issues"
 
-[tool.hatch.version]
-path = "miditok/__init__.py"
-
-[tool.hatch.build.targets.sdist]
-include = [
-    "/miditok",
-]
+[tool.hatch.build.targets.wheel]
+packages = ["src/treeval"]
 
 [mypy]
 warn_return_any = "True"
@@ -83,8 +78,9 @@ exclude = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = [
-    "tests",
+pythonpath = "src"
+addopts = [
+    "--import-mode=importlib",
 ]
 
 [tool.coverage.report]
@@ -97,7 +93,7 @@ omit = [
 ]
 
 [tool.ruff]
-target-version = "py312"
+target-version = "py313"
 
 [tool.ruff.lint]
 extend-select = [
@@ -216,7 +212,7 @@ ignore = [
 # we don't use passwords in MidiTok, only HF token for the interactions with the hub.
 # However we have a lot of variables with "token"(s) in their name, which would yield a
 # lot of lint errors or require a lot of noqa exceptions.
-"miditok/**" = [
+"src/miditok/**" = [
     "S105",
 ]
 "tests/**" = [

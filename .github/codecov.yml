@@ -10,7 +10,7 @@ coverage:
         target: 70%
       source:
         paths:
-          - "miditok/"
+          - "src/miditok/"
         target: 75%
         threshold: 0.5%
     patch:

@@ -5,11 +5,10 @@ from __future__ import annotations
 from random import seed
 from typing import TYPE_CHECKING, Any, Literal
 
-import pytest
-from symusic import Score
-
 import miditok
+import pytest
 from miditok.attribute_controls import create_random_ac_indexes
+from symusic import Score
 
 from .utils_tests import (
     BARS_RANDOM_RATIO_RANGE,
