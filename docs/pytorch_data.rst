@@ -19,7 +19,7 @@ Preparing data
 
 When training a model, you will likely want to limit the possible token sequence length in order to not run out of memory. The dataset classes handle such case and can trim the token sequences. However, **it is not uncommon for a single MIDI to be tokenized into sequences that can contain several thousands tokens, depending on its duration and number of notes. In such case, using only the first portion of the token sequence would considerably reduce the amount of data used to train and test a model.**
 
-To handle such case, MidiTok provides the :py:func:`miditok.pytorch_data.split_midis_for_training` method to dynamically split MIDI files into chunks that should be tokenized in approximately the number of tokens you want.
+To handle such case, MidiTok provides the :py:func:`miditok.pytorch_data.split_files_for_training` method to dynamically split MIDI files into chunks that should be tokenized in approximately the number of tokens you want.
 If you cannot fit most of your MIDIs into single usable token sequences, we recommend to split your dataset with this method.
 
 Data loading example
@@ -31,7 +31,7 @@ Here is a complete example showing how to use this module to train any model.
 ..  code-block:: python
 
     from miditok import REMI, TokenizerConfig
-    from miditok.pytorch_data import DatasetMIDI, DataCollator, split_midis_for_training
+    from miditok.pytorch_data import DatasetMIDI, DataCollator, split_files_for_training
     from torch.utils.data import DataLoader
     from pathlib import Path
 
@@ -48,7 +48,7 @@ Here is a complete example showing how to use this module to train any model.
 
     # Split MIDIs into smaller chunks for training
     dataset_chunks_dir = Path("path", "to", "midi_chunks")
-    split_midis_for_training(
+    split_files_for_training(
         files_paths=midi_paths,
         tokenizer=tokenizer,
         save_dir=dataset_chunks_dir,
