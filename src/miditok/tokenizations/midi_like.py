@@ -327,7 +327,10 @@ class MIDILike(MusicTokenizer):
                         if not self.config.use_velocities:
                             vel = DEFAULT_VELOCITY
                         elif ti + 1 < len(seq):
-                            vel = int(seq[ti + 1].split("_")[1])
+                            try:
+                                vel = int(seq[ti + 1].split("_")[1])
+                            except ValueError:  # invalid token succession
+                                continue
                         else:
                             break  # last token
 

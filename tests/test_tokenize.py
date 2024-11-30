@@ -6,11 +6,10 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-import pytest
-from symusic import Score
-
 import miditok
+import pytest
 from miditok.constants import SCORE_LOADING_EXCEPTION, USE_NOTE_DURATION_PROGRAMS
+from symusic import Score
 
 from .utils_tests import (
     ABC_PATHS,

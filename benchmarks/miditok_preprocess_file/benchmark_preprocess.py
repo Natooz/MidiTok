@@ -8,14 +8,14 @@ from importlib.metadata import version
 from pathlib import Path
 from time import time
 
+import miditok
 import numpy as np
+from miditok.constants import SCORE_LOADING_EXCEPTION
 from pandas import DataFrame, read_csv
 from symusic import Score
 from tqdm import tqdm
 
-import miditok
 from benchmarks.utils import mean_std_str
-from miditok.constants import SCORE_LOADING_EXCEPTION
 
 TOKENIZER_CONFIG_KWARGS = {
     "use_tempos": True,

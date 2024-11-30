@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import miditok
+from miditok.utils.utils import miditoolkit_to_symusic
 from miditoolkit import Instrument, MidiFile, Pedal
 from tensorflow import Tensor as tfTensor
 from tensorflow import convert_to_tensor
@@ -16,9 +18,6 @@ from torch import (
 from torch import (
     Tensor as ptTensor,
 )
-
-import miditok
-from miditok.utils.utils import miditoolkit_to_symusic
 
 from .utils_tests import HERE, MIDI_PATHS_ALL
 

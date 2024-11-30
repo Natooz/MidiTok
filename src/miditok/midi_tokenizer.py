@@ -155,7 +155,7 @@ class MusicTokenizer(ABC, HFHubMixin):
 
         # Tweak the tokenizer's configuration and / or attributes before creating the
         # vocabulary. This method is intended to be overridden by inheriting tokenizer
-        # classes
+        # classes.
         self._tweak_config_before_creating_voc()
 
         # Determines whether the tokenizer will produce a single sequence of tokens for

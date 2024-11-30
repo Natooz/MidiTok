@@ -5,11 +5,10 @@ from __future__ import annotations
 from time import time
 from typing import TYPE_CHECKING
 
+import miditok
 import pytest
 from torch import randint
 from torch.utils.data import DataLoader
-
-import miditok
 
 from .utils_tests import (
     ABC_PATHS,

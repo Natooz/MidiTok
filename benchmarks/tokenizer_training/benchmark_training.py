@@ -9,14 +9,14 @@ from pathlib import Path
 from time import time
 from typing import Literal
 
+import miditok
 import numpy as np
+from miditok.constants import SCORE_LOADING_EXCEPTION
 from pandas import DataFrame, read_csv  # requires tabulate package
 from symusic import Score
 from tqdm import tqdm
 
-import miditok
 from benchmarks.utils import mean_std_str
-from miditok.constants import SCORE_LOADING_EXCEPTION
 
 # Tokenizer
 TOKENIZER_PARAMS = {

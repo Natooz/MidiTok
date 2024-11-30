@@ -145,12 +145,11 @@ def split_files_for_training(
                     TextMeta(0, f"miditok: chunk {_i}/{len(score_chunks) - 1}")
                 )
                 if tracks_separated:
-                    file_name = f"{file_path.stem}_t{ti}_{_i}{file_path.suffix}"
+                    file_name = f"{file_path.stem}_t{ti}_{_i}"
                 else:
-                    file_name = f"{file_path.stem}_{_i}{file_path.suffix}"
-                # use with_stem when dropping support for python 3.8
-                saving_path = (
-                    save_dir / file_path.relative_to(root_dir).parent / file_name
+                    file_name = f"{file_path.stem}_{_i}"
+                saving_path = save_dir / file_path.relative_to(root_dir).with_stem(
+                    file_name
                 )
                 saving_path.parent.mkdir(parents=True, exist_ok=True)
                 if file_path.suffix in MIDI_FILES_EXTENSIONS:

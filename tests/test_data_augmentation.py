@@ -4,12 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from symusic import Score
-from tqdm import tqdm
-
 from miditok.data_augmentation import (
     augment_dataset,
 )
+from symusic import Score
+from tqdm import tqdm
 
 from .utils_tests import HERE
 

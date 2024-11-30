@@ -5,11 +5,10 @@ from __future__ import annotations
 from random import seed
 from typing import TYPE_CHECKING, Any, Literal
 
-import pytest
-from symusic import Score
-
 import miditok
+import pytest
 from miditok.attribute_controls import create_random_ac_indexes
+from symusic import Score
 
 from .utils_tests import (
     BARS_RANDOM_RATIO_RANGE,
@@ -63,7 +62,7 @@ WORDPIECE_MAX_INPUT_CHARS_PER_WORD_BEAT = 150
 @pytest.mark.parametrize(
     "random_bars_idx", [False, True], ids=lambda r: "rand_bars" if r else "all_bars"
 )
-def test_controller_controls_computation(
+def test_attribute_controls_computation(
     file_path: Path,
     tokenization: str,
     random_tracks_idx: bool,
