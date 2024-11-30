@@ -63,7 +63,7 @@ WORDPIECE_MAX_INPUT_CHARS_PER_WORD_BEAT = 150
 @pytest.mark.parametrize(
     "random_bars_idx", [False, True], ids=lambda r: "rand_bars" if r else "all_bars"
 )
-def test_controller_controls_computation(
+def test_attribute_controls_computation(
     file_path: Path,
     tokenization: str,
     random_tracks_idx: bool,

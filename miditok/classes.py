@@ -832,6 +832,19 @@ class TokenizerConfig:
         # Additional params
         self.additional_params = kwargs
 
+    # Using dataclass overly complicates all the checks performed after init and reduces
+    # the types flexibility (sequence etc...).
+    # Freezing the class could be done, but special cases (MMM) should be handled.
+    """def __setattr__(self, name, value):
+        if getattr(self, "_is_frozen", False) and name != "_is_frozen":
+            raise AttributeError(
+                f"Cannot modify frozen instance of {self.__class__.__name__}"
+            )
+        super().__setattr__(name, value)
+
+    def freeze(self):
+        object.__setattr__(self, "_is_frozen", True)"""
+
     @property
     def max_num_pos_per_beat(self) -> int:
         """
