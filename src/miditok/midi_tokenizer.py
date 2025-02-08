@@ -2760,8 +2760,8 @@ class MusicTokenizer(ABC, HFHubMixin):
         initial_alphabet = {
             chr(i + CHR_ID_START): i
             for tok, i in self._vocab_base.items()
-            if len(tok) == 1  # to discard special tokens with Unigram
-        }
+            if not tok.endswith(UNIGRAM_SPECIAL_TOKEN_SUFFIX)
+        }  # if to discard special tokens with Unigram
 
         # Define the model
         # A `tokenizers.Tokenizer` can feature: a normalizer, pre-tokenizer, model,
