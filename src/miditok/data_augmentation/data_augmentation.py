@@ -257,7 +257,7 @@ def augment_score(
     velocity_range: tuple[int, int] = (1, 127),
     duration_in_ticks: bool = False,
     min_duration: int | float = 0.03125,
-    augment_copy: bool = True
+    augment_copy: bool = True,
 ) -> Score:
     r"""
     Augment a Score object by shifting its pitch, velocity and/or duration values.
