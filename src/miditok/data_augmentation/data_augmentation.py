@@ -257,6 +257,7 @@ def augment_score(
     velocity_range: tuple[int, int] = (1, 127),
     duration_in_ticks: bool = False,
     min_duration: int | float = 0.03125,
+    augment_copy: bool = True
 ) -> Score:
     r"""
     Augment a Score object by shifting its pitch, velocity and/or duration values.
@@ -284,9 +285,12 @@ def augment_score(
     :param min_duration: minimum duration limit to apply if ``duration_offset`` is
         negative. If ``duration_in_ticks`` is ``True``, it must be given in ticks,
         otherwise in beats as a float or integer. (default: ``0.03125``)
+    :param augment_copy: if given True, a copy of the input ``symusic.Score`` object is
+        augmented and returned. If False, the input ``symusic.Score`` object is modified
+        in-place. (default: ``True``)
     :return: the augmented ``symusic.Score`` object.
     """
-    score_aug = score.copy()
+    score_aug = score.copy() if augment_copy else score
     # score_aug = score.copy(deep=True)
 
     if pitch_offset != 0:
