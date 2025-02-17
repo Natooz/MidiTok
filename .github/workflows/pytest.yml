@@ -55,6 +55,6 @@ jobs:
         with:
           python-version: '3.x'
       - name: Install dependencies
-        run: pip install build
+        run: pip install hatch
       - name: Build package
-        run: python -m build
+        run: hatch build
