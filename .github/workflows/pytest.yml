@@ -26,18 +26,17 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
 
-      - name: Install dependencies
+      - name: Install hatch
         run: |
-          # Install local package with tests dependencies extras
           python -m pip install --upgrade pip
-          pip install -e ".[tests]"
+          pip install hatch
 
       # Tokenizer training tests are significantly slower than others.
       # So that xdist don't assign chunks of training tests to the same worker, we use
       # the `--dist worksteal` distribution mode to dynamically reassign queued tests to
       # free workers.
-      - name: Test with pytest
-        run: python -m pytest --cov=./ --cov-report=xml -n logical --dist worksteal --durations=0 -v tests
+      - name: Test with pytest via hatch
+        run: hatch run test:test --cov=./ --cov-report=xml -n logical --dist worksteal --durations=0 --reruns=3
         env:
           HF_TOKEN_HUB_TESTS: ${{ secrets.HF_TOKEN_HUB_TESTS }}
 
@@ -45,16 +44,3 @@ jobs:
         uses: codecov/codecov-action@v5.3.1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-      - name: Install dependencies
-        run: pip install hatch
-      - name: Build package
-        run: hatch build

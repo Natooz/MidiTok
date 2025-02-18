@@ -65,12 +65,11 @@ Repository = "https://github.com/Natooz/MidiTok.git"
 Documentation = "https://miditok.readthedocs.io"
 Issues = "https://github.com/Natooz/MidiTok/issues"
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/miditok"]
-only-packages = true
+[tool.hatch.envs.test]
+features = ["tests"]  # references to "tests" optional dependencies
 
-[tool.hatch.version]
-path = "src/miditok/__init__.py"
+[tool.hatch.envs.test.scripts]
+test = "pytest"
 
 [mypy]
 warn_return_any = "True"
