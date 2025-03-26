@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING
-from pathlib import Path
 
 import numpy as np
 from symusic import Note, Pedal, PitchBend, Score, Tempo, TimeSignature, Track
-from tokenizers import Tokenizer as _HFTokenizer
 
 from miditok.classes import Event, TokenizerConfig, TokSequence
 from miditok.constants import DEFAULT_VELOCITY, MIDI_INSTRUMENTS, TIME_SIGNATURE
