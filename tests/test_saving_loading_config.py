@@ -8,7 +8,12 @@ from typing import TYPE_CHECKING, Any
 import miditok
 import pytest
 
-from .utils_tests import ALL_TOKENIZATIONS, MAX_BAR_EMBEDDING, MIDI_PATHS_MULTITRACK
+from .utils_tests import (
+    ALL_TOKENIZATIONS,
+    MAX_BAR_EMBEDDING,
+    MIDI_PATHS_MULTITRACK,
+    MIDI_PATHS_ONE_TRACK,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -118,3 +123,24 @@ def test_multitrack_midi_to_tokens_to_midi(
 
     # Assert tokens are the same
     assert tokens == tokens_loaded
+
+
+@pytest.mark.parametrize("file_path", MIDI_PATHS_ONE_TRACK[:3], ids=lambda p: p.name)
+def test_pertok_microtiming_tick_values(file_path: Path):
+    # Create the pertok tokenizer
+    cfg = miditok.TokenizerConfig(
+        use_chords=False,
+        use_microtiming=True,
+        ticks_per_quarter=480,
+        max_microtiming_shift=0.25,
+        num_microtiming_bins=110,
+    )
+    tok = miditok.PerTok(cfg)
+    # Train the tokenizer
+    tok.train(files_paths=[file_path], vocab_size=1000)
+    # Dump the tokenizer to a JSON
+    tok.save("tmp.json")
+    # Reload the tokenizer
+    newtok = miditok.PerTok(params="tmp.json")
+    # Should still have the microtiming_tick_values parameter
+    assert hasattr(newtok, "microtiming_tick_values")

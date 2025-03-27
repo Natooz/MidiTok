@@ -98,6 +98,12 @@ class PerTok(MusicTokenizer):
             "PitchDrum",
             "Program",
         ]
+        # This will be hit when we're using microtiming
+        # and have loaded a TRAINED tokenizer
+        if self.config.additional_params["use_microtiming"] and not hasattr(
+            self, "microtiming_tick_values"
+        ):
+            self.microtiming_tick_values = self.create_microtiming_tick_values()
 
     def _tweak_config_before_creating_voc(self) -> None:
         self.tpq = self.config.additional_params["ticks_per_quarter"]
@@ -134,11 +140,7 @@ class PerTok(MusicTokenizer):
 
         # Microtiming
         if self.config.additional_params["use_microtiming"]:
-            mt_bins = self.config.additional_params["num_microtiming_bins"]
-            self.microtiming_tick_values = np.linspace(
-                -self.max_mt_shift, self.max_mt_shift, mt_bins + 1, dtype=np.intc
-            )
-
+            self.microtiming_tick_values = self.create_microtiming_tick_values()
             vocab += [
                 f"MicroTiming_{microtiming!s}"
                 for microtiming in self.microtiming_tick_values
@@ -179,6 +181,20 @@ class PerTok(MusicTokenizer):
             time=note.start,
             program=_program,
             desc=f"duration {note.duration}",
+        )
+
+    def create_microtiming_tick_values(self) -> NDArray:
+        """
+        Generate tick-based microtiming tokens.
+
+        Returns
+        -------
+            NDArray: Array of available microtiming values
+
+        """
+        mt_bins = self.config.additional_params["num_microtiming_bins"]
+        return np.linspace(
+            -self.max_mt_shift, self.max_mt_shift, mt_bins + 1, dtype=np.intc
         )
 
     def create_timeshift_tick_values(self) -> NDArray:
