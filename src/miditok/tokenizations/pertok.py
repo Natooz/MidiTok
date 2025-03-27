@@ -100,9 +100,8 @@ class PerTok(MusicTokenizer):
         ]
         # This will be hit when we're using microtiming
         # and have loaded a TRAINED tokenizer
-        if (
-                self.config.additional_params["use_microtiming"] and
-                not hasattr(self, "microtiming_tick_values")
+        if self.config.additional_params["use_microtiming"] and not hasattr(
+            self, "microtiming_tick_values"
         ):
             self.microtiming_tick_values = self.create_microtiming_tick_values()
 

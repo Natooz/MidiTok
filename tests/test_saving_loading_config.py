@@ -8,7 +8,12 @@ from typing import TYPE_CHECKING, Any
 import miditok
 import pytest
 
-from .utils_tests import ALL_TOKENIZATIONS, MAX_BAR_EMBEDDING, MIDI_PATHS_MULTITRACK, MIDI_PATHS_ONE_TRACK
+from .utils_tests import (
+    ALL_TOKENIZATIONS,
+    MAX_BAR_EMBEDDING,
+    MIDI_PATHS_MULTITRACK,
+    MIDI_PATHS_ONE_TRACK,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -124,7 +129,7 @@ def test_multitrack_midi_to_tokens_to_midi(
 def test_pertok_microtiming_tick_values(file_path: Path):
     # Create the pertok tokenizer
     cfg = miditok.TokenizerConfig(
-        use_chords=False,    # False to speed up tests
+        use_chords=False,
         use_microtiming=True,
         ticks_per_quarter=480,
         max_microtiming_shift=0.25,
