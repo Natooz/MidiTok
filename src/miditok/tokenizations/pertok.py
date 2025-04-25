@@ -375,8 +375,8 @@ class PerTok(MusicTokenizer):
             curr_bar = 0
             current_program = 0
             previous_note_end = 0
-            previous_pitch_onset = {prog: -128 for prog in self.config.programs}
-            previous_pitch_chord = {prog: -128 for prog in self.config.programs}
+            previous_pitch_onset = dict.fromkeys(self.config.programs, -128)
+            previous_pitch_chord = dict.fromkeys(self.config.programs, -128)
             active_pedals = {}
             ticks_per_bar = ticks_per_beat * TIME_SIGNATURE[0]
 
@@ -511,22 +511,23 @@ class PerTok(MusicTokenizer):
                             ]
                             # Add instrument if it doesn't exist, can happen for the
                             # first tokens
-                            new_pedal = Pedal(current_tick, duration)
+                            new_pedal = Pedal(int(current_tick), int(duration))
                             if self.config.one_token_stream_for_programs:
                                 check_inst(pedal_prog)
                                 tracks[pedal_prog].pedals.append(new_pedal)
                             else:
                                 current_track.pedals.append(new_pedal)
                     elif pedal_prog not in active_pedals:
-                        active_pedals[pedal_prog] = current_tick
+                        active_pedals[pedal_prog] = int(current_tick)
                 elif tok_type == "PedalOff":
                     pedal_prog = (
                         int(tok_val) if self.config.use_programs else current_program
                     )
                     if pedal_prog in active_pedals:
                         new_pedal = Pedal(
-                            active_pedals[pedal_prog],
-                            current_tick - active_pedals[pedal_prog],
+                            int(active_pedals[pedal_prog]).int(
+                                current_tick - active_pedals[pedal_prog]
+                            ),
                         )
                         if self.config.one_token_stream_for_programs:
                             check_inst(pedal_prog)
