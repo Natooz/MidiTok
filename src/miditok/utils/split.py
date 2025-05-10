@@ -387,7 +387,7 @@ def split_tokens_files_to_subsequences(
             with path.open("w") as outfile:
                 new_tok = deepcopy(tokens)
                 new_tok["ids"] = subseq
-                json.dump(tokens, outfile)
+                json.dump(new_tok, outfile)
 
 
 def _preprocess_time_signatures(score: Score, tokenizer: MusicTokenizer) -> None:
