@@ -13,7 +13,6 @@ from miditok.midi_tokenizer import MusicTokenizer
 
 if TYPE_CHECKING:
     from pathlib import Path
-    from typing import Optional
     from numpy.typing import NDArray
     from symusic.core import TimeSignatureTickList
 
@@ -121,7 +120,6 @@ class PerTok(MusicTokenizer):
 
         self.use_position_toks: bool = self.config.additional_params.get("use_position_toks", False)
         self.position_locations = None
-        print(f"(remove this): using pos toks: {self.use_position_toks}")
 
     def _create_base_vocabulary(self) -> list[str]:
         vocab = ["Bar_None"]
@@ -246,9 +244,8 @@ class PerTok(MusicTokenizer):
         return durations
 
     # Utility Methods
-    def _get_closest_array_value(
-        self, value: int | float, array: NDArray
-    ) -> int | float:
+    @staticmethod
+    def _get_closest_array_value(value: int | float, array: NDArray) -> int | float:
         return array[np.abs(array - value).argmin()]
 
     def _get_closest_duration_tuple(self, target: int) -> tuple[int, int, int]:
