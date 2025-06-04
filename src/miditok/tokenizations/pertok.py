@@ -73,6 +73,7 @@ class PerTok(MusicTokenizer):
         "ticks_per_quarter": 320,
         "max_microtiming_shift": 0.125,
         "num_microtiming_bins": 30,
+        "use_position_toks": true
         }
         config = TokenizerConfig(**TOKENIZER_PARAMS)
     """
@@ -118,6 +119,9 @@ class PerTok(MusicTokenizer):
             self.config.additional_params["max_microtiming_shift"] * self.tpq
         )
 
+        self.use_position_toks: bool = self.config.additional_params.get("use_position_toks", False)
+        print(f"(remove this): using pos toks: {self.use_position_toks}")
+
     def _create_base_vocabulary(self) -> list[str]:
         vocab = ["Bar_None"]
 
@@ -125,11 +129,15 @@ class PerTok(MusicTokenizer):
         self.timeshift_tick_values = self.create_timeshift_tick_values()
         self._add_note_tokens_to_vocab_list(vocab)
 
-        # TimeShift
-        vocab += [
-            f"TimeShift_{self._duration_tuple_to_str(duration)}"
-            for duration in self.durations
-        ]
+
+        if self.use_position_toks:
+            pass
+        # TimeShift tokens
+        else:
+            vocab += [
+                f"TimeShift_{self._duration_tuple_to_str(duration)}"
+                for duration in self.durations
+            ]
 
         # Duration
         if any(self.config.use_note_duration_programs):
@@ -241,11 +249,13 @@ class PerTok(MusicTokenizer):
     def _get_closest_duration_tuple(self, target: int) -> tuple[int, int, int]:
         return min(self.durations, key=lambda x: abs((x[0] * x[-1] + x[1]) - target))
 
-    def _convert_durations_to_ticks(self, duration: str) -> int:
+    @staticmethod
+    def _convert_durations_to_ticks(duration: str) -> int:
         beats, subdiv, tpq = map(int, duration.split("."))
         return beats * tpq + subdiv
 
-    def _duration_tuple_to_str(self, duration_tuple: tuple[int, int, int]) -> str:
+    @staticmethod
+    def _duration_tuple_to_str(duration_tuple: tuple[int, int, int]) -> str:
         return ".".join(str(x) for x in duration_tuple)
 
     def _add_time_events(self, events: list[Event], _time_division: int) -> list[Event]:
