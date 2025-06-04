@@ -265,7 +265,7 @@ class PerTok(MusicTokenizer):
         return beats * tpq + subdiv
 
     def _create_position_tok_locations(self):
-        positions = sorted(list(set((dur[0] * self.tpq) + dur[1] for dur in self.durations)))
+        positions = [0] + sorted(list(set((dur[0] * self.tpq) + dur[1] for dur in self.durations)))
         return tuple(positions)
 
     @staticmethod
@@ -279,6 +279,8 @@ class PerTok(MusicTokenizer):
         ticks_per_bar = self.tpq * TIME_SIGNATURE[0]
         curr_bar = 0
         bar_time = 0 # to keep track of location of last bar start
+        pos = 0
+        position_in_bar = 0
         microtiming = 0
 
         for event in events:
@@ -290,6 +292,7 @@ class PerTok(MusicTokenizer):
                 )  # tpq=220, time=20, so add 200 to get to next bar
 
                 bar_time += ticks_per_bar
+                position_in_bar = 0
 
                 all_events.append(
                     Event(
@@ -306,18 +309,13 @@ class PerTok(MusicTokenizer):
                 ticks_per_bar = den / 4 * num * self.tpq
 
             time_delta = event.time - previous_tick
-            #timeshift = 0
 
-            # Changing the 'Macro' time of the event
-            # Only should be placed before events that are followed by a MicroTime token (e.g. Pitch)
-            if (
-                time_delta >= self.min_timeshift
-                and event.type_ in self.microtime_events
-            ):
-
-                if self.use_position_toks:
-                    position_in_bar = event.time - bar_time
-                    pos = self._find_closest_position_tok(position_in_bar)
+            # Option 1: Adding Position tokens
+            if event.type_ in self.microtime_events and self.use_position_toks:
+                position_in_bar = event.time - bar_time
+                pos = self._find_closest_position_tok(position_in_bar)
+                microtiming = position_in_bar - pos
+                if time_delta >= self.min_timeshift:
                     all_events.append(
                         Event(
                             type_="Position",
@@ -327,11 +325,12 @@ class PerTok(MusicTokenizer):
                         )
                     )
                     previous_tick = bar_time + pos
-                    if self.use_microtiming:
-                        microtiming = position_in_bar - pos
 
-                # Timeshift token (original)
-                else:
+
+            # Option 2: creating Timeshift tokens
+            else:
+                timeshift = 0
+                if time_delta >= self.min_timeshift:
                     ts_tuple = self._get_closest_duration_tuple(time_delta)
                     ts = ".".join(str(x) for x in ts_tuple)
                     all_events.append(
@@ -344,15 +343,13 @@ class PerTok(MusicTokenizer):
                     )
                     timeshift = ts_tuple[0] * ts_tuple[-1] + ts_tuple[1]
                     previous_tick += timeshift
-                    if self.use_microtiming:
-                        microtiming = time_delta - timeshift
+                microtiming = time_delta - timeshift
 
             all_events.append(event)
 
             # MicroTiming
             # These will come only after certain types of tokens, e.g. 'Pitch'
             if self.use_microtiming and event.type_ in self.microtime_events:
-                #microtiming = time_delta - timeshift
                 closest_microtiming = int(
                     self._get_closest_array_value(
                         value=microtiming, array=self.microtiming_tick_values
