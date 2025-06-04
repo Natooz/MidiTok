@@ -278,14 +278,18 @@ class PerTok(MusicTokenizer):
         previous_tick = 0
         ticks_per_bar = self.tpq * TIME_SIGNATURE[0]
         curr_bar = 0
+        bar_time = 0 # to keep track of location of last bar start
+        microtiming = 0
 
         for event in events:
             # Bar
-            bar_time = previous_tick
+            global_time = previous_tick
             while event.time > ((curr_bar + 1) * ticks_per_bar - self.min_timeshift):
-                bar_time += ticks_per_bar - (
-                    bar_time % ticks_per_bar
+                global_time += ticks_per_bar - (
+                    global_time % ticks_per_bar
                 )  # tpq=220, time=20, so add 200 to get to next bar
+
+                bar_time += ticks_per_bar
 
                 all_events.append(
                     Event(
@@ -302,7 +306,7 @@ class PerTok(MusicTokenizer):
                 ticks_per_bar = den / 4 * num * self.tpq
 
             time_delta = event.time - previous_tick
-            timeshift = 0
+            #timeshift = 0
 
             # Changing the 'Macro' time of the event
             # Only should be placed before events that are followed by a MicroTime token (e.g. Pitch)
@@ -323,6 +327,8 @@ class PerTok(MusicTokenizer):
                         )
                     )
                     previous_tick = bar_time + pos
+                    if self.use_microtiming:
+                        microtiming = position_in_bar - pos
 
                 # Timeshift token (original)
                 else:
@@ -338,14 +344,15 @@ class PerTok(MusicTokenizer):
                     )
                     timeshift = ts_tuple[0] * ts_tuple[-1] + ts_tuple[1]
                     previous_tick += timeshift
+                    if self.use_microtiming:
+                        microtiming = time_delta - timeshift
 
             all_events.append(event)
 
-            # Microtiming
-            # Right now hard-coded to come only after 'Pitch' tokens
-            # TODO: Check with Nathan on the PitchInterval logic below
+            # MicroTiming
+            # These will come only after certain types of tokens, e.g. 'Pitch'
             if self.use_microtiming and event.type_ in self.microtime_events:
-                microtiming = time_delta - timeshift
+                #microtiming = time_delta - timeshift
                 closest_microtiming = int(
                     self._get_closest_array_value(
                         value=microtiming, array=self.microtiming_tick_values
@@ -359,6 +366,7 @@ class PerTok(MusicTokenizer):
                         desc=f"{closest_microtiming} microtiming",
                     )
                 )
+
         return all_events
 
     def _tokens_to_score(
@@ -412,6 +420,7 @@ class PerTok(MusicTokenizer):
             # Set tracking variables
             current_tick = 0
             curr_bar = 0
+            curr_bar_tick = 0
             current_program = 0
             previous_note_end = 0
             previous_pitch_onset = dict.fromkeys(self.config.programs, -128)
@@ -450,8 +459,11 @@ class PerTok(MusicTokenizer):
                 if tok_type == "Bar":
                     curr_bar += 1
                     current_tick += (ticks_per_bar * curr_bar) - current_tick
+                    curr_bar_tick = current_tick
                 elif tok_type == "TimeShift":
                     current_tick += self._convert_durations_to_ticks(tok_val)
+                elif tok_type == "Position":
+                    current_tick =  curr_bar_tick + int(tok_val)
                 elif tok_type in [
                     "Pitch",
                     "PitchDrum",
