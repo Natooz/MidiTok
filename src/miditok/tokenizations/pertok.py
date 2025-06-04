@@ -13,7 +13,7 @@ from miditok.midi_tokenizer import MusicTokenizer
 
 if TYPE_CHECKING:
     from pathlib import Path
-
+    from typing import Optional
     from numpy.typing import NDArray
     from symusic.core import TimeSignatureTickList
 
@@ -120,6 +120,7 @@ class PerTok(MusicTokenizer):
         )
 
         self.use_position_toks: bool = self.config.additional_params.get("use_position_toks", False)
+        self.position_locations = None
         print(f"(remove this): using pos toks: {self.use_position_toks}")
 
     def _create_base_vocabulary(self) -> list[str]:
@@ -129,10 +130,14 @@ class PerTok(MusicTokenizer):
         self.timeshift_tick_values = self.create_timeshift_tick_values()
         self._add_note_tokens_to_vocab_list(vocab)
 
-
+        # Position tokens - for denoting absolute positions of tokens
         if self.use_position_toks:
-            pass
-        # TimeShift tokens
+            self.position_locations = self._create_position_tok_locations()
+            vocab += [
+                f"Position_{pos}" for pos in self.position_locations
+            ]
+
+        # PerTok's original version uses 'Timeshift' to denote delta between two note's positions
         else:
             vocab += [
                 f"TimeShift_{self._duration_tuple_to_str(duration)}"
@@ -249,10 +254,19 @@ class PerTok(MusicTokenizer):
     def _get_closest_duration_tuple(self, target: int) -> tuple[int, int, int]:
         return min(self.durations, key=lambda x: abs((x[0] * x[-1] + x[1]) - target))
 
+    # Given a note's location, find the closest Position token
+    def _find_closest_position_tok(self, target: int) -> int:
+        return min(self.position_locations,
+                   key=lambda x: abs(x - target))
+
     @staticmethod
     def _convert_durations_to_ticks(duration: str) -> int:
         beats, subdiv, tpq = map(int, duration.split("."))
         return beats * tpq + subdiv
+
+    def _create_position_tok_locations(self):
+        positions = sorted(list(set((dur[0] * self.tpq) + dur[1] for dur in self.durations)))
+        return tuple(positions)
 
     @staticmethod
     def _duration_tuple_to_str(duration_tuple: tuple[int, int, int]) -> str:
@@ -290,25 +304,40 @@ class PerTok(MusicTokenizer):
             time_delta = event.time - previous_tick
             timeshift = 0
 
-            # Time Shift
-            # Only should be placed before 'Pitch' events
+            # Changing the 'Macro' time of the event
+            # Only should be placed before events that are followed by a MicroTime token (e.g. Pitch)
             if (
                 time_delta >= self.min_timeshift
                 and event.type_ in self.microtime_events
             ):
-                ts_tuple = self._get_closest_duration_tuple(time_delta)
-                ts = ".".join(str(x) for x in ts_tuple)
 
-                all_events.append(
-                    Event(
-                        type_="TimeShift",
-                        value=ts,
-                        time=event.time,
-                        desc=f"timeshift {ts}",
+                if self.use_position_toks:
+                    position_in_bar = event.time - bar_time
+                    pos = self._find_closest_position_tok(position_in_bar)
+                    all_events.append(
+                        Event(
+                            type_="Position",
+                            value=pos,
+                            time=event.time,
+                            desc=f"position {pos}"
+                        )
                     )
-                )
-                timeshift = ts_tuple[0] * ts_tuple[-1] + ts_tuple[1]
-                previous_tick += timeshift
+                    previous_tick = bar_time + pos
+
+                # Timeshift token (original)
+                else:
+                    ts_tuple = self._get_closest_duration_tuple(time_delta)
+                    ts = ".".join(str(x) for x in ts_tuple)
+                    all_events.append(
+                        Event(
+                            type_="TimeShift",
+                            value=ts,
+                            time=event.time,
+                            desc=f"timeshift {ts}",
+                        )
+                    )
+                    timeshift = ts_tuple[0] * ts_tuple[-1] + ts_tuple[1]
+                    previous_tick += timeshift
 
             all_events.append(event)
 
