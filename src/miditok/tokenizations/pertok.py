@@ -137,7 +137,8 @@ class PerTok(MusicTokenizer):
                 f"Position_{pos}" for pos in self.position_locations
             ]
 
-        # PerTok's original version uses 'Timeshift' to denote delta between two note's positions
+        # PerTok's original version uses 'Timeshift' to denote delta between
+        # two note's positions
         else:
             vocab += [
                 f"TimeShift_{self._duration_tuple_to_str(duration)}"
