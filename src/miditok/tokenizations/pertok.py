@@ -118,7 +118,9 @@ class PerTok(MusicTokenizer):
             self.config.additional_params["max_microtiming_shift"] * self.tpq
         )
 
-        self.use_position_toks: bool = self.config.additional_params.get("use_position_toks", False)
+        self.use_position_toks: bool = self.config.additional_params.get(
+            "use_position_toks", False
+        )
         self.position_locations = None
 
     def _create_base_vocabulary(self) -> list[str]:
