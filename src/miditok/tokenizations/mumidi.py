@@ -436,7 +436,7 @@ class MuMIDI(MusicTokenizer):
 
         # REST
         if self.config.use_rests:
-            vocab[0] += [f'Rest_{".".join(map(str, rest))}' for rest in self.rests]
+            vocab[0] += [f"Rest_{'.'.join(map(str, rest))}" for rest in self.rests]
 
         # TEMPO
         if self.config.use_tempos:
@@ -451,7 +451,7 @@ class MuMIDI(MusicTokenizer):
         if self.config.using_note_duration_tokens:
             vocab.append(
                 [
-                    f'Duration_{".".join(map(str, duration))}'
+                    f"Duration_{'.'.join(map(str, duration))}"
                     for duration in self.durations
                 ]
             )

@@ -17,13 +17,13 @@ from .structured import Structured
 from .tsd import TSD
 
 __all__ = [
-    "MIDILike",
+    "MMM",
     "REMI",
     "TSD",
-    "Structured",
-    "Octuple",
     "CPWord",
+    "MIDILike",
     "MuMIDI",
-    "MMM",
+    "Octuple",
     "PerTok",
+    "Structured",
 ]

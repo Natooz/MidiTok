@@ -260,8 +260,8 @@ class MIDILike(MusicTokenizer):
             # Set tracking variables
             current_tick = 0
             current_program = 0
-            previous_pitch_onset = {prog: -128 for prog in self.config.programs}
-            previous_pitch_chord = {prog: -128 for prog in self.config.programs}
+            previous_pitch_onset = dict.fromkeys(self.config.programs, -128)
+            previous_pitch_chord = dict.fromkeys(self.config.programs, -128)
             active_pedals = {}
             ticks_per_beat = score.ticks_per_quarter
             if max_duration_str is not None:
@@ -490,7 +490,7 @@ class MIDILike(MusicTokenizer):
 
         # TimeShift
         vocab += [
-            f'TimeShift_{".".join(map(str, duration))}' for duration in self.durations
+            f"TimeShift_{'.'.join(map(str, duration))}" for duration in self.durations
         ]
 
         # Add additional tokens
@@ -499,7 +499,7 @@ class MIDILike(MusicTokenizer):
         # Add durations if needed
         if self.config.use_sustain_pedals and self.config.sustain_pedal_duration:
             vocab += [
-                f'Duration_{".".join(map(str, duration))}'
+                f"Duration_{'.'.join(map(str, duration))}"
                 for duration in self.durations
             ]
 
@@ -761,8 +761,8 @@ class MIDILike(MusicTokenizer):
             max_duration = self._time_token_to_ticks(max_duration_str, ticks_per_beat)
         else:
             max_duration = None
-        previous_pitch_onset = {program: -128 for program in self.config.programs}
-        previous_pitch_chord = {program: -128 for program in self.config.programs}
+        previous_pitch_onset = dict.fromkeys(self.config.programs, -128)
+        previous_pitch_chord = dict.fromkeys(self.config.programs, -128)
 
         events = [Event(*tok.split("_")) for tok in tokens]
         current_tick = 0

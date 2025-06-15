@@ -716,7 +716,7 @@ class CPWord(MusicTokenizer):
                 [
                     "Ignore_None",
                     *[
-                        f'Duration_{".".join(map(str, duration))}'
+                        f"Duration_{'.'.join(map(str, duration))}"
                         for duration in self.durations
                     ],
                 ]
@@ -737,7 +737,7 @@ class CPWord(MusicTokenizer):
         if self.config.use_rests:
             vocab += [
                 ["Ignore_None"]
-                + [f'Rest_{".".join(map(str, rest))}' for rest in self.rests]
+                + [f"Rest_{'.'.join(map(str, rest))}" for rest in self.rests]
             ]
 
         # TEMPO

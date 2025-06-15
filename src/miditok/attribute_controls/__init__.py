@@ -21,9 +21,9 @@ __all__ = (
     "BarNoteDuration",
     "BarOnsetPolyphony",
     "BarPitchClass",
-    "TrackRepetition",
-    "TrackNoteDuration",
     "TrackNoteDensity",
+    "TrackNoteDuration",
     "TrackOnsetPolyphony",
+    "TrackRepetition",
     "create_random_ac_indexes",
 )

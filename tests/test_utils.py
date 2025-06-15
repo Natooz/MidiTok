@@ -6,17 +6,7 @@ from copy import copy
 from math import ceil
 from typing import TYPE_CHECKING
 
-import miditok.utils.utils
 import pytest
-from miditok import REMI, TokenizerConfig
-from miditok.constants import CLASS_OF_INST
-from miditok.utils import (
-    merge_same_program_tracks,
-    merge_tracks,
-    merge_tracks_per_class,
-    num_bar_pos,
-    remove_duplicated_notes,
-)
 from symusic import (
     ControlChange,
     KeySignature,
@@ -29,6 +19,17 @@ from symusic import (
     TimeSignature,
 )
 from symusic.core import NoteTickList
+
+import miditok.utils.utils
+from miditok import REMI, TokenizerConfig
+from miditok.constants import CLASS_OF_INST
+from miditok.utils import (
+    merge_same_program_tracks,
+    merge_tracks,
+    merge_tracks_per_class,
+    num_bar_pos,
+    remove_duplicated_notes,
+)
 
 from .utils_tests import (
     MIDI_PATHS_CORRUPTED,

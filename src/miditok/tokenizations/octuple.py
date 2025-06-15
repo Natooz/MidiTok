@@ -488,7 +488,7 @@ class Octuple(MusicTokenizer):
         if self.config.using_note_duration_tokens:
             vocab.append(
                 [
-                    f'Duration_{".".join(map(str, duration))}'
+                    f"Duration_{'.'.join(map(str, duration))}"
                     for duration in self.durations
                 ]
             )

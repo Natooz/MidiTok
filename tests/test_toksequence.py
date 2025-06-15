@@ -4,6 +4,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
+
 from miditok import TSD, TokenizerConfig, TokSequence
 
 from .utils_tests import MIDI_PATHS_MULTITRACK

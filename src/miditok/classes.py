@@ -218,8 +218,7 @@ class TokSequence:
                 return getattr(self, attr_)[val]
 
         msg = (
-            "This TokSequence seems to not be initialized, all its attributes "
-            "are None."
+            "This TokSequence seems to not be initialized, all its attributes are None."
         )
         raise ValueError(msg)
 
@@ -648,10 +647,15 @@ class TokenizerConfig:
                 f"greater than the second (received {pitch_range})"
             )
             raise ValueError(msg)
+        if not 0 <= drums_pitch_range[0] < drums_pitch_range[1] <= 127:
+            msg = (
+                "`drums_pitch_range` must be within 0 and 127, and an first value "
+                f"greater than the second (received {drums_pitch_range})"
+            )
+            raise ValueError(msg)
         if not 1 <= num_velocities <= 127:
             msg = (
-                "`num_velocities` must be within 1 and 127 (received "
-                f"{num_velocities})"
+                f"`num_velocities` must be within 1 and 127 (received {num_velocities})"
             )
             raise ValueError(msg)
         if max_pitch_interval and not 0 <= max_pitch_interval <= 127:

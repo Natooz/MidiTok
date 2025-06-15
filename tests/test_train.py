@@ -7,10 +7,11 @@ from dataclasses import replace
 from time import time
 from typing import TYPE_CHECKING
 
-import miditok
 import pytest
-from miditok.constants import DEFAULT_TOKENIZER_FILE_NAME
 from tqdm import tqdm
+
+import miditok
+from miditok.constants import DEFAULT_TOKENIZER_FILE_NAME
 
 from .utils_tests import (
     MIDI_PATHS_ONE_TRACK,
@@ -120,9 +121,9 @@ def test_tokenizer_training_and_encoding_decoding(
         for id_, byte_ in tokenizer2._vocab_base_id_to_byte.items()
     }
     vocab_inv = {v: k for k, v in tokenizer2._vocab_base.items()}
-    assert (
-        test_id_to_token == vocab_inv
-    ), "Vocabulary inversion failed, something is wrong with the way they are built"
+    assert test_id_to_token == vocab_inv, (
+        "Vocabulary inversion failed, something is wrong with the way they are built"
+    )
     # Test the two tokenizers are identical
     assert len(tokenizer2) == vocab_size + NUM_ADDITIONAL_TOKENS_SECOND_TRAINING
 
@@ -130,9 +131,9 @@ def test_tokenizer_training_and_encoding_decoding(
     # is the same) when not using a `continuing_subword_prefix`.
     # With Unigram, vocabs may have swapped ids orders.
     if model in ["BPE", "WordPiece"] and encode_ids_split == "no":
-        assert (
-            tokenizer2 == tokenizer1
-        ), "tokenizer 1-shot not equal to tokenizer 2-shots"
+        assert tokenizer2 == tokenizer1, (
+            "tokenizer 1-shot not equal to tokenizer 2-shots"
+        )
 
     # Checks tokens <--> ids <--> bytes conversions with one test case
     tokens = tokenizer1(files_paths[0], encode_ids=False)

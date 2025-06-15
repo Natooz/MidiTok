@@ -398,7 +398,7 @@ class Structured(MusicTokenizer):
         # TimeShift (same as durations)
         vocab.append("TimeShift_0.0.1")  # for a time shift of 0
         vocab += [
-            f'TimeShift_{".".join(map(str, duration))}' for duration in self.durations
+            f"TimeShift_{'.'.join(map(str, duration))}" for duration in self.durations
         ]
 
         # Add additional tokens (just Program for Structured)
