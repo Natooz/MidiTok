@@ -621,7 +621,7 @@ class TokenizerConfig:
         one_token_stream_for_programs: bool = ONE_TOKEN_STREAM_FOR_PROGRAMS,
         program_changes: bool = PROGRAM_CHANGES,
         max_pitch_interval: int = MAX_PITCH_INTERVAL,
-        pitch_intervals_max_time_dist: bool = PITCH_INTERVALS_MAX_TIME_DIST,
+        pitch_intervals_max_time_dist: int | float = PITCH_INTERVALS_MAX_TIME_DIST,
         drums_pitch_range: tuple[int, int] = DRUM_PITCH_RANGE,
         ac_polyphony_track: bool = AC_POLYPHONY_TRACK,
         ac_polyphony_bar: bool = AC_POLYPHONY_BAR,
