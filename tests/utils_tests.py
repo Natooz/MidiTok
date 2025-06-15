@@ -6,16 +6,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-import miditok
 import numpy as np
-from miditok.attribute_controls import BarAttributeControl
-from miditok.constants import (
-    CHORD_MAPS,
-    TIME_SIGNATURE,
-    TIME_SIGNATURE_RANGE,
-    USE_NOTE_DURATION_PROGRAMS,
-)
-from miditok.utils import get_bars_ticks, get_beats_ticks
 from symusic import (
     Note,
     Pedal,
@@ -26,11 +17,22 @@ from symusic import (
     Track,
 )
 
+import miditok
+from miditok.attribute_controls import BarAttributeControl
+from miditok.constants import (
+    CHORD_MAPS,
+    TIME_SIGNATURE,
+    TIME_SIGNATURE_RANGE,
+    USE_NOTE_DURATION_PROGRAMS,
+)
+from miditok.utils import get_bars_ticks, get_beats_ticks
+
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from miditok import MusicTokenizer, TokSequence
     from symusic.core import NoteTickList, TempoTickList
+
+    from miditok import MusicTokenizer, TokSequence
 
 SEED = 777
 

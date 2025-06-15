@@ -19,7 +19,7 @@ from .data_augmentation import (
 )
 
 __all__ = [
-    "augment_score",
     "augment_dataset",
+    "augment_score",
     "augment_score_multiple_offsets",
 ]

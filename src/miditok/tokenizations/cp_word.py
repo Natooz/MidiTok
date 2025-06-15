@@ -699,11 +699,24 @@ class CPWord(MusicTokenizer):
 
         # PITCH
         vocab.append(
-            ["Ignore_None", *[f"Pitch_{i}" for i in range(*self.config.pitch_range)]]
+            [
+                "Ignore_None",
+                *[
+                    f"Pitch_{i}"
+                    for i in range(
+                        self.config.pitch_range[0],
+                        self.config.pitch_range[1] + 1,
+                    )
+                ],
+            ]
         )
         if self.config.use_pitchdrum_tokens:
             vocab[2] += [
-                f"PitchDrum_{i}" for i in range(*self.config.drums_pitch_range)
+                f"PitchDrum_{i}"
+                for i in range(
+                    self.config.drums_pitch_range[0],
+                    self.config.drums_pitch_range[1] + 1,
+                )
             ]
 
         # VELOCITY
@@ -716,7 +729,7 @@ class CPWord(MusicTokenizer):
                 [
                     "Ignore_None",
                     *[
-                        f'Duration_{".".join(map(str, duration))}'
+                        f"Duration_{'.'.join(map(str, duration))}"
                         for duration in self.durations
                     ],
                 ]
@@ -737,7 +750,7 @@ class CPWord(MusicTokenizer):
         if self.config.use_rests:
             vocab += [
                 ["Ignore_None"]
-                + [f'Rest_{".".join(map(str, rest))}' for rest in self.rests]
+                + [f"Rest_{'.'.join(map(str, rest))}" for rest in self.rests]
             ]
 
         # TEMPO

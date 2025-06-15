@@ -670,7 +670,7 @@ class MusicTokenizer(ABC, HFHubMixin):
         )
         idx_out_of_pitch_range = np.where(
             np.logical_or(
-                note_soa["pitch"] < pitch_range[0], note_soa["pitch"] >= pitch_range[1]
+                note_soa["pitch"] < pitch_range[0], note_soa["pitch"] > pitch_range[1]
             )
         )[0]
         if len(idx_out_of_pitch_range) > 0:
@@ -2049,13 +2049,16 @@ class MusicTokenizer(ABC, HFHubMixin):
 
     def _add_note_tokens_to_vocab_list(self, vocab: list[str]) -> None:
         # NoteOn + NoteOff
+        pitch_values = list(
+            range(self.config.pitch_range[0], self.config.pitch_range[1] + 1)
+        )
         if self._note_on_off:
-            vocab += [f"NoteOn_{i}" for i in range(*self.config.pitch_range)]
+            vocab += [f"NoteOn_{i}" for i in pitch_values]
             if len(self.config.use_note_duration_programs) > 0:
-                vocab += [f"NoteOff_{i}" for i in range(*self.config.pitch_range)]
+                vocab += [f"NoteOff_{i}" for i in pitch_values]
         # Pitch + Duration (later done after velocity)
         else:
-            vocab += [f"Pitch_{i}" for i in range(*self.config.pitch_range)]
+            vocab += [f"Pitch_{i}" for i in pitch_values]
 
         # Velocity
         if self.config.use_velocities:
@@ -2084,16 +2087,16 @@ class MusicTokenizer(ABC, HFHubMixin):
 
         # PitchDrum
         if self.config.use_pitchdrum_tokens:
+            drum_pitch_values = list(
+                range(
+                    self.config.drums_pitch_range[0],
+                    self.config.drums_pitch_range[1] + 1,
+                )
+            )
             pitch_token_name = "DrumOn" if self._note_on_off else "PitchDrum"
-            vocab += [
-                f"{pitch_token_name}_{pitch_bend}"
-                for pitch_bend in range(*self.config.drums_pitch_range)
-            ]
+            vocab += [f"{pitch_token_name}_{pitch}" for pitch in drum_pitch_values]
             if self._note_on_off:
-                vocab += [
-                    f"DrumOff_{pitch_bend}"
-                    for pitch_bend in range(*self.config.drums_pitch_range)
-                ]
+                vocab += [f"DrumOff_{pitch}" for pitch in drum_pitch_values]
 
         # Chord
         if self.config.use_chords:
@@ -2101,7 +2104,7 @@ class MusicTokenizer(ABC, HFHubMixin):
 
         # Rest
         if self.config.use_rests:
-            vocab += [f'Rest_{".".join(map(str, rest))}' for rest in self.rests]
+            vocab += [f"Rest_{'.'.join(map(str, rest))}" for rest in self.rests]
 
         # Tempo
         if self.config.use_tempos:
@@ -3228,8 +3231,8 @@ class MusicTokenizer(ABC, HFHubMixin):
         current_pos = -1
         current_program = 0
         current_pitches = {p: [] for p in self.config.programs}
-        previous_pitch_onset = {program: -128 for program in self.config.programs}
-        previous_pitch_chord = {program: -128 for program in self.config.programs}
+        previous_pitch_onset = dict.fromkeys(self.config.programs, -128)
+        previous_pitch_chord = dict.fromkeys(self.config.programs, -128)
         note_tokens_types = ["Pitch", "NoteOn", "PitchDrum"]
         if self.config.use_pitch_intervals:
             note_tokens_types += ["PitchIntervalTime", "PitchIntervalChord"]

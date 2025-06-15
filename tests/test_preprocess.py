@@ -2,9 +2,10 @@
 
 from pathlib import Path
 
-import miditok
 import pytest
 from symusic import Score
+
+import miditok
 
 from .utils_tests import MIDI_PATHS_ALL
 

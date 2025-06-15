@@ -230,7 +230,7 @@ def create_random_ac_indexes(
                     else uniform(*tracks_idx_ratio)  # noqa: S311
                 )
             )
-            track_indexes = {i: True for i in sample(acs_track_idx, k=num_track_acs)}
+            track_indexes = dict.fromkeys(sample(acs_track_idx, k=num_track_acs), True)
         # For each "bar-level" ac randomly sample the bars to compute
         if bars_idx_ratio:
             bar_ticks_track = bar_ticks[np.where(bar_ticks <= track.end())[0]]

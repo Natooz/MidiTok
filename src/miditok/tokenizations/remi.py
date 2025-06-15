@@ -445,8 +445,8 @@ class REMI(MusicTokenizer):
             bar_at_last_ts_change = 0
             current_program = 0
             previous_note_end = 0
-            previous_pitch_onset = {prog: -128 for prog in self.config.programs}
-            previous_pitch_chord = {prog: -128 for prog in self.config.programs}
+            previous_pitch_onset = dict.fromkeys(self.config.programs, -128)
+            previous_pitch_chord = dict.fromkeys(self.config.programs, -128)
             active_pedals = {}
 
             # Set track / sequence program if needed

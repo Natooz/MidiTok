@@ -7,7 +7,7 @@ from .datasets import (
 )
 
 __all__ = [
-    "DatasetMIDI",
-    "DatasetJSON",
     "DataCollator",
+    "DatasetJSON",
+    "DatasetMIDI",
 ]

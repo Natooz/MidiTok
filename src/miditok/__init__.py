@@ -22,22 +22,22 @@ from .tokenizations import (
 from .tokenizer_training_iterator import TokTrainingIterator
 
 __all__ = [
-    "MusicTokenizer",
-    "Event",
-    "TokSequence",
-    "TokenizerConfig",
-    "TokTrainingIterator",
-    "MIDILike",
+    "MMM",
     "REMI",
     "TSD",
-    "Structured",
-    "Octuple",
     "CPWord",
+    "Event",
+    "MIDILike",
     "MuMIDI",
-    "MMM",
+    "MusicTokenizer",
+    "Octuple",
     "PerTok",
-    "utils",
+    "Structured",
+    "TokSequence",
+    "TokTrainingIterator",
+    "TokenizerConfig",
     "data_augmentation",
+    "utils",
 ]
 
 try:

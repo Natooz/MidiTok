@@ -11,7 +11,7 @@ import os
 import pytest
 
 
-@pytest.fixture()
+@pytest.fixture
 def hf_token() -> str | None:
     """
     Get the Hugging Face token from the environment variable HF_TOKEN_HUB_TESTS.

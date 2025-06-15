@@ -410,8 +410,17 @@ class MuMIDI(MusicTokenizer):
         vocab = [[] for _ in range(3)]
 
         # PITCH & DRUM PITCHES & BAR & POSITIONS & PROGRAM
-        vocab[0] += [f"Pitch_{i}" for i in range(*self.config.pitch_range)]
-        vocab[0] += [f"PitchDrum_{i}" for i in range(*self.config.drums_pitch_range)]
+        vocab[0] += [
+            f"Pitch_{i}"
+            for i in range(self.config.pitch_range[0], self.config.pitch_range[1] + 1)
+        ]
+        vocab[0] += [
+            f"PitchDrum_{i}"
+            for i in range(
+                self.config.drums_pitch_range[0],
+                self.config.drums_pitch_range[1] + 1,
+            )
+        ]
         vocab[0] += ["Bar_None"]  # new bar token
         max_num_beats = max(ts[0] for ts in self.time_signatures)
         num_positions = self.config.max_num_pos_per_beat * max_num_beats
@@ -436,7 +445,7 @@ class MuMIDI(MusicTokenizer):
 
         # REST
         if self.config.use_rests:
-            vocab[0] += [f'Rest_{".".join(map(str, rest))}' for rest in self.rests]
+            vocab[0] += [f"Rest_{'.'.join(map(str, rest))}" for rest in self.rests]
 
         # TEMPO
         if self.config.use_tempos:
@@ -451,7 +460,7 @@ class MuMIDI(MusicTokenizer):
         if self.config.using_note_duration_tokens:
             vocab.append(
                 [
-                    f'Duration_{".".join(map(str, duration))}'
+                    f"Duration_{'.'.join(map(str, duration))}"
                     for duration in self.durations
                 ]
             )
