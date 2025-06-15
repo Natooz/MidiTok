@@ -1280,8 +1280,10 @@ class MusicTokenizer(ABC, HFHubMixin):
         # max_time_interval is adjusted depending on the time signature denom / tpb
         max_time_interval = 0
         if self.config.use_pitch_intervals:
-            max_time_interval = (
-                ticks_per_beat[0, 1] * self.config.pitch_intervals_max_time_dist
+            max_time_interval = round(
+                (
+                    ticks_per_beat[0, 1] * self.config.pitch_intervals_max_time_dist
+                ).item()
             )
         previous_note_onset = -max_time_interval - 1
         previous_pitch_onset = -128  # lowest at a given time
@@ -1394,9 +1396,11 @@ class MusicTokenizer(ABC, HFHubMixin):
                 # Adjust max_time_interval if needed
                 if note.time >= ticks_per_beat[tpb_idx, 0]:
                     tpb_idx += 1
-                    max_time_interval = (
-                        ticks_per_beat[tpb_idx, 1]
-                        * self.config.pitch_intervals_max_time_dist
+                    max_time_interval = round(
+                        (
+                            ticks_per_beat[tpb_idx, 1]
+                            * self.config.pitch_intervals_max_time_dist
+                        ).item()
                     )
                 if note.start != previous_note_onset:
                     if (
