@@ -486,7 +486,8 @@ class PerTok(MusicTokenizer):
                     previous_pitch_chord[current_program] = pitch
 
                     try:
-                        if self.use_microtiming and "MicroTiming" in seq[ti + mt_offset]:
+                        if self.use_microtiming \
+                                and "MicroTiming" in seq[ti + mt_offset]:
                             mt_type, mt = seq[ti + mt_offset].split("_")
                             mt = int(mt)
                         else:
