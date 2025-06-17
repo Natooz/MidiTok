@@ -486,7 +486,7 @@ class PerTok(MusicTokenizer):
                     previous_pitch_chord[current_program] = pitch
 
                     try:
-                        if self.use_microtiming:
+                        if self.use_microtiming and "MicroTiming" in seq[ti + mt_offset]:
                             mt_type, mt = seq[ti + mt_offset].split("_")
                             mt = int(mt)
                         else:
@@ -509,7 +509,7 @@ class PerTok(MusicTokenizer):
                         ):
                             if isinstance(dur, str):
                                 dur = self._convert_durations_to_ticks(dur)
-                                # dur = self._tpb_tokens_to_ticks[ticks_per_beat][dur]
+
                             mt += current_tick
                             new_note = Note(int(mt), dur, pitch, int(vel))
                             if self.config.one_token_stream_for_programs:
