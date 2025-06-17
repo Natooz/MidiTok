@@ -264,9 +264,8 @@ class PerTok(MusicTokenizer):
         beats, subdiv, tpq = map(int, duration.split("."))
         return beats * tpq + subdiv
 
-    def _create_position_tok_locations(self):
-        positions = [0] + sorted(list(set((dur[0] * self.tpq) + dur[1] for dur in self.durations)))
-        return tuple(positions)
+    def _create_position_tok_locations(self) -> list[int]:
+        return [0, *sorted({(dur[0] * self.tpq) + dur[1] for dur in self.durations})]
 
     @staticmethod
     def _duration_tuple_to_str(duration_tuple: tuple[int, int, int]) -> str:
