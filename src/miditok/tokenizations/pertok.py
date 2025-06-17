@@ -13,6 +13,7 @@ from miditok.midi_tokenizer import MusicTokenizer
 
 if TYPE_CHECKING:
     from pathlib import Path
+
     from numpy.typing import NDArray
     from symusic.core import TimeSignatureTickList
 
