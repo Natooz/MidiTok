@@ -311,39 +311,41 @@ class PerTok(MusicTokenizer):
             time_delta = event.time - previous_tick
 
             # Option 1: Adding Position tokens
-            if event.type_ in self.microtime_events and self.use_position_toks:
-                position_in_bar = event.time - bar_time
-                pos = self._find_closest_position_tok(position_in_bar)
-                microtiming = position_in_bar - pos
-                if time_delta >= self.min_timeshift:
-                    all_events.append(
-                        Event(
-                            type_="Position",
-                            value=pos,
-                            time=event.time,
-                            desc=f"position {pos}"
+            if event.type_ in self.microtime_events:
+                
+                if self.use_position_toks:
+                    position_in_bar = event.time - bar_time
+                    pos = self._find_closest_position_tok(position_in_bar)
+                    microtiming = position_in_bar - pos
+                    if time_delta >= self.min_timeshift:
+                        all_events.append(
+                            Event(
+                                type_="Position",
+                                value=pos,
+                                time=event.time,
+                                desc=f"position {pos}"
+                            )
                         )
-                    )
-                    previous_tick = bar_time + pos
+                        previous_tick = bar_time + pos
 
 
-            # Option 2: creating Timeshift tokens
-            else:
-                timeshift = 0
-                if time_delta >= self.min_timeshift:
-                    ts_tuple = self._get_closest_duration_tuple(time_delta)
-                    ts = ".".join(str(x) for x in ts_tuple)
-                    all_events.append(
-                        Event(
-                            type_="TimeShift",
-                            value=ts,
-                            time=event.time,
-                            desc=f"timeshift {ts}",
+                # Option 2: creating Timeshift tokens
+                else:
+                    timeshift = 0
+                    if time_delta >= self.min_timeshift:
+                        ts_tuple = self._get_closest_duration_tuple(time_delta)
+                        ts = ".".join(str(x) for x in ts_tuple)
+                        all_events.append(
+                            Event(
+                                type_="TimeShift",
+                                value=ts,
+                                time=event.time,
+                                desc=f"timeshift {ts}",
+                            )
                         )
-                    )
-                    timeshift = ts_tuple[0] * ts_tuple[-1] + ts_tuple[1]
-                    previous_tick += timeshift
-                microtiming = time_delta - timeshift
+                        timeshift = ts_tuple[0] * ts_tuple[-1] + ts_tuple[1]
+                        previous_tick += timeshift
+                    microtiming = time_delta - timeshift
 
             all_events.append(event)
 
