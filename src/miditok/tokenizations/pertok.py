@@ -312,7 +312,7 @@ class PerTok(MusicTokenizer):
 
             # Option 1: Adding Position tokens
             if event.type_ in self.microtime_events:
-                
+
                 if self.use_position_toks:
                     position_in_bar = event.time - bar_time
                     pos = self._find_closest_position_tok(position_in_bar)
