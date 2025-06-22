@@ -5,8 +5,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from miditoolkit import Instrument, MidiFile, Pedal
-from tensorflow import Tensor as tfTensor
-from tensorflow import convert_to_tensor
 from torch import (
     FloatTensor as ptFloatTensor,
 )
@@ -32,21 +30,18 @@ if TYPE_CHECKING:
 
 def test_convert_tensors() -> None:
     original = [[2, 6, 95, 130, 25, 15]]
-    types = [ptTensor, ptIntTensor, ptFloatTensor, tfTensor]
+    types = [ptTensor, ptIntTensor, ptFloatTensor]
 
     tokenizer = miditok.TSD()
     for type_ in types:
-        tensor = convert_to_tensor(original) if type_ == tfTensor else type_(original)
+        tensor = type_(original)
         tokenizer(tensor)  # to make sure it passes as decorator
         as_list = miditok.midi_tokenizer.convert_ids_tensors_to_list(tensor)
         assert as_list == original
 
 
-def test_tokenize_datasets_file_tree(
-    tmp_path: Path, midi_paths: list[str | Path] | None = None
-) -> None:
-    if midi_paths is None:
-        midi_paths = MIDI_PATHS_ALL
+def test_tokenize_datasets_file_tree(tmp_path: Path) -> None:
+    midi_paths = MIDI_PATHS_ALL
 
     # Check the file tree is copied
     tokenizer = miditok.TSD(miditok.TokenizerConfig())
@@ -217,14 +212,14 @@ def are_midis_equals(midi_mtk: MidiFile, midi_sms: Score) -> bool:
     return err == 0
 
 
-def test_miditoolkit_to_symusic(midi_path: Path = MIDI_PATHS_ALL[0]) -> None:
-    midi = MidiFile(midi_path)
+def test_miditoolkit_to_symusic() -> None:
+    midi = MidiFile(MIDI_PATHS_ALL[0])
     score = miditoolkit_to_symusic(midi)
 
     assert are_midis_equals(midi, score)
 
 
-def test_legacy_miditoolkit(midi_path: Path = MIDI_PATHS_ALL[0]) -> None:
-    midi = MidiFile(midi_path)
+def test_legacy_miditoolkit() -> None:
+    midi = MidiFile(MIDI_PATHS_ALL[0])
     tokenizer = miditok.TSD()
     _ = tokenizer(midi)

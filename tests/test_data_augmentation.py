@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import pytest
 from symusic import Score
 from tqdm import tqdm
 
@@ -17,10 +18,8 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-def test_augment_dataset(
-    tmp_path: Path,
-    data_path: Path = HERE / "MIDIs_multitrack",
-) -> None:
+@pytest.mark.parametrize("data_path", [HERE / "MIDIs_multitrack"])
+def test_augment_dataset(tmp_path: Path, data_path: Path) -> None:
     # We only test data augmentation on MIDIs with one tokenization
 
     midi_aug_path = tmp_path / "Multitrack_MIDIs_aug"

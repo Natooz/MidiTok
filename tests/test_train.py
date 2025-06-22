@@ -54,13 +54,15 @@ for tokenization_ in TOKENIZATIONS_TRAIN:
     ["no", "bar", "beat"],
     ids=lambda s: f"{s}_split",
 )
+@pytest.mark.parametrize("files_paths", [MIDI_PATHS_ONE_TRACK], ids=lambda _: "")
+@pytest.mark.parametrize("vocab_size", [VOCAB_SIZE], ids=lambda s: f"vocab size {s}")
 def test_tokenizer_training_and_encoding_decoding(
     tok_params_set: tuple[str, dict[str, Any]],
     tmp_path: Path,
     model: Literal["BPE", "Unigram", "WordPiece"],
     encode_ids_split: Literal["bar", "beat", "no"],
-    files_paths: Sequence[Path] = MIDI_PATHS_ONE_TRACK,
-    vocab_size: int = VOCAB_SIZE,
+    files_paths: Sequence[Path],
+    vocab_size: int,
 ):
     r"""
     Train a tokenizer, check encoding-decoding keeps the same data.

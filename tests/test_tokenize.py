@@ -263,11 +263,9 @@ def _id_tok(tok_params_set: tuple[str, dict]) -> str:
 @pytest.mark.parametrize("file_path", MIDI_PATHS_ONE_TRACK, ids=lambda p: p.name)
 @pytest.mark.parametrize("tok_params_set", TOK_PARAMS_ONE_TRACK, ids=_id_tok)
 def test_one_track_midi_to_tokens_to_midi(
-    file_path: str | Path,
-    tok_params_set: tuple[str, dict[str, Any]],
-    saving_erroneous_files: bool = True,
+    file_path: str | Path, tok_params_set: tuple[str, dict[str, Any]]
 ):
-    _test_tokenize(file_path, tok_params_set, saving_erroneous_files)
+    _test_tokenize(file_path, tok_params_set, saving_erroneous_files=True)
 
 
 @pytest.mark.parametrize("file_path", MIDI_PATHS_ONE_TRACK_HARD, ids=lambda p: p.name)
@@ -275,26 +273,21 @@ def test_one_track_midi_to_tokens_to_midi(
 def test_one_track_midi_to_tokens_to_midi_hard(
     file_path: str | Path,
     tok_params_set: tuple[str, dict[str, Any]],
-    saving_erroneous_files: bool = True,
 ):
-    _test_tokenize(file_path, tok_params_set, saving_erroneous_files)
+    _test_tokenize(file_path, tok_params_set, saving_erroneous_files=True)
 
 
 @pytest.mark.parametrize("file_path", MIDI_PATHS_MULTITRACK, ids=lambda p: p.name)
 @pytest.mark.parametrize("tok_params_set", TOK_PARAMS_MULTITRACK, ids=_id_tok)
 def test_multitrack_midi_to_tokens_to_midi(
-    file_path: str | Path,
-    tok_params_set: tuple[str, dict[str, Any]],
-    saving_erroneous_files: bool = False,
+    file_path: str | Path, tok_params_set: tuple[str, dict[str, Any]]
 ):
-    _test_tokenize(file_path, tok_params_set, saving_erroneous_files)
+    _test_tokenize(file_path, tok_params_set, saving_erroneous_files=False)
 
 
 @pytest.mark.parametrize("file_path", ABC_PATHS, ids=lambda p: p.name)
 @pytest.mark.parametrize("tok_params_set", TOK_PARAMS_ONE_TRACK, ids=_id_tok)
 def test_abc_to_tokens_to_abc(
-    file_path: str | Path,
-    tok_params_set: tuple[str, dict[str, Any]],
-    saving_erroneous_files: bool = True,
+    file_path: str | Path, tok_params_set: tuple[str, dict[str, Any]]
 ):
-    _test_tokenize(file_path, tok_params_set, saving_erroneous_files)
+    _test_tokenize(file_path, tok_params_set, saving_erroneous_files=False)

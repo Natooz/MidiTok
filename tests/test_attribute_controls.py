@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from random import seed
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal
 
 import pytest
 from symusic import Score
@@ -68,10 +68,8 @@ def test_attribute_controls_computation(
     tokenization: str,
     random_tracks_idx: bool,
     random_bars_idx: bool,
-    tokenizer_params: dict[str, Any] | None = None,
 ) -> None:
-    if tokenizer_params is None:
-        tokenizer_params = TOKENIZER_PARAMS
+    tokenizer_params = TOKENIZER_PARAMS
 
     tokenizer: miditok.MusicTokenizer = getattr(miditok, tokenization)(
         tokenizer_config=miditok.TokenizerConfig(**tokenizer_params)
@@ -109,12 +107,14 @@ def test_attribute_controls_computation(
     ["no", "bar", "beat"],
     ids=lambda s: f"{s}_split",
 )
+@pytest.mark.parametrize("files_paths", [MIDI_PATHS_ONE_TRACK], ids=lambda _: "")
+@pytest.mark.parametrize("vocab_size", [VOCAB_SIZE], ids=lambda s: f"vocab size {s}")
 def test_tokenizer_training_and_encoding_decoding(
     tokenization: str,
     model: Literal["BPE", "Unigram", "WordPiece"],
     encode_ids_split: Literal["bar", "beat", "no"],
-    files_paths: Sequence[Path] = MIDI_PATHS_ONE_TRACK,
-    vocab_size: int = VOCAB_SIZE,
+    files_paths: Sequence[Path],
+    vocab_size: int,
 ):
     r"""
     Train a tokenizer to make sure the training iterator works with attribute controls.
