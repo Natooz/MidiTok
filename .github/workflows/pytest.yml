@@ -33,7 +33,7 @@ jobs:
       # the `--dist worksteal` distribution mode to dynamically reassign queued tests to
       # free workers.
       - name: Run tests
-        run: uv run pytest tests --cov=./ --cov-report=xml -n logical --dist worksteal --durations=0 --reruns=3
+        run: uv run pytest tests --cov=./ --cov-report=xml -n logical --dist worksteal --durations=0
         env:
           HF_TOKEN_HUB_TESTS: ${{ secrets.HF_TOKEN_HUB_TESTS }}
 
