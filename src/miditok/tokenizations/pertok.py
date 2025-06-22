@@ -134,9 +134,7 @@ class PerTok(MusicTokenizer):
         # Position tokens - for denoting absolute positions of tokens
         if self.use_position_toks:
             self.position_locations = self._create_position_tok_locations()
-            vocab += [
-                f"Position_{pos}" for pos in self.position_locations
-            ]
+            vocab += [f"Position_{pos}" for pos in self.position_locations]
 
         # PerTok's original version uses 'Timeshift' to denote delta between
         # two note's positions
@@ -257,8 +255,7 @@ class PerTok(MusicTokenizer):
 
     # Given a note's location, find the closest Position token
     def _find_closest_position_tok(self, target: int) -> int:
-        return min(self.position_locations,
-                   key=lambda x: abs(x - target))
+        return min(self.position_locations, key=lambda x: abs(x - target))
 
     @staticmethod
     def _convert_durations_to_ticks(duration: str) -> int:
@@ -278,7 +275,7 @@ class PerTok(MusicTokenizer):
         previous_tick = 0
         ticks_per_bar = self.tpq * TIME_SIGNATURE[0]
         curr_bar = 0
-        bar_time = 0 # to keep track of location of last bar start
+        bar_time = 0  # to keep track of location of last bar start
         pos = 0
         position_in_bar = 0
         microtiming = 0
@@ -312,7 +309,6 @@ class PerTok(MusicTokenizer):
 
             # Option 1: Adding Position tokens
             if event.type_ in self.microtime_events:
-
                 if self.use_position_toks:
                     position_in_bar = event.time - bar_time
                     pos = self._find_closest_position_tok(position_in_bar)
@@ -323,11 +319,10 @@ class PerTok(MusicTokenizer):
                                 type_="Position",
                                 value=pos,
                                 time=event.time,
-                                desc=f"position {pos}"
+                                desc=f"position {pos}",
                             )
                         )
                         previous_tick = bar_time + pos
-
 
                 # Option 2: creating Timeshift tokens
                 else:
@@ -462,7 +457,7 @@ class PerTok(MusicTokenizer):
                 elif tok_type == "TimeShift":
                     current_tick += self._convert_durations_to_ticks(tok_val)
                 elif tok_type == "Position":
-                    current_tick =  curr_bar_tick + int(tok_val)
+                    current_tick = curr_bar_tick + int(tok_val)
                 elif tok_type in [
                     "Pitch",
                     "PitchDrum",
@@ -489,8 +484,10 @@ class PerTok(MusicTokenizer):
                     previous_pitch_chord[current_program] = pitch
 
                     try:
-                        if self.use_microtiming \
-                                and "MicroTiming" in seq[ti + mt_offset]:
+                        if (
+                            self.use_microtiming
+                            and "MicroTiming" in seq[ti + mt_offset]
+                        ):
                             mt_type, mt = seq[ti + mt_offset].split("_")
                             mt = int(mt)
                         else:

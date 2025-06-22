@@ -146,9 +146,8 @@ def test_check_scores_equals(file_path: Path):
     assert not check_scores_equals(score, score_copy)
 
 
-def test_merge_tracks(
-    file_path: str | Path = MIDI_PATHS_ONE_TRACK[0],
-):
+@pytest.mark.parametrize("file_path", MIDI_PATHS_ONE_TRACK[:1], ids=lambda p: p.name)
+def test_merge_tracks(file_path: str | Path):
     # Load music file and only keep the first track
     score = Score(file_path)
     score.tracks = [score.tracks[0]]
@@ -290,7 +289,8 @@ def test_remove_duplicated_notes():
 
 
 @pytest.mark.parametrize("file_path", MIDI_PATHS_ONE_TRACK, ids=lambda p: p.name)
-def test_get_bars(file_path: Path, save_bars_markers: bool = False):
+def test_get_bars(file_path: Path):
+    save_bars_markers = False
     # Used for debug, this method do not make assertions
     score = Score(file_path)
     bars_ticks = miditok.utils.get_bars_ticks(score)
@@ -312,7 +312,8 @@ def test_get_num_notes_per_bar(file_path: Path):
 
 
 @pytest.mark.parametrize("file_path", MIDI_PATHS_MULTITRACK, ids=lambda p: p.name)
-def test_split_concat_score(file_path: Path, max_num_beats: int = 16):
+@pytest.mark.parametrize("max_num_beats", [16], ids=lambda x: f"{x} max beats")
+def test_split_concat_score(file_path: Path, max_num_beats: int):
     score = Score(file_path)
     score_splits = miditok.utils.split_score_per_beats(score, max_num_beats)
     ticks_beat = miditok.utils.get_beats_ticks(score, only_notes_onsets=True)

@@ -20,7 +20,7 @@ from .utils_tests import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable
     from pathlib import Path
 
     from symusic import Score
@@ -63,12 +63,11 @@ def test_dataset_midi(
     ac_random_bars_ratio: tuple[float, float] | None,
     func_labels: Callable,
     num_overlap_bars: int,
-    files_paths: Sequence[Path] = MIDI_PATHS_MULTITRACK
-    + MIDI_PATHS_ONE_TRACK
-    + MIDI_PATHS_CORRUPTED
-    + ABC_PATHS,
-    max_seq_len: int = 1000,
 ):
+    max_seq_len = 1000
+    files_paths = (
+        MIDI_PATHS_MULTITRACK + MIDI_PATHS_ONE_TRACK + MIDI_PATHS_CORRUPTED + ABC_PATHS
+    )
     config = miditok.TokenizerConfig(
         use_programs=True,
         one_token_stream_for_programs=one_token_stream_for_programs,
@@ -136,9 +135,8 @@ def test_dataset_midi(
         pass
 
 
-def test_dataset_json(tmp_path: Path, file_paths: Sequence[Path] | None = None):
-    if file_paths is None:
-        file_paths = MIDI_PATHS_MULTITRACK[:5]
+def test_dataset_json(tmp_path: Path):
+    file_paths = MIDI_PATHS_MULTITRACK[:5]
     tokens_dir_path = tmp_path / "multitrack_tokens_dataset_json"
 
     config = miditok.TokenizerConfig(use_programs=True)

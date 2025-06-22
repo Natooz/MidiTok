@@ -48,7 +48,8 @@ def test_tokseq_slice_and_concat():
 
 
 @pytest.mark.parametrize("file_path", MIDI_PATHS_MULTITRACK, ids=lambda p: p.name)
-def test_split_tokseq_per_bars_beats(file_path: Path, tokenization: Callable = TSD):
+@pytest.mark.parametrize("tokenization", [TSD], ids=lambda c: c.__name__)
+def test_split_tokseq_per_bars_beats(file_path: Path, tokenization: Callable):
     tokenizer = tokenization(TokenizerConfig(use_programs=True))
     tokseq = tokenizer(file_path)
 
