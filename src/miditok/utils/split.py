@@ -6,7 +6,6 @@ import json
 from copy import deepcopy
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-from warnings import warn
 
 from symusic import Score, TextMeta, TimeSignature
 from symusic.core import TimeSignatureTickList
@@ -83,11 +82,6 @@ def split_files_for_training(
     # Safety checks
     split_hidden_file_path = save_dir / f".{hash(tuple(files_paths))}"
     if split_hidden_file_path.is_file():
-        warn(
-            f"These files have already been split in the saving directory ({save_dir})."
-            f" Skipping file splitting.",
-            stacklevel=2,
-        )
         return [
             path
             for path in save_dir.glob("**/*")

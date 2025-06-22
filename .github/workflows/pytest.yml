@@ -19,25 +19,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
         with:
+          enable-cache: true
           python-version: ${{ matrix.python-version }}
-          cache: pip
-          cache-dependency-path: pyproject.toml
 
-      - name: Install dependencies
-        run: |
-          # Install local package with tests dependencies extras
-          python -m pip install --upgrade pip
-          pip install -e ".[tests]"
+      - name: Install the project
+        run: uv sync --extra tests
 
       # Tokenizer training tests are significantly slower than others.
       # So that xdist don't assign chunks of training tests to the same worker, we use
       # the `--dist worksteal` distribution mode to dynamically reassign queued tests to
       # free workers.
-      - name: Test with pytest
-        run: python -m pytest --cov=./ --cov-report=xml -n logical --dist worksteal --durations=0 -v tests
+      - name: Run tests
+        run: uv run pytest tests --cov=./ --cov-report=xml -n logical --dist worksteal --durations=0 --reruns=3
         env:
           HF_TOKEN_HUB_TESTS: ${{ secrets.HF_TOKEN_HUB_TESTS }}
 
