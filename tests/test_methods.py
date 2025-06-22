@@ -5,8 +5,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from miditoolkit import Instrument, MidiFile, Pedal
-from tensorflow import Tensor as tfTensor
-from tensorflow import convert_to_tensor
 from torch import (
     FloatTensor as ptFloatTensor,
 )
@@ -32,11 +30,11 @@ if TYPE_CHECKING:
 
 def test_convert_tensors() -> None:
     original = [[2, 6, 95, 130, 25, 15]]
-    types = [ptTensor, ptIntTensor, ptFloatTensor, tfTensor]
+    types = [ptTensor, ptIntTensor, ptFloatTensor]
 
     tokenizer = miditok.TSD()
     for type_ in types:
-        tensor = convert_to_tensor(original) if type_ == tfTensor else type_(original)
+        tensor = type_(original)
         tokenizer(tensor)  # to make sure it passes as decorator
         as_list = miditok.midi_tokenizer.convert_ids_tensors_to_list(tensor)
         assert as_list == original

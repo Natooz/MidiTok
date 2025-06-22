@@ -49,7 +49,6 @@ tests = [
     "pytest-cov",
     "pytest-xdist[psutil]",
     "torch",
-    "tensorflow",
     "miditoolkit",
 ]
 docs = [
