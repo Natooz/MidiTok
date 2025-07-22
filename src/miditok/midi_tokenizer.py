@@ -1182,7 +1182,7 @@ class MusicTokenizer(ABC, HFHubMixin):
                 score.ticks_per_quarter,
                 ticks_bars,
                 ticks_beats,
-                attribute_controls_indexes.get(ti, None),
+                attribute_controls_indexes.get(ti),
             )
             if self.config.one_token_stream_for_programs:
                 all_events += track_events
