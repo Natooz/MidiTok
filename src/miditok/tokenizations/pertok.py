@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from symusic import Note, Pedal, PitchBend, Score, Tempo, TimeSignature, Track
@@ -106,11 +106,12 @@ class PerTok(MusicTokenizer):
         ):
             self.microtiming_tick_values = self.create_microtiming_tick_values()
 
-    def __setstate__(self, state):
+    def __setstate__(self, state: dict[str, Any]) -> None:
+        """Restore object state from pickle, setting defaults for missing attributes."""
         # Load the state normally
         self.__dict__.update(state)
         # Set default for missing attribute
-        if not hasattr(self, 'use_position_toks'):
+        if "use_position_toks" not in state:
             self.use_position_toks = False
 
     def _tweak_config_before_creating_voc(self) -> None:
