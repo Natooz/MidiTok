@@ -106,6 +106,13 @@ class PerTok(MusicTokenizer):
         ):
             self.microtiming_tick_values = self.create_microtiming_tick_values()
 
+    def __setstate__(self, state):
+        # Load the state normally
+        self.__dict__.update(state)
+        # Set default for missing attribute
+        if not hasattr(self, 'use_position_toks'):
+            self.use_position_toks = False
+
     def _tweak_config_before_creating_voc(self) -> None:
         self.tpq = self.config.additional_params["ticks_per_quarter"]
         self.use_microtiming = self.config.additional_params["use_microtiming"]
