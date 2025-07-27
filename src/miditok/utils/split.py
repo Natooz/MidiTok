@@ -273,10 +273,17 @@ def split_score_per_note_density(
     if len(ticks_split) == 1:
         return [score]
 
-    return [
-        score.clip(t_start, t_end).shift_time(-t_start)
-        for t_start, t_end in ticks_split
-    ]
+    # Splitting the score into smaller chunks and copying metadata
+    split_scores = []
+    for t_start, t_end in ticks_split:
+        split_score = score.clip(t_start, t_end).shift_time(-t_start)
+        split_score.tempos = score.tempos
+        split_score.time_signatures = score.time_signatures
+        split_score.key_signatures = score.key_signatures
+        split_score.markers = score.markers
+        split_scores.append(split_score)
+    
+    return split_scores
 
 
 def get_average_num_tokens_per_note(
