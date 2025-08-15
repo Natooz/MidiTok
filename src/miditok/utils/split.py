@@ -40,6 +40,7 @@ def split_files_for_training(
     average_num_tokens_per_note: float | None = None,
     num_overlap_bars: int = 1,
     min_seq_len: int | None = None,
+    skip_drums: bool = False
 ) -> list[Path]:
     """
     Split a list of music files into smaller chunks to use for training.
@@ -77,6 +78,8 @@ def split_files_for_training(
     :param min_seq_len: minimum sequence length, only used when splitting at the last
         bar of the file. (default: ``None``, see default value of
         :py:func:`miditok.pytorch_data.split_score_per_note_density`)
+    :param skip_drums: will skip processing drum tracks if all tracks are split into 
+        their own tracks i.e. (``tokenizer.one_token_stream``) (default: ``False``)
     :return: the paths to the files splits.
     """
     # Safety checks
@@ -119,6 +122,10 @@ def split_files_for_training(
 
         # Split per note density
         for ti, score_to_split in enumerate(scores):
+            
+            if skip_drums and len(score_to_split.tracks) == 1 and score_to_split.tracks[0].is_drum:
+                continue
+            
             score_chunks = split_score_per_note_density(
                 score_to_split,
                 max_seq_len,
