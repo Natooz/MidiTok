@@ -832,7 +832,7 @@ class MIDILike(MusicTokenizer):
                         events[i].value
                     ]
             elif events[i].type_ == "TimeSig":
-                num, den = self._parse_token_time_signature(events[i].value)
+                _, den = self._parse_token_time_signature(events[i].value)
                 ticks_per_beat = self._tpb_per_ts[den]
                 if max_duration is not None:
                     max_duration = self._time_token_to_ticks(
