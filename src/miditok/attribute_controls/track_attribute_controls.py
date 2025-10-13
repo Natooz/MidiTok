@@ -66,7 +66,7 @@ class TrackOnsetPolyphony(AttributeControl):
         """
         del time_division, ticks_bars, ticks_beats, bars_idx
         notes_soa = track.notes.numpy()
-        unique_onsets, counts_onsets = np.unique(notes_soa["time"], return_counts=True)
+        _, counts_onsets = np.unique(notes_soa["time"], return_counts=True)
         onset_poly_min, onset_poly_max = np.min(counts_onsets), np.max(counts_onsets)
         if onset_poly_min > self.min_polyphony:
             onset_poly_min = self.min_polyphony
