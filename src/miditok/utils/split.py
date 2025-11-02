@@ -40,7 +40,7 @@ def split_files_for_training(
     average_num_tokens_per_note: float | None = None,
     num_overlap_bars: int = 1,
     min_seq_len: int | None = None,
-    skip_drums: bool = False
+    preprocessing_method: callable[Score, Score] | None = None,
 ) -> list[Path]:
     """
     Split a list of music files into smaller chunks to use for training.
@@ -78,8 +78,9 @@ def split_files_for_training(
     :param min_seq_len: minimum sequence length, only used when splitting at the last
         bar of the file. (default: ``None``, see default value of
         :py:func:`miditok.pytorch_data.split_score_per_note_density`)
-    :param skip_drums: will skip processing drum tracks if all tracks are split into 
-        their own tracks i.e. (``tokenizer.one_token_stream``) (default: ``False``)
+    :param preprocessing_method: a custom preprocessing method to apply to each 
+        ``symusic.Score`` before splitting it. This method must take as input a
+        ``symusic.Score`` and return a ``symusic.Score``. (default: ``None``)
     :return: the paths to the files splits.
     """
     # Safety checks
@@ -114,6 +115,10 @@ def split_files_for_training(
         # First preprocess time signatures to avoid cases where they might cause errors
         _preprocess_time_signatures(scores[0], tokenizer)
 
+        # Apply custom preprocessing if any
+        if preprocessing_method is not None:
+            scores[0] = preprocessing_method(scores[0])
+
         # Separate track if needed
         tracks_separated = False
         if not tokenizer.one_token_stream and len(scores[0].tracks) > 1:
@@ -122,10 +127,6 @@ def split_files_for_training(
 
         # Split per note density
         for ti, score_to_split in enumerate(scores):
-            
-            if skip_drums and len(score_to_split.tracks) == 1 and score_to_split.tracks[0].is_drum:
-                continue
-            
             score_chunks = split_score_per_note_density(
                 score_to_split,
                 max_seq_len,
