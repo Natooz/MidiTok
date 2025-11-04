@@ -78,7 +78,7 @@ def split_files_for_training(
     :param min_seq_len: minimum sequence length, only used when splitting at the last
         bar of the file. (default: ``None``, see default value of
         :py:func:`miditok.pytorch_data.split_score_per_note_density`)
-    :param preprocessing_method: a custom preprocessing method to apply to each 
+    :param preprocessing_method: a custom preprocessing method to apply to each
         ``symusic.Score`` before splitting it. This method must take as input a
         ``symusic.Score`` and return a ``symusic.Score``. (default: ``None``)
     :return: the paths to the files splits.

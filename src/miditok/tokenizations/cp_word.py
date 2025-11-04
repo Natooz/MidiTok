@@ -854,7 +854,9 @@ class CPWord(MusicTokenizer):
                     "PitchDrum",
                 }:
                     if self.config.use_programs:
-                        program = int(self[5, token[5]].split("_")[1])
+                        program = int(
+                            token[self.vocab_types_idx["Program"]].split("_")[1]
+                        )
                     if int(token_value) in current_pitches[program]:
                         err += 1  # pitch already played at current position
                     else:
