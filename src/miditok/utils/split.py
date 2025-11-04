@@ -109,7 +109,7 @@ def split_files_for_training(
         maxinterval=480,
     )
 
-    fn = partial(_split_files_for_training_per_file, tokenizer, save_dir, max_seq_len, average_num_tokens_per_note, num_overlap_bars, min_seq_len, preprocessing_method)
+    fn = partial(_split_files_for_training_per_file, tokenizer, save_dir, max_seq_len, average_num_tokens_per_note, num_overlap_bars, min_seq_len, preprocessing_method, root_dir)
     new_files_paths = process_map(fn, files_paths, max_workers=4, tqdm_class=tqdm_class)
 
     # Save file in save_dir to indicate file split has been performed
@@ -125,7 +125,8 @@ def _split_files_for_training_per_file(file_path: Path,
     average_num_tokens_per_note: float | None = None,
     num_overlap_bars: int = 1,
     min_seq_len: int | None = None,
-    preprocessing_method: callable[Score, Score] | None = None) -> list[Path]:
+    preprocessing_method: callable[Score, Score] | None = None,
+    root_dir: Path | None = None) -> list[Path]:
         
     print(f"Splitting file: {file_path}")
     new_files_paths = []
