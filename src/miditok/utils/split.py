@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING, Any
 from symusic import Score, TextMeta, TimeSignature
 from symusic.core import TimeSignatureTickList
 from tqdm import tqdm
+from tqdm.contrib.concurrent import process_map
+from functools import partial
 
 from miditok.constants import (
     MAX_NUM_FILES_NUM_TOKENS_PER_NOTE,
@@ -100,65 +102,15 @@ def split_files_for_training(
     root_dir = get_deepest_common_subdir(files_paths)
 
     # Splitting files
-    new_files_paths = []
-    for file_path in tqdm(
+    tqdm_class = tqdm(
         files_paths,
         desc=f"Splitting music files ({save_dir})",
         miniters=int(len(files_paths) / 20),
         maxinterval=480,
-    ):
-        try:
-            scores = [Score(file_path)]
-        except SCORE_LOADING_EXCEPTION:
-            continue
+    )
 
-        # First preprocess time signatures to avoid cases where they might cause errors
-        _preprocess_time_signatures(scores[0], tokenizer)
-
-        # Apply custom preprocessing if any
-        if preprocessing_method is not None:
-            scores[0] = preprocessing_method(scores[0])
-
-        # Separate track if needed
-        tracks_separated = False
-        if not tokenizer.one_token_stream and len(scores[0].tracks) > 1:
-            scores = split_score_per_tracks(scores[0])
-            tracks_separated = True
-
-        # Split per note density
-        for ti, score_to_split in enumerate(scores):
-            score_chunks = split_score_per_note_density(
-                score_to_split,
-                max_seq_len,
-                average_num_tokens_per_note,
-                num_overlap_bars,
-                min_seq_len,
-            )
-
-            # Save them
-            for _i, chunk_to_save in enumerate(score_chunks):
-                # Skip it if there are no notes, this can happen with
-                # portions of tracks with no notes but tempo/signature
-                # changes happening later
-                if len(chunk_to_save.tracks) == 0 or chunk_to_save.note_num() == 0:
-                    continue
-                # Add a marker to indicate chunk number
-                chunk_to_save.markers.append(
-                    TextMeta(0, f"miditok: chunk {_i}/{len(score_chunks) - 1}")
-                )
-                if tracks_separated:
-                    file_name = f"{file_path.stem}_t{ti}_{_i}"
-                else:
-                    file_name = f"{file_path.stem}_{_i}"
-                saving_path = save_dir / file_path.relative_to(root_dir).with_stem(
-                    file_name
-                )
-                saving_path.parent.mkdir(parents=True, exist_ok=True)
-                if file_path.suffix in MIDI_FILES_EXTENSIONS:
-                    chunk_to_save.dump_midi(saving_path)
-                else:
-                    chunk_to_save.dump_abc(saving_path)
-                new_files_paths.append(saving_path)
+    fn = partial(_split_files_for_training_per_file, tokenizer, save_dir, max_seq_len, average_num_tokens_per_note, num_overlap_bars, min_seq_len, preprocessing_method)
+    new_files_paths = process_map(fn, files_paths, max_workers=4, tqdm_class=tqdm_class)
 
     # Save file in save_dir to indicate file split has been performed
     with split_hidden_file_path.open("w") as f:
@@ -166,6 +118,72 @@ def split_files_for_training(
 
     return new_files_paths
 
+def _split_files_for_training_per_file(file_path: Path,
+    tokenizer: MusicTokenizer,
+    save_dir: Path,
+    max_seq_len: int,
+    average_num_tokens_per_note: float | None = None,
+    num_overlap_bars: int = 1,
+    min_seq_len: int | None = None,
+    preprocessing_method: callable[Score, Score] | None = None) -> list[Path]:
+        
+    print(f"Splitting file: {file_path}")
+    new_files_paths = []
+    try:
+        scores = [Score(file_path)]
+    except SCORE_LOADING_EXCEPTION:
+        return new_files_paths
+
+    # First preprocess time signatures to avoid cases where they might cause errors
+    _preprocess_time_signatures(scores[0], tokenizer)
+
+    # Apply custom preprocessing if any
+    if preprocessing_method is not None:
+        scores[0] = preprocessing_method(scores[0])
+
+    # Separate track if needed
+    tracks_separated = False
+    if not tokenizer.one_token_stream and len(scores[0].tracks) > 1:
+        scores = split_score_per_tracks(scores[0])
+        tracks_separated = True
+
+    # Split per note density
+    for ti, score_to_split in enumerate(scores):
+
+        score_chunks = split_score_per_note_density(
+            score_to_split,
+            max_seq_len,
+            average_num_tokens_per_note,
+            num_overlap_bars,
+            min_seq_len,
+        )
+
+        # Save them
+        for _i, chunk_to_save in enumerate(score_chunks):
+            # Skip it if there are no notes, this can happen with
+            # portions of tracks with no notes but tempo/signature
+            # changes happening later
+            if len(chunk_to_save.tracks) == 0 or chunk_to_save.note_num() == 0:
+                continue
+            # Add a marker to indicate chunk number
+            chunk_to_save.markers.append(
+                TextMeta(0, f"miditok: chunk {_i}/{len(score_chunks) - 1}")
+            )
+            if tracks_separated:
+                file_name = f"{file_path.stem}_t{ti}_{_i}"
+            else:
+                file_name = f"{file_path.stem}_{_i}"
+            saving_path = save_dir / file_path.relative_to(root_dir).with_stem(
+                file_name
+            )
+            saving_path.parent.mkdir(parents=True, exist_ok=True)
+            if file_path.suffix in MIDI_FILES_EXTENSIONS:
+                chunk_to_save.dump_midi(saving_path)
+            else:
+                chunk_to_save.dump_abc(saving_path)
+            new_files_paths.append(saving_path)
+
+    return new_files_paths
 
 def split_score_per_note_density(
     score: Score,
