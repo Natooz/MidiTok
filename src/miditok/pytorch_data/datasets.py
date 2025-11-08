@@ -152,7 +152,6 @@ class DatasetMIDI(_DatasetABC):
         | None = None,
         sample_key_name: str = "input_ids",
         labels_key_name: str = "labels",
-        pre_tokenize_thread_count: int = 1,
     ) -> None:
         super().__init__()
 
@@ -170,40 +169,28 @@ class DatasetMIDI(_DatasetABC):
         self.labels_key_name = labels_key_name
         self.samples, self.labels = [], [] if func_to_get_labels else None
 
-        # Pre-tokenize the files in parallel
+        # Pre-tokenize the files
         if pre_tokenize:
-            from concurrent.futures import ThreadPoolExecutor, as_completed
-            from tqdm import tqdm
-
-            def process_file(file_path):
+            for file_path in tqdm(
+                self.files_paths,
+                desc="Pre-tokenizing",
+                miniters=int(len(self.files_paths) / 20),
+                maxinterval=480,
+            ):
                 try:
                     score = Score(file_path)
                 except SCORE_LOADING_EXCEPTION:
-                    return []
+                    continue
                 tokseq = self._tokenize_score(score)
                 if tokenizer.one_token_stream:
                     tokseq = [tokseq]
-                results = []
                 for seq in tokseq:
-                    sample = LongTensor(seq.ids)
-                    label = None
+                    self.samples.append(LongTensor(seq.ids))
                     if func_to_get_labels:
                         label = func_to_get_labels(score, seq, file_path)
                         if not isinstance(label, LongTensor):
                             label = LongTensor(label)
-                    results.append((sample, label))
-                return results
-
-            self.samples = []
-            self.labels = [] if func_to_get_labels else None
-            with ThreadPoolExecutor(max_workers=pre_tokenize_thread_count) as executor:
-                futures = {executor.submit(process_file, fp): fp for fp in self.files_paths}
-                for future in tqdm(as_completed(futures), total=len(futures), desc="Pre-tokenizing"):
-                    results = future.result()
-                    for sample, label in results:
-                        self.samples.append(sample)
-                        if func_to_get_labels:
-                            self.labels.append(label)
+                        self.labels.append(label)
 
     def __getitem__(self, idx: int) -> dict[str, LongTensor]:
         """
