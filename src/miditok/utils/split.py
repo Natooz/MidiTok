@@ -5,11 +5,11 @@ from __future__ import annotations
 import json
 from copy import deepcopy
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
+from os import cpu_count
 
 from symusic import Score, TextMeta, TimeSignature
 from symusic.core import TimeSignatureTickList
-from tqdm import tqdm
 from tqdm.contrib.concurrent import process_map
 from functools import partial
 
@@ -43,7 +43,8 @@ def split_files_for_training(
     num_overlap_bars: int = 1,
     min_seq_len: int | None = None,
     preprocessing_method: callable[Score, Score] | None = None,
-    parallel_workers: int = 1
+    parallel_workers: int = min(32, cpu_count() + 4),
+    parallel_chunk_size: int = 1,
 ) -> list[Path]:
     """
     Split a list of music files into smaller chunks to use for training.
@@ -115,23 +116,14 @@ def split_files_for_training(
         root_dir=root_dir
     )
     new_files_paths: list[Path] = []
-    from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    with ThreadPoolExecutor(max_workers=parallel_workers) as executor:
-        futures = [executor.submit(fn, file_path) for file_path in files_paths]
-        for future in tqdm(
-            as_completed(futures),
-            total=len(futures),
-            desc=f"Splitting music files ({save_dir})",
-            miniters=int(len(files_paths) / 20),
-            maxinterval=480,
-        ):
-            try:
-                res = future.result()
-                new_files_paths.extend(res)
-            except Exception as e:  # pragma: no cover - logging
-                # Skip file on error, could add logging here
-                continue
+    new_files_paths = process_map(fn, 
+                files_paths, 
+                max_workers=parallel_workers, 
+                chunksize=parallel_chunk_size,
+                desc=f"Splitting music files ({save_dir})", 
+                miniters=int(len(files_paths) / 20), 
+                maxinterval=480)
 
     # Save file in save_dir to indicate file split has been performed
     with split_hidden_file_path.open("w") as f:
