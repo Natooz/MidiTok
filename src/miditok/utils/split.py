@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from copy import deepcopy
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 from symusic import Score, TextMeta, TimeSignature
 from symusic.core import TimeSignatureTickList
@@ -43,6 +43,7 @@ def split_files_for_training(
     num_overlap_bars: int = 1,
     min_seq_len: int | None = None,
     preprocessing_method: callable[Score, Score] | None = None,
+    parallel_workers: int = 1
 ) -> list[Path]:
     """
     Split a list of music files into smaller chunks to use for training.
@@ -101,16 +102,36 @@ def split_files_for_training(
     # Determine the deepest common subdirectory to replicate file tree
     root_dir = get_deepest_common_subdir(files_paths)
 
-    # Splitting files
-    tqdm_class = tqdm(
-        files_paths,
-        desc=f"Splitting music files ({save_dir})",
-        miniters=int(len(files_paths) / 20),
-        maxinterval=480,
+    # Splitting files (optionally in parallel). We prefer threads to avoid pickling the tokenizer.
+    fn = partial(
+        _split_files_for_training_per_file,
+        tokenizer=tokenizer,
+        save_dir=save_dir,
+        max_seq_len=max_seq_len,
+        average_num_tokens_per_note=average_num_tokens_per_note,
+        num_overlap_bars=num_overlap_bars,
+        min_seq_len=min_seq_len,
+        preprocessing_method=preprocessing_method,
+        root_dir=root_dir
     )
+    new_files_paths: list[Path] = []
+    from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    fn = partial(_split_files_for_training_per_file, tokenizer, save_dir, max_seq_len, average_num_tokens_per_note, num_overlap_bars, min_seq_len, preprocessing_method, root_dir)
-    new_files_paths = process_map(fn, files_paths, max_workers=4, tqdm_class=tqdm_class)
+    with ThreadPoolExecutor(max_workers=parallel_workers) as executor:
+        futures = [executor.submit(fn, file_path) for file_path in files_paths]
+        for future in tqdm(
+            as_completed(futures),
+            total=len(futures),
+            desc=f"Splitting music files ({save_dir})",
+            miniters=int(len(files_paths) / 20),
+            maxinterval=480,
+        ):
+            try:
+                res = future.result()
+                new_files_paths.extend(res)
+            except Exception as e:  # pragma: no cover - logging
+                # Skip file on error, could add logging here
+                continue
 
     # Save file in save_dir to indicate file split has been performed
     with split_hidden_file_path.open("w") as f:
@@ -118,17 +139,18 @@ def split_files_for_training(
 
     return new_files_paths
 
-def _split_files_for_training_per_file(file_path: Path,
+def _split_files_for_training_per_file(
+    file_path: Path,
     tokenizer: MusicTokenizer,
     save_dir: Path,
     max_seq_len: int,
     average_num_tokens_per_note: float | None = None,
     num_overlap_bars: int = 1,
     min_seq_len: int | None = None,
-    preprocessing_method: callable[Score, Score] | None = None,
-    root_dir: Path | None = None) -> list[Path]:
+    preprocessing_method=None,
+    root_dir: Path | None = None,
+):
         
-    print(f"Splitting file: {file_path}")
     new_files_paths = []
     try:
         scores = [Score(file_path)]
