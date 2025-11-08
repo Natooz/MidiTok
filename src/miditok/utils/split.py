@@ -106,7 +106,7 @@ def split_files_for_training(
     # Determine the deepest common subdirectory to replicate file tree
     root_dir = get_deepest_common_subdir(files_paths)
 
-    # Splitting files (optionally in parallel). 
+    # Splitting files (optionally in parallel).
     # We prefer threads to avoid pickling the tokenizer.
     fn = partial(
         _split_files_for_training_per_file,
@@ -146,7 +146,7 @@ def _split_files_for_training_per_file(
     preprocessing_method: callable[Score, Score] | None = None,
     root_dir: Path | None = None,
 ) -> list[Path]:
-        
+
     new_files_paths = []
     try:
         scores = [Score(file_path)]
