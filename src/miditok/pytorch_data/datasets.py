@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import json
 from abc import ABC
-from typing import TYPE_CHECKING, Any
-from os import cpu_count
 from functools import partial
+from os import cpu_count
+from typing import TYPE_CHECKING, Any
 
 from symusic import Score
 from torch import LongTensor
@@ -136,7 +136,7 @@ class DatasetMIDI(_DatasetABC):
     :param labels_key_name: name of the dictionary key containing the labels data when
         iterating the dataset. (default: ``"labels"``)
     :param parallel_workers_size: number of parallel workers to use for file splitting.
-        (default: ``min(32, cpu_count() + 4)``)        
+        (default: ``min(32, cpu_count() + 4)``)
     """
 
     def __init__(
@@ -181,7 +181,7 @@ class DatasetMIDI(_DatasetABC):
                 tokenizer=self.tokenizer,
                 func_to_get_labels=self.func_to_get_labels
                 )
-            
+
             process_map(
                 fn,
                 self.files_paths,
@@ -192,9 +192,9 @@ class DatasetMIDI(_DatasetABC):
                 maxinterval=480)
 
     def _pre_tokenize_file(
-            self, 
-            file_path: Path, 
-            tokenizer: MusicTokenizer, 
+            self,
+            file_path: Path,
+            tokenizer: MusicTokenizer,
             func_to_get_labels: Callable[
                 [Score, TokSequence | list[TokSequence], Path],
                 int | list[int] | LongTensor,

@@ -4,15 +4,14 @@ from __future__ import annotations
 
 import json
 from copy import deepcopy
+from functools import partial
+from os import cpu_count
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-from os import cpu_count
-from functools import partial
 
 from symusic import Score, TextMeta, TimeSignature
 from symusic.core import TimeSignatureTickList
 from tqdm.contrib.concurrent import process_map
-
 
 from miditok.constants import (
     MAX_NUM_FILES_NUM_TOKENS_PER_NOTE,

@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from functools import partial
 import json
+from functools import partial
+from os import cpu_count
 from pathlib import Path
 from shutil import copy2
-from os import cpu_count
 
 import numpy as np
 from symusic import Note, Score
