@@ -7,11 +7,12 @@ from copy import deepcopy
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from os import cpu_count
+from functools import partial
 
 from symusic import Score, TextMeta, TimeSignature
 from symusic.core import TimeSignatureTickList
 from tqdm.contrib.concurrent import process_map
-from functools import partial
+
 
 from miditok.constants import (
     MAX_NUM_FILES_NUM_TOKENS_PER_NOTE,

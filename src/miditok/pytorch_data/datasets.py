@@ -5,11 +5,13 @@ from __future__ import annotations
 import json
 from abc import ABC
 from typing import TYPE_CHECKING, Any
+from os import cpu_count
+from functools import partial
 
 from symusic import Score
 from torch import LongTensor
 from torch.utils.data import Dataset
-from tqdm import tqdm
+from tqdm.contrib.concurrent import process_map
 
 from miditok.attribute_controls import create_random_ac_indexes
 from miditok.constants import SCORE_LOADING_EXCEPTION
@@ -133,6 +135,8 @@ class DatasetMIDI(_DatasetABC):
         iterating the dataset. (default: ``"input_ids"``)
     :param labels_key_name: name of the dictionary key containing the labels data when
         iterating the dataset. (default: ``"labels"``)
+    :param parallel_workers_size: number of parallel workers to use for file splitting.
+        (default: ``min(32, cpu_count() + 4)``)        
     """
 
     def __init__(
@@ -152,6 +156,7 @@ class DatasetMIDI(_DatasetABC):
         | None = None,
         sample_key_name: str = "input_ids",
         labels_key_name: str = "labels",
+        parallel_workers_size: int = min(32, cpu_count() + 4)
     ) -> None:
         super().__init__()
 
@@ -171,26 +176,45 @@ class DatasetMIDI(_DatasetABC):
 
         # Pre-tokenize the files
         if pre_tokenize:
-            for file_path in tqdm(
+            fn = partial(
+                self._pre_tokenize_file,
+                tokenizer=self.tokenizer,
+                func_to_get_labels=self.func_to_get_labels
+                )
+            
+            process_map(
+                fn,
                 self.files_paths,
+                max_workers=parallel_workers_size,
+                chunksize=int(len(self.files_paths) / parallel_workers_size),
                 desc="Pre-tokenizing",
                 miniters=int(len(self.files_paths) / 20),
-                maxinterval=480,
-            ):
-                try:
-                    score = Score(file_path)
-                except SCORE_LOADING_EXCEPTION:
-                    continue
-                tokseq = self._tokenize_score(score)
-                if tokenizer.one_token_stream:
-                    tokseq = [tokseq]
-                for seq in tokseq:
-                    self.samples.append(LongTensor(seq.ids))
-                    if func_to_get_labels:
-                        label = func_to_get_labels(score, seq, file_path)
-                        if not isinstance(label, LongTensor):
-                            label = LongTensor(label)
-                        self.labels.append(label)
+                maxinterval=480)
+
+    def _pre_tokenize_file(
+            self, 
+            file_path: Path, 
+            tokenizer: MusicTokenizer, 
+            func_to_get_labels: Callable[
+                [Score, TokSequence | list[TokSequence], Path],
+                int | list[int] | LongTensor,
+                ] | None = None
+    ) -> None:
+
+        try:
+            score = Score(file_path)
+        except SCORE_LOADING_EXCEPTION:
+            return
+        tokseq = self._tokenize_score(score)
+        if tokenizer.one_token_stream:
+            tokseq = [tokseq]
+        for seq in tokseq:
+            self.samples.append(LongTensor(seq.ids))
+            if func_to_get_labels:
+                label = func_to_get_labels(score, seq, file_path)
+                if not isinstance(label, LongTensor):
+                    label = LongTensor(label)
+                self.labels.append(label)
 
     def __getitem__(self, idx: int) -> dict[str, LongTensor]:
         """
