@@ -117,9 +117,8 @@ def split_files_for_training(
         preprocessing_method=preprocessing_method,
         root_dir=root_dir
     )
-    new_files_paths: list[Path] = []
 
-    new_files_paths = process_map(fn,
+    new_files_paths_results = process_map(fn,
                 files_paths,
                 max_workers=parallel_workers_size,
                 chunksize=int((len(files_paths) / parallel_workers_size)),
@@ -131,6 +130,10 @@ def split_files_for_training(
     with split_hidden_file_path.open("w") as f:
         f.write(f"{len(files_paths)} files after file splits")
 
+    new_files_paths: list[Path] = []
+    for result in new_files_paths_results:
+        new_files_paths.extend(result)
+        
     return new_files_paths
 
 def _split_files_for_training_per_file(
