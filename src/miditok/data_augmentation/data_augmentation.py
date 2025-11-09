@@ -107,12 +107,12 @@ def augment_dataset(
     agg_results = process_map(fn,
                 files_paths,
                 max_workers=parallel_workers_size,
-                chunksize=int((len(files_paths) / parallel_workers_size)),
+                chunksize=int(len(files_paths) / parallel_workers_size),
                 desc="Performing data augmentation")
 
-    for num_augmentations_per_batch, num_tracks_augmented_per_batch in agg_results: 
+    for num_augmentations_per_batch, num_tracks_augmented_per_batch in agg_results:
         num_augmentations += num_augmentations_per_batch
-        num_tracks_augmented += num_tracks_augmented_per_batch                
+        num_tracks_augmented += num_tracks_augmented_per_batch
 
     # Saves data augmentation report, json encoded with txt extension to not mess with
     # others json files
@@ -147,7 +147,7 @@ def _augment_dataset_inner(
     out_path: Path | str | None = None,
     copy_original_in_new_location: bool = True,
 ) -> tuple[int, int] | tuple[0, 0]:
-    
+
     num_augmentations, num_tracks_augmented = 0, 0
     try:
         score = Score(file_path)
