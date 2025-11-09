@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from functools import partial
 import json
 from pathlib import Path
 from shutil import copy2
+from os import cpu_count
 
 import numpy as np
 from symusic import Note, Score
-from tqdm import tqdm
+from tqdm.contrib.concurrent import process_map
 
 from miditok.constants import (
     MIDI_FILES_EXTENSIONS,
@@ -31,6 +33,7 @@ def augment_dataset(
     out_path: Path | str | None = None,
     copy_original_in_new_location: bool = True,
     save_data_aug_report: bool = True,
+    parallel_workers_size: int = min(32, cpu_count() + 4)
 ) -> None:
     r"""
     Perform data augmentation on a dataset of music files.
@@ -85,46 +88,31 @@ def augment_dataset(
     ]
 
     num_augmentations, num_tracks_augmented = 0, 0
-    for file_path in tqdm(files_paths, desc="Performing data augmentation"):
-        try:
-            score = Score(file_path)
-        except SCORE_LOADING_EXCEPTION:
-            continue
+    #for file_path in tqdm(files_paths, desc="Performing data augmentation"):
+    fn = partial(
+        _augment_dataset_inner,
+        data_path=Path(data_path),
+        pitch_offsets=pitch_offsets,
+        velocity_offsets=velocity_offsets,
+        duration_offsets=duration_offsets,
+        all_offset_combinations=all_offset_combinations,
+        restrict_on_program_tessitura=restrict_on_program_tessitura,
+        velocity_range=velocity_range,
+        duration_in_ticks=duration_in_ticks,
+        min_duration=min_duration,
+        out_path=out_path,
+        copy_original_in_new_location=copy_original_in_new_location,
+    )
 
-        augmented_scores = augment_score_multiple_offsets(
-            score,
-            pitch_offsets,
-            velocity_offsets,
-            duration_offsets,
-            all_offset_combinations,
-            restrict_on_program_tessitura,
-            velocity_range,
-            duration_in_ticks,
-            min_duration,
-        )
-        for aug_offsets, score_aug in augmented_scores:
-            if len(score_aug.tracks) == 0:
-                continue
-            suffix = "#" + "_".join(
-                [
-                    f"{t}{offset}"
-                    for t, offset in zip(["p", "v", "d"], aug_offsets)
-                    if offset != 0
-                ]
-            )
-            saving_path = out_path / file_path.parent.relative_to(data_path)
-            saving_path.mkdir(parents=True, exist_ok=True)
-            saving_path /= f"{file_path.stem}{suffix}{file_path.suffix}"
-            if file_path.suffix in MIDI_FILES_EXTENSIONS:
-                score_aug.dump_midi(saving_path)
-            else:
-                score_aug.dump_abc(saving_path)
-            num_augmentations += 1
-            num_tracks_augmented += len(score_aug.tracks)
-        if copy_original_in_new_location and out_path != data_path:
-            saving_path = out_path / file_path.relative_to(data_path)
-            saving_path.parent.mkdir(parents=True, exist_ok=True)
-            copy2(file_path, saving_path)
+    agg_results = process_map(fn,
+                files_paths,
+                max_workers=parallel_workers_size,
+                chunksize=int((len(files_paths) / parallel_workers_size)),
+                desc="Performing data augmentation")
+
+    for num_augmentations_per_batch, num_tracks_augmented_per_batch in agg_results: 
+        num_augmentations += num_augmentations_per_batch
+        num_tracks_augmented += num_tracks_augmented_per_batch                
 
     # Saves data augmentation report, json encoded with txt extension to not mess with
     # others json files
@@ -145,6 +133,64 @@ def augment_dataset(
                 outfile,
             )
 
+def _augment_dataset_inner(
+    file_path: Path,
+    data_path: Path,
+    pitch_offsets: list[int] | None = None,
+    velocity_offsets: list[int] | None = None,
+    duration_offsets: list[int] | None = None,
+    all_offset_combinations: bool = False,
+    restrict_on_program_tessitura: bool = True,
+    velocity_range: tuple[int, int] = (1, 127),
+    duration_in_ticks: bool = False,
+    min_duration: int | float = 0.03125,
+    out_path: Path | str | None = None,
+    copy_original_in_new_location: bool = True,
+) -> tuple[int, int] | tuple[0, 0]:
+    
+    num_augmentations, num_tracks_augmented = 0, 0
+    try:
+        score = Score(file_path)
+    except SCORE_LOADING_EXCEPTION:
+        return num_augmentations, num_tracks_augmented
+
+    augmented_scores = augment_score_multiple_offsets(
+        score,
+        pitch_offsets,
+        velocity_offsets,
+        duration_offsets,
+        all_offset_combinations,
+        restrict_on_program_tessitura,
+        velocity_range,
+        duration_in_ticks,
+        min_duration,
+    )
+    for aug_offsets, score_aug in augmented_scores:
+        if len(score_aug.tracks) == 0:
+            continue
+        suffix = "#" + "_".join(
+            [
+                f"{t}{offset}"
+                for t, offset in zip(["p", "v", "d"], aug_offsets)
+                if offset != 0
+            ]
+        )
+        saving_path = out_path / file_path.parent.relative_to(data_path)
+        saving_path.mkdir(parents=True, exist_ok=True)
+        saving_path /= f"{file_path.stem}{suffix}{file_path.suffix}"
+        if file_path.suffix in MIDI_FILES_EXTENSIONS:
+            score_aug.dump_midi(saving_path)
+        else:
+            score_aug.dump_abc(saving_path)
+        num_augmentations += 1
+        num_tracks_augmented += len(score_aug.tracks)
+
+    if copy_original_in_new_location and out_path != data_path:
+        saving_path = out_path / file_path.relative_to(data_path)
+        saving_path.parent.mkdir(parents=True, exist_ok=True)
+        copy2(file_path, saving_path)
+
+    return num_augmentations, num_tracks_augmented
 
 def _filter_offset_tuples_to_score(
     pitch_offsets: list[int],

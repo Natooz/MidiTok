@@ -121,7 +121,7 @@ def split_files_for_training(
     new_files_paths_results = process_map(fn,
                 files_paths,
                 max_workers=parallel_workers_size,
-                chunksize=int((len(files_paths) / parallel_workers_size)),
+                chunksize=int(len(files_paths) / parallel_workers_size),
                 desc=f"Splitting music files ({save_dir})",
                 miniters=int(len(files_paths) / 20),
                 maxinterval=480)
@@ -133,7 +133,7 @@ def split_files_for_training(
     new_files_paths: list[Path] = []
     for result in new_files_paths_results:
         new_files_paths.extend(result)
-        
+
     return new_files_paths
 
 def _split_files_for_training_per_file(
