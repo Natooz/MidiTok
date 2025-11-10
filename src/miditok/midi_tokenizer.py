@@ -45,7 +45,6 @@ from tokenizers import decoders as _decoders
 from tokenizers import models as _tok_models
 from tokenizers import pre_tokenizers as _pre_tokenizers
 from tokenizers import trainers as _tok_trainers
-from tqdm import tqdm
 
 from .attribute_controls import (
     BarAttributeControl,
