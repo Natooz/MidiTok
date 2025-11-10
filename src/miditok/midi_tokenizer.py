@@ -8,6 +8,8 @@ import sys
 import warnings
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from functools import partial
+from os import cpu_count
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -31,6 +33,7 @@ from symusic.core import (
     ScoreTick,
     TimeSignatureTickList,
 )
+from tqdm.contrib.concurrent import process_map
 
 try:
     from miditoolkit import MidiFile
@@ -3078,6 +3081,7 @@ class MusicTokenizer(ABC, HFHubMixin):
         validation_fn: Callable[[Score], bool] | None = None,
         save_programs: bool | None = None,
         verbose: bool = True,
+        parallel_workers_size: int = min(32, cpu_count() + 4)
     ) -> None:
         r"""
         Tokenize a dataset or list of music files and save them in Json files.
@@ -3112,6 +3116,8 @@ class MusicTokenizer(ABC, HFHubMixin):
             else ``True``)
         :param verbose: will throw warnings of errors when loading files, or if
             some files content is incorrect or need your attention. (default: ``True``)
+        :param parallel_workers_size: number of workers to use for parallel
+            processing. (default: ``min(32, cpu_count() + 4)``
         """
         self._verbose = verbose
         out_dir = Path(out_dir).resolve()
@@ -3138,46 +3144,72 @@ class MusicTokenizer(ABC, HFHubMixin):
         # Note: tests with multiprocessing show significant slower runtime with 4
         # workers.
         desc = f"Tokenizing music files ({'/'.join(list(out_dir.parts[-2:]))})"
-        for file_path in tqdm(files_paths, desc=desc):
-            # Some files can contain errors, if so the loop continues
-            file_path = Path(file_path)
-            try:
-                score = Score(file_path)
-            except FileNotFoundError:
-                if self._verbose:
-                    warnings.warn(f"File not found: {file_path}", stacklevel=2)
-                continue
-            except SCORE_LOADING_EXCEPTION:
-                continue
 
-            # Passing the Score to validation tests if given
-            if validation_fn is not None and not validation_fn(score):
-                continue
+        fn = partial(
+            self._tokenize_dataset_file,
+            root_dir=root_dir,
+            out_dir=out_dir,
+            overwrite_mode=overwrite_mode,
+            validation_fn=validation_fn,
+            save_programs=save_programs)
 
-            # Tokenizing the Score
-            tokens = self.encode(score)
-
-            # Set output file path
-            out_path = out_dir / file_path.resolve().parent.relative_to(root_dir)
-            out_path.mkdir(parents=True, exist_ok=True)
-            out_path /= f"{file_path.stem}.json"
-
-            # If non-overwrite, set the new file name
-            if not overwrite_mode and out_path.is_file():
-                i = 1
-                while out_path.is_file():
-                    out_path = out_path.parent / f"{file_path.stem}_{i}.json"
-                    i += 1
-
-            # Save the tokens as JSON
-            self.save_tokens(
-                tokens,
-                out_path,
-                get_score_programs(score) if save_programs else None,
+        process_map(
+            fn,
+            files_paths,
+            desc=desc,
+            max_workers=parallel_workers_size,
+            chunksize=int(len(files_paths) / parallel_workers_size),
+            miniters=int(len(self.files_paths) / 20),
+            maxinterval=480
             )
 
         # Set it back to False
         self._verbose = False
+
+    def _tokenize_dataset_file(self,
+        file_path: Path,
+        root_dir: Path,
+        out_dir: str | Path,
+        overwrite_mode: bool = True,
+        validation_fn: Callable[[Score], bool] | None = None,
+        save_programs: bool | None = None,
+        ) -> None:
+
+        file_path = Path(file_path)
+        try:
+            score = Score(file_path)
+        except FileNotFoundError:
+            if self._verbose:
+                warnings.warn(f"File not found: {file_path}", stacklevel=2)
+            return
+        except SCORE_LOADING_EXCEPTION:
+            return
+
+        # Passing the Score to validation tests if given
+        if validation_fn is not None and not validation_fn(score):
+            return
+
+        # Tokenizing the Score
+        tokens = self.encode(score)
+
+        # Set output file path
+        out_path = out_dir / file_path.resolve().parent.relative_to(root_dir)
+        out_path.mkdir(parents=True, exist_ok=True)
+        out_path /= f"{file_path.stem}.json"
+
+        # If non-overwrite, set the new file name
+        if not overwrite_mode and out_path.is_file():
+            i = 1
+            while out_path.is_file():
+                out_path = out_path.parent / f"{file_path.stem}_{i}.json"
+                i += 1
+
+        # Save the tokens as JSON
+        self.save_tokens(
+            tokens,
+            out_path,
+            get_score_programs(score) if save_programs else None,
+        )
 
     def tokens_errors(
         self,

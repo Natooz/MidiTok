@@ -200,7 +200,6 @@ class DatasetMIDI(_DatasetABC):
                 int | list[int] | LongTensor,
                 ] | None = None
     ) -> None:
-
         try:
             score = Score(file_path)
         except SCORE_LOADING_EXCEPTION:
