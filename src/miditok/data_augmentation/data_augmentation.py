@@ -7,6 +7,7 @@ from functools import partial
 from os import cpu_count
 from pathlib import Path
 from shutil import copy2
+import warnings
 
 import numpy as np
 from symusic import Note, Score
@@ -87,8 +88,14 @@ def augment_dataset(
         if path.suffix in SUPPORTED_MUSIC_FILE_EXTENSIONS
     ]
 
+    if len(files_paths) == 0:
+        warnings.warn(
+            f"No supported music files found in {data_path}.",
+            stacklevel=2,
+        )
+        return
+
     num_augmentations, num_tracks_augmented = 0, 0
-    #for file_path in tqdm(files_paths, desc="Performing data augmentation"):
     fn = partial(
         _augment_dataset_inner,
         data_path=Path(data_path),

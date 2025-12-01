@@ -104,6 +104,10 @@ def split_files_for_training(
     # Determine the deepest common subdirectory to replicate file tree
     root_dir = get_deepest_common_subdir(files_paths)
 
+    if len(files_paths) == 0:
+        msg = "No music file provided to split for training."
+        raise ValueError(msg)
+
     # Splitting files (optionally in parallel).
     # We prefer threads to avoid pickling the tokenizer.
     fn = partial(

@@ -3140,9 +3140,16 @@ class MusicTokenizer(ABC, HFHubMixin):
             save_programs = not self.config.use_programs
 
         # Tokenizing
-        # Note: tests with multiprocessing show significant slower runtime with 4
-        # workers.
         desc = f"Tokenizing music files ({'/'.join(list(out_dir.parts[-2:]))})"
+
+        if len(files_paths) == 0:
+            warnings.warn(
+                f"miditok - tokenizer.tokenize_dataset: No music file found in the "
+                f"given path(s): {files_paths}. Supported extensions are: "
+                f"{SUPPORTED_MUSIC_FILE_EXTENSIONS}.",
+                stacklevel=2,
+            )
+            return
 
         fn = partial(
             self._tokenize_dataset_file,

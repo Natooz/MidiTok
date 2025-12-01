@@ -176,6 +176,15 @@ class DatasetMIDI(_DatasetABC):
 
         # Pre-tokenize the files
         if pre_tokenize:
+            if len(self.files_paths) == 0:
+                msg = (
+                    "DatasetMIDI - pre_tokenize: No music file path given to "
+                    "pre-tokenize."
+                )
+                raise ValueError(
+                    msg
+                )
+
             fn = partial(
                 self._pre_tokenize_file,
                 tokenizer=self.tokenizer,
