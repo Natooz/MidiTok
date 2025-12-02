@@ -115,7 +115,7 @@ def augment_dataset(
                 files_paths,
                 max_workers=parallel_workers_size,
                 chunksize=int(len(files_paths) / parallel_workers_size),
-                miniters=int(len(files_paths) / 200),
+                miniters=parallel_workers_size,
                 maxinterval=480,
                 desc="Performing data augmentation")
 
