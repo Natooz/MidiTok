@@ -127,8 +127,9 @@ def split_files_for_training(
                 max_workers=parallel_workers_size,
                 chunksize=int(len(files_paths) / parallel_workers_size),
                 desc=f"Splitting music files ({save_dir})",
-                miniters=int(len(files_paths) / 20),
-                maxinterval=480)
+                miniters=parallel_workers_size,
+                maxinterval=480,
+                smoothing=0)
 
     # Save file in save_dir to indicate file split has been performed
     with split_hidden_file_path.open("w") as f:

@@ -197,8 +197,9 @@ class DatasetMIDI(_DatasetABC):
                 max_workers=parallel_workers_size,
                 chunksize=int(len(self.files_paths) / parallel_workers_size),
                 desc="Pre-tokenizing",
-                miniters=int(len(self.files_paths) / 20),
-                maxinterval=480)
+                miniters=parallel_workers_size,
+                maxinterval=480,
+                smoothing=0)
 
     def _pre_tokenize_file(
             self,

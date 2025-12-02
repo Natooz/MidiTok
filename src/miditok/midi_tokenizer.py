@@ -3165,8 +3165,9 @@ class MusicTokenizer(ABC, HFHubMixin):
             desc=desc,
             max_workers=parallel_workers_size,
             chunksize=int(len(files_paths) / parallel_workers_size),
-            miniters=int(len(files_paths) / 200),
-            maxinterval=10
+            miniters=parallel_workers_size,
+            maxinterval=10,
+            smoothing=0
             )
 
         # Set it back to False

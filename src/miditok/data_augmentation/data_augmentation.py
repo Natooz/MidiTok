@@ -117,6 +117,7 @@ def augment_dataset(
                 chunksize=int(len(files_paths) / parallel_workers_size),
                 miniters=parallel_workers_size,
                 maxinterval=480,
+                smoothing=0,
                 desc="Performing data augmentation")
 
     for num_augmentations_per_batch, num_tracks_augmented_per_batch in agg_results:
