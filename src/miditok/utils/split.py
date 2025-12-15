@@ -110,14 +110,8 @@ def split_files_for_training(
         raise ValueError(msg)
 
     if parallel_workers_size < 2:
-        new_files_paths_results = []
-        for file_path in tqdm(
-            files_paths,
-            desc=f"Splitting music files ({save_dir})",
-            miniters=int(len(files_paths) / 20),
-            maxinterval=480
-        ):
-            new_files_paths_results.append(_split_files_for_training_per_file(
+        new_files_paths_results = [
+            _split_files_for_training_per_file(
                 file_path,
                 tokenizer=tokenizer,
                 save_dir=save_dir,
@@ -126,7 +120,15 @@ def split_files_for_training(
                 num_overlap_bars=num_overlap_bars,
                 min_seq_len=min_seq_len,
                 preprocessing_method=preprocessing_method,
-                root_dir=root_dir))
+                root_dir=root_dir
+            )
+            for file_path in tqdm(
+                files_paths,
+                desc=f"Splitting music files ({save_dir})",
+                miniters=int(len(files_paths) / 20),
+                maxinterval=480
+            )
+        ]
     else:
         # Splitting files (optionally in parallel).
         # We prefer threads to avoid pickling the tokenizer.

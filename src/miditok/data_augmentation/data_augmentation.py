@@ -109,7 +109,8 @@ def augment_dataset(
             maxinterval=480,
             smoothing=0
         ):
-            num_augmentations_per_file, num_tracks_augmented_per_file = _augment_dataset_inner(
+            (num_augmentations_per_file,
+             num_tracks_augmented_per_file) = _augment_dataset_inner(
                 file_path,
                 data_path=Path(data_path),
                 pitch_offsets=pitch_offsets,
