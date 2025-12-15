@@ -10,6 +10,7 @@ from pathlib import Path
 from shutil import copy2
 
 import numpy as np
+import tqdm
 from symusic import Note, Score
 from tqdm.contrib.concurrent import process_map
 
@@ -75,6 +76,9 @@ def augment_dataset(
         files will be saved in the out_path location too. (default: True)
     :param save_data_aug_report: will save numbers from the data augmentation in a
         ``data_augmentation_report.txt`` file in the output directory. (default: True)
+    :param parallel_workers_size: number of parallel workers to use for data
+        augmentation. (default: ``min(32, os.cpu_count() + 4)``)
+    :return: None
     """
     if out_path is None:
         out_path = Path(data_path)
@@ -96,33 +100,59 @@ def augment_dataset(
         return
 
     num_augmentations, num_tracks_augmented = 0, 0
-    fn = partial(
-        _augment_dataset_inner,
-        data_path=Path(data_path),
-        pitch_offsets=pitch_offsets,
-        velocity_offsets=velocity_offsets,
-        duration_offsets=duration_offsets,
-        all_offset_combinations=all_offset_combinations,
-        restrict_on_program_tessitura=restrict_on_program_tessitura,
-        velocity_range=velocity_range,
-        duration_in_ticks=duration_in_ticks,
-        min_duration=min_duration,
-        out_path=out_path,
-        copy_original_in_new_location=copy_original_in_new_location,
-    )
 
-    agg_results = process_map(fn,
-                files_paths,
-                max_workers=parallel_workers_size,
-                chunksize=int(len(files_paths) / parallel_workers_size),
-                miniters=parallel_workers_size,
-                maxinterval=480,
-                smoothing=0,
-                desc="Performing data augmentation")
+    if parallel_workers_size < 2:
+        for file_path in tqdm(
+            files_paths,
+            desc="Performing data augmentation",
+            unit="file",
+            maxinterval=480,
+            smoothing=0
+        ):
+            num_augmentations_per_file, num_tracks_augmented_per_file = _augment_dataset_inner(
+                file_path,
+                data_path=Path(data_path),
+                pitch_offsets=pitch_offsets,
+                velocity_offsets=velocity_offsets,
+                duration_offsets=duration_offsets,
+                all_offset_combinations=all_offset_combinations,
+                restrict_on_program_tessitura=restrict_on_program_tessitura,
+                velocity_range=velocity_range,
+                duration_in_ticks=duration_in_ticks,
+                min_duration=min_duration,
+                out_path=out_path,
+                copy_original_in_new_location=copy_original_in_new_location,
+            )
+            num_augmentations += num_augmentations_per_file
+            num_tracks_augmented += num_tracks_augmented_per_file
+    else:
+        fn = partial(
+            _augment_dataset_inner,
+            data_path=Path(data_path),
+            pitch_offsets=pitch_offsets,
+            velocity_offsets=velocity_offsets,
+            duration_offsets=duration_offsets,
+            all_offset_combinations=all_offset_combinations,
+            restrict_on_program_tessitura=restrict_on_program_tessitura,
+            velocity_range=velocity_range,
+            duration_in_ticks=duration_in_ticks,
+            min_duration=min_duration,
+            out_path=out_path,
+            copy_original_in_new_location=copy_original_in_new_location,
+        )
 
-    for num_augmentations_per_batch, num_tracks_augmented_per_batch in agg_results:
-        num_augmentations += num_augmentations_per_batch
-        num_tracks_augmented += num_tracks_augmented_per_batch
+        agg_results = process_map(fn,
+                    files_paths,
+                    max_workers=parallel_workers_size,
+                    chunksize=int(len(files_paths) / parallel_workers_size),
+                    miniters=parallel_workers_size,
+                    maxinterval=480,
+                    smoothing=0,
+                    desc="Performing data augmentation")
+
+        for num_augmentations_per_batch, num_tracks_augmented_per_batch in agg_results:
+            num_augmentations += num_augmentations_per_batch
+            num_tracks_augmented += num_tracks_augmented_per_batch
 
     # Saves data augmentation report, json encoded with txt extension to not mess with
     # others json files

@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 from symusic import Score
 from torch import LongTensor
 from torch.utils.data import Dataset
+from tqdm import tqdm
 from tqdm.contrib.concurrent import process_map
 
 from miditok.attribute_controls import create_random_ac_indexes
@@ -184,22 +185,35 @@ class DatasetMIDI(_DatasetABC):
                 raise ValueError(
                     msg
                 )
+            if parallel_workers_size < 2:
+                for file_path in tqdm(
+                    self.files_paths,
+                    desc="Pre-tokenizing",
+                    miniters=int(len(self.files_paths) / 20),
+                    maxinterval=480
+                ):
+                    self._pre_tokenize_file(
+                        file_path,
+                        self.tokenizer,
+                        self.func_to_get_labels
+                    )
 
-            fn = partial(
-                self._pre_tokenize_file,
-                tokenizer=self.tokenizer,
-                func_to_get_labels=self.func_to_get_labels
-                )
+            else:
+                fn = partial(
+                    self._pre_tokenize_file,
+                    tokenizer=self.tokenizer,
+                    func_to_get_labels=self.func_to_get_labels
+                    )
 
-            process_map(
-                fn,
-                self.files_paths,
-                max_workers=parallel_workers_size,
-                chunksize=int(len(self.files_paths) / parallel_workers_size),
-                desc="Pre-tokenizing",
-                miniters=parallel_workers_size,
-                maxinterval=480,
-                smoothing=0)
+                process_map(
+                    fn,
+                    self.files_paths,
+                    max_workers=parallel_workers_size,
+                    chunksize=int(len(self.files_paths) / parallel_workers_size),
+                    desc="Pre-tokenizing",
+                    miniters=parallel_workers_size,
+                    maxinterval=480,
+                    smoothing=0)
 
     def _pre_tokenize_file(
             self,

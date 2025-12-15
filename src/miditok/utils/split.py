@@ -9,6 +9,7 @@ from os import cpu_count
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import tqdm
 from symusic import Score, TextMeta, TimeSignature
 from symusic.core import TimeSignatureTickList
 from tqdm.contrib.concurrent import process_map
@@ -108,28 +109,47 @@ def split_files_for_training(
         msg = "No music file provided to split for training."
         raise ValueError(msg)
 
-    # Splitting files (optionally in parallel).
-    # We prefer threads to avoid pickling the tokenizer.
-    fn = partial(
-        _split_files_for_training_per_file,
-        tokenizer=tokenizer,
-        save_dir=save_dir,
-        max_seq_len=max_seq_len,
-        average_num_tokens_per_note=average_num_tokens_per_note,
-        num_overlap_bars=num_overlap_bars,
-        min_seq_len=min_seq_len,
-        preprocessing_method=preprocessing_method,
-        root_dir=root_dir
-    )
-
-    new_files_paths_results = process_map(fn,
+    if parallel_workers_size < 2:
+        new_files_paths_results = [
+            _split_files_for_training_per_file(file_path,
+                tokenizer=tokenizer,
+                save_dir=save_dir,
+                max_seq_len=max_seq_len,
+                average_num_tokens_per_note=average_num_tokens_per_note,
+                num_overlap_bars=num_overlap_bars,
+                min_seq_len=min_seq_len,
+                preprocessing_method=preprocessing_method,
+                root_dir=root_dir)
+            for file_path in tqdm(
                 files_paths,
-                max_workers=parallel_workers_size,
-                chunksize=int(len(files_paths) / parallel_workers_size),
                 desc=f"Splitting music files ({save_dir})",
-                miniters=parallel_workers_size,
+                miniters=int(len(files_paths) / 20),
                 maxinterval=480,
-                smoothing=0)
+            )
+        ]
+    else:
+        # Splitting files (optionally in parallel).
+        # We prefer threads to avoid pickling the tokenizer.
+        fn = partial(
+            _split_files_for_training_per_file,
+            tokenizer=tokenizer,
+            save_dir=save_dir,
+            max_seq_len=max_seq_len,
+            average_num_tokens_per_note=average_num_tokens_per_note,
+            num_overlap_bars=num_overlap_bars,
+            min_seq_len=min_seq_len,
+            preprocessing_method=preprocessing_method,
+            root_dir=root_dir
+        )
+
+        new_files_paths_results = process_map(fn,
+                    files_paths,
+                    max_workers=parallel_workers_size,
+                    chunksize=int(len(files_paths) / parallel_workers_size),
+                    desc=f"Splitting music files ({save_dir})",
+                    miniters=parallel_workers_size,
+                    maxinterval=480,
+                    smoothing=0)
 
     # Save file in save_dir to indicate file split has been performed
     with split_hidden_file_path.open("w") as f:

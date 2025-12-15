@@ -33,6 +33,7 @@ from symusic.core import (
     ScoreTick,
     TimeSignatureTickList,
 )
+from tqdm import tqdm
 from tqdm.contrib.concurrent import process_map
 
 try:
@@ -3151,24 +3152,35 @@ class MusicTokenizer(ABC, HFHubMixin):
             )
             return
 
-        fn = partial(
-            self._tokenize_dataset_file,
-            root_dir=root_dir,
-            out_dir=out_dir,
-            overwrite_mode=overwrite_mode,
-            validation_fn=validation_fn,
-            save_programs=save_programs)
+        if parallel_workers_size < 2:
+            for file_path in tqdm(files_paths, desc="Performing data augmentation"):
+                self._tokenize_dataset_file(
+                    file_path,
+                    root_dir,
+                    out_dir,
+                    overwrite_mode,
+                    validation_fn,
+                    save_programs,
+                )
+        else:
+            fn = partial(
+                self._tokenize_dataset_file,
+                root_dir=root_dir,
+                out_dir=out_dir,
+                overwrite_mode=overwrite_mode,
+                validation_fn=validation_fn,
+                save_programs=save_programs)
 
-        process_map(
-            fn,
-            files_paths,
-            desc=desc,
-            max_workers=parallel_workers_size,
-            chunksize=int(len(files_paths) / parallel_workers_size),
-            miniters=parallel_workers_size,
-            maxinterval=10,
-            smoothing=0
-            )
+            process_map(
+                fn,
+                files_paths,
+                desc=desc,
+                max_workers=parallel_workers_size,
+                chunksize=int(len(files_paths) / parallel_workers_size),
+                miniters=parallel_workers_size,
+                maxinterval=10,
+                smoothing=0
+                )
 
         # Set it back to False
         self._verbose = False
