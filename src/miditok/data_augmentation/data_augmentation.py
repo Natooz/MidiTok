@@ -10,8 +10,8 @@ from pathlib import Path
 from shutil import copy2
 
 import numpy as np
-import tqdm
 from symusic import Note, Score
+from tqdm import tqdm
 from tqdm.contrib.concurrent import process_map
 
 from miditok.constants import (
