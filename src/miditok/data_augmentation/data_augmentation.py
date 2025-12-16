@@ -15,6 +15,7 @@ from tqdm import tqdm
 from tqdm.contrib.concurrent import process_map
 
 from miditok.constants import (
+    CPU_COUNT_ADDED_WORKERS,
     MAX_THREADS_PROCESSED_IN_PARALLEL,
     MIDI_FILES_EXTENSIONS,
     MIDI_INSTRUMENTS,
@@ -36,7 +37,7 @@ def augment_dataset(
     out_path: Path | str | None = None,
     copy_original_in_new_location: bool = True,
     save_data_aug_report: bool = True,
-    parallel_workers_size: int = min(MAX_THREADS_PROCESSED_IN_PARALLEL, cpu_count() + 4)
+    parallel_workers_size: int = min(MAX_THREADS_PROCESSED_IN_PARALLEL, cpu_count() + CPU_COUNT_ADDED_WORKERS)
 ) -> None:
     r"""
     Perform data augmentation on a dataset of music files.
@@ -79,7 +80,7 @@ def augment_dataset(
         ``data_augmentation_report.txt`` file in the output directory. (default: True)
     :param parallel_workers_size: number of parallel workers to use for data
         augmentation. (default: ``min(MAX_THREADS_PROCESSED_IN_PARALLEL, os.cpu_count()
-        + 4)``)
+        + CPU_COUNT_ADDED_WORKERS)``)
     :return: None
     """
     if out_path is None:

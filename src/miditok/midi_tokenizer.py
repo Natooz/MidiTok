@@ -63,12 +63,14 @@ from .constants import (
     ABC_FILES_EXTENSIONS,
     BOS_TOKEN_NAME,
     CHR_ID_START,
+    CPU_COUNT_ADDED_WORKERS,
     CURRENT_MIDITOK_VERSION,
     CURRENT_SYMUSIC_VERSION,
     CURRENT_TOKENIZERS_VERSION,
     DEFAULT_TOKENIZER_FILE_NAME,
     DEFAULT_TRAINING_MODEL_NAME,
     EOS_TOKEN_NAME,
+    MAX_THREADS_PROCESSED_IN_PARALLEL,
     PITCH_CLASSES,
     SCORE_LOADING_EXCEPTION,
     SUPPORTED_MUSIC_FILE_EXTENSIONS,
@@ -3081,7 +3083,7 @@ class MusicTokenizer(ABC, HFHubMixin):
         validation_fn: Callable[[Score], bool] | None = None,
         save_programs: bool | None = None,
         verbose: bool = True,
-        parallel_workers_size: int = min(32, cpu_count() + 4)
+        parallel_workers_size: int = min(MAX_THREADS_PROCESSED_IN_PARALLEL, cpu_count() + CPU_COUNT_ADDED_WORKERS)
     ) -> None:
         r"""
         Tokenize a dataset or list of music files and save them in Json files.
@@ -3117,7 +3119,7 @@ class MusicTokenizer(ABC, HFHubMixin):
         :param verbose: will throw warnings of errors when loading files, or if
             some files content is incorrect or need your attention. (default: ``True``)
         :param parallel_workers_size: number of workers to use for parallel
-            processing. (default: ``min(32, cpu_count() + 4)``
+            processing. (default: ``min(MAX_THREADS_PROCESSED_IN_PARALLEL, cpu_count() + CPU_COUNT_ADDED_WORKERS)``
         """
         self._verbose = verbose
         out_dir = Path(out_dir).resolve()

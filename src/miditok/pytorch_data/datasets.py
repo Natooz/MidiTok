@@ -15,7 +15,7 @@ from tqdm import tqdm
 from tqdm.contrib.concurrent import process_map
 
 from miditok.attribute_controls import create_random_ac_indexes
-from miditok.constants import SCORE_LOADING_EXCEPTION
+from miditok.constants import CPU_COUNT_ADDED_WORKERS, MAX_THREADS_PROCESSED_IN_PARALLEL, SCORE_LOADING_EXCEPTION
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -137,7 +137,7 @@ class DatasetMIDI(_DatasetABC):
     :param labels_key_name: name of the dictionary key containing the labels data when
         iterating the dataset. (default: ``"labels"``)
     :param parallel_workers_size: number of parallel workers to use for file splitting.
-        (default: ``min(32, cpu_count() + 4)``)
+        (default: ``min(MAX_THREADS_PROCESSED_IN_PARALLEL, cpu_count() + CPU_COUNT_ADDED_WORKERS)``)
     """
 
     def __init__(
@@ -157,7 +157,7 @@ class DatasetMIDI(_DatasetABC):
         | None = None,
         sample_key_name: str = "input_ids",
         labels_key_name: str = "labels",
-        parallel_workers_size: int = min(32, cpu_count() + 4)
+        parallel_workers_size: int = min(MAX_THREADS_PROCESSED_IN_PARALLEL, cpu_count() + CPU_COUNT_ADDED_WORKERS)
     ) -> None:
         super().__init__()
 
