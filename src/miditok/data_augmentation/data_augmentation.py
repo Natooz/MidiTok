@@ -37,7 +37,8 @@ def augment_dataset(
     out_path: Path | str | None = None,
     copy_original_in_new_location: bool = True,
     save_data_aug_report: bool = True,
-    parallel_workers_size: int = min(MAX_THREADS_PROCESSED_IN_PARALLEL, cpu_count() + CPU_COUNT_ADDED_WORKERS)
+    parallel_workers_size: int = min(MAX_THREADS_PROCESSED_IN_PARALLEL, cpu_count()
+                                     + CPU_COUNT_ADDED_WORKERS)
 ) -> None:
     r"""
     Perform data augmentation on a dataset of music files.
