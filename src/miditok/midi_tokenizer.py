@@ -3083,7 +3083,8 @@ class MusicTokenizer(ABC, HFHubMixin):
         validation_fn: Callable[[Score], bool] | None = None,
         save_programs: bool | None = None,
         verbose: bool = True,
-        parallel_workers_size: int = min(MAX_THREADS_PROCESSED_IN_PARALLEL, cpu_count() + CPU_COUNT_ADDED_WORKERS)
+        parallel_workers_size: int = min(MAX_THREADS_PROCESSED_IN_PARALLEL, cpu_count()
+                                         + CPU_COUNT_ADDED_WORKERS)
     ) -> None:
         r"""
         Tokenize a dataset or list of music files and save them in Json files.
@@ -3119,7 +3120,8 @@ class MusicTokenizer(ABC, HFHubMixin):
         :param verbose: will throw warnings of errors when loading files, or if
             some files content is incorrect or need your attention. (default: ``True``)
         :param parallel_workers_size: number of workers to use for parallel
-            processing. (default: ``min(MAX_THREADS_PROCESSED_IN_PARALLEL, cpu_count() + CPU_COUNT_ADDED_WORKERS)``
+            processing. (default: ``min(MAX_THREADS_PROCESSED_IN_PARALLEL, cpu_count()
+            + CPU_COUNT_ADDED_WORKERS)``
         """
         self._verbose = verbose
         out_dir = Path(out_dir).resolve()

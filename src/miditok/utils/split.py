@@ -46,7 +46,8 @@ def split_files_for_training(
     num_overlap_bars: int = 1,
     min_seq_len: int | None = None,
     preprocessing_method: callable[Score, Score] | None = None,
-    parallel_workers_size: int = min(MAX_THREADS_PROCESSED_IN_PARALLEL, cpu_count() + CPU_COUNT_ADDED_WORKERS)
+    parallel_workers_size: int = min(MAX_THREADS_PROCESSED_IN_PARALLEL, cpu_count()
+                                     + CPU_COUNT_ADDED_WORKERS)
 ) -> list[Path]:
     """
     Split a list of music files into smaller chunks to use for training.
@@ -88,7 +89,8 @@ def split_files_for_training(
         ``symusic.Score`` before splitting it. This method must take as input a
         ``symusic.Score`` and return a ``symusic.Score``. (default: ``None``)
     :param parallel_workers_size: number of parallel workers to use for file splitting.
-        (default: ``min(MAX_THREADS_PROCESSED_IN_PARALLEL, cpu_count() + CPU_COUNT_ADDED_WORKERS)``)
+        (default: ``min(MAX_THREADS_PROCESSED_IN_PARALLEL, cpu_count()
+        + CPU_COUNT_ADDED_WORKERS)``)
     :return: the paths to the files splits.
     """
     # Safety checks
