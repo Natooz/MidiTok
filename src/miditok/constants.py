@@ -160,6 +160,10 @@ UNIGRAM_SPECIAL_TOKEN_SUFFIX = "-unigram"
 # For file split in DatasetMIDI
 MAX_NUM_FILES_NUM_TOKENS_PER_NOTE = 200
 
+# Parallel processing
+MAX_THREADS_PROCESSED_IN_PARALLEL = 32
+CPU_COUNT_ADDED_WORKERS = 4
+
 # Used with chords
 PITCH_CLASSES = [
     "C",
