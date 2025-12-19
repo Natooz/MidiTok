@@ -710,7 +710,11 @@ def get_bars_ticks(score: Score, only_notes_onsets: bool = False) -> list[int]:
     # Mock the last one to cover the last section in the loop below in all cases, as it
     # prevents the case in which the last time signature had an invalid numerator or
     # denominator (that would have been skipped in the while loop below).
-    time_sigs.append(TimeSignature(max_tick, *TIME_SIGNATURE))
+
+    # When only_notes_onsets is True, we add an extra tick because otherwise, when
+    # the last onset coincides with a start of a bar, it will be excluded because
+    # range() is exclusive of the endpoint.
+    time_sigs.append(TimeSignature(max_tick + int(only_notes_onsets), *TIME_SIGNATURE))
 
     # Section from tick 0 to first time sig is 4/4 if first time sig time is not 0
     if (
