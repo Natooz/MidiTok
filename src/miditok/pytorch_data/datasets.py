@@ -162,8 +162,9 @@ class DatasetMIDI(_DatasetABC):
         | None = None,
         sample_key_name: str = "input_ids",
         labels_key_name: str = "labels",
-        parallel_workers_size: int = min(MAX_THREADS_PROCESSED_IN_PARALLEL, cpu_count()
-                                         + CPU_COUNT_ADDED_WORKERS)
+        parallel_workers_size: int = min(
+            MAX_THREADS_PROCESSED_IN_PARALLEL, cpu_count() + CPU_COUNT_ADDED_WORKERS
+        ),
     ) -> None:
         super().__init__()
 
@@ -188,28 +189,24 @@ class DatasetMIDI(_DatasetABC):
                     "DatasetMIDI - pre_tokenize: No music file path given to "
                     "pre-tokenize."
                 )
-                raise ValueError(
-                    msg
-                )
+                raise ValueError(msg)
             if parallel_workers_size < 2:
                 for file_path in tqdm(
                     self.files_paths,
                     desc="Pre-tokenizing",
                     miniters=int(len(self.files_paths) / 20),
-                    maxinterval=480
+                    maxinterval=480,
                 ):
                     self._pre_tokenize_file(
-                        file_path,
-                        self.tokenizer,
-                        self.func_to_get_labels
+                        file_path, self.tokenizer, self.func_to_get_labels
                     )
 
             else:
                 fn = partial(
                     self._pre_tokenize_file,
                     tokenizer=self.tokenizer,
-                    func_to_get_labels=self.func_to_get_labels
-                    )
+                    func_to_get_labels=self.func_to_get_labels,
+                )
 
                 process_map(
                     fn,
@@ -219,16 +216,18 @@ class DatasetMIDI(_DatasetABC):
                     desc="Pre-tokenizing",
                     miniters=parallel_workers_size,
                     maxinterval=480,
-                    smoothing=0)
+                    smoothing=0,
+                )
 
     def _pre_tokenize_file(
-            self,
-            file_path: Path,
-            tokenizer: MusicTokenizer,
-            func_to_get_labels: Callable[
-                [Score, TokSequence | list[TokSequence], Path],
-                int | list[int] | LongTensor,
-                ] | None = None
+        self,
+        file_path: Path,
+        tokenizer: MusicTokenizer,
+        func_to_get_labels: Callable[
+            [Score, TokSequence | list[TokSequence], Path],
+            int | list[int] | LongTensor,
+        ]
+        | None = None,
     ) -> None:
         try:
             score = Score(file_path)

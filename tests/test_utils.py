@@ -24,6 +24,7 @@ import miditok.utils.utils
 from miditok import REMI, TokenizerConfig
 from miditok.constants import CLASS_OF_INST
 from miditok.utils import (
+    get_bars_ticks,
     merge_same_program_tracks,
     merge_tracks,
     merge_tracks_per_class,
@@ -286,6 +287,87 @@ def test_remove_duplicated_notes():
             assert notes == notes_filtered_dur
         else:
             assert len(notes) - len(notes_filtered_dur) == diff_with_duration
+
+
+def _build_score(
+    notes: list[tuple[int, int]], tpq: int, time_sig: tuple[int, int] | None = None
+) -> Score:
+    from symusic import Track
+
+    track = Track()
+    for onset, duration in notes:
+        track.notes.append(Note(onset, duration, 60, 100))
+    score = Score.from_tpq(tpq=tpq)
+    score.tracks.append(track)
+    if time_sig is not None:
+        score.time_signatures.append(TimeSignature(0, *time_sig))
+    return score
+
+
+_TPQ = 480
+_BAR = _TPQ * 4  # ticks per 4/4 bar
+
+
+@pytest.mark.parametrize(
+    ("score", "only_notes_onsets", "expected"),
+    [
+        # Regression: onsets land exactly on each downbeat — last bar must be included.
+        # Bug: ceil(max_onset / ticks_per_bar) is an integer, so the last bar is dropped
+        (
+            _build_score([(i * _BAR, _BAR) for i in range(4)], _TPQ),
+            True,
+            [0, _BAR, 2 * _BAR, 3 * _BAR],
+        ),
+        # Onsets offset by 1 tick — last onset (3841) is inside bar 2, bar 3 excluded.
+        (
+            _build_score([(i * _BAR + 1, _BAR - 1) for i in range(3)], _TPQ),
+            True,
+            [0, _BAR, 2 * _BAR],
+        ),
+        # Off-by-one guard: last onset 1 tick before bar 4 — bar 3 included, bar 4 not.
+        # With a naive +1 fix, max_tick+1 == 4*BAR => ceil(4*BAR/BAR) == 4 — correct.
+        (
+            _build_score(
+                [(i * _BAR, _BAR) for i in range(3)] + [(4 * _BAR - 1, 1)], _TPQ
+            ),
+            True,
+            [0, _BAR, 2 * _BAR, 3 * _BAR],
+        ),
+        # only_notes_onsets=False uses score.end() (note end, not onset), so a single
+        # note spanning 4 bars should yield 4 bar ticks.
+        (
+            _build_score([(0, 4 * _BAR)], _TPQ),
+            False,
+            [0, _BAR, 2 * _BAR, 3 * _BAR],
+        ),
+        # 3/4 time signature: regression case with onsets on every downbeat.
+        (
+            _build_score(
+                [(i * _TPQ * 3, _TPQ * 3) for i in range(4)],
+                _TPQ,
+                time_sig=(3, 4),
+            ),
+            True,
+            [0, _TPQ * 3, 2 * _TPQ * 3, 3 * _TPQ * 3],
+        ),
+        # Single note at tick 0 — only bar 0 should be returned.
+        (
+            _build_score([(0, _TPQ)], _TPQ),
+            True,
+            [0],
+        ),
+    ],
+    ids=[
+        "onsets_on_downbeats",
+        "onsets_offset_by_one",
+        "onset_one_tick_before_next_bar",
+        "only_notes_onsets_false",
+        "3/4_time_signature",
+        "single_note_at_zero",
+    ],
+)
+def test_get_bars_ticks(score: Score, only_notes_onsets: bool, expected: list[int]):
+    assert get_bars_ticks(score, only_notes_onsets=only_notes_onsets) == expected
 
 
 @pytest.mark.parametrize("file_path", MIDI_PATHS_ONE_TRACK, ids=lambda p: p.name)

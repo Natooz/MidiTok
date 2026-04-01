@@ -37,8 +37,9 @@ def augment_dataset(
     out_path: Path | str | None = None,
     copy_original_in_new_location: bool = True,
     save_data_aug_report: bool = True,
-    parallel_workers_size: int = min(MAX_THREADS_PROCESSED_IN_PARALLEL, cpu_count()
-                                     + CPU_COUNT_ADDED_WORKERS)
+    parallel_workers_size: int = min(
+        MAX_THREADS_PROCESSED_IN_PARALLEL, cpu_count() + CPU_COUNT_ADDED_WORKERS
+    ),
 ) -> None:
     r"""
     Perform data augmentation on a dataset of music files.
@@ -111,22 +112,23 @@ def augment_dataset(
             desc="Performing data augmentation",
             unit="file",
             maxinterval=480,
-            smoothing=0
+            smoothing=0,
         ):
-            (num_augmentations_per_file,
-             num_tracks_augmented_per_file) = _augment_dataset_inner(
-                file_path,
-                data_path=Path(data_path),
-                pitch_offsets=pitch_offsets,
-                velocity_offsets=velocity_offsets,
-                duration_offsets=duration_offsets,
-                all_offset_combinations=all_offset_combinations,
-                restrict_on_program_tessitura=restrict_on_program_tessitura,
-                velocity_range=velocity_range,
-                duration_in_ticks=duration_in_ticks,
-                min_duration=min_duration,
-                out_path=out_path,
-                copy_original_in_new_location=copy_original_in_new_location,
+            (num_augmentations_per_file, num_tracks_augmented_per_file) = (
+                _augment_dataset_inner(
+                    file_path,
+                    data_path=Path(data_path),
+                    pitch_offsets=pitch_offsets,
+                    velocity_offsets=velocity_offsets,
+                    duration_offsets=duration_offsets,
+                    all_offset_combinations=all_offset_combinations,
+                    restrict_on_program_tessitura=restrict_on_program_tessitura,
+                    velocity_range=velocity_range,
+                    duration_in_ticks=duration_in_ticks,
+                    min_duration=min_duration,
+                    out_path=out_path,
+                    copy_original_in_new_location=copy_original_in_new_location,
+                )
             )
             num_augmentations += num_augmentations_per_file
             num_tracks_augmented += num_tracks_augmented_per_file
@@ -146,14 +148,16 @@ def augment_dataset(
             copy_original_in_new_location=copy_original_in_new_location,
         )
 
-        agg_results = process_map(fn,
-                    files_paths,
-                    max_workers=parallel_workers_size,
-                    chunksize=int(len(files_paths) / parallel_workers_size),
-                    miniters=parallel_workers_size,
-                    maxinterval=480,
-                    smoothing=0,
-                    desc="Performing data augmentation")
+        agg_results = process_map(
+            fn,
+            files_paths,
+            max_workers=parallel_workers_size,
+            chunksize=int(len(files_paths) / parallel_workers_size),
+            miniters=parallel_workers_size,
+            maxinterval=480,
+            smoothing=0,
+            desc="Performing data augmentation",
+        )
 
         for num_augmentations_per_batch, num_tracks_augmented_per_batch in agg_results:
             num_augmentations += num_augmentations_per_batch
@@ -177,6 +181,7 @@ def augment_dataset(
                 },
                 outfile,
             )
+
 
 def _augment_dataset_inner(
     file_path: Path,
@@ -236,6 +241,7 @@ def _augment_dataset_inner(
         copy2(file_path, saving_path)
 
     return num_augmentations, num_tracks_augmented
+
 
 def _filter_offset_tuples_to_score(
     pitch_offsets: list[int],

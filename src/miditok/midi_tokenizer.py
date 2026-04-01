@@ -3083,8 +3083,9 @@ class MusicTokenizer(ABC, HFHubMixin):
         validation_fn: Callable[[Score], bool] | None = None,
         save_programs: bool | None = None,
         verbose: bool = True,
-        parallel_workers_size: int = min(MAX_THREADS_PROCESSED_IN_PARALLEL, cpu_count()
-                                         + CPU_COUNT_ADDED_WORKERS)
+        parallel_workers_size: int = min(
+            MAX_THREADS_PROCESSED_IN_PARALLEL, cpu_count() + CPU_COUNT_ADDED_WORKERS
+        ),
     ) -> None:
         r"""
         Tokenize a dataset or list of music files and save them in Json files.
@@ -3173,7 +3174,8 @@ class MusicTokenizer(ABC, HFHubMixin):
                 out_dir=out_dir,
                 overwrite_mode=overwrite_mode,
                 validation_fn=validation_fn,
-                save_programs=save_programs)
+                save_programs=save_programs,
+            )
 
             process_map(
                 fn,
@@ -3183,20 +3185,21 @@ class MusicTokenizer(ABC, HFHubMixin):
                 chunksize=int(len(files_paths) / parallel_workers_size),
                 miniters=parallel_workers_size,
                 maxinterval=10,
-                smoothing=0
-                )
+                smoothing=0,
+            )
 
         # Set it back to False
         self._verbose = False
 
-    def _tokenize_dataset_file(self,
+    def _tokenize_dataset_file(
+        self,
         file_path: Path,
         root_dir: Path,
         out_dir: str | Path,
         overwrite_mode: bool = True,
         validation_fn: Callable[[Score], bool] | None = None,
         save_programs: bool | None = None,
-        ) -> None:
+    ) -> None:
 
         file_path = Path(file_path)
         try:

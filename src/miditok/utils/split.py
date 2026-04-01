@@ -46,8 +46,9 @@ def split_files_for_training(
     num_overlap_bars: int = 1,
     min_seq_len: int | None = None,
     preprocessing_method: callable[Score, Score] | None = None,
-    parallel_workers_size: int = min(MAX_THREADS_PROCESSED_IN_PARALLEL, cpu_count()
-                                     + CPU_COUNT_ADDED_WORKERS)
+    parallel_workers_size: int = min(
+        MAX_THREADS_PROCESSED_IN_PARALLEL, cpu_count() + CPU_COUNT_ADDED_WORKERS
+    ),
 ) -> list[Path]:
     """
     Split a list of music files into smaller chunks to use for training.
@@ -124,13 +125,13 @@ def split_files_for_training(
                 num_overlap_bars=num_overlap_bars,
                 min_seq_len=min_seq_len,
                 preprocessing_method=preprocessing_method,
-                root_dir=root_dir
+                root_dir=root_dir,
             )
             for file_path in tqdm(
                 files_paths,
                 desc=f"Splitting music files ({save_dir})",
                 miniters=int(len(files_paths) / 20),
-                maxinterval=480
+                maxinterval=480,
             )
         ]
     else:
@@ -145,17 +146,19 @@ def split_files_for_training(
             num_overlap_bars=num_overlap_bars,
             min_seq_len=min_seq_len,
             preprocessing_method=preprocessing_method,
-            root_dir=root_dir
+            root_dir=root_dir,
         )
 
-        new_files_paths_results = process_map(fn,
-                    files_paths,
-                    max_workers=parallel_workers_size,
-                    chunksize=int(len(files_paths) / parallel_workers_size),
-                    desc=f"Splitting music files ({save_dir})",
-                    miniters=parallel_workers_size,
-                    maxinterval=480,
-                    smoothing=0)
+        new_files_paths_results = process_map(
+            fn,
+            files_paths,
+            max_workers=parallel_workers_size,
+            chunksize=int(len(files_paths) / parallel_workers_size),
+            desc=f"Splitting music files ({save_dir})",
+            miniters=parallel_workers_size,
+            maxinterval=480,
+            smoothing=0,
+        )
 
     # Save file in save_dir to indicate file split has been performed
     with split_hidden_file_path.open("w") as f:
@@ -166,6 +169,7 @@ def split_files_for_training(
         new_files_paths.extend(result)
 
     return new_files_paths
+
 
 def _split_files_for_training_per_file(
     file_path: Path,
@@ -200,7 +204,6 @@ def _split_files_for_training_per_file(
 
     # Split per note density
     for ti, score_to_split in enumerate(scores):
-
         score_chunks = split_score_per_note_density(
             score_to_split,
             max_seq_len,
@@ -235,6 +238,7 @@ def _split_files_for_training_per_file(
             new_files_paths.append(saving_path)
 
     return new_files_paths
+
 
 def split_score_per_note_density(
     score: Score,
