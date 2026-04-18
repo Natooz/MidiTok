@@ -3814,7 +3814,8 @@ class MusicTokenizer(ABC, HFHubMixin):
             out_str += f", trained with {self._model_name}"
         else:
             out_str += ", not trained"
-        return out_str
+
+        return f"{self.__class__.__name__}({out_str})"
 
     def __getitem__(
         self, item: int | str | tuple[int, int | str]
