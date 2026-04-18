@@ -262,13 +262,19 @@ class MusicTokenizer(ABC, HFHubMixin):
         # Attribute controls
         self.attribute_controls = []
         if self.config.one_token_stream_for_programs or self.is_multi_voc:
-            self._disable_attribute_controls()
-            warnings.warn(
-                "Attribute controls are not compatible with "
-                "'config.one_token_stream_for_programs' and multi-vocabulary "
-                "tokenizers. Disabling them from the config.",
-                stacklevel=2,
+            any_ac_enabled = any(
+                getattr(self.config, attr)
+                for attr in vars(self.config)
+                if attr.startswith("ac_") and isinstance(getattr(self.config, attr), bool)
             )
+            if any_ac_enabled:
+                warnings.warn(
+                    "Attribute controls are not compatible with "
+                    "'config.one_token_stream_for_programs' and multi-vocabulary "
+                    "tokenizers. Disabling them from the config.",
+                    stacklevel=2,
+                )
+                self._disable_attribute_controls()
         else:
             self._initialize_attribute_controls()
 
