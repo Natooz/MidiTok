@@ -262,13 +262,19 @@ class MusicTokenizer(ABC, HFHubMixin):
         # Attribute controls
         self.attribute_controls = []
         if self.config.one_token_stream_for_programs or self.is_multi_voc:
-            self._disable_attribute_controls()
-            warnings.warn(
-                "Attribute controls are not compatible with "
-                "'config.one_token_stream_for_programs' and multi-vocabulary "
-                "tokenizers. Disabling them from the config.",
-                stacklevel=2,
+            any_ac_enabled = any(
+                getattr(self.config, attr)
+                for attr in vars(self.config)
+                if attr.startswith("ac_") and isinstance(getattr(self.config, attr), bool)
             )
+            if any_ac_enabled:
+                warnings.warn(
+                    "Attribute controls are not compatible with "
+                    "'config.one_token_stream_for_programs' and multi-vocabulary "
+                    "tokenizers. Disabling them from the config.",
+                    stacklevel=2,
+                )
+                self._disable_attribute_controls()
         else:
             self._initialize_attribute_controls()
 
@@ -3541,8 +3547,8 @@ class MusicTokenizer(ABC, HFHubMixin):
         revision: str | None,
         cache_dir: str | Path | None,
         force_download: bool,
-        proxies: dict | None,
-        resume_download: bool,
+        proxies: dict | None = None,
+        resume_download: bool = False,
         local_files_only: bool,
         token: str | bool | None,
         **kwargs,
@@ -3556,19 +3562,27 @@ class MusicTokenizer(ABC, HFHubMixin):
             if (pretrained_path / filename).is_file():
                 params_path = pretrained_path / filename
             else:
-                params_path = hf_hub_download(
+                hf_hub_kwargs = dict(
                     repo_id=model_id,
                     filename=filename,
                     revision=revision,
                     cache_dir=cache_dir,
                     force_download=force_download,
-                    proxies=proxies,
-                    resume_download=resume_download,
                     local_files_only=local_files_only,
                     token=token,
                     library_name="MidiTok",
                     library_version=CURRENT_MIDITOK_VERSION,
                 )
+
+                import inspect
+
+                hf_download_params = inspect.signature(hf_hub_download).parameters
+                if "proxies" in hf_download_params:
+                    hf_hub_kwargs["proxies"] = proxies
+                if "resume_download" in hf_download_params:
+                    hf_hub_kwargs["resume_download"] = resume_download
+
+                params_path = hf_hub_download(**hf_hub_kwargs)
 
         # Checking config file tokenization
         with Path(params_path).open() as file:
@@ -3806,7 +3820,8 @@ class MusicTokenizer(ABC, HFHubMixin):
             out_str += f", trained with {self._model_name}"
         else:
             out_str += ", not trained"
-        return out_str
+
+        return f"{self.__class__.__name__}({out_str})"
 
     def __getitem__(
         self, item: int | str | tuple[int, int | str]
