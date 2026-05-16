@@ -93,7 +93,7 @@ class Structured(MusicTokenizer):
                         np_get_closest(
                             self._tpb_to_time_array[ticks_per_beat],
                             np.array([time_shift_ticks]),
-                        )
+                        ).item()
                     )
                     time_shift = self._tpb_ticks_to_tokens[ticks_per_beat][
                         time_shift_ticks
@@ -182,7 +182,7 @@ class Structured(MusicTokenizer):
                         np_get_closest(
                             self._tpb_to_time_array[time_division],
                             np.array([time_shift_ticks]),
-                        )
+                        ).item()
                     )
                     time_shift = self._tpb_ticks_to_tokens[time_division][
                         time_shift_ticks
