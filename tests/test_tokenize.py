@@ -111,7 +111,7 @@ for tokenization_ in ALL_TOKENIZATIONS:
         bin_combinations = ["0"]
     for bin_combination in bin_combinations:
         params_ = deepcopy(default_params)
-        for param, bin_val in zip(add_tokens, bin_combination):
+        for param, bin_val in zip(add_tokens, bin_combination, strict=False):
             bool_val = bool(int(bin_val))
             if param == "use_note_duration_programs":
                 params_[param] = USE_NOTE_DURATION_PROGRAMS if bool_val else []

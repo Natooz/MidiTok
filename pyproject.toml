@@ -4,11 +4,11 @@ build-backend = "hatchling.build"
 
 [project]
 name = "miditok"
-version = "3.0.6.post1"
+version = "3.0.7"
 description = "MIDI / symbolic music tokenizers for Deep Learning models."
 readme = {file = "README.md", content-type = "text/markdown"}
 license = {file = "LICENSE"}
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 authors = [
     { name = "Nathan Fradet" },
 ]
@@ -29,11 +29,11 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Operating System :: OS Independent",
 ]
 dependencies = [
@@ -96,7 +96,7 @@ omit = [
 ]
 
 [tool.ruff]
-target-version = "py313"
+target-version = "py314"
 exclude = ["colab-notebooks"]
 
 [tool.ruff.lint]
@@ -155,11 +155,6 @@ extend-select = [
 # difficult to comply and/or would add a lot of noqa exceptions. ANN002 is used as it
 # adds very few "noqa" exceptions, but ANN003 would add too much complexity.
 
-# B905
-# The `strict` keyword argument for the `zip` built-in method appeared with Python
-# 3.10. As we support previous versions, we cannot comply (yet) with this rule. The
-# exclusion should be removed when MidiTok drop support for Python 3.9.
-
 # D107
 # We document classes at the class level (D101). This documentation should cover the
 # way classes are initialized. So we do not document `__init__` methods.
@@ -190,7 +185,6 @@ extend-select = [
 
 ignore = [
     "ANN003",
-    "B905",
     "COM812",
     "D107",
     "D203",

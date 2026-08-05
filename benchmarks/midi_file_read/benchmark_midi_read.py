@@ -76,7 +76,7 @@ def benchmark_midi_parsing(
             (HERE.parent.parent.parent / "data" / dataset).rglob("*.mid")
         )[:MAX_NUM_FILES]
         all_times = read_midi_files(midi_paths)
-        for library, times in zip(LIBRARIES, all_times):
+        for library, times in zip(LIBRARIES, all_times, strict=False):
             times_ = np.array(times)
             if library == "Symusic":
                 times_ *= 1e3

@@ -1,6 +1,6 @@
 """Tests on the preprocessing steps of music files, before tokenization."""
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 from symusic import Score
@@ -8,6 +8,9 @@ from symusic import Score
 import miditok
 
 from .utils_tests import MIDI_PATHS_ALL
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 CONFIG_KWARGS = {
     "use_tempos": True,

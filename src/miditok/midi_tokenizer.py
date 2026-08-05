@@ -1846,7 +1846,7 @@ class MusicTokenizer(ABC, HFHubMixin):
         # Deduce the type of data (ids/tokens/events)
         try:
             arg = ("ids", convert_ids_tensors_to_list(input_seq))
-        except (AttributeError, ValueError, TypeError, IndexError):
+        except AttributeError, ValueError, TypeError, IndexError:
             if isinstance(input_seq[0], str) or (
                 isinstance(input_seq[0], list) and isinstance(input_seq[0][0], str)
             ):
@@ -2877,7 +2877,9 @@ class MusicTokenizer(ABC, HFHubMixin):
             special_tokens.append(AddedToken(**added_token))
             special_tokens_str.append(added_token["content"])
         # Make sure all the special tokens of the tokenizer are referenced
-        for token_id, token_str in zip(self.special_tokens_ids, self.special_tokens):
+        for token_id, token_str in zip(
+            self.special_tokens_ids, self.special_tokens, strict=False
+        ):
             # For Unigram, we have to make an exception for special tokens. A special
             # token cannot be just a character from the initial vocabulary. As such, we
             # prepend and append a special character to the byte of each special token.
@@ -3029,7 +3031,7 @@ class MusicTokenizer(ABC, HFHubMixin):
         if isinstance(seq, list):
             all_bytes = [_split_seq_bytes(seq_) for seq_ in seq]
             encoded_tokens = self._model.encode_batch(all_bytes, is_pretokenized=True)
-            for seq_, ids_encoded in zip(seq, encoded_tokens):
+            for seq_, ids_encoded in zip(seq, encoded_tokens, strict=False):
                 seq_.ids = ids_encoded.ids
                 seq_.are_ids_encoded = True
         else:

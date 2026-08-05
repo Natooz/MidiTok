@@ -229,6 +229,7 @@ def test_tokenizer_training_and_encoding_decoding(
         samples1_decoded,
         samples2_decoded,
         files_paths,
+        strict=False,
     ):
         at_least_one_error = (
             not func_check(

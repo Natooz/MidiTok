@@ -308,7 +308,7 @@ def scores_notes_equals(
     if len(score1.tracks) != len(score2.tracks):
         return [(0, "num tracks", [])]
     errors = []
-    for track1, track2 in zip(score1.tracks, score2.tracks):
+    for track1, track2 in zip(score1.tracks, score2.tracks, strict=False):
         if track1.program != track2.program or track1.is_drum != track2.is_drum:
             errors.append((0, "program", [track1.program, track2.program]))
             continue
@@ -348,7 +348,7 @@ def tracks_notes_equals(
 ) -> list[tuple[str, Note | int, int]]:
     if not use_time_range:
         errors = []
-        for note1, note2 in zip(track1.notes, track2.notes):
+        for note1, note2 in zip(track1.notes, track2.notes, strict=False):
             err = notes_equals(
                 note1,
                 note2,
@@ -436,7 +436,7 @@ def notes_equals(
 def tempos_equals(tempos1: TempoTickList, tempos2: TempoTickList) -> bool:
     if len(tempos1) != len(tempos2):
         return False
-    for tempo1, tempo2 in zip(tempos1, tempos2):
+    for tempo1, tempo2 in zip(tempos1, tempos2, strict=False):
         if (
             tempo1.time != tempo2.time
             or round(tempo1.qpm, 2) != round(tempo2.qpm, 2)
@@ -488,12 +488,12 @@ def check_scores_equals(
 
     # Check pedals
     if check_pedals:
-        for inst1, inst2 in zip(score1.tracks, score2.tracks):
+        for inst1, inst2 in zip(score1.tracks, score2.tracks, strict=False):
             if not use_time_ranges and inst1.pedals != inst2.pedals:
                 types_of_errors.append("PEDALS")
                 break
             inst1_pedals, inst2_pedals = inst1.pedals, inst2.pedals
-            for pedal_0, pedal_1 in zip(inst1_pedals, inst2_pedals):
+            for pedal_0, pedal_1 in zip(inst1_pedals, inst2_pedals, strict=False):
                 if (pedal_0.time - pedal_1.time) > max_time_range or (
                     pedal_0.duration - pedal_1.duration
                 ) > max_time_range:
@@ -502,7 +502,7 @@ def check_scores_equals(
 
     # Check pitch bends
     if check_pitch_bends:
-        for inst1, inst2 in zip(score1.tracks, score2.tracks):
+        for inst1, inst2 in zip(score1.tracks, score2.tracks, strict=False):
             if inst1.pitch_bends != inst2.pitch_bends:
                 types_of_errors.append("PITCH BENDS")
                 break
@@ -524,7 +524,7 @@ def check_scores_equals(
             types_of_errors.append("TIME SIGNATURES")
         elif use_time_ranges:
             time_sigs1, time_sigs2 = score1.time_signatures, score2.time_signatures
-            for time_sig1, time_sig2 in zip(time_sigs1, time_sigs2):
+            for time_sig1, time_sig2 in zip(time_sigs1, time_sigs2, strict=False):
                 if abs(time_sig1.time - time_sig2.time) > max_time_range:
                     types_of_errors.append("TIME SIGNATURES")
                     break

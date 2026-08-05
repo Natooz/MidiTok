@@ -56,12 +56,12 @@ def test_augment_dataset(tmp_path: Path, data_path: Path) -> None:
         min_duration_ticks = round(min_duration * midi_aug.ticks_per_quarter)
 
         # Compare them
-        for track_ogi, track_aug in zip(midi_ogi.tracks, midi_aug.tracks):
+        for track_ogi, track_aug in zip(midi_ogi.tracks, midi_aug.tracks, strict=False):
             if track_ogi.is_drum:
                 continue
             track_ogi.notes.sort(key=lambda x: (x.start, x.pitch, x.end, x.velocity))
             track_aug.notes.sort(key=lambda x: (x.start, x.pitch, x.end, x.velocity))
-            for note_o, note_a in zip(track_ogi.notes, track_aug.notes):
+            for note_o, note_a in zip(track_ogi.notes, track_aug.notes, strict=False):
                 if note_a.pitch != note_o.pitch + offsets[0]:
                     msg = (
                         f"Pitch assertion failed: expected "
@@ -90,7 +90,7 @@ def test_augment_dataset(tmp_path: Path, data_path: Path) -> None:
             # before checking their values.
             track_ogi.notes.sort(key=lambda x: (x.start, x.pitch, x.velocity))
             track_aug.notes.sort(key=lambda x: (x.start, x.pitch, x.velocity))
-            for note_o, note_a in zip(track_ogi.notes, track_aug.notes):
+            for note_o, note_a in zip(track_ogi.notes, track_aug.notes, strict=False):
                 if note_a.velocity not in [1, 127, note_o.velocity + offsets[1]]:
                     msg = (
                         f"Velocity assertion failed: expected one in "

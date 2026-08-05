@@ -986,7 +986,7 @@ class TokenizerConfig:
             try:
                 if len(value) != len(other_dict[key]):
                     return False
-                for val1, val2 in zip(value, other_dict[key]):
+                for val1, val2 in zip(value, other_dict[key], strict=False):
                     if val1 != val2:
                         return False
             except TypeError:

@@ -1,13 +1,16 @@
 """Test methods."""
 
-from collections.abc import Callable
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
 from miditok import TSD, TokenizerConfig, TokSequence
 
 from .utils_tests import MIDI_PATHS_MULTITRACK
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
 
 
 def test_tokseq_concat():

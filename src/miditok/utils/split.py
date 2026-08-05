@@ -383,7 +383,7 @@ def get_average_num_tokens_per_note(
             if (num_notes := score.note_num()) > 0:
                 num_tokens_per_note.append(len(tok_seq) / num_notes)
         else:
-            for track, seq in zip(score.tracks, tok_seq):
+            for track, seq in zip(score.tracks, tok_seq, strict=False):
                 if (num_notes := track.note_num()) > 0:
                     num_tokens_per_note.append(len(seq) / num_notes)
 

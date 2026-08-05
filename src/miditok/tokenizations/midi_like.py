@@ -76,7 +76,7 @@ class MIDILike(MusicTokenizer):
                     rest_values = self._time_ticks_to_tokens(
                         event.time - previous_tick, ticks_per_beat, rest=True
                     )
-                    for dur_value, dur_ticks in zip(*rest_values):
+                    for dur_value, dur_ticks in zip(*rest_values, strict=False):
                         all_events.append(
                             Event(
                                 type_="Rest",
@@ -92,7 +92,8 @@ class MIDILike(MusicTokenizer):
                 if event.time != previous_tick:
                     time_shift = event.time - previous_tick
                     for dur_value, dur_ticks in zip(
-                        *self._time_ticks_to_tokens(time_shift, ticks_per_beat)
+                        *self._time_ticks_to_tokens(time_shift, ticks_per_beat),
+                        strict=False,
                     ):
                         all_events.append(
                             Event(

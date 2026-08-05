@@ -238,7 +238,7 @@ class REMI(MusicTokenizer):
                         event.time - previous_tick, ticks_per_beat, rest=True
                     )
                     # Add Rest events and increment previous_tick
-                    for dur_value, dur_ticks in zip(*rest_values):
+                    for dur_value, dur_ticks in zip(*rest_values, strict=False):
                         all_events.append(
                             Event(
                                 type_="Rest",

@@ -221,7 +221,7 @@ def _augment_dataset_inner(
         suffix = "#" + "_".join(
             [
                 f"{t}{offset}"
-                for t, offset in zip(["p", "v", "d"], aug_offsets)
+                for t, offset in zip(["p", "v", "d"], aug_offsets, strict=False)
                 if offset != 0
             ]
         )
@@ -271,7 +271,10 @@ def _filter_offset_tuples_to_score(
     if restrict_on_program_tessitura:
         min_possible_pitch_offset, max_possible_pitch_offset = -127, 127
         for min_pitch, max_pitch, track in zip(
-            min_pitches, max_pitches, [t for t in score.tracks if not t.is_drum]
+            min_pitches,
+            max_pitches,
+            [t for t in score.tracks if not t.is_drum],
+            strict=False,
         ):
             pitch_range = MIDI_INSTRUMENTS[track.program]["pitch_range"]
             min_possible_pitch_offset = max(

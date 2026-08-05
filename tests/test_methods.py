@@ -49,7 +49,7 @@ def test_tokenize_datasets_file_tree(tmp_path: Path) -> None:
     json_paths = list(tmp_path.glob("**/*.json"))
     json_paths.sort(key=lambda x: x.stem)
     midi_paths.sort(key=lambda x: x.stem)
-    for json_path, midi_path in zip(json_paths, midi_paths):
+    for json_path, midi_path in zip(json_paths, midi_paths, strict=False):
         assert json_path.relative_to(tmp_path).with_suffix(
             ".test"
         ) == midi_path.relative_to(HERE).with_suffix(".test"), (
@@ -90,13 +90,13 @@ def are_tracks_equals(track1: Instrument, track2: Track) -> int:
             err += 1
     track1.notes.sort(key=lambda x: (x.start, x.pitch, x.end, x.velocity))
     track2.notes.sort(key=lambda x: (x.time, x.pitch, x.end, x.velocity))
-    for note1, note2 in zip(track1.notes, track2.notes):
+    for note1, note2 in zip(track1.notes, track2.notes, strict=False):
         if not are_notes_equals(note1, note2):
             err += 1
-    for cc1, cc2 in zip(track1.control_changes, track2.controls):
+    for cc1, cc2 in zip(track1.control_changes, track2.controls, strict=False):
         if not are_control_changes_equals(cc1, cc2):
             err += 1
-    for pb1, pb2 in zip(track1.pitch_bends, track2.pitch_bends):
+    for pb1, pb2 in zip(track1.pitch_bends, track2.pitch_bends, strict=False):
         if not are_pitch_bends_equals(pb1, pb2):
             err += 1
     # get pedals from the miditoolkit track
@@ -115,7 +115,7 @@ def are_tracks_equals(track1: Instrument, track2: Track) -> int:
                 last_pedal_on_time = None
             elif last_pedal_on_time is None and control_change.value >= 64:
                 last_pedal_on_time = control_change.time
-        for sp1, sp2 in zip(pedals_track1, track2.pedals):
+        for sp1, sp2 in zip(pedals_track1, track2.pedals, strict=False):
             if not are_pedals_equals(sp1, sp2):
                 err += 1
 
@@ -174,7 +174,9 @@ def are_midis_equals(midi_mtk: MidiFile, midi_sms: Score) -> bool:
             )
             err += abs(len(midi_mtk.tempo_changes) - len(midi_sms.tempos))
     else:
-        for tempo1, tempo2 in zip(midi_mtk.tempo_changes, midi_sms.tempos):
+        for tempo1, tempo2 in zip(
+            midi_mtk.tempo_changes, midi_sms.tempos, strict=False
+        ):
             if not are_tempos_equals(tempo1, tempo2):
                 err += 1
     if len(midi_mtk.time_signature_changes) != len(midi_sms.time_signatures):
@@ -184,7 +186,9 @@ def are_midis_equals(midi_mtk: MidiFile, midi_sms: Score) -> bool:
         )
         err += abs(len(midi_mtk.time_signature_changes) - len(midi_sms.time_signatures))
     else:
-        for ts1, ts2 in zip(midi_mtk.time_signature_changes, midi_sms.time_signatures):
+        for ts1, ts2 in zip(
+            midi_mtk.time_signature_changes, midi_sms.time_signatures, strict=False
+        ):
             if not are_time_signatures_equals(ts1, ts2):
                 err += 1
     # Not testing lyrics anymore as symusic contain them at the track level
@@ -199,14 +203,14 @@ def are_midis_equals(midi_mtk: MidiFile, midi_sms: Score) -> bool:
         print(f"expected {len(midi_mtk.markers)} markers, got {len(midi_sms.markers)}")
         err += abs(len(midi_mtk.markers) - len(midi_sms.markers))
     else:
-        for marker1, marker2 in zip(midi_mtk.markers, midi_sms.markers):
+        for marker1, marker2 in zip(midi_mtk.markers, midi_sms.markers, strict=False):
             if not are_lyrics_or_markers_equals(marker1, marker2):
                 err += 1
 
     # Check tracks: notes, control changes, pitch bends
     midi_mtk.instruments.sort(key=lambda t: (t.program, t.is_drum, len(t.notes)))
     midi_sms.tracks.sort(key=lambda t: (t.program, t.is_drum, len(t.notes)))
-    for track1, track2 in zip(midi_mtk.instruments, midi_sms.tracks):
+    for track1, track2 in zip(midi_mtk.instruments, midi_sms.tracks, strict=False):
         err += are_tracks_equals(track1, track2)
 
     return err == 0
