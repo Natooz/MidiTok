@@ -71,14 +71,20 @@ only-packages = true
 [tool.hatch.version]
 path = "src/miditok/__init__.py"
 
-[mypy]
-warn_return_any = "True"
-warn_unused_configs = "True"
-plugins = "numpy.typing.mypy_plugin"
-exclude = [
-    "venv",
-    ".venv",
-]
+[tool.ty.src]
+include = ["src"]
+
+[tool.ty.environment]
+python-version = "3.14"
+python-platform = "all"
+
+[tool.ty.rules]
+blanket-ignore-comment = "error"
+ignore-comment-unknown-rule = "error"
+missing-type-argument = "error"
+possibly-unresolved-reference = "warn"
+unused-ignore-comment = "error"
+unused-type-ignore-comment = "error"
 
 [tool.pytest.ini_options]
 pythonpath = "src"
