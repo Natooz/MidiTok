@@ -265,7 +265,8 @@ class MusicTokenizer(ABC, HFHubMixin):
             any_ac_enabled = any(
                 getattr(self.config, attr)
                 for attr in vars(self.config)
-                if attr.startswith("ac_") and isinstance(getattr(self.config, attr), bool)
+                if attr.startswith("ac_")
+                and isinstance(getattr(self.config, attr), bool)
             )
             if any_ac_enabled:
                 warnings.warn(
@@ -393,7 +394,7 @@ class MusicTokenizer(ABC, HFHubMixin):
         return self._vocab_base
 
     @property
-    def vocab_model(self) -> None | dict[str, int]:  # byte (str) to its id (int)
+    def vocab_model(self) -> dict[str, int] | None:  # byte (str) to its id (int)
         r"""
         Return the vocabulary learnt with BPE.
 
@@ -2991,8 +2992,7 @@ class MusicTokenizer(ABC, HFHubMixin):
                 key_ = key_[: -len(end_of_word_suffix)]
             if isinstance(self._model.pre_tokenizer, _pre_tokenizers.Metaspace):
                 replacement = self._model.pre_tokenizer.replacement
-                if key_.startswith(replacement):
-                    key_ = key_[len(replacement) :]
+                key_ = key_.removeprefix(replacement)
             self._vocab_learned_bytes_to_tokens[k] = [
                 self._vocab_base_byte_to_token[b] for b in key_
             ]
@@ -3562,17 +3562,17 @@ class MusicTokenizer(ABC, HFHubMixin):
             if (pretrained_path / filename).is_file():
                 params_path = pretrained_path / filename
             else:
-                hf_hub_kwargs = dict(
-                    repo_id=model_id,
-                    filename=filename,
-                    revision=revision,
-                    cache_dir=cache_dir,
-                    force_download=force_download,
-                    local_files_only=local_files_only,
-                    token=token,
-                    library_name="MidiTok",
-                    library_version=CURRENT_MIDITOK_VERSION,
-                )
+                hf_hub_kwargs = {
+                    "repo_id": model_id,
+                    "filename": filename,
+                    "revision": revision,
+                    "cache_dir": cache_dir,
+                    "force_download": force_download,
+                    "local_files_only": local_files_only,
+                    "token": token,
+                    "library_name": "MidiTok",
+                    "library_version": CURRENT_MIDITOK_VERSION,
+                }
 
                 import inspect
 

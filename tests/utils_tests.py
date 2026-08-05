@@ -690,8 +690,7 @@ def clip_durations(
     for note_pedal in notes_pedals:
         if note_pedal.time > max_durations[tpb_idx, 0]:
             tpb_idx += 1
-        if note_pedal.duration > max_durations[tpb_idx, 1]:
-            note_pedal.duration = max_durations[tpb_idx, 1]
+        note_pedal.duration = min(note_pedal.duration, max_durations[tpb_idx, 1])
 
 
 def check_control_tokens_are_well_inserted(

@@ -584,7 +584,7 @@ class TSD(MusicTokenizer):
             dic["TimeShift"].add("TimeShift")
 
         if self.config.program_changes:
-            for token_type in {
+            for token_type in (
                 "TimeShift",
                 "Rest",
                 "PitchBend",
@@ -593,15 +593,15 @@ class TSD(MusicTokenizer):
                 "Tempo",
                 "TimeSig",
                 "Chord",
-            }:
+            ):
                 if token_type in dic:
                     dic["Program"].add(token_type)
                     dic[token_type].add("Program")
 
         if self.config.use_pitchdrum_tokens:
             dic["PitchDrum"] = dic["Pitch"]
-            for key, values in dic.items():
+            for values in dic.values():
                 if "Pitch" in values:
-                    dic[key].add("PitchDrum")
+                    values.add("PitchDrum")
 
         return dic

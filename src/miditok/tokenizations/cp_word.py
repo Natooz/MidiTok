@@ -793,15 +793,15 @@ class CPWord(MusicTokenizer):
                 dic["Position"].add("Rest")
                 dic["Rest"].add("Position")
 
-        for key in dic:
-            dic[key].add("Ignore")
+        for values in dic.values():
+            values.add("Ignore")
         dic["Ignore"] = set(dic.keys())
 
         if self.config.use_pitchdrum_tokens:
             dic["PitchDrum"] = dic["Pitch"]
-            for key, values in dic.items():
+            for values in dic.values():
                 if "Pitch" in values:
-                    dic[key].add("PitchDrum")
+                    values.add("PitchDrum")
 
         return dic
 

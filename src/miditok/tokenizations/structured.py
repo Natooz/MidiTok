@@ -346,7 +346,7 @@ class Structured(MusicTokenizer):
                                 self.config.default_note_duration * ticks_per_beat
                             )
                         if vel_type == "Velocity" and dur_type == "Duration":
-                            pitch = int(seq[ti].split("_")[1])
+                            pitch = int(token.split("_")[1])
                             if isinstance(dur, str):
                                 dur = self._tpb_tokens_to_ticks[ticks_per_beat][dur]
                             new_note = Note(current_tick, dur, pitch, int(vel))

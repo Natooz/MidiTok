@@ -534,7 +534,7 @@ class MIDILike(MusicTokenizer):
             dic["NoteOff"] = {"NoteOff", first_note_token_type, "TimeShift"}
             dic["TimeShift"].add("NoteOff")
         if self.config.use_pitch_intervals:
-            for token_type in {"PitchIntervalTime", "PitchIntervalChord"}:
+            for token_type in ("PitchIntervalTime", "PitchIntervalChord"):
                 dic[token_type] = {last_note_token_type}
                 if not self.config.use_velocities:
                     dic[token_type] |= {
@@ -703,7 +703,7 @@ class MIDILike(MusicTokenizer):
             dic["TimeShift"].add("TimeShift")
 
         if self.config.program_changes:
-            for token_type in {
+            for token_type in (
                 "TimeShift",
                 "Rest",
                 "PitchBend",
@@ -712,7 +712,7 @@ class MIDILike(MusicTokenizer):
                 "Tempo",
                 "TimeSig",
                 "Chord",
-            }:
+            ):
                 if token_type in dic:
                     dic["Program"].add(token_type)
                     dic[token_type].add("Program")
@@ -723,9 +723,9 @@ class MIDILike(MusicTokenizer):
                 tok_list.append(("DrumOff", "NoteOff"))
             for tok1, tok2 in tok_list:
                 dic[tok1] = dic[tok2]
-                for key, values in dic.items():
+                for values in dic.values():
                     if tok2 in values:
-                        dic[key].add(tok1)
+                        values.add(tok1)
 
         return dic
 

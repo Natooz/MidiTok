@@ -273,7 +273,8 @@ class TokSequence:
         seq += other
         return seq
 
-    def __iadd__(self, other: TokSequence) -> TokSequence:
+    # Keep the concrete return type because ``typing.Self`` requires Python 3.11.
+    def __iadd__(self, other: TokSequence) -> TokSequence:  # noqa: PYI034
         """
         Concatenate the self ``TokSequence`` to another one.
 
@@ -281,13 +282,14 @@ class TokSequence:
 
         :param other: other ``TokSequence``.
         :return: the two sequences concatenated.
+        :raises TypeError: if ``other`` is not a ``TokSequence``.
         """
         if not isinstance(other, TokSequence):
             msg = (
                 "Addition to a `TokSequence` object can only be performed with other"
                 f"`TokSequence` objects. Received: {other.__class__.__name__}"
             )
-            raise ValueError(msg)
+            raise TypeError(msg)
         attributes = ["tokens", "ids", "bytes", "events", "_ids_decoded"]
         for attr in attributes:
             self_attr, other_attr = getattr(self, attr), getattr(other, attr)
@@ -597,7 +599,7 @@ class TokenizerConfig:
         use_programs: bool = USE_PROGRAMS,
         use_pitch_intervals: bool = USE_PITCH_INTERVALS,
         use_pitchdrum_tokens: bool = USE_PITCHDRUM_TOKENS,
-        default_note_duration: int | float = DEFAULT_NOTE_DURATION,
+        default_note_duration: float = DEFAULT_NOTE_DURATION,
         beat_res_rest: dict[tuple[int, int], int] = BEAT_RES_REST,
         chord_maps: dict[str, tuple] = CHORD_MAPS,
         chord_tokens_with_root_note: bool = CHORD_TOKENS_WITH_ROOT_NOTE,
@@ -621,7 +623,7 @@ class TokenizerConfig:
         one_token_stream_for_programs: bool = ONE_TOKEN_STREAM_FOR_PROGRAMS,
         program_changes: bool = PROGRAM_CHANGES,
         max_pitch_interval: int = MAX_PITCH_INTERVAL,
-        pitch_intervals_max_time_dist: int | float = PITCH_INTERVALS_MAX_TIME_DIST,
+        pitch_intervals_max_time_dist: float = PITCH_INTERVALS_MAX_TIME_DIST,
         drums_pitch_range: tuple[int, int] = DRUM_PITCH_RANGE,
         ac_polyphony_track: bool = AC_POLYPHONY_TRACK,
         ac_polyphony_bar: bool = AC_POLYPHONY_BAR,

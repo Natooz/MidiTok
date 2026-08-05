@@ -155,11 +155,6 @@ extend-select = [
 # difficult to comply and/or would add a lot of noqa exceptions. ANN002 is used as it
 # adds very few "noqa" exceptions, but ANN003 would add too much complexity.
 
-# ANN101 and ANN102:
-# Yields errors for `self` in methods from classes, which is unecessary.
-# The existence of these rules is currently questioned, they are likely to be removed.
-# https://github.com/astral-sh/ruff/issues/4396
-
 # B905
 # The `strict` keyword argument for the `zip` built-in method appeared with Python
 # 3.10. As we support previous versions, we cannot comply (yet) with this rule. The
@@ -189,18 +184,12 @@ extend-select = [
 # set with ruff format anyway. This exclusion could be removed when this behavior is
 # fixed in ruff.
 
-# UP038
-# Recommends to | type union with `isinstance`, which is only supported since Python
-# 3.10. The exclusion should be removed when MidiTok drop support for Python 3.9.
-
 # (ISC001)
 # May cause conflicts when used with the ruff formatter. They recommend to disable it.
 # We leave it enabled but keep this in mind.
 
 ignore = [
     "ANN003",
-    "ANN101",
-    "ANN102",
     "B905",
     "COM812",
     "D107",
@@ -208,7 +197,6 @@ ignore = [
     "D212",
     "FBT001",
     "FBT002",
-    "UP038",
 ]
 
 [tool.ruff.lint.per-file-ignores]

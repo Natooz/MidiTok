@@ -33,7 +33,7 @@ def augment_dataset(
     restrict_on_program_tessitura: bool = True,
     velocity_range: tuple[int, int] = (1, 127),
     duration_in_ticks: bool = False,
-    min_duration: int | float = 0.03125,
+    min_duration: float = 0.03125,
     out_path: Path | str | None = None,
     copy_original_in_new_location: bool = True,
     save_data_aug_report: bool = True,
@@ -193,7 +193,7 @@ def _augment_dataset_inner(
     restrict_on_program_tessitura: bool = True,
     velocity_range: tuple[int, int] = (1, 127),
     duration_in_ticks: bool = False,
-    min_duration: int | float = 0.03125,
+    min_duration: float = 0.03125,
     out_path: Path | str | None = None,
     copy_original_in_new_location: bool = True,
 ) -> tuple[int, int] | tuple[0, 0]:
@@ -350,10 +350,10 @@ def augment_score(
     score: Score,
     pitch_offset: int = 0,
     velocity_offset: int = 0,
-    duration_offset: int | float = 0,
+    duration_offset: float = 0,
     velocity_range: tuple[int, int] = (1, 127),
     duration_in_ticks: bool = False,
-    min_duration: int | float = 0.03125,
+    min_duration: float = 0.03125,
     augment_copy: bool = True,
 ) -> Score:
     r"""
@@ -438,7 +438,7 @@ def augment_score_multiple_offsets(
     restrict_on_program_tessitura: bool = True,
     velocity_range: tuple[int, int] = (1, 127),
     duration_in_ticks: bool = False,
-    min_duration: int | float = 0.03125,
+    min_duration: float = 0.03125,
 ) -> list[tuple[tuple[int, int, int], Score]]:
     r"""
     Perform data augmentation on a ``symusic.Score`` object with multiple offset values.

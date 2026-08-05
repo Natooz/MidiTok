@@ -10,7 +10,7 @@ from time import time
 from typing import Literal
 
 import numpy as np
-from pandas import DataFrame, read_csv  # requires tabulate package
+from pandas import DataFrame, notna, read_csv  # requires tabulate package
 from symusic import Score
 from tqdm import tqdm
 
@@ -207,7 +207,7 @@ def benchmark_training_time(vocab_size: int) -> None:
 
                     # Check measure is not already performed
                     cell_val = df.at[index_name, col_name]
-                    if cell_val == cell_val:  # not nan
+                    if notna(cell_val):
                         continue
 
                     # Creates tokenizer
@@ -273,7 +273,7 @@ def benchmark_encoding_decoding_speed_seq_len_reduction() -> None:
 
                     # Check measure is not already performed
                     cell_val = df_enc_time.at[index_name, col_name]
-                    if cell_val == cell_val:  # not nan
+                    if notna(cell_val):
                         continue
 
                     tokenizer_filename = (
@@ -374,7 +374,7 @@ def wordpiece_max_chars(
 
                 # Check measure is not already performed
                 cell_val = df_enc.at[index_name, col_name]
-                if cell_val == cell_val:  # not nan
+                if notna(cell_val):
                     continue
 
                 # Creates tokenizer

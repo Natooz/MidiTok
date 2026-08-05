@@ -581,7 +581,7 @@ def np_get_closest(array: np.ndarray, values: np.ndarray) -> np.ndarray:
     return array[idxs]
 
 
-def tempo_qpm_to_mspq(tempo_qpm: int | float | np.ndarray) -> int | float | np.ndarray:
+def tempo_qpm_to_mspq(tempo_qpm: float | np.ndarray) -> int | float | np.ndarray:
     """
     Convert tempo value(s) in qpm (quarter/minute) to mspq (μs/quarter).
 

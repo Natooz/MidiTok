@@ -41,8 +41,12 @@ tokenizer = REMI(config)
 
 # Loads a midi, converts to tokens, and back to a MIDI
 midi = Score("path/to/your_midi.mid")
-tokens = tokenizer(midi)  # calling the tokenizer will automatically detect MIDIs, paths and tokens
-converted_back_midi = tokenizer(tokens)  # PyTorch, Tensorflow and Numpy tensors are supported
+tokens = tokenizer(
+    midi
+)  # calling the tokenizer will automatically detect MIDIs, paths and tokens
+converted_back_midi = tokenizer(
+    tokens
+)  # PyTorch, Tensorflow and Numpy tensors are supported
 ```
 
 Here is a complete yet concise example of how you can use MidiTok to train any PyTorch model. And [here](colab-notebooks/Example_HuggingFace_Mistral_Transformer.ipynb) is a simple notebook example showing how to use Hugging Face models to generate music, with MidiTok taking care of tokenizing music files.

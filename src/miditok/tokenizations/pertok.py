@@ -255,7 +255,7 @@ class PerTok(MusicTokenizer):
 
     # Utility Methods
     @staticmethod
-    def _get_closest_array_value(value: int | float, array: NDArray) -> int | float:
+    def _get_closest_array_value(value: float, array: NDArray) -> int | float:
         return array[np.abs(array - value).argmin()]
 
     def _get_closest_duration_tuple(self, target: int) -> tuple[int, int, int]:
