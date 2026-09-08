@@ -58,6 +58,14 @@ docs = [
     # "sphinxcontrib-tikz",
 ]
 
+[dependency-groups]
+# Tools used to run checks locally, mirroring what the CI workflows enforce.
+# Install with `uv sync --group dev`.
+dev = [
+    "ruff",
+    "ty",
+]
+
 [project.urls]
 Homepage = "https://github.com/Natooz/MidiTok"
 Repository = "https://github.com/Natooz/MidiTok.git"
