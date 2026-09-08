@@ -17,6 +17,6 @@ jobs:
       - run: ruff check
         env:
           RUFF_OUTPUT_FORMAT: github
-      #- run: ruff format
-      #  env:
-      #    RUFF_OUTPUT_FORMAT: github
+      - run: ruff format --check
+        env:
+          RUFF_OUTPUT_FORMAT: github
