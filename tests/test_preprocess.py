@@ -1,5 +1,7 @@
 """Tests on the preprocessing steps of music files, before tokenization."""
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 import pytest
