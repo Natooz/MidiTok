@@ -25,6 +25,7 @@ from miditok import REMI, TokenizerConfig
 from miditok.constants import CLASS_OF_INST
 from miditok.utils import (
     get_bars_ticks,
+    get_beats_ticks,
     merge_same_program_tracks,
     merge_tracks,
     merge_tracks_per_class,
@@ -368,6 +369,54 @@ _BAR = _TPQ * 4  # ticks per 4/4 bar
 )
 def test_get_bars_ticks(score: Score, only_notes_onsets: bool, expected: list[int]):
     assert get_bars_ticks(score, only_notes_onsets=only_notes_onsets) == expected
+
+
+_TPQ_BEAT = _TPQ  # ticks per beat in 4/4
+
+
+@pytest.mark.parametrize(
+    ("score", "only_notes_onsets", "expected"),
+    [
+        # Regression: same root cause as #263 but for beats — an onset landing exactly
+        # on the final beat boundary was dropped.
+        (
+            _build_score([(i * _TPQ_BEAT, _TPQ_BEAT) for i in range(5)], _TPQ),
+            True,
+            [0, _TPQ_BEAT, 2 * _TPQ_BEAT, 3 * _TPQ_BEAT, 4 * _TPQ_BEAT],
+        ),
+        # Last onset 1 tick before the next beat boundary — that next beat excluded.
+        (
+            _build_score(
+                [(i * _TPQ_BEAT, _TPQ_BEAT) for i in range(3)]
+                + [(4 * _TPQ_BEAT - 1, 1)],
+                _TPQ,
+            ),
+            True,
+            [0, _TPQ_BEAT, 2 * _TPQ_BEAT, 3 * _TPQ_BEAT],
+        ),
+        # only_notes_onsets=False uses score.end() (note end, not onset), so a single
+        # note spanning 4 beats should yield 4 beat ticks.
+        (
+            _build_score([(0, 4 * _TPQ_BEAT)], _TPQ),
+            False,
+            [0, _TPQ_BEAT, 2 * _TPQ_BEAT, 3 * _TPQ_BEAT],
+        ),
+        # Single note at tick 0 — only beat 0 should be returned.
+        (
+            _build_score([(0, _TPQ_BEAT)], _TPQ),
+            True,
+            [0],
+        ),
+    ],
+    ids=[
+        "onsets_on_beat_boundaries",
+        "onset_one_tick_before_next_beat",
+        "only_notes_onsets_false",
+        "single_note_at_zero",
+    ],
+)
+def test_get_beats_ticks(score: Score, only_notes_onsets: bool, expected: list[int]):
+    assert get_beats_ticks(score, only_notes_onsets=only_notes_onsets) == expected
 
 
 @pytest.mark.parametrize("file_path", MIDI_PATHS_ONE_TRACK, ids=lambda p: p.name)
