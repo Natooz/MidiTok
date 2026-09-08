@@ -1846,7 +1846,7 @@ class MusicTokenizer(ABC, HFHubMixin):
         # Deduce the type of data (ids/tokens/events)
         try:
             arg = ("ids", convert_ids_tensors_to_list(input_seq))
-        except AttributeError, ValueError, TypeError, IndexError:
+        except (AttributeError, ValueError, TypeError, IndexError):
             if isinstance(input_seq[0], str) or (
                 isinstance(input_seq[0], list) and isinstance(input_seq[0][0], str)
             ):
