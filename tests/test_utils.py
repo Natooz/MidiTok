@@ -25,6 +25,7 @@ from miditok import REMI, TokenizerConfig
 from miditok.constants import CLASS_OF_INST
 from miditok.utils import (
     get_bars_ticks,
+    get_beats_ticks,
     merge_same_program_tracks,
     merge_tracks,
     merge_tracks_per_class,
@@ -368,6 +369,52 @@ _BAR = _TPQ * 4  # ticks per 4/4 bar
 )
 def test_get_bars_ticks(score: Score, only_notes_onsets: bool, expected: list[int]):
     assert get_bars_ticks(score, only_notes_onsets=only_notes_onsets) == expected
+
+
+_BEAT = _TPQ  # ticks per beat in 4/4
+
+
+@pytest.mark.parametrize(
+    ("score", "only_notes_onsets", "expected"),
+    [
+        # Regression: onsets land exactly on each beat — last beat must be included.
+        # Bug: ceil(max_onset / ticks_per_beat) is an integer, so the last beat is
+        # dropped.
+        (
+            _build_score([(i * _BEAT, _BEAT) for i in range(4)], _TPQ),
+            True,
+            [0, _BEAT, 2 * _BEAT, 3 * _BEAT],
+        ),
+        # Onsets offset by 1 tick — last onset (BEAT*2+1) is inside beat 2, beat 3
+        # excluded.
+        (
+            _build_score([(i * _BEAT + 1, _BEAT - 1) for i in range(3)], _TPQ),
+            True,
+            [0, _BEAT, 2 * _BEAT],
+        ),
+        # only_notes_onsets=False uses score.end() (note end, not onset), so a single
+        # note spanning 4 beats should yield 4 beat ticks.
+        (
+            _build_score([(0, 4 * _BEAT)], _TPQ),
+            False,
+            [0, _BEAT, 2 * _BEAT, 3 * _BEAT],
+        ),
+        # Single note at tick 0 — only beat 0 should be returned.
+        (
+            _build_score([(0, _TPQ)], _TPQ),
+            True,
+            [0],
+        ),
+    ],
+    ids=[
+        "onsets_on_beats",
+        "onsets_offset_by_one",
+        "only_notes_onsets_false",
+        "single_note_at_zero",
+    ],
+)
+def test_get_beats_ticks(score: Score, only_notes_onsets: bool, expected: list[int]):
+    assert get_beats_ticks(score, only_notes_onsets=only_notes_onsets) == expected
 
 
 @pytest.mark.parametrize("file_path", MIDI_PATHS_ONE_TRACK, ids=lambda p: p.name)
