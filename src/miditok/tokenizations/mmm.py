@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from copy import deepcopy
 from typing import TYPE_CHECKING
 
@@ -68,6 +69,16 @@ class MMM(MusicTokenizer):
         # `_tokens_errors` and mirrored base vocabulary (created from config).
 
     def _tweak_config_before_creating_voc(self) -> None:
+        # Key signatures are disabled as MMM concatenates the token sequences of
+        # each track, and the key signature would be duplicated in each of them.
+        if self.config.use_key_signatures:
+            warnings.warn(
+                "Key signatures are not supported by MMM. Disabling "
+                "`use_key_signatures`.",
+                stacklevel=2,
+            )
+            self.config.use_key_signatures = False
+
         # The Programs are specified at the beginning of each track token sequence.
         self.config.use_programs = True
         self.config.program_changes = True

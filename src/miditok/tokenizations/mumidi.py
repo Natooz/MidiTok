@@ -59,6 +59,14 @@ class MuMIDI(MusicTokenizer):
         self.config.use_pitch_intervals = True
         self.config.one_token_stream_for_programs = True
         self.config.program_changes = False
+        if self.config.use_key_signatures:
+            warn(
+                "Key signatures are not supported by MuMIDI, as key signature "
+                "changes cannot be carried cleanly by its compound tokens. "
+                "Disabling `use_key_signatures`.",
+                stacklevel=2,
+            )
+            self.config.use_key_signatures = False
         self._disable_attribute_controls()
 
         # Durations are enabled for all programs or none
