@@ -39,11 +39,14 @@ class BEAT(MusicTokenizer):
     support time signatures, this always amounts to one tick per step.
     Notes are represented as successions of *Pitch*, *Velocity* and *Duration* tokens.
 
+    Introduced in `BEAT: Tokenizing and Generating Symbolic Music by Uniform Temporal
+    Steps (Qian et al.) <https://arxiv.org/abs/2604.19532>`_.
+
     :param tokenizer_config: the tokenizer's configuration, as a
         :class:`miditok.classes.TokenizerConfig` object.
-        BEAT accepts an additional param for tokenizer configuration:
-        | - max_step_embedding -- maximum number of *Step* tokens ("Step_0",
-          "Step_1", ..., "Step_{max_step_embedding-1}").
+        BEAT accepts an additional param for tokenizer configuration,
+        ``max_step_embedding``, which sets the maximum number of *Step* tokens
+        (``Step_0`` to ``Step_{max_step_embedding - 1}``).
     :param params: path to a tokenizer config file. This will override other arguments
         and load the tokenizer based on the config file. This is particularly useful
         if the tokenizer learned Byte Pair Encoding. (default: None)
