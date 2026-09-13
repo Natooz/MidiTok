@@ -27,6 +27,7 @@ from symusic import (
     Track,
 )
 from symusic.core import (
+    ControlChangeTickList,
     NoteTickList,
     PedalTickList,
     PitchBendTickList,
@@ -549,6 +550,7 @@ class MusicTokenizer(ABC, HFHubMixin):
                 score.tracks[t],
                 check_pedals=self.config.use_sustain_pedals,
                 check_pitch_bend=self.config.use_pitch_bends,
+                check_controls=self.config.use_control_changes,
             ) or (self.config.use_programs and program not in self.config.programs):
                 del score.tracks[t]
                 continue
@@ -567,6 +569,12 @@ class MusicTokenizer(ABC, HFHubMixin):
                     score.tracks[t].pitch_bends, tpq_resampling_factors
                 )
 
+            # Resample control changes
+            if self.config.use_control_changes and len(score.tracks[t].controls) > 0:
+                score.tracks[t].controls = self._preprocess_control_changes(
+                    score.tracks[t].controls, tpq_resampling_factors
+                )
+
             # Resample pedals durations
             if self.config.use_sustain_pedals and len(score.tracks[t].pedals) > 0:
                 score.tracks[t].pedals = self._preprocess_pedals(
@@ -578,6 +586,7 @@ class MusicTokenizer(ABC, HFHubMixin):
                 score.tracks[t],
                 check_pedals=self.config.use_sustain_pedals,
                 check_pitch_bend=self.config.use_pitch_bends,
+                check_controls=self.config.use_control_changes,
             ):
                 del score.tracks[t]
                 continue
@@ -946,6 +955,69 @@ class MusicTokenizer(ABC, HFHubMixin):
 
         return PitchBend.from_numpy(**pitch_bends_soa)
 
+    def _preprocess_control_changes(
+        self,
+        control_changes: ControlChangeTickList,
+        resampling_factors: np.ndarray = None,
+    ) -> ControlChangeTickList:
+        r"""
+        Resample the control change events from a track.
+
+        Control changes whose number is not in ``config.control_change_numbers`` are
+        discarded. Control changes occurring at the same tick with the same number are
+        deduplicated by keeping the last one.
+
+        :param control_changes: control change events.
+        :param resampling_factors: sections of resampling factors, when we need to
+            adjust the times of events to a specific ticks/beat value. This is required
+            when the Score has time signatures with different denominators. The factors
+            are given as a numpy array of shape ``(N,2)``, for ``N`` changes of ticks
+            per beat, and the second dimension representing the end tick of each
+            section and the number of ticks per beat respectively. (default: ``None``)
+        """
+        control_changes_soa = control_changes.numpy()
+
+        # Filter out control changes whose number is not tokenized
+        if len(control_changes_soa["number"]) > 0:
+            numbers = np.array(
+                sorted(self.config.control_change_numbers), dtype=np.int64
+            )
+            mask = np.isin(control_changes_soa["number"].astype(np.int64), numbers)
+            if not mask.all():
+                for key in control_changes_soa:
+                    control_changes_soa[key] = control_changes_soa[key][mask]
+
+        # Sort by time then number so that the order is deterministic and the
+        # duplicates are adjacent
+        if len(control_changes_soa["time"]) > 1:
+            order = np.lexsort(
+                (control_changes_soa["number"], control_changes_soa["time"])
+            )
+            for key in control_changes_soa:
+                control_changes_soa[key] = control_changes_soa[key][order]
+
+        # Adjust times if needed
+        if resampling_factors is not None and len(control_changes_soa["time"]) > 0:
+            resampling_factors = self.__convert_resampling_ratios_ticks_to_idx(
+                resampling_factors, control_changes_soa["time"]
+            )
+            control_changes_soa["time"] = self._adjust_time_to_tpb(
+                control_changes_soa["time"], resampling_factors
+            )
+
+        # Deduplicate control changes with the same time and number, keep the last
+        if len(control_changes_soa["time"]) > 1:
+            keep = np.ones(len(control_changes_soa["time"]), dtype=bool)
+            duplicates = (np.diff(control_changes_soa["time"]) == 0) & (
+                np.diff(control_changes_soa["number"]) == 0
+            )
+            keep[:-1][duplicates] = False
+            if not keep.all():
+                for key in control_changes_soa:
+                    control_changes_soa[key] = control_changes_soa[key][keep]
+
+        return ControlChange.from_numpy(**control_changes_soa)
+
     def _preprocess_pedals(
         self,
         pedals: PedalTickList,
@@ -1261,7 +1333,7 @@ class MusicTokenizer(ABC, HFHubMixin):
         Extract the tokens/events from a track (``symusic.Track``).
 
         Concerned events are: *Pitch*, *Velocity*, *Duration*, *NoteOn*, *NoteOff* and
-        optionally *Chord*, *Pedal* and *PitchBend*.
+        optionally *Chord*, *Pedal*, *PitchBend* and *ControlChange*.
         **If the tokenizer is using pitch intervals, the notes must be sorted by time
         then pitch values. This is done in**
         :py:func:`miditok.MusicTokenizer.preprocess_score`.
@@ -1367,7 +1439,27 @@ class MusicTokenizer(ABC, HFHubMixin):
                     Event("PitchBend", pitch_bend.value, pitch_bend.time, program)
                 )
 
-        # Control changes (in the future, and handle pedals redundancy)
+        # Control changes
+        if self.config.use_control_changes:
+            for control in track.controls:
+                if self.config.use_programs and not self.config.program_changes:
+                    events.append(
+                        Event(
+                            "Program",
+                            program,
+                            control.time,
+                            program,
+                            "ProgramControlChange",
+                        )
+                    )
+                events.append(
+                    Event(
+                        "ControlChange",
+                        f"{control.number}-{control.value}",
+                        control.time,
+                        program,
+                    )
+                )
 
         # Add chords
         if self.config.use_chords and not track.is_drum:
@@ -1846,7 +1938,7 @@ class MusicTokenizer(ABC, HFHubMixin):
         # Deduce the type of data (ids/tokens/events)
         try:
             arg = ("ids", convert_ids_tensors_to_list(input_seq))
-        except (AttributeError, ValueError, TypeError, IndexError):
+        except (AttributeError, ValueError, TypeError, IndexError):  # fmt: skip
             if isinstance(input_seq[0], str) or (
                 isinstance(input_seq[0], list) and isinstance(input_seq[0][0], str)
             ):
@@ -1967,7 +2059,9 @@ class MusicTokenizer(ABC, HFHubMixin):
         # Create controls for pedals
         # This is required so that they are saved when the Score is dumped, as symusic
         # will only write the control messages.
-        if self.config.use_sustain_pedals:
+        # When control changes are tokenized, they are decoded as is and we must not
+        # add the controls derived from the pedals, as this would duplicate them.
+        if self.config.use_sustain_pedals and not self.config.use_control_changes:
             for track in score.tracks:
                 for pedal in track.pedals:
                     track.controls.append(ControlChange(pedal.time, 64, 127))
@@ -2148,6 +2242,14 @@ class MusicTokenizer(ABC, HFHubMixin):
         # PitchBend
         if self.config.use_pitch_bends:
             vocab += [f"PitchBend_{pitch_bend}" for pitch_bend in self.pitch_bends]
+
+        # ControlChange
+        if self.config.use_control_changes:
+            vocab += [
+                f"ControlChange_{number}-{value}"
+                for number in sorted(self.config.control_change_numbers)
+                for value in range(128)
+            ]
 
     def _update_token_types_indexes(self) -> None:
         r"""Update the _token_types_indexes attribute according to _event_to_token."""

@@ -55,6 +55,13 @@ class MuMIDI(MusicTokenizer):
         self.config.use_time_signatures = False
         self.config.use_sustain_pedals = False
         self.config.use_pitch_bends = False
+        if self.config.use_control_changes:
+            self.config.use_control_changes = False
+            warn(
+                "Control changes are not supported by the MuMIDI tokenization. "
+                "Disabling them.",
+                stacklevel=2,
+            )
         self.config.use_programs = True
         self.config.use_pitch_intervals = True
         self.config.one_token_stream_for_programs = True

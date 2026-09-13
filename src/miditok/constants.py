@@ -47,6 +47,7 @@ USE_TEMPOS = False
 USE_TIME_SIGNATURE = False
 USE_SUSTAIN_PEDALS = False
 USE_PITCH_BENDS = False
+USE_CONTROL_CHANGES = False
 USE_PROGRAMS = False
 USE_PITCHDRUM_TOKENS = True
 USE_NOTE_DURATION_PROGRAMS = list(range(-1, 128))
@@ -453,3 +454,5 @@ CONTROL_CHANGES = {
     126: "Mono Mode On",  # + poly off, + all notes off
     127: "Poly Mode On",  # + mono off, +all notes off
 }
+# Control change numbers tokenized by default when `use_control_changes` is enabled
+DEFAULT_CONTROL_CHANGE_NUMBERS = list(CONTROL_CHANGES)

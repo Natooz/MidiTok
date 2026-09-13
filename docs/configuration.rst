@@ -66,6 +66,8 @@ Below is an example of how pitch intervals would be tokenized, with a ``max_pitc
   :width: 800
   :alt: Schema of the pitch intervals over a piano-roll
 
+**Control changes** can be tokenized with the ``use_control_changes`` option. When enabled, a ``ControlChange_{number}-{value}`` token is created for each control change message of the tracks, with the control number and its value (both between 0 and 127) separated by a dash. By default, all the control numbers listed in ``miditok.constants.CONTROL_CHANGES`` are tokenized; you can restrict them with the ``control_change_numbers`` argument. Control changes are currently supported by the :ref:`MIDI-Like`, :ref:`REMI`, :ref:`TSD` and :class:`miditok.PerTok` tokenizations.
+
 
 Special tokens
 ------------------------

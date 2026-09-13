@@ -106,6 +106,9 @@ def adjust_tok_params_for_tests(tokenization: str, params: dict[str, Any]) -> No
     :param tokenization: tokenization.
     :param params: parameters as a dictionary of keyword arguments.
     """
+    # Control changes are supported by these tokenizations
+    if tokenization in ["REMI", "TSD", "MIDILike", "PerTok"]:
+        params["use_control_changes"] = True
     # Increase the TimeShift voc for Structured as it doesn't support successive
     # TimeShifts.
     if tokenization == "Structured":
@@ -455,6 +458,7 @@ def check_scores_equals(
     check_time_signatures: bool = True,
     check_pedals: bool = True,
     check_pitch_bends: bool = True,
+    check_control_changes: bool = True,
     log_prefix: str = "",
     use_time_ranges: bool = False,
     max_time_range: int = 120,
@@ -507,12 +511,12 @@ def check_scores_equals(
                 types_of_errors.append("PITCH BENDS")
                 break
 
-    """# Check control changes
+    # Check control changes
     if check_control_changes:
-        for inst1, inst2 in zip(score1.tracks, score2.tracks):
+        for inst1, inst2 in zip(score1.tracks, score2.tracks, strict=False):
             if inst1.controls != inst2.controls:
                 types_of_errors.append("CONTROL CHANGES")
-                break"""
+                break
 
     # Checks tempos
     if check_tempos and not tempos_equals(score1.tempos, score2.tempos):
@@ -574,6 +578,7 @@ def tokenize_and_check_equals(
         check_time_signatures=tokenizer.config.use_time_signatures,
         check_pedals=tokenizer.config.use_sustain_pedals,
         check_pitch_bends=tokenizer.config.use_pitch_bends,
+        check_control_changes=tokenizer.config.use_control_changes,
         log_prefix=log_prefix,
         use_time_ranges=use_time_ranges,
     )

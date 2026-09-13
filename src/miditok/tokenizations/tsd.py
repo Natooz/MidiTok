@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from symusic import (
+    ControlChange,
     Note,
     Pedal,
     PitchBend,
@@ -63,7 +64,7 @@ class TSD(MusicTokenizer):
                     self.config.use_rests
                     and event.time - previous_note_end >= self._min_rest(ticks_per_beat)
                 ):
-                    previous_tick = previous_note_end
+                    previous_tick = max(previous_note_end, previous_tick)
                     rest_values = self._time_ticks_to_tokens(
                         event.time - previous_tick, ticks_per_beat, rest=True
                     )
@@ -120,6 +121,7 @@ class TSD(MusicTokenizer):
                 "Pedal",
                 "PedalOff",
                 "PitchBend",
+                "ControlChange",
                 "Chord",
             }:
                 previous_note_end = max(previous_note_end, event.time)
@@ -334,6 +336,14 @@ class TSD(MusicTokenizer):
                         tracks[current_program].pitch_bends.append(new_pitch_bend)
                     else:
                         current_track.pitch_bends.append(new_pitch_bend)
+                elif tok_type == "ControlChange":
+                    number, value = tok_val.split("-")
+                    new_control = ControlChange(current_tick, int(number), int(value))
+                    if self.config.one_token_stream_for_programs:
+                        check_inst(current_program)
+                        tracks[current_program].controls.append(new_control)
+                    else:
+                        current_track.controls.append(new_control)
 
                 if tok_type in [
                     "Program",
@@ -342,6 +352,7 @@ class TSD(MusicTokenizer):
                     "Pedal",
                     "PedalOff",
                     "PitchBend",
+                    "ControlChange",
                     "Chord",
                 ]:
                     previous_note_end = max(previous_note_end, current_tick)
@@ -555,6 +566,39 @@ class TSD(MusicTokenizer):
             if self.config.use_rests:
                 dic["PitchBend"].add("Rest")
 
+        if self.config.use_control_changes:
+            dic["ControlChange"] = {
+                first_note_token_type,
+                "ControlChange",
+                "TimeShift",
+            }
+            if self.config.use_programs and not self.config.program_changes:
+                dic["Program"].add("ControlChange")
+            else:
+                dic["TimeShift"].add("ControlChange")
+                if self.config.use_tempos:
+                    dic["Tempo"].add("ControlChange")
+                if self.config.use_time_signatures:
+                    dic["TimeSig"].add("ControlChange")
+                if self.config.use_sustain_pedals:
+                    dic["Pedal"].add("ControlChange")
+                    if self.config.sustain_pedal_duration:
+                        dic["Duration"].add("ControlChange")
+                    else:
+                        dic["PedalOff"].add("ControlChange")
+                    dic["ControlChange"].add("Pedal")
+                    if not self.config.sustain_pedal_duration:
+                        dic["ControlChange"].add("PedalOff")
+            if self.config.use_pitch_bends:
+                dic["PitchBend"].add("ControlChange")
+                dic["ControlChange"].add("PitchBend")
+            if self.config.use_pitch_intervals:
+                dic["ControlChange"] |= {"PitchIntervalTime", "PitchIntervalChord"}
+            if self.config.use_chords:
+                dic["ControlChange"].add("Chord")
+            if self.config.use_rests:
+                dic["ControlChange"].add("Rest")
+
         if self.config.use_rests:
             dic["Rest"] = {"Rest", first_note_token_type, "TimeShift"}
             dic[
@@ -579,6 +623,8 @@ class TSD(MusicTokenizer):
                     dic["PedalOff"].add("Rest")
             if self.config.use_pitch_bends:
                 dic["Rest"].add("PitchBend")
+            if self.config.use_control_changes:
+                dic["Rest"].add("ControlChange")
             if self.config.use_pitch_intervals:
                 dic["Rest"] |= {"PitchIntervalTime", "PitchIntervalChord"}
         else:
@@ -589,6 +635,7 @@ class TSD(MusicTokenizer):
                 "TimeShift",
                 "Rest",
                 "PitchBend",
+                "ControlChange",
                 "Pedal",
                 "PedalOff",
                 "Tempo",
@@ -604,5 +651,13 @@ class TSD(MusicTokenizer):
             for values in dic.values():
                 if "Pitch" in values:
                     values.add("PitchDrum")
+
+        if self.config.use_control_changes:
+            # Control changes can occur at any time within a track, so we allow them
+            # to precede and follow any other token type.
+            token_types = list(dic)
+            for token_type in token_types:
+                dic[token_type].add("ControlChange")
+            dic["ControlChange"] |= set(token_types)
 
         return dic
