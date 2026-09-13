@@ -50,6 +50,8 @@ MidiTok offers to include additional tokens on music information. You can specif
 ¹: using both time signatures and rests with :class:`miditok.CPWord` might result in time alterations, as the time signature changes are carried with the Bar tokens which can be skipped during period of rests.
 ²: using time signatures with :class:`miditok.Octuple` might result in time alterations, as the time signature changes are carried with the note onsets. An example is shown below.
 
+The ``use_key_signatures`` option enables ``KeySig`` tokens representing the key signature of the music, formatted as ``KeySig_{key}:{tonality}`` where ``key`` is the number of accidentals (from ``-7`` to ``7``) and ``tonality`` is ``0`` for major or ``1`` for minor. Key signatures are global events, stored on ``symusic.Score.key_signatures``. A default C major key signature is added at tick 0 if the ``Score`` does not contain any. This option is supported by :class:`miditok.REMI`, :class:`miditok.TSD`, :class:`miditok.MIDILike` and :class:`miditok.PerTok`; it is disabled with a warning for the other tokenizations.
+
 Alternatively, **Velocity** and **Duration** tokens are optional and are enabled by default for all tokenizers.
 
 .. image:: /assets/Octuple_TS_Rest/original.png

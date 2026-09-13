@@ -5,7 +5,16 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from symusic import Note, Pedal, PitchBend, Score, Tempo, TimeSignature, Track
+from symusic import (
+    KeySignature,
+    Note,
+    Pedal,
+    PitchBend,
+    Score,
+    Tempo,
+    TimeSignature,
+    Track,
+)
 
 from miditok.classes import Event, TokenizerConfig, TokSequence
 from miditok.constants import DEFAULT_VELOCITY, MIDI_INSTRUMENTS, TIME_SIGNATURE
@@ -401,7 +410,7 @@ class PerTok(MusicTokenizer):
 
         # RESULTS
         tracks: dict[int, Track] = {}
-        tempo_changes, time_signature_changes = [], []
+        tempo_changes, time_signature_changes, key_signature_changes = [], [], []
 
         def check_inst(prog: int) -> None:
             if prog not in tracks:
@@ -548,6 +557,11 @@ class PerTok(MusicTokenizer):
                             current_track.is_drum = True
                 elif tok_type == "Tempo" and si == 0:
                     tempo_changes.append(Tempo(current_tick, float(tok_val)))
+                elif tok_type == "KeySig" and si == 0:
+                    key, tonality = tok_val.split(":")
+                    key_signature_changes.append(
+                        KeySignature(int(current_tick), int(key), int(tonality))
+                    )
                 elif tok_type == "TimeSig":
                     num, den = self._parse_token_time_signature(tok_val)
                     ticks_per_bar = den / 4 * num * ticks_per_beat
@@ -608,6 +622,7 @@ class PerTok(MusicTokenizer):
                     "Program",
                     "Tempo",
                     "TimeSig",
+                    "KeySig",
                     "Pedal",
                     "PedalOff",
                     "PitchBend",
@@ -629,6 +644,7 @@ class PerTok(MusicTokenizer):
             num, den = TIME_SIGNATURE
             time_signature_changes.append(TimeSignature(0, num, den))
         score.time_signatures = time_signature_changes
+        score.key_signatures = key_signature_changes
 
         return score
 

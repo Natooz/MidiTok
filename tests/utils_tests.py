@@ -146,6 +146,11 @@ def adjust_tok_params_for_tests(tokenization: str, params: dict[str, Any]) -> No
         params["use_pitchdrum_tokens"] = False
         params["use_pitch_intervals"] = False
 
+    # Key signatures are only supported by the "simple" tokenizers, the compound ones
+    # disable it in their `_tweak_config_before_creating_voc` method.
+    if tokenization in ("REMI", "TSD", "MIDILike", "PerTok"):
+        params["use_key_signatures"] = True
+
 
 def sort_score(score: Score, sort_tracks: bool = True) -> None:
     """
@@ -453,6 +458,7 @@ def check_scores_equals(
     use_note_duration_programs: Sequence[int] = USE_NOTE_DURATION_PROGRAMS,
     check_tempos: bool = True,
     check_time_signatures: bool = True,
+    check_key_signatures: bool = True,
     check_pedals: bool = True,
     check_pitch_bends: bool = True,
     log_prefix: str = "",
@@ -529,6 +535,10 @@ def check_scores_equals(
                     types_of_errors.append("TIME SIGNATURES")
                     break
 
+    # Checks key signatures
+    if check_key_signatures and score1.key_signatures != score2.key_signatures:
+        types_of_errors.append("KEY SIGNATURES")
+
     # Prints types of errors
     has_errors = has_errors or len(types_of_errors) > 0
     for err_type in types_of_errors:
@@ -572,6 +582,7 @@ def tokenize_and_check_equals(
         use_note_duration_programs=tokenizer.config.use_note_duration_programs,
         check_tempos=tokenizer.config.use_tempos and tokenization != "MuMIDI",
         check_time_signatures=tokenizer.config.use_time_signatures,
+        check_key_signatures=tokenizer.config.use_key_signatures,
         check_pedals=tokenizer.config.use_sustain_pedals,
         check_pitch_bends=tokenizer.config.use_pitch_bends,
         log_prefix=log_prefix,

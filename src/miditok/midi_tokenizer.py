@@ -18,6 +18,7 @@ from huggingface_hub import ModelHubMixin as HFHubMixin
 from huggingface_hub import hf_hub_download
 from symusic import (
     ControlChange,
+    KeySignature,
     Note,
     Pedal,
     PitchBend,
@@ -27,6 +28,7 @@ from symusic import (
     Track,
 )
 from symusic.core import (
+    KeySignatureTickList,
     NoteTickList,
     PedalTickList,
     PitchBendTickList,
@@ -70,6 +72,8 @@ from .constants import (
     DEFAULT_TOKENIZER_FILE_NAME,
     DEFAULT_TRAINING_MODEL_NAME,
     EOS_TOKEN_NAME,
+    KEY_SIGNATURE_KEY,
+    KEY_SIGNATURE_TONALITY,
     MAX_THREADS_PROCESSED_IN_PARALLEL,
     PITCH_CLASSES,
     SCORE_LOADING_EXCEPTION,
@@ -586,8 +590,11 @@ class MusicTokenizer(ABC, HFHubMixin):
         if self.config.use_tempos:
             score.tempos = self._preprocess_tempos(score.tempos, tpq_resampling_factors)
 
-        # We do not change key signature changes, markers and lyrics here as they are
-        # not used by MidiTok (yet)
+        # Process key signature changes
+        if self.config.use_key_signatures:
+            score.key_signatures = self._preprocess_key_signatures(score.key_signatures)
+
+        # We do not change markers and lyrics here as they are not used by MidiTok (yet)
 
         return score
 
@@ -894,6 +901,26 @@ class MusicTokenizer(ABC, HFHubMixin):
                 time_sigs.insert(0, TimeSignature(0, *TIME_SIGNATURE))
         else:
             time_sigs.insert(0, TimeSignature(0, *TIME_SIGNATURE))
+
+    def _preprocess_key_signatures(
+        self, key_signatures: KeySignatureTickList
+    ) -> KeySignatureTickList:
+        r"""
+        Preprocess the key signature changes of a Score.
+
+        Key signatures are sorted by time, and a default key signature is added at
+        tick 0 if the ``Score`` does not contain any, or if the first one does not
+        occur at tick 0. This mirrors the behavior of tempos and time signatures.
+
+        :param key_signatures: key signature changes to preprocess.
+        :return: the preprocessed key signature changes.
+        """
+        if len(key_signatures) == 0 or key_signatures[0].time != 0:
+            key_signatures.insert(
+                0, KeySignature(0, KEY_SIGNATURE_KEY, KEY_SIGNATURE_TONALITY)
+            )
+        key_signatures.sort()
+        return key_signatures
 
     def _preprocess_pitch_bends(
         self,
@@ -1559,7 +1586,7 @@ class MusicTokenizer(ABC, HFHubMixin):
 
     def _create_global_events(self, score: Score) -> list[Event]:
         r"""
-        Create the *global* music tokens: ``Tempo`` and ``TimeSignature``.
+        Create the *global* music tokens: ``Tempo``, ``TimeSignature`` and ``KeySig``.
 
         :param score: ``symusic.Score`` to extract the events from.
         :return: list of ``miditok.classes.Event``.
@@ -1587,6 +1614,17 @@ class MusicTokenizer(ABC, HFHubMixin):
                     desc=tempo.tempo,
                 )
                 for tempo in score.tempos
+            ]
+
+        # Adds key signature events if specified
+        if self.config.use_key_signatures:
+            events += [
+                Event(
+                    type_="KeySig",
+                    value=f"{key_sig.key}:{key_sig.tonality}",
+                    time=key_sig.time,
+                )
+                for key_sig in score.key_signatures
             ]
 
         return events
@@ -1846,7 +1884,7 @@ class MusicTokenizer(ABC, HFHubMixin):
         # Deduce the type of data (ids/tokens/events)
         try:
             arg = ("ids", convert_ids_tensors_to_list(input_seq))
-        except (AttributeError, ValueError, TypeError, IndexError):
+        except (AttributeError, ValueError, TypeError, IndexError):  # fmt: skip
             if isinstance(input_seq[0], str) or (
                 isinstance(input_seq[0], list) and isinstance(input_seq[0][0], str)
             ):
@@ -2133,6 +2171,14 @@ class MusicTokenizer(ABC, HFHubMixin):
         # TimeSig
         if self.config.use_time_signatures:
             vocab += [f"TimeSig_{i[0]}/{i[1]}" for i in self.time_signatures]
+
+        # KeySig
+        if self.config.use_key_signatures:
+            vocab += [
+                f"KeySig_{key}:{tonality}"
+                for key in range(-7, 8)
+                for tonality in (0, 1)
+            ]
 
         # Pedal
         if self.config.use_sustain_pedals:
