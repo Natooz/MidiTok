@@ -9,6 +9,7 @@ from miditok import data_augmentation
 from .classes import Event, TokenizerConfig, TokSequence
 from .midi_tokenizer import MusicTokenizer
 from .tokenizations import (
+    BEAT,
     MMM,
     REMI,
     TSD,
@@ -22,6 +23,7 @@ from .tokenizations import (
 from .tokenizer_training_iterator import TokTrainingIterator
 
 __all__ = [
+    "BEAT",
     "MMM",
     "REMI",
     "TSD",

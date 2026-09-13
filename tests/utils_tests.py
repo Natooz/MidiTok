@@ -106,9 +106,12 @@ def adjust_tok_params_for_tests(tokenization: str, params: dict[str, Any]) -> No
     :param tokenization: tokenization.
     :param params: parameters as a dictionary of keyword arguments.
     """
+    # BEAT does not support time signatures.
+    if tokenization == "BEAT":
+        params["use_time_signatures"] = False
     # Increase the TimeShift voc for Structured as it doesn't support successive
     # TimeShifts.
-    if tokenization == "Structured":
+    elif tokenization == "Structured":
         params["beat_res"] = {(0, 512): 8}
     # We don't test time signatures with Octuple as it can lead to time shifts, as the
     # TS changes are only carried at the onset times of the notes.
