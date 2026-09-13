@@ -28,7 +28,7 @@ You can get the REMI+ tokenization by using the :ref:`REMI` tokenizer with ``con
 BEAT
 ------------------------
 
-BEAT (uniform temporal steps) is a flat tokenization replacing the ``Bar`` and ``Position`` tokens of :ref:`REMI` with a single absolute ``Step`` token type on a uniform time grid. It represents notes as successions of ``Pitch``, ``Velocity`` and ``Duration`` tokens, and does not support time signatures.
+BEAT (uniform temporal steps) is a flat tokenization replacing the ``Bar`` and ``Position`` tokens of :ref:`REMI` with a single absolute ``Step`` token type on a uniform time grid. It represents notes as successions of ``Pitch``, ``Velocity`` and ``Duration`` tokens, and does not support time signatures. It was introduced in `BEAT (Qian et al.) <https://arxiv.org/abs/2604.19532>`_.
 
 .. autoclass:: miditok.BEAT
     :show-inheritance:
