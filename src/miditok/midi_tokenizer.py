@@ -3231,8 +3231,8 @@ class MusicTokenizer(ABC, HFHubMixin):
         :param verbose: will throw warnings of errors when loading files, or if
             some files content is incorrect or need your attention. (default: ``True``)
         :param parallel_workers_size: number of workers to use for parallel
-            processing. (default: ``min(MAX_THREADS_PROCESSED_IN_PARALLEL, cpu_count()
-            + CPU_COUNT_ADDED_WORKERS)``
+            processing. (default: min(MAX_THREADS_PROCESSED_IN_PARALLEL, cpu_count()
+            + CPU_COUNT_ADDED_WORKERS))
         """
         self._verbose = verbose
         out_dir = Path(out_dir).resolve()

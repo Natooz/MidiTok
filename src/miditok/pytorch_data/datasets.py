@@ -141,8 +141,8 @@ class DatasetMIDI(_DatasetABC):
     :param labels_key_name: name of the dictionary key containing the labels data when
         iterating the dataset. (default: ``"labels"``)
     :param parallel_workers_size: number of parallel workers to use for file splitting.
-        (default: ``min(MAX_THREADS_PROCESSED_IN_PARALLEL, cpu_count()
-            + CPU_COUNT_ADDED_WORKERS)``
+        (default: min(MAX_THREADS_PROCESSED_IN_PARALLEL, cpu_count()
+        + CPU_COUNT_ADDED_WORKERS))
     """
 
     def __init__(
