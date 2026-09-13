@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from symusic import KeySignature, Note, Score, Track
+from symusic import ControlChange, KeySignature, Note, Score, Track
 
 import miditok
 from miditok.constants import SCORE_LOADING_EXCEPTION, USE_NOTE_DURATION_PROGRAMS
@@ -358,3 +358,40 @@ def test_key_signatures_round_trip() -> None:
         config = miditok.TokenizerConfig(use_key_signatures=True)
         tokenizer = getattr(miditok, tokenization)(tokenizer_config=config)
         assert not tokenizer.config.use_key_signatures
+
+
+@pytest.mark.parametrize("tokenization", ["REMI", "TSD", "MIDILike", "PerTok"])
+def test_control_changes_round_trip(tokenization: str) -> None:
+    r"""Make sure tracks with control changes round-trip through the tokens."""
+    score = Score(480)
+    track = Track(program=0, is_drum=False, name="control_changes")
+    track.notes.append(Note(0, 240, 60, 100))
+    track.notes.append(Note(480, 240, 62, 100))
+    track.controls.append(ControlChange(0, 64, 127))
+    track.controls.append(ControlChange(120, 1, 64))
+    track.controls.append(ControlChange(240, 7, 100))
+    track.controls.append(ControlChange(480, 64, 0))
+    score.tracks.append(track)
+    score.tempos.append(Tempo(0, 120))
+    score.time_signatures.append(TimeSignature(0, 4, 4))
+
+    params = deepcopy(TOKENIZER_CONFIG_KWARGS)
+    params.update(
+        {
+            "use_control_changes": True,
+            "use_rests": True,
+            "use_tempos": True,
+            "use_time_signatures": True,
+            "use_sustain_pedals": True,
+            "use_pitch_bends": True,
+        }
+    )
+    adjust_tok_params_for_tests(tokenization, params)
+    tokenizer = getattr(miditok, tokenization)(miditok.TokenizerConfig(**params))
+
+    score_decoded, _, has_errors = tokenize_and_check_equals(
+        score, tokenizer, "control_changes"
+    )
+    assert not has_errors
+    assert tokenizer.config.use_control_changes
+    assert any(len(track.controls) > 0 for track in score_decoded.tracks)
