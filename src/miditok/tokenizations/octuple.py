@@ -63,6 +63,13 @@ class Octuple(MusicTokenizer):
         self.config.use_rests = False
         self.config.use_sustain_pedals = False
         self.config.use_pitch_bends = False
+        if self.config.use_control_changes:
+            self.config.use_control_changes = False
+            warn(
+                "Control changes are not supported by the Octuple tokenization. "
+                "Disabling them.",
+                stacklevel=2,
+            )
         self.config.use_pitch_intervals = False
         self.config.delete_equal_successive_tempo_changes = True
         self.config.program_changes = False

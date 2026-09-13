@@ -105,9 +105,6 @@ def is_track_empty(
     :param check_pitch_bend: whether to check the pitch bends. (default: ``False``)
     :return: a boolean indicating if the track has at least one element.
     """
-    if check_controls and check_pedals and check_pitch_bend:
-        return track.empty()
-
     is_empty = track.note_num() == 0
     if check_controls:
         is_empty &= len(track.controls) == 0

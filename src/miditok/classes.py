@@ -33,6 +33,7 @@ from .constants import (
     CHORD_MAPS,
     CHORD_TOKENS_WITH_ROOT_NOTE,
     CHORD_UNKNOWN,
+    DEFAULT_CONTROL_CHANGE_NUMBERS,
     DEFAULT_NOTE_DURATION,
     DELETE_EQUAL_SUCCESSIVE_TEMPO_CHANGES,
     DELETE_EQUAL_SUCCESSIVE_TIME_SIG_CHANGES,
@@ -55,6 +56,7 @@ from .constants import (
     TEMPO_RANGE,
     TIME_SIGNATURE_RANGE,
     USE_CHORDS,
+    USE_CONTROL_CHANGES,
     USE_NOTE_DURATION_PROGRAMS,
     USE_PITCH_BENDS,
     USE_PITCH_INTERVALS,
@@ -422,6 +424,17 @@ class TokenizerConfig:
     :param use_pitch_bends: will use ``PitchBend`` tokens. In multitrack setting, a
         ``Program`` token will be added before each ``PitchBend`` token.
         (default: ``False``)
+    :param use_control_changes: will use ``ControlChange`` tokens to represent the
+        control change messages of the tracks. The token values take the form
+        ``ControlChange_{number}-{value}``, with the control number and its value
+        (both within 0 and 127) separated by a dash. Only the control numbers listed in
+        ``control_change_numbers`` will be tokenized. In multitrack setting, a
+        ``Program`` token will be added before each ``ControlChange`` token.
+        (default: ``False``)
+    :param control_change_numbers: control change numbers to tokenize when
+        ``use_control_changes`` is enabled. Control numbers outside of this list will
+        be discarded during the preprocessing of the music files. (default: the keys of
+        ``miditok.constants.CONTROL_CHANGES``)
     :param use_pitch_intervals: if given True, will represent the pitch of the notes
         with pitch intervals tokens. This way, successive and simultaneous notes will
         be represented with respectively ``PitchIntervalTime`` and
@@ -596,6 +609,8 @@ class TokenizerConfig:
         use_time_signatures: bool = USE_TIME_SIGNATURE,
         use_sustain_pedals: bool = USE_SUSTAIN_PEDALS,
         use_pitch_bends: bool = USE_PITCH_BENDS,
+        use_control_changes: bool = USE_CONTROL_CHANGES,
+        control_change_numbers: Sequence[int] = DEFAULT_CONTROL_CHANGE_NUMBERS,
         use_programs: bool = USE_PROGRAMS,
         use_pitch_intervals: bool = USE_PITCH_INTERVALS,
         use_pitchdrum_tokens: bool = USE_PITCHDRUM_TOKENS,
@@ -666,6 +681,14 @@ class TokenizerConfig:
                 f"{max_pitch_interval})."
             )
             raise ValueError(msg)
+        if use_control_changes:
+            for control_number in control_change_numbers:
+                if not 0 <= control_number <= 127:
+                    msg = (
+                        "`control_change_numbers` must only contain values within 0 "
+                        f"and 127 (received {control_number})."
+                    )
+                    raise ValueError(msg)
         if use_time_signatures:
             for denominator in time_signature_range:
                 if not log2(denominator).is_integer():
@@ -710,6 +733,8 @@ class TokenizerConfig:
         self.use_time_signatures: bool = use_time_signatures
         self.use_sustain_pedals: bool = use_sustain_pedals
         self.use_pitch_bends: bool = use_pitch_bends
+        self.use_control_changes: bool = use_control_changes
+        self.control_change_numbers: set[int] = set(control_change_numbers)
         self.use_programs: bool = use_programs
         self.use_pitch_intervals: bool = use_pitch_intervals
         self.use_pitchdrum_tokens: bool = use_pitchdrum_tokens

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -42,6 +43,13 @@ class Structured(MusicTokenizer):
         self.config.use_time_signatures = False
         self.config.use_sustain_pedals = False
         self.config.use_pitch_bends = False
+        if self.config.use_control_changes:
+            self.config.use_control_changes = False
+            warnings.warn(
+                "Control changes are not supported by the Structured tokenization. "
+                "Disabling them.",
+                stacklevel=2,
+            )
         self.config.use_pitch_intervals = False
         self.config.program_changes = False
         self._disable_attribute_controls()

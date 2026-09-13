@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from copy import deepcopy
 from typing import TYPE_CHECKING
 
@@ -68,6 +69,13 @@ class MMM(MusicTokenizer):
         # `_tokens_errors` and mirrored base vocabulary (created from config).
 
     def _tweak_config_before_creating_voc(self) -> None:
+        if self.config.use_control_changes:
+            self.config.use_control_changes = False
+            warnings.warn(
+                "Control changes are not supported by the MMM tokenization. "
+                "Disabling them.",
+                stacklevel=2,
+            )
         # The Programs are specified at the beginning of each track token sequence.
         self.config.use_programs = True
         self.config.program_changes = True
