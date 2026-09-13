@@ -6,6 +6,7 @@ override specific methods such as ``_add_time_events`` or ``_tokens_to_score`` w
 their specific behaviors/representations.
 """
 
+from .beat import BEAT
 from .cp_word import CPWord
 from .midi_like import MIDILike
 from .mmm import MMM
@@ -17,6 +18,7 @@ from .structured import Structured
 from .tsd import TSD
 
 __all__ = [
+    "BEAT",
     "MMM",
     "REMI",
     "TSD",

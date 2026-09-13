@@ -1846,7 +1846,7 @@ class MusicTokenizer(ABC, HFHubMixin):
         # Deduce the type of data (ids/tokens/events)
         try:
             arg = ("ids", convert_ids_tensors_to_list(input_seq))
-        except (AttributeError, ValueError, TypeError, IndexError):
+        except (AttributeError, ValueError, TypeError, IndexError):  # fmt: skip
             if isinstance(input_seq[0], str) or (
                 isinstance(input_seq[0], list) and isinstance(input_seq[0][0], str)
             ):
@@ -3129,8 +3129,8 @@ class MusicTokenizer(ABC, HFHubMixin):
         :param verbose: will throw warnings of errors when loading files, or if
             some files content is incorrect or need your attention. (default: ``True``)
         :param parallel_workers_size: number of workers to use for parallel
-            processing. (default: ``min(MAX_THREADS_PROCESSED_IN_PARALLEL, cpu_count()
-            + CPU_COUNT_ADDED_WORKERS)``
+            processing. (default: min(MAX_THREADS_PROCESSED_IN_PARALLEL, cpu_count()
+            + CPU_COUNT_ADDED_WORKERS))
         """
         self._verbose = verbose
         out_dir = Path(out_dir).resolve()
