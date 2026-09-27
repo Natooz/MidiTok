@@ -67,7 +67,7 @@ def test_tokenizer_training_and_encoding_decoding(
     encode_ids_split: Literal["bar", "beat", "no"],
     files_paths: Sequence[Path],
     vocab_size: int,
-):
+) -> None:
     r"""
     Train a tokenizer, check encoding-decoding keeps the same data.
 

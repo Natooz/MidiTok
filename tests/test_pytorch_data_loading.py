@@ -69,7 +69,7 @@ def test_dataset_midi(
     ac_random_bars_ratio: tuple[float, float] | None,
     func_labels: Callable,
     num_overlap_bars: int,
-):
+) -> None:
     """Exercise all dataset combinations, reusing only configuration-specific splits."""
     max_seq_len = 1000
     files_paths = (
@@ -153,7 +153,7 @@ def test_dataset_midi(
 @pytest.mark.parametrize("func_labels", [get_labels_seq_len, get_labels_seq])
 def test_dataset_midi_multiprocessing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, func_labels: Callable
-):
+) -> None:
     """Check two-worker splitting and compare serial/parallel pre-tokenization."""
     # Spawned workers must be able to import this module's label callbacks.
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
@@ -182,7 +182,7 @@ def test_dataset_midi_multiprocessing(
             assert serial_sample[key].equal(parallel_sample[key])
 
 
-def test_dataset_json(tmp_path: Path):
+def test_dataset_json(tmp_path: Path) -> None:
     file_paths = MIDI_PATHS_MULTITRACK[:5]
     tokens_dir_path = tmp_path / "multitrack_tokens_dataset_json"
 
@@ -209,7 +209,7 @@ def test_dataset_json(tmp_path: Path):
         pass
 
 
-def test_collator():
+def test_collator() -> None:
     collator = miditok.pytorch_data.DataCollator(
         0,
         pad_on_left=True,

@@ -351,6 +351,12 @@ def tracks_notes_equals(
     use_time_range: bool = False,
     max_time_range: int = 220,
 ) -> list[tuple[str, Note | int, int]]:
+    """
+    Compare track notes in order or within a timing-tolerant sliding window.
+
+    :param use_time_range: search nearby notes instead of comparing matching indices.
+    :return: mismatched attributes, decoded notes and expected values.
+    """
     if not use_time_range:
         errors = []
         for note1, note2 in zip(track1.notes, track2.notes, strict=False):
@@ -380,6 +386,12 @@ def notes_in_sliding_window_equals(
     check_durations: bool = True,
     max_time_range: int = 120,
 ) -> list[tuple[str, Note | int, int]]:
+    """
+    Find note mismatches using nearby same-pitch candidates in the second sequence.
+
+    :param max_time_range: exclusive tolerance for note starts and ends, in ticks.
+    :return: mismatched attributes, decoded notes and expected values.
+    """
     errors = []
     for idx, note_1 in enumerate(notes_1):
         potential_notes = get_notes_in_range(idx=idx, note_list=notes_2, window_size=25)
@@ -416,6 +428,11 @@ def notes_in_sliding_window_equals(
 def get_notes_in_range(
     idx: int, note_list: NoteTickList, window_size: int = 5
 ) -> NoteTickList:
+    """
+    Return notes around an index, clipped to the sequence boundaries.
+
+    :param window_size: number of indices to include on each side of ``idx``.
+    """
     start = max(0, idx - window_size)
     end = min(len(note_list) - 1, idx + window_size)
     return note_list[start : end + 1]
@@ -427,6 +444,7 @@ def notes_equals(
     check_velocity: bool = True,
     check_duration: bool = True,
 ) -> str:
+    """Return the first differing note attribute, or an empty string if equal."""
     if note1.start != note2.start:
         return "start"
     if check_duration and note1.end != note2.end:
@@ -439,6 +457,7 @@ def notes_equals(
 
 
 def tempos_equals(tempos1: TempoTickList, tempos2: TempoTickList) -> bool:
+    """Compare tempo times exactly and values within their rounding tolerances."""
     if len(tempos1) != len(tempos2):
         return False
     for tempo1, tempo2 in zip(tempos1, tempos2, strict=False):
@@ -465,6 +484,13 @@ def check_scores_equals(
     use_time_ranges: bool = False,
     max_time_range: int = 120,
 ) -> bool:
+    """
+    Compare selected score events and report differences to stdout.
+
+    Note mismatches also add diagnostic markers to ``score2``.
+
+    :return: whether all enabled comparisons pass.
+    """
     has_errors = False
     types_of_errors = []
 
@@ -552,6 +578,12 @@ def tokenize_and_check_equals(
     tokenizer: MusicTokenizer,
     file_name: str,
 ) -> tuple[Score, Score, bool]:
+    """
+    Check a tokenizer round trip against an adapted reference score.
+
+    :param score: reference score, modified for the tokenizer's supported features.
+    :return: decoded score, adapted reference score and whether any check failed.
+    """
     tokenization = type(tokenizer).__name__
     log_prefix = f"{file_name} / {tokenization}"
     use_time_ranges = bool(tokenization in ["PerTok"])
@@ -710,6 +742,12 @@ def check_control_tokens_are_well_inserted(
     tokens: TokSequence | Sequence[TokSequence],
     ac_indexes: Mapping[int, Mapping[int, bool | Sequence[int]]],
 ) -> list[tuple[int, str]]:
+    """
+    Verify selected track and bar attribute controls occur at the expected positions.
+
+    :param ac_indexes: attribute controls and bar selections indexed by track.
+    :return: track indices and descriptions of missing or misplaced control tokens.
+    """
     errors = []
 
     # If MMM split the token sequence per track

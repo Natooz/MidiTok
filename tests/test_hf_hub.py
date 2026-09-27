@@ -25,7 +25,7 @@ AUTO_TOKENIZER_CASES = [
 ]
 
 
-def test_push_and_load_to_hf_hub(hf_token: str):
+def test_push_and_load_to_hf_hub(hf_token: str) -> None:
     tokenizer = miditok.REMI(
         miditok.TokenizerConfig(num_velocities=62, pitch_range=(12, 44))
     )
@@ -54,7 +54,7 @@ def test_push_and_load_to_hf_hub(hf_token: str):
     assert tokenizer == tokenizer2
 
 
-def test_from_pretrained_local(tmp_path: Path):
+def test_from_pretrained_local(tmp_path: Path) -> None:
     # Here using paths to directories
     tokenizer = miditok.TSD()
     tokenizer.save_pretrained(tmp_path)
@@ -63,7 +63,7 @@ def test_from_pretrained_local(tmp_path: Path):
 
 
 @pytest.mark.parametrize("params_case", AUTO_TOKENIZER_CASES)
-def test_autotokenizer(tmp_path: Path, params_case: tuple[str, str, str]):
+def test_autotokenizer(tmp_path: Path, params_case: tuple[str, str, str]) -> None:
     tok_class, save_path, tok_class2 = params_case
 
     tokenizer = getattr(miditok, tok_class)()

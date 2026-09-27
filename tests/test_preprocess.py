@@ -29,7 +29,7 @@ TOKENIZATIONS = ["MIDILike", "TSD"]
 
 @pytest.mark.parametrize("tokenization", TOKENIZATIONS)
 @pytest.mark.parametrize("file_path", MIDI_PATHS_ALL, ids=lambda p: p.name)
-def test_preprocess(tokenization: str, file_path: Path):
+def test_preprocess(tokenization: str, file_path: Path) -> None:
     r"""
     Check that a second preprocessing doesn't alter the MIDI anymore.
 
