@@ -82,6 +82,9 @@ def test_saving_loading_tokenizer_config(tokenization: str, tmp_path: Path):
 
 
 @pytest.mark.parametrize("tokenization", ALL_TOKENIZATIONS)
+@pytest.mark.filterwarnings(
+    r"ignore:You are using both Time Signatures and Rests with CPWord\.:UserWarning"
+)
 def test_saving_loading_tokenizer(tokenization: str, tmp_path: Path):
     r"""
     Make sure saving and loading end with the identical tokenizer.

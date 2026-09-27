@@ -300,6 +300,10 @@ def test_abc_to_tokens_to_abc(
     _test_tokenize(file_path, tok_params_set, saving_erroneous_files=False)
 
 
+@pytest.mark.filterwarnings(
+    "ignore:Key signatures are not supported by "
+    "(CPWord|Octuple|MuMIDI|Structured),:UserWarning"
+)
 def test_key_signatures_round_trip() -> None:
     """Test that key signatures are encoded and decoded back identically."""
     score = Score(480)

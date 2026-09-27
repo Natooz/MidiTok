@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import pytest
 from miditoolkit import Instrument, MidiFile, Pedal
 from torch import (
     FloatTensor as ptFloatTensor,
@@ -223,6 +224,9 @@ def test_miditoolkit_to_symusic() -> None:
     assert are_midis_equals(midi, score)
 
 
+@pytest.mark.filterwarnings(
+    r"ignore:You are using a depreciated `miditoolkit\.MidiFile` object\.:UserWarning"
+)
 def test_legacy_miditoolkit() -> None:
     midi = MidiFile(MIDI_PATHS_ALL[0])
     tokenizer = miditok.TSD()
