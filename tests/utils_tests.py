@@ -146,9 +146,9 @@ def adjust_tok_params_for_tests(tokenization: str, params: dict[str, Any]) -> No
         params["use_pitchdrum_tokens"] = False
         params["use_pitch_intervals"] = False
 
-    # Key signatures are only supported by the "simple" tokenizers, the compound ones
-    # disable it in their `_tweak_config_before_creating_voc` method.
-    if tokenization in ("REMI", "TSD", "MIDILike", "PerTok"):
+    # Key signatures are only supported by the "simple" tokenizers and MMM, the
+    # compound ones disable it in their `_tweak_config_before_creating_voc` method.
+    if tokenization in ("REMI", "TSD", "MIDILike", "PerTok", "MMM"):
         params["use_key_signatures"] = True
 
 

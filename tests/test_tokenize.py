@@ -295,6 +295,19 @@ def test_abc_to_tokens_to_abc(
 
 def test_key_signatures_round_trip() -> None:
     """Test that key signatures are encoded and decoded back identically."""
+    score = Score(480)
+    score.tracks.append(
+        Track(
+            program=0,
+            is_drum=False,
+            notes=[Note(0, 240, 60, 100), Note(240, 240, 64, 100)],
+        )
+    )
+    score.tracks.append(
+        Track(program=24, is_drum=False, notes=[Note(120, 240, 67, 100)])
+    )
+    score.key_signatures.append(KeySignature(0, 3, 1))
+
     tokenizations_params = {
         "REMI": {},
         "TSD": {},
@@ -312,15 +325,20 @@ def test_key_signatures_round_trip() -> None:
         tokenizer = getattr(miditok, tokenization)(tokenizer_config=config)
         assert tokenizer.config.use_key_signatures
 
-        score = Score(480)
-        track = Track(program=0, is_drum=False)
-        track.notes.append(Note(0, 240, 60, 100))
-        track.notes.append(Note(240, 240, 64, 100))
-        score.tracks.append(track)
-        # Non-default key signature
-        score.key_signatures.append(KeySignature(0, 3, 1))
+        tokens = tokenizer(score)
+        decoded = tokenizer(tokens)
+        assert list(decoded.key_signatures) == [KeySignature(0, 3, 1)]
+
+    # MMM duplicates global tokens per track and decodes them from the first one only.
+    for base_tokenization in MMM_BASE_TOKENIZATIONS:
+        config = miditok.TokenizerConfig(
+            use_key_signatures=True, base_tokenizer=base_tokenization
+        )
+        tokenizer = miditok.MMM(tokenizer_config=config)
+        assert tokenizer.config.use_key_signatures
 
         tokens = tokenizer(score)
+        assert tokens.tokens.count("KeySig_3:1") == len(score.tracks)
         decoded = tokenizer(tokens)
         assert list(decoded.key_signatures) == [KeySignature(0, 3, 1)]
 
@@ -329,5 +347,3 @@ def test_key_signatures_round_trip() -> None:
         config = miditok.TokenizerConfig(use_key_signatures=True)
         tokenizer = getattr(miditok, tokenization)(tokenizer_config=config)
         assert not tokenizer.config.use_key_signatures
-    mmm_config = miditok.TokenizerConfig(use_key_signatures=True, base_tokenizer="TSD")
-    assert not miditok.MMM(tokenizer_config=mmm_config).config.use_key_signatures
