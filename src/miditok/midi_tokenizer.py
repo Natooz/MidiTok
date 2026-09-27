@@ -3211,6 +3211,7 @@ class MusicTokenizer(ABC, HFHubMixin):
             )
             return
 
+        parallel_workers_size = min(parallel_workers_size, len(files_paths))
         if parallel_workers_size < 2:
             for file_path in tqdm(files_paths, desc="Performing data augmentation"):
                 self._tokenize_dataset_file(
@@ -3236,7 +3237,7 @@ class MusicTokenizer(ABC, HFHubMixin):
                 files_paths,
                 desc=desc,
                 max_workers=parallel_workers_size,
-                chunksize=int(len(files_paths) / parallel_workers_size),
+                chunksize=len(files_paths) // parallel_workers_size,
                 miniters=parallel_workers_size,
                 maxinterval=10,
                 smoothing=0,

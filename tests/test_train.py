@@ -47,6 +47,10 @@ for tokenization_ in TOKENIZATIONS_TRAIN:
     TOK_PARAMS_TRAINING.append((tokenization_, params_))
 
 
+@pytest.mark.filterwarnings(
+    "ignore:miditok - tokenizer\\.train.*retraining a tokenizer "
+    "with Unigram:UserWarning"
+)
 @pytest.mark.parametrize("tok_params_set", TOK_PARAMS_TRAINING)
 @pytest.mark.parametrize("model", TRAINING_MODELS)
 @pytest.mark.parametrize(
