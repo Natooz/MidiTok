@@ -127,6 +127,13 @@ for tokenization_ in ALL_TOKENIZATIONS:
 
 # Make final adjustments
 for tpi in range(len(TOK_PARAMS_ONE_TRACK_HARD) - 1, -1, -1):
+    # Delete cases using rests without note durations
+    if TOK_PARAMS_ONE_TRACK_HARD[tpi][1].get("use_rests") and not (
+        TOK_PARAMS_ONE_TRACK_HARD[tpi][1].get("use_note_duration_programs")
+    ):
+        del TOK_PARAMS_ONE_TRACK_HARD[tpi]
+        continue
+
     # Delete cases for CPWord with rest and time signature
     tokenization_, params_ = TOK_PARAMS_ONE_TRACK_HARD[tpi]
     if (

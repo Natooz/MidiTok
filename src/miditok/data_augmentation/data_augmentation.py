@@ -152,7 +152,7 @@ def augment_dataset(
             fn,
             files_paths,
             max_workers=parallel_workers_size,
-            chunksize=int(len(files_paths) / parallel_workers_size),
+            chunksize=max(1, int(len(files_paths) / parallel_workers_size)),
             miniters=parallel_workers_size,
             maxinterval=480,
             smoothing=0,

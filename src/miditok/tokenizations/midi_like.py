@@ -513,13 +513,6 @@ class MIDILike(MusicTokenizer):
         # Add additional tokens
         self._add_additional_tokens_to_vocab_list(vocab)
 
-        # Add durations if needed
-        if self.config.use_sustain_pedals and self.config.sustain_pedal_duration:
-            vocab += [
-                f"Duration_{'.'.join(map(str, duration))}"
-                for duration in self.durations
-            ]
-
         return vocab
 
     def _create_token_types_graph(self) -> dict[str, set[str]]:

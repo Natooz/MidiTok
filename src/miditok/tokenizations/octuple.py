@@ -77,7 +77,7 @@ class Octuple(MusicTokenizer):
         self._disable_attribute_controls()
 
         # Durations are enabled for all programs or none
-        if any(
+        if self.config.use_note_duration_programs and any(
             p not in self.config.use_note_duration_programs
             for p in self.config.programs
         ):

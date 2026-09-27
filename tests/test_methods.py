@@ -41,7 +41,7 @@ def test_convert_tensors() -> None:
 
 
 def test_tokenize_datasets_file_tree(tmp_path: Path) -> None:
-    midi_paths = MIDI_PATHS_ALL
+    midi_paths = MIDI_PATHS_ALL.copy()
 
     # Check the file tree is copied
     tokenizer = miditok.TSD(miditok.TokenizerConfig())
