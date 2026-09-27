@@ -55,6 +55,7 @@ from .constants import (
     TEMPO_RANGE,
     TIME_SIGNATURE_RANGE,
     USE_CHORDS,
+    USE_KEY_SIGNATURES,
     USE_NOTE_DURATION_PROGRAMS,
     USE_PITCH_BENDS,
     USE_PITCH_INTERVALS,
@@ -416,6 +417,13 @@ class TokenizerConfig:
         of the current time signature within your token sequences, you can preprocess
         a ``symusic.Score`` object to add more ``symusic.TimeSignature`` objects.
         (default: ``False``)
+    :param use_key_signatures: will use ``KeySig`` tokens, if the tokenizer is
+        compatible. ``KeySig`` tokens will specify the current key signature, as
+        ``KeySig_{key}:{tonality}`` where ``key`` is the number of accidentals
+        (from -7 to 7) and ``tonality`` is ``0`` for major and ``1`` for minor.
+        Key signatures are global events, stored on ``symusic.Score.key_signatures``.
+        A default C major key signature will be added at tick 0 if the ``Score``
+        does not contain any. (default: ``False``)
     :param use_sustain_pedals: will use ``Pedal`` tokens to represent the sustain pedal
         events. In multitrack setting, The value of each ``Pedal`` token will be equal
         to the program of the track. (default: ``False``)
@@ -594,6 +602,7 @@ class TokenizerConfig:
         use_rests: bool = USE_RESTS,
         use_tempos: bool = USE_TEMPOS,
         use_time_signatures: bool = USE_TIME_SIGNATURE,
+        use_key_signatures: bool = USE_KEY_SIGNATURES,
         use_sustain_pedals: bool = USE_SUSTAIN_PEDALS,
         use_pitch_bends: bool = USE_PITCH_BENDS,
         use_programs: bool = USE_PROGRAMS,
@@ -708,6 +717,7 @@ class TokenizerConfig:
         self.use_rests: bool = use_rests
         self.use_tempos: bool = use_tempos
         self.use_time_signatures: bool = use_time_signatures
+        self.use_key_signatures: bool = use_key_signatures
         self.use_sustain_pedals: bool = use_sustain_pedals
         self.use_pitch_bends: bool = use_pitch_bends
         self.use_programs: bool = use_programs

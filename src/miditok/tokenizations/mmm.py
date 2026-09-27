@@ -39,8 +39,8 @@ class MMM(MusicTokenizer):
     the number of density bins, and the maximum density in notes per beat to consider.
     (default: (10, 20))**
 
-    **Note:** When decoding tokens with tempos, only the tempos of the first track
-    will be decoded.
+    **Note:** When decoding tokens with tempos or key signatures, only those of the
+    first track will be decoded.
 
     :param tokenizer_config: the tokenizer's configuration, as a
         :class:`miditok.TokenizerConfig` object.

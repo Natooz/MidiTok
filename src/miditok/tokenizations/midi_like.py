@@ -2,7 +2,16 @@
 
 from __future__ import annotations
 
-from symusic import Note, Pedal, PitchBend, Score, Tempo, TimeSignature, Track
+from symusic import (
+    KeySignature,
+    Note,
+    Pedal,
+    PitchBend,
+    Score,
+    Tempo,
+    TimeSignature,
+    Track,
+)
 
 from miditok.classes import Event, TokSequence
 from miditok.constants import DEFAULT_VELOCITY, MIDI_INSTRUMENTS, TIME_SIGNATURE
@@ -125,6 +134,7 @@ class MIDILike(MusicTokenizer):
             elif event.type_ in {
                 "Program",
                 "Tempo",
+                "KeySig",
                 "Pedal",
                 "PedalOff",
                 "PitchBend",
@@ -161,7 +171,7 @@ class MIDILike(MusicTokenizer):
         :return: priority as an int
         """
         # Global tokens first
-        if event.type_ in {"Tempo", "TimeSig"}:
+        if event.type_ in {"Tempo", "TimeSig", "KeySig"}:
             return 0
         # Then NoteOff
         if event.type_ in {"NoteOff", "DrumOff"} or (
@@ -210,7 +220,7 @@ class MIDILike(MusicTokenizer):
 
         # RESULTS
         tracks: dict[int, Track] = {}
-        tempo_changes, time_signature_changes = [], []
+        tempo_changes, time_signature_changes, key_signature_changes = [], [], []
         active_notes: dict[int, dict[int, list[tuple[int, int]]]] = {
             prog: {
                 pi: []
@@ -385,6 +395,11 @@ class MIDILike(MusicTokenizer):
                             current_track.is_drum = True
                 elif tok_type == "Tempo" and si == 0:
                     tempo_changes.append(Tempo(current_tick, float(tok_val)))
+                elif tok_type == "KeySig" and si == 0:
+                    key, tonality = tok_val.split(":")
+                    key_signature_changes.append(
+                        KeySignature(current_tick, int(key), int(tonality))
+                    )
                 elif tok_type == "TimeSig":
                     num, den = self._parse_token_time_signature(tok_val)
                     ticks_per_beat = self._tpb_per_ts[den]
@@ -465,6 +480,7 @@ class MIDILike(MusicTokenizer):
             score.tracks = list(tracks.values())
         score.tempos = tempo_changes
         score.time_signatures = time_signature_changes
+        score.key_signatures = key_signature_changes
 
         return score
 
@@ -602,6 +618,24 @@ class MIDILike(MusicTokenizer):
             if self.config.use_pitch_intervals:
                 dic["TimeSig"] |= {"PitchIntervalTime", "PitchIntervalChord"}
 
+        if self.config.use_key_signatures:
+            dic["TimeShift"] |= {"KeySig"}
+            dic["KeySig"] = {first_note_token_type, "TimeShift", "KeySig"}
+            if self.config.using_note_duration_tokens and (
+                not self.config.use_programs or self.config.program_changes
+            ):
+                dic["KeySig"].add("NoteOff")
+            if self.config.use_chords:
+                dic["KeySig"] |= {"Chord"}
+            if self.config.use_rests:
+                dic["KeySig"].add("Rest")  # only for first token
+            if self.config.use_tempos:
+                dic["Tempo"].add("KeySig")
+            if self.config.use_time_signatures:
+                dic["TimeSig"].add("KeySig")
+            if self.config.use_pitch_intervals:
+                dic["KeySig"] |= {"PitchIntervalTime", "PitchIntervalChord"}
+
         if self.config.use_sustain_pedals:
             dic["TimeShift"].add("Pedal")
             if self.config.using_note_duration_tokens:
@@ -651,6 +685,10 @@ class MIDILike(MusicTokenizer):
                 dic["TimeSig"].add("Pedal")
                 if not self.config.sustain_pedal_duration:
                     dic["TimeSig"].add("PedalOff")
+            if self.config.use_key_signatures:
+                dic["KeySig"].add("Pedal")
+                if not self.config.sustain_pedal_duration:
+                    dic["KeySig"].add("PedalOff")
 
         if self.config.use_pitch_bends:
             # As a Program token will precede PitchBend otherwise
@@ -668,6 +706,8 @@ class MIDILike(MusicTokenizer):
                     dic["Tempo"].add("PitchBend")
                 if self.config.use_time_signatures:
                     dic["TimeSig"].add("PitchBend")
+                if self.config.use_key_signatures:
+                    dic["KeySig"].add("PitchBend")
                 if self.config.use_sustain_pedals:
                     dic["Pedal"].add("PitchBend")
                     if self.config.sustain_pedal_duration:
@@ -689,6 +729,8 @@ class MIDILike(MusicTokenizer):
                 dic["Rest"].add("Tempo")
             if self.config.use_time_signatures:
                 dic["Rest"].add("TimeSig")
+            if self.config.use_key_signatures:
+                dic["Rest"].add("KeySig")
             if self.config.use_sustain_pedals:
                 dic["Rest"].add("Pedal")
                 if self.config.sustain_pedal_duration:
@@ -712,6 +754,7 @@ class MIDILike(MusicTokenizer):
                 "PedalOff",
                 "Tempo",
                 "TimeSig",
+                "KeySig",
                 "Chord",
             ):
                 if token_type in dic:

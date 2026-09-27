@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from symusic import (
+    KeySignature,
     Note,
     Pedal,
     PitchBend,
@@ -353,6 +354,7 @@ class REMI(MusicTokenizer):
             "Program",
             "Tempo",
             "TimeSig",
+            "KeySig",
             "Pedal",
             "PedalOff",
             "PitchBend",
@@ -392,7 +394,7 @@ class REMI(MusicTokenizer):
 
         # RESULTS
         tracks: dict[int, Track] = {}
-        tempo_changes, time_signature_changes = [], []
+        tempo_changes, time_signature_changes, key_signature_changes = [], [], []
 
         def check_inst(prog: int) -> None:
             if prog not in tracks:
@@ -578,6 +580,13 @@ class REMI(MusicTokenizer):
                     if si == 0:
                         tempo_changes.append(Tempo(current_tick, float(tok_val)))
                     previous_note_end = max(previous_note_end, current_tick)
+                elif tok_type == "KeySig":
+                    if si == 0:
+                        key, tonality = tok_val.split(":")
+                        key_signature_changes.append(
+                            KeySignature(current_tick, int(key), int(tonality))
+                        )
+                    previous_note_end = max(previous_note_end, current_tick)
                 elif tok_type == "TimeSig":
                     num, den = self._parse_token_time_signature(tok_val)
                     if (
@@ -647,6 +656,7 @@ class REMI(MusicTokenizer):
             score.tracks = list(tracks.values())
         score.tempos = tempo_changes
         score.time_signatures = time_signature_changes
+        score.key_signatures = key_signature_changes
 
         return score
 
@@ -795,6 +805,20 @@ class REMI(MusicTokenizer):
             if self.config.use_pitch_intervals:
                 dic["TimeSig"] |= {"PitchIntervalTime", "PitchIntervalChord"}
 
+        if self.config.use_key_signatures:
+            dic["Position"] |= {"KeySig"}
+            dic["KeySig"] = {first_note_token_type, "Position", "Bar", "KeySig"}
+            if self.config.use_chords:
+                dic["KeySig"] |= {"Chord"}
+            if self.config.use_rests:
+                dic["KeySig"].add("Rest")  # only for first token
+            if self.config.use_tempos:
+                dic["Tempo"].add("KeySig")
+            if self.config.use_time_signatures:
+                dic["TimeSig"].add("KeySig")
+            if self.config.use_pitch_intervals:
+                dic["KeySig"] |= {"PitchIntervalTime", "PitchIntervalChord"}
+
         if self.config.use_sustain_pedals:
             dic["Position"].add("Pedal")
             if self.config.sustain_pedal_duration:
@@ -834,6 +858,10 @@ class REMI(MusicTokenizer):
                 dic["TimeSig"].add("Pedal")
                 if not self.config.sustain_pedal_duration:
                     dic["TimeSig"].add("PedalOff")
+            if self.config.use_key_signatures:
+                dic["KeySig"].add("Pedal")
+                if not self.config.sustain_pedal_duration:
+                    dic["KeySig"].add("PedalOff")
             if self.config.use_pitch_intervals:
                 if self.config.sustain_pedal_duration:
                     dic["Duration"] |= {"PitchIntervalTime", "PitchIntervalChord"}
@@ -853,6 +881,8 @@ class REMI(MusicTokenizer):
                     dic["Tempo"].add("PitchBend")
                 if self.config.use_time_signatures:
                     dic["TimeSig"].add("PitchBend")
+                if self.config.use_key_signatures:
+                    dic["KeySig"].add("PitchBend")
                 if self.config.use_sustain_pedals:
                     dic["Pedal"].add("PitchBend")
                     if self.config.sustain_pedal_duration:
@@ -879,6 +909,8 @@ class REMI(MusicTokenizer):
                 dic["Rest"].add("Tempo")
             if self.config.use_time_signatures:
                 dic["Rest"].add("TimeSig")
+            if self.config.use_key_signatures:
+                dic["Rest"].add("KeySig")
             if self.config.use_sustain_pedals:
                 dic["Rest"].add("Pedal")
                 if self.config.sustain_pedal_duration:
@@ -900,6 +932,7 @@ class REMI(MusicTokenizer):
                 "PedalOff",
                 "Tempo",
                 "TimeSig",
+                "KeySig",
                 "Chord",
             ):
                 if token_type in dic:

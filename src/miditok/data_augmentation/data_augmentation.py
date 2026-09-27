@@ -81,8 +81,8 @@ def augment_dataset(
     :param save_data_aug_report: will save numbers from the data augmentation in a
         ``data_augmentation_report.txt`` file in the output directory. (default: True)
     :param parallel_workers_size: number of parallel workers to use for data
-        augmentation. (default: ``min(MAX_THREADS_PROCESSED_IN_PARALLEL, os.cpu_count()
-        + CPU_COUNT_ADDED_WORKERS)``)
+        augmentation. (default: min(MAX_THREADS_PROCESSED_IN_PARALLEL, os.cpu_count()
+        + CPU_COUNT_ADDED_WORKERS))
     :return: None
     """
     if out_path is None:

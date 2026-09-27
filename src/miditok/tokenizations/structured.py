@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from warnings import warn
 
 import numpy as np
 from symusic import Note, Score, Track
@@ -44,6 +45,14 @@ class Structured(MusicTokenizer):
         self.config.use_pitch_bends = False
         self.config.use_pitch_intervals = False
         self.config.program_changes = False
+        if self.config.use_key_signatures:
+            warn(
+                "Key signatures are not supported by Structured, as its token type "
+                "successions are strict and do not allow global tokens. Disabling "
+                "`use_key_signatures`.",
+                stacklevel=2,
+            )
+            self.config.use_key_signatures = False
         self._disable_attribute_controls()
 
     def _create_track_events(

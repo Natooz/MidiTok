@@ -90,8 +90,8 @@ def split_files_for_training(
         ``symusic.Score`` before splitting it. This method must take as input a
         ``symusic.Score`` and return a ``symusic.Score``. (default: ``None``)
     :param parallel_workers_size: number of parallel workers to use for file splitting.
-        (default: ``min(MAX_THREADS_PROCESSED_IN_PARALLEL, cpu_count()
-        + CPU_COUNT_ADDED_WORKERS)``)
+        (default: min(MAX_THREADS_PROCESSED_IN_PARALLEL, cpu_count()
+        + CPU_COUNT_ADDED_WORKERS))
     :return: the paths to the files splits.
     """
     # Safety checks

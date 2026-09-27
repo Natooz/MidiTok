@@ -64,6 +64,14 @@ class Octuple(MusicTokenizer):
         self.config.use_sustain_pedals = False
         self.config.use_pitch_bends = False
         self.config.use_pitch_intervals = False
+        if self.config.use_key_signatures:
+            warn(
+                "Key signatures are not supported by Octuple, as key signature "
+                "changes cannot be carried cleanly by its compound tokens. "
+                "Disabling `use_key_signatures`.",
+                stacklevel=2,
+            )
+            self.config.use_key_signatures = False
         self.config.delete_equal_successive_tempo_changes = True
         self.config.program_changes = False
         self._disable_attribute_controls()

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from symusic import Score
+from symusic import KeySignature, Note, Score, Track
 
 import miditok
 from miditok.constants import SCORE_LOADING_EXCEPTION, USE_NOTE_DURATION_PROGRAMS
@@ -291,3 +291,59 @@ def test_abc_to_tokens_to_abc(
     file_path: str | Path, tok_params_set: tuple[str, dict[str, Any]]
 ):
     _test_tokenize(file_path, tok_params_set, saving_erroneous_files=False)
+
+
+def test_key_signatures_round_trip() -> None:
+    """Test that key signatures are encoded and decoded back identically."""
+    score = Score(480)
+    score.tracks.append(
+        Track(
+            program=0,
+            is_drum=False,
+            notes=[Note(0, 240, 60, 100), Note(240, 240, 64, 100)],
+        )
+    )
+    score.tracks.append(
+        Track(program=24, is_drum=False, notes=[Note(120, 240, 67, 100)])
+    )
+    score.key_signatures.append(KeySignature(0, 3, 1))
+
+    tokenizations_params = {
+        "REMI": {},
+        "TSD": {},
+        "MIDILike": {},
+        "PerTok": {
+            "beat_res": {(0, 128): 4, (0, 32): 3},
+            "use_microtiming": True,
+            "ticks_per_quarter": 220,
+            "max_microtiming_shift": 0.25,
+            "num_microtiming_bins": 110,
+        },
+    }
+    for tokenization, params in tokenizations_params.items():
+        config = miditok.TokenizerConfig(use_key_signatures=True, **params)
+        tokenizer = getattr(miditok, tokenization)(tokenizer_config=config)
+        assert tokenizer.config.use_key_signatures
+
+        tokens = tokenizer(score)
+        decoded = tokenizer(tokens)
+        assert list(decoded.key_signatures) == [KeySignature(0, 3, 1)]
+
+    # MMM duplicates global tokens per track and decodes them from the first one only.
+    for base_tokenization in MMM_BASE_TOKENIZATIONS:
+        config = miditok.TokenizerConfig(
+            use_key_signatures=True, base_tokenizer=base_tokenization
+        )
+        tokenizer = miditok.MMM(tokenizer_config=config)
+        assert tokenizer.config.use_key_signatures
+
+        tokens = tokenizer(score)
+        assert tokens.tokens.count("KeySig_3:1") == len(score.tracks)
+        decoded = tokenizer(tokens)
+        assert list(decoded.key_signatures) == [KeySignature(0, 3, 1)]
+
+    # Compound tokenizations do not support key signatures and must disable it
+    for tokenization in ("CPWord", "Octuple", "MuMIDI", "Structured"):
+        config = miditok.TokenizerConfig(use_key_signatures=True)
+        tokenizer = getattr(miditok, tokenization)(tokenizer_config=config)
+        assert not tokenizer.config.use_key_signatures
