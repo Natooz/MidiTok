@@ -870,8 +870,7 @@ def get_num_notes_per_bar(
 
     # Get bar and note times
     bar_ticks = get_bars_ticks(score, only_notes_onsets=True)
-    if bar_ticks[-1] != score.end():
-        bar_ticks.append(score.end())
+    bar_ticks.append(score.end() + 1)
     tracks_times = [track.notes.numpy()["time"] for track in score.tracks]
     if not tracks_indep:
         if len(tracks_times) > 0:

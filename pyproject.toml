@@ -79,12 +79,13 @@ only-packages = true
 [tool.hatch.version]
 path = "src/miditok/__init__.py"
 
-[tool.ty.src]
-include = ["src"]
-
 [tool.ty.environment]
 python-version = "3.14"
 python-platform = "all"
+root = ["./src"]
+
+[tool.ty.src]
+include = ["src", "tests"]
 
 [tool.ty.rules]
 blanket-ignore-comment = "error"
@@ -216,9 +217,8 @@ ignore = [
     "S105",
 ]
 "tests/**" = [
-    "ANN201",  # allow no return type hint for pytest methods
-    "D103",  # no need to document pytest methods
     "S101",  # allow assertions in tests
     "T201",  # print allowed
 ]
+"tests/test_*.py" = ["D103"]  # no need to document pytest methods
 "docs/conf.py" = ["INP001"]  # not a package

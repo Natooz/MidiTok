@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-def test_tokseq_concat():
+def test_tokseq_concat() -> None:
     ids1 = list(range(10))
     ids2 = list(range(10, 20))
     str1 = [str(id_ * 2) for id_ in ids1]
@@ -32,7 +32,7 @@ def test_tokseq_concat():
     assert seq_concat.bytes == bytes1 + bytes2
 
 
-def test_tokseq_slice_and_concat():
+def test_tokseq_slice_and_concat() -> None:
     ids1 = list(range(20))
     str1 = [str(id_ * 2) for id_ in ids1]
     bytes1 = "".join(str1)
@@ -54,7 +54,7 @@ def test_tokseq_slice_and_concat():
 
 @pytest.mark.parametrize("file_path", MIDI_PATHS_MULTITRACK, ids=lambda p: p.name)
 @pytest.mark.parametrize("tokenization", [TSD], ids=lambda c: c.__name__)
-def test_split_tokseq_per_bars_beats(file_path: Path, tokenization: Callable):
+def test_split_tokseq_per_bars_beats(file_path: Path, tokenization: Callable) -> None:
     tokenizer = tokenization(TokenizerConfig(use_programs=True))
     tokseq = tokenizer(file_path)
 

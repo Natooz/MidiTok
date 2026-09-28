@@ -68,7 +68,7 @@ for tokenization_ in ALL_TOKENIZATIONS:
 
 
 @pytest.mark.parametrize("tokenization", ALL_TOKENIZATIONS)
-def test_saving_loading_tokenizer_config(tokenization: str, tmp_path: Path):
+def test_saving_loading_tokenizer_config(tokenization: str, tmp_path: Path) -> None:
     config1 = miditok.TokenizerConfig()
     config1.save_to_json(tmp_path / f"tok_conf_{tokenization}.json")
 
@@ -82,7 +82,10 @@ def test_saving_loading_tokenizer_config(tokenization: str, tmp_path: Path):
 
 
 @pytest.mark.parametrize("tokenization", ALL_TOKENIZATIONS)
-def test_saving_loading_tokenizer(tokenization: str, tmp_path: Path):
+@pytest.mark.filterwarnings(
+    r"ignore:You are using both Time Signatures and Rests with CPWord\.:UserWarning"
+)
+def test_saving_loading_tokenizer(tokenization: str, tmp_path: Path) -> None:
     r"""
     Make sure saving and loading end with the identical tokenizer.
 
@@ -110,7 +113,7 @@ def test_multitrack_midi_to_tokens_to_midi(
     file_path: Path,
     tok_params_set: tuple[str, dict[str, Any]],
     tmp_path: Path,
-):
+) -> None:
     # Create tokenizer
     tokenization, params = tok_params_set
     tokenizer: miditok.MusicTokenizer = getattr(miditok, tokenization)(
@@ -127,7 +130,7 @@ def test_multitrack_midi_to_tokens_to_midi(
 
 
 @pytest.mark.parametrize("file_path", MIDI_PATHS_ONE_TRACK[:3], ids=lambda p: p.name)
-def test_pertok_microtiming_tick_values(file_path: Path):
+def test_pertok_microtiming_tick_values(file_path: Path) -> None:
     # Create the pertok tokenizer
     cfg = miditok.TokenizerConfig(
         use_chords=False,

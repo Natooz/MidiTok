@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from time import time
 from typing import TYPE_CHECKING
 
@@ -21,7 +22,6 @@ from .utils_tests import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from pathlib import Path
 
     from symusic import Score
 
@@ -41,6 +41,12 @@ def get_labels_seq(score: Score, tokseq: miditok.TokSequence, _: Path) -> list[i
     return tokseq.ids
 
 
+@pytest.fixture(scope="module")
+def split_files_root(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Keep split files across parameter combinations within each pytest worker."""
+    return tmp_path_factory.mktemp("dataset_midi_splits")
+
+
 @pytest.mark.parametrize(
     "tokenizer_cls", [miditok.TSD, miditok.Octuple], ids=["TSD", "Octuple"]
 )
@@ -54,7 +60,7 @@ def get_labels_seq(score: Score, tokseq: miditok.TokSequence, _: Path) -> list[i
 @pytest.mark.parametrize("func_labels", [get_labels_seq_len, get_labels_seq])
 @pytest.mark.parametrize("num_overlap_bars", [0, 1], ids=["no overlap", "overlap"])
 def test_dataset_midi(
-    tmp_path: Path,
+    split_files_root: Path,
     tokenizer_cls: Callable,
     one_token_stream_for_programs: bool,
     split_files: bool,
@@ -63,7 +69,8 @@ def test_dataset_midi(
     ac_random_bars_ratio: tuple[float, float] | None,
     func_labels: Callable,
     num_overlap_bars: int,
-):
+) -> None:
+    """Exercise all dataset combinations, reusing only configuration-specific splits."""
     max_seq_len = 1000
     files_paths = (
         MIDI_PATHS_MULTITRACK + MIDI_PATHS_ONE_TRACK + MIDI_PATHS_CORRUPTED + ABC_PATHS
@@ -79,13 +86,19 @@ def test_dataset_midi(
     # We perform it twice as the second time, the method would return the same paths as
     # the ones created in the first call.
     if split_files:
+        # Labels, attribute controls and pre-tokenization do not affect file splitting.
+        # Separate directories keep the existing split cache configuration-specific.
+        split_dir = split_files_root / (
+            f"{tokenizer_cls.__name__}_{one_token_stream_for_programs}_{num_overlap_bars}"
+        )
         t0 = time()
         file_paths_split1 = miditok.utils.split_files_for_training(
             files_paths,
             tokenizer,
-            tmp_path,
+            split_dir,
             max_seq_len,
             num_overlap_bars=num_overlap_bars,
+            parallel_workers_size=1,
         )
         t1 = time() - t0
         print(f"First Score split call: {t1:.2f} sec")
@@ -93,9 +106,10 @@ def test_dataset_midi(
         file_paths_split2 = miditok.utils.split_files_for_training(
             files_paths,
             tokenizer,
-            tmp_path,
+            split_dir,
             max_seq_len,
             num_overlap_bars=num_overlap_bars,
+            parallel_workers_size=1,
         )
         t1 = time() - t0
         print(f"Second Score split call: {t1:.2f} sec")
@@ -117,6 +131,7 @@ def test_dataset_midi(
         ac_tracks_random_ratio_range=ac_random_tracks_ratio,
         ac_bars_random_ratio_range=ac_random_bars_ratio,
         func_to_get_labels=func_labels,
+        parallel_workers_size=1,
     )
     t1 = time() - t0
     print(f"Dataset init took {t1:.2f} sec")
@@ -135,14 +150,46 @@ def test_dataset_midi(
         pass
 
 
-def test_dataset_json(tmp_path: Path):
+@pytest.mark.parametrize("func_labels", [get_labels_seq_len, get_labels_seq])
+def test_dataset_midi_multiprocessing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, func_labels: Callable
+) -> None:
+    """Check two-worker splitting and compare serial/parallel pre-tokenization."""
+    # Spawned workers must be able to import this module's label callbacks.
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
+    tokenizer = miditok.TSD(miditok.TokenizerConfig(use_programs=True))
+    files_paths = miditok.utils.split_files_for_training(
+        MIDI_PATHS_ONE_TRACK[:2], tokenizer, tmp_path, 1000, parallel_workers_size=2
+    )
+    assert len(files_paths) >= 2
+    datasets = [
+        miditok.pytorch_data.DatasetMIDI(
+            files_paths,
+            tokenizer,
+            1000,
+            tokenizer["BOS_None"],
+            tokenizer["EOS_None"],
+            pre_tokenize=True,
+            func_to_get_labels=func_labels,
+            parallel_workers_size=num_workers,
+        )
+        for num_workers in (1, 2)
+    ]
+    assert len(datasets[0]) == len(datasets[1]) > 0
+    for serial_sample, parallel_sample in zip(*datasets, strict=True):
+        assert serial_sample.keys() == parallel_sample.keys()
+        for key in serial_sample:
+            assert serial_sample[key].equal(parallel_sample[key])
+
+
+def test_dataset_json(tmp_path: Path) -> None:
     file_paths = MIDI_PATHS_MULTITRACK[:5]
     tokens_dir_path = tmp_path / "multitrack_tokens_dataset_json"
 
     config = miditok.TokenizerConfig(use_programs=True)
     tokenizer = miditok.TSD(config)
     if not tokens_dir_path.is_dir():
-        tokenizer.tokenize_dataset(file_paths, tokens_dir_path)
+        tokenizer.tokenize_dataset(file_paths, tokens_dir_path, parallel_workers_size=1)
 
     tokens_split_dir_path = tmp_path / "multitrack_tokens_dataset_json_split"
     miditok.utils.split_tokens_files_to_subsequences(
@@ -162,7 +209,7 @@ def test_dataset_json(tmp_path: Path):
         pass
 
 
-def test_collator():
+def test_collator() -> None:
     collator = miditok.pytorch_data.DataCollator(
         0,
         pad_on_left=True,

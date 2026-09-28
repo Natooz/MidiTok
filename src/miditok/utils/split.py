@@ -114,6 +114,7 @@ def split_files_for_training(
         msg = "No music file provided to split for training."
         raise ValueError(msg)
 
+    parallel_workers_size = min(parallel_workers_size, len(files_paths))
     if parallel_workers_size < 2:
         new_files_paths_results = [
             _split_files_for_training_per_file(
@@ -153,7 +154,7 @@ def split_files_for_training(
             fn,
             files_paths,
             max_workers=parallel_workers_size,
-            chunksize=int(len(files_paths) / parallel_workers_size),
+            chunksize=len(files_paths) // parallel_workers_size,
             desc=f"Splitting music files ({save_dir})",
             miniters=parallel_workers_size,
             maxinterval=480,

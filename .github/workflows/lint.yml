@@ -11,12 +11,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/ruff-action@v3
+      - uses: astral-sh/setup-uv@v7
         with:
-          args: "--version"  # added to not run the check command as done by default
-      - run: ruff check
+          enable-cache: true
+      - run: uv sync --extra tests
+      - run: uv run ruff check
         env:
           RUFF_OUTPUT_FORMAT: github
-      - run: ruff format --check
+      - run: uv run ruff format --check
         env:
           RUFF_OUTPUT_FORMAT: github
+      #- run: uv run ty check --output-format github

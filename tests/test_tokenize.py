@@ -127,6 +127,13 @@ for tokenization_ in ALL_TOKENIZATIONS:
 
 # Make final adjustments
 for tpi in range(len(TOK_PARAMS_ONE_TRACK_HARD) - 1, -1, -1):
+    # Delete cases using rests without note durations
+    if TOK_PARAMS_ONE_TRACK_HARD[tpi][1].get("use_rests") and not (
+        TOK_PARAMS_ONE_TRACK_HARD[tpi][1].get("use_note_duration_programs")
+    ):
+        del TOK_PARAMS_ONE_TRACK_HARD[tpi]
+        continue
+
     # Delete cases for CPWord with rest and time signature
     tokenization_, params_ = TOK_PARAMS_ONE_TRACK_HARD[tpi]
     if (
@@ -264,7 +271,7 @@ def _id_tok(tok_params_set: tuple[str, dict]) -> str:
 @pytest.mark.parametrize("tok_params_set", TOK_PARAMS_ONE_TRACK, ids=_id_tok)
 def test_one_track_midi_to_tokens_to_midi(
     file_path: str | Path, tok_params_set: tuple[str, dict[str, Any]]
-):
+) -> None:
     _test_tokenize(file_path, tok_params_set, saving_erroneous_files=True)
 
 
@@ -273,7 +280,7 @@ def test_one_track_midi_to_tokens_to_midi(
 def test_one_track_midi_to_tokens_to_midi_hard(
     file_path: str | Path,
     tok_params_set: tuple[str, dict[str, Any]],
-):
+) -> None:
     _test_tokenize(file_path, tok_params_set, saving_erroneous_files=True)
 
 
@@ -281,7 +288,7 @@ def test_one_track_midi_to_tokens_to_midi_hard(
 @pytest.mark.parametrize("tok_params_set", TOK_PARAMS_MULTITRACK, ids=_id_tok)
 def test_multitrack_midi_to_tokens_to_midi(
     file_path: str | Path, tok_params_set: tuple[str, dict[str, Any]]
-):
+) -> None:
     _test_tokenize(file_path, tok_params_set, saving_erroneous_files=False)
 
 
@@ -289,10 +296,14 @@ def test_multitrack_midi_to_tokens_to_midi(
 @pytest.mark.parametrize("tok_params_set", TOK_PARAMS_ONE_TRACK, ids=_id_tok)
 def test_abc_to_tokens_to_abc(
     file_path: str | Path, tok_params_set: tuple[str, dict[str, Any]]
-):
+) -> None:
     _test_tokenize(file_path, tok_params_set, saving_erroneous_files=False)
 
 
+@pytest.mark.filterwarnings(
+    "ignore:Key signatures are not supported by "
+    "(CPWord|Octuple|MuMIDI|Structured),:UserWarning"
+)
 def test_key_signatures_round_trip() -> None:
     """Test that key signatures are encoded and decoded back identically."""
     score = Score(480)

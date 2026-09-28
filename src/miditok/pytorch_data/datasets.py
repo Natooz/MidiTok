@@ -190,59 +190,74 @@ class DatasetMIDI(_DatasetABC):
                     "pre-tokenize."
                 )
                 raise ValueError(msg)
+            parallel_workers_size = min(parallel_workers_size, len(self.files_paths))
             if parallel_workers_size < 2:
-                for file_path in tqdm(
-                    self.files_paths,
-                    desc="Pre-tokenizing",
-                    miniters=int(len(self.files_paths) / 20),
-                    maxinterval=480,
-                ):
-                    self._pre_tokenize_file(
-                        file_path, self.tokenizer, self.func_to_get_labels
+                pre_tokenized_files = [
+                    self._pre_tokenize_file(file_path, self.func_to_get_labels)
+                    for file_path in tqdm(
+                        self.files_paths,
+                        desc="Pre-tokenizing",
+                        miniters=int(len(self.files_paths) / 20),
+                        maxinterval=480,
                     )
+                ]
 
             else:
                 fn = partial(
                     self._pre_tokenize_file,
-                    tokenizer=self.tokenizer,
                     func_to_get_labels=self.func_to_get_labels,
                 )
 
-                process_map(
+                pre_tokenized_files = process_map(
                     fn,
                     self.files_paths,
                     max_workers=parallel_workers_size,
-                    chunksize=int(len(self.files_paths) / parallel_workers_size),
+                    chunksize=len(self.files_paths) // parallel_workers_size,
                     desc="Pre-tokenizing",
                     miniters=parallel_workers_size,
                     maxinterval=480,
                     smoothing=0,
                 )
 
+            for samples, labels in pre_tokenized_files:
+                self.samples.extend(samples)
+                if labels is not None and self.labels is not None:
+                    self.labels.extend(labels)
+
     def _pre_tokenize_file(
         self,
         file_path: Path,
-        tokenizer: MusicTokenizer,
         func_to_get_labels: Callable[
             [Score, TokSequence | list[TokSequence], Path],
             int | list[int] | LongTensor,
         ]
         | None = None,
-    ) -> None:
+    ) -> tuple[list[LongTensor], list[LongTensor] | None]:
+        """
+        Tokenize one file and return its samples and optional labels.
+
+        :param file_path: path of the music file to tokenize.
+        :param func_to_get_labels: optional callback producing labels for each sample.
+        :return: tokenized samples and their labels, if labels were requested.
+        """
+        samples = []
+        labels = [] if func_to_get_labels else None
         try:
             score = Score(file_path)
         except SCORE_LOADING_EXCEPTION:
-            return
+            return samples, labels
         tokseq = self._tokenize_score(score)
-        if tokenizer.one_token_stream:
+        if self.tokenizer.one_token_stream:
             tokseq = [tokseq]
         for seq in tokseq:
-            self.samples.append(LongTensor(seq.ids))
-            if func_to_get_labels:
+            samples.append(LongTensor(seq.ids))
+            if func_to_get_labels is not None and labels is not None:
                 label = func_to_get_labels(score, seq, file_path)
                 if not isinstance(label, LongTensor):
-                    label = LongTensor(label)
-                self.labels.append(label)
+                    label = LongTensor([label] if isinstance(label, int) else label)
+                labels.append(label)
+
+        return samples, labels
 
     def __getitem__(self, idx: int) -> dict[str, LongTensor]:
         """

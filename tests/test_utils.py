@@ -47,7 +47,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-def test_containers_assertions():
+def test_containers_assertions() -> None:
     note1 = [Note(0, 30, 50, 120), Note(0, 30, 49, 120)]
     note2 = [Note(0, 30, 51, 120), Note(0, 30, 49, 120)]
     note3 = [Note(0, 30, 51, 120), Note(0, 30, 49, 120)]
@@ -92,7 +92,7 @@ def test_containers_assertions():
 
 
 @pytest.mark.parametrize("file_path", MIDI_PATHS_ONE_TRACK, ids=lambda p: p.name)
-def test_check_scores_equals(file_path: Path):
+def test_check_scores_equals(file_path: Path) -> None:
     score = Score(file_path)
     score_copy = score.copy()
     # score_copy = score.copy(deep=True)
@@ -149,7 +149,7 @@ def test_check_scores_equals(file_path: Path):
 
 
 @pytest.mark.parametrize("file_path", MIDI_PATHS_ONE_TRACK[:1], ids=lambda p: p.name)
-def test_merge_tracks(file_path: str | Path):
+def test_merge_tracks(file_path: str | Path) -> None:
     # Load music file and only keep the first track
     score = Score(file_path)
     score.tracks = [score.tracks[0]]
@@ -167,7 +167,7 @@ def test_merge_tracks(file_path: str | Path):
 
 
 @pytest.mark.parametrize("file_path", MIDI_PATHS_MULTITRACK, ids=lambda p: p.name)
-def test_merge_same_program_tracks_and_by_class(file_path: str | Path):
+def test_merge_same_program_tracks_and_by_class(file_path: str | Path) -> None:
     score = Score(file_path)
     for track in score.tracks:
         if track.is_drum:
@@ -193,7 +193,7 @@ def test_merge_same_program_tracks_and_by_class(file_path: str | Path):
     )
 
 
-def test_num_pos():
+def test_num_pos() -> None:
     (tok_conf := TokenizerConfig(**TOKENIZER_CONFIG_KWARGS)).use_time_signatures = True
     tokenizer = REMI(tok_conf)
     score = Score(MIDI_PATHS_ONE_TRACK[0])
@@ -205,7 +205,7 @@ def test_num_pos():
     )
 
 
-def test_remove_duplicated_notes():
+def test_remove_duplicated_notes() -> None:
     sets = [
         # No duplicated
         (
@@ -367,7 +367,9 @@ _BAR = _TPQ * 4  # ticks per 4/4 bar
         "single_note_at_zero",
     ],
 )
-def test_get_bars_ticks(score: Score, only_notes_onsets: bool, expected: list[int]):
+def test_get_bars_ticks(
+    score: Score, only_notes_onsets: bool, expected: list[int]
+) -> None:
     assert get_bars_ticks(score, only_notes_onsets=only_notes_onsets) == expected
 
 
@@ -413,12 +415,14 @@ _BEAT = _TPQ  # ticks per beat in 4/4
         "single_note_at_zero",
     ],
 )
-def test_get_beats_ticks(score: Score, only_notes_onsets: bool, expected: list[int]):
+def test_get_beats_ticks(
+    score: Score, only_notes_onsets: bool, expected: list[int]
+) -> None:
     assert get_beats_ticks(score, only_notes_onsets=only_notes_onsets) == expected
 
 
 @pytest.mark.parametrize("file_path", MIDI_PATHS_ONE_TRACK, ids=lambda p: p.name)
-def test_get_bars(file_path: Path):
+def test_get_bars(file_path: Path) -> None:
     save_bars_markers = False
     # Used for debug, this method do not make assertions
     score = Score(file_path)
@@ -430,7 +434,7 @@ def test_get_bars(file_path: Path):
 
 
 @pytest.mark.parametrize("file_path", MIDI_PATHS_MULTITRACK, ids=lambda p: p.name)
-def test_get_num_notes_per_bar(file_path: Path):
+def test_get_num_notes_per_bar(file_path: Path) -> None:
     score = Score(file_path)
     num_notes = miditok.utils.get_num_notes_per_bar(score)
     num_notes_track_indep = miditok.utils.get_num_notes_per_bar(
@@ -442,7 +446,7 @@ def test_get_num_notes_per_bar(file_path: Path):
 
 @pytest.mark.parametrize("file_path", MIDI_PATHS_MULTITRACK, ids=lambda p: p.name)
 @pytest.mark.parametrize("max_num_beats", [16], ids=lambda x: f"{x} max beats")
-def test_split_concat_score(file_path: Path, max_num_beats: int):
+def test_split_concat_score(file_path: Path, max_num_beats: int) -> None:
     score = Score(file_path)
     score_splits = miditok.utils.split_score_per_beats(score, max_num_beats)
     ticks_beat = miditok.utils.get_beats_ticks(score, only_notes_onsets=True)
@@ -469,7 +473,7 @@ def test_split_concat_score(file_path: Path, max_num_beats: int):
 
 
 @pytest.mark.parametrize("file_path", MIDI_PATHS_MULTITRACK, ids=lambda p: p.name)
-def test_split_score_per_tracks(file_path: Path):
+def test_split_score_per_tracks(file_path: Path) -> None:
     score = Score(file_path)
     score_splits = miditok.utils.split_score_per_tracks(score)
 
@@ -488,6 +492,6 @@ def test_split_score_per_tracks(file_path: Path):
     assert score == score_merged
 
 
-def test_filter_dataset():
+def test_filter_dataset() -> None:
     files_paths = MIDI_PATHS_MULTITRACK + MIDI_PATHS_CORRUPTED
     assert miditok.utils.filter_dataset(files_paths) == MIDI_PATHS_MULTITRACK
