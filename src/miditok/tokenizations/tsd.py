@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from symusic import (
-    KeySignature,
     ControlChange,
+    KeySignature,
     Note,
     Pedal,
     PitchBend,

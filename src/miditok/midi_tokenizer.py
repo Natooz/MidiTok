@@ -28,8 +28,8 @@ from symusic import (
     Track,
 )
 from symusic.core import (
-    KeySignatureTickList,
     ControlChangeTickList,
+    KeySignatureTickList,
     NoteTickList,
     PedalTickList,
     PitchBendTickList,

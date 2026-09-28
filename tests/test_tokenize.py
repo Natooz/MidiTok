@@ -7,7 +7,15 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from symusic import ControlChange, KeySignature, Note, Score, Track
+from symusic import (
+    ControlChange,
+    KeySignature,
+    Note,
+    Score,
+    Tempo,
+    TimeSignature,
+    Track,
+)
 
 import miditok
 from miditok.constants import SCORE_LOADING_EXCEPTION, USE_NOTE_DURATION_PROGRAMS

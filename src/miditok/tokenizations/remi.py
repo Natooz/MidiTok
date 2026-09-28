@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from symusic import (
-    KeySignature,
     ControlChange,
+    KeySignature,
     Note,
     Pedal,
     PitchBend,
