@@ -28,6 +28,7 @@ from symusic import (
     Track,
 )
 from symusic.core import (
+    ControlChangeTickList,
     KeySignatureTickList,
     NoteTickList,
     PedalTickList,
@@ -65,10 +66,12 @@ from .constants import (
     ABC_FILES_EXTENSIONS,
     BOS_TOKEN_NAME,
     CHR_ID_START,
+    CONTINUOUS_CONTROL_CHANGE_NUMBERS,
     CPU_COUNT_ADDED_WORKERS,
     CURRENT_MIDITOK_VERSION,
     CURRENT_SYMUSIC_VERSION,
     CURRENT_TOKENIZERS_VERSION,
+    DEDUPLICABLE_CONTROL_CHANGE_NUMBERS,
     DEFAULT_TOKENIZER_FILE_NAME,
     DEFAULT_TRAINING_MODEL_NAME,
     EOS_TOKEN_NAME,
@@ -78,6 +81,7 @@ from .constants import (
     PITCH_CLASSES,
     SCORE_LOADING_EXCEPTION,
     SUPPORTED_MUSIC_FILE_EXTENSIONS,
+    SWITCH_CONTROL_CHANGE_NUMBERS,
     TEMPO,
     TIME_SIGNATURE,
     TOKEN_TYPE_BEFORE_PC,
@@ -166,6 +170,20 @@ class MusicTokenizer(ABC, HFHubMixin):
         # vocabulary. This method is intended to be overridden by inheriting tokenizer
         # classes.
         self._tweak_config_before_creating_voc()
+
+        # Represent sustain only once when this tokenizer supports CC64 tokens.
+        if (
+            self.config.use_control_changes
+            and 64 in self.config.control_change_numbers
+            and self.config.use_sustain_pedals
+        ):
+            warnings.warn(
+                "CC64 is tokenized as a control change; disabling "
+                "`use_sustain_pedals` and `sustain_pedal_duration`.",
+                stacklevel=2,
+            )
+            self.config.use_sustain_pedals = False
+            self.config.sustain_pedal_duration = False
 
         # Determines whether the tokenizer will produce a single sequence of tokens for
         # all the tracks one token sequence per track. This is attribute is distinct
@@ -256,6 +274,21 @@ class MusicTokenizer(ABC, HFHubMixin):
         self.pitch_bends = np.zeros(1)
         if self.config.use_pitch_bends:
             self.pitch_bends = self.__create_pitch_bends()
+
+        # Share the allowed CC values between vocabulary creation and preprocessing.
+        self.control_change_values = {}
+        if self.config.use_control_changes:
+            continuous_values = np.rint(
+                np.linspace(0, 127, self.config.control_change_n_bins)
+            ).astype(np.intc)
+            for number in sorted(self.config.control_change_numbers):
+                if number in CONTINUOUS_CONTROL_CHANGE_NUMBERS:
+                    values = continuous_values
+                elif number in SWITCH_CONTROL_CHANGE_NUMBERS:
+                    values = np.array([0, 127], dtype=np.intc)
+                else:
+                    values = np.arange(128, dtype=np.intc)
+                self.control_change_values[number] = values
 
         # Vocabulary and token types graph
         # The vocabulary might have already been created if the tokenizer is being
@@ -478,6 +511,8 @@ class MusicTokenizer(ABC, HFHubMixin):
         supported by the tokenizer will be deleted.
 
         This method is **not inplace** and does not alter the provided ``score`` object.
+        To encode its result, use ``encode(..., no_preprocess_score=True)``: a second
+        pass cannot distinguish original CC repetitions from resampling collisions.
 
         :param score: ``symusic.Score`` object to preprocess.
         :return: the preprocessed ``score``.
@@ -506,14 +541,10 @@ class MusicTokenizer(ABC, HFHubMixin):
             )
             new_tpq = self.config.max_num_pos_per_beat
 
+        # Retain original CC timestamps to distinguish resampling collisions.
+        original_score = score
         # Resample time if needed (not inplace) and attribute preprocessed time sig.
         score = self._resample_score(score, new_tpq, time_signatures_copy)
-
-        # Merge instruments of the same program / inst before preprocessing them.
-        # This allows to avoid potential duplicated notes in some multitrack settings
-        # This can however mess up chord detections.
-        if self.config.use_programs and self.config.one_token_stream_for_programs:
-            merge_same_program_tracks(score.tracks)
 
         # Process time signature changes
         # We need to do it before computing the ticks_per_beat sections
@@ -545,6 +576,23 @@ class MusicTokenizer(ABC, HFHubMixin):
         else:
             tpq_resampling_factors = None
 
+        # Process CCs before merging tracks, while original event order is available.
+        if self.config.use_control_changes:
+            for original_track, track in zip(
+                original_score.tracks, score.tracks, strict=True
+            ):
+                if len(track.controls) > 0:
+                    track.controls = self._preprocess_control_changes(
+                        track.controls,
+                        original_track.controls.numpy()["time"],
+                        tpq_resampling_factors,
+                    )
+
+        # Merge instruments of the same program / inst before preprocessing notes.
+        # This avoids potential duplicated notes but can affect chord detections.
+        if self.config.use_programs and self.config.one_token_stream_for_programs:
+            merge_same_program_tracks(score.tracks)
+
         # Preprocess track events
         for t in range(len(score.tracks) - 1, -1, -1):
             # Delete track only there is nothing inside being used
@@ -553,6 +601,7 @@ class MusicTokenizer(ABC, HFHubMixin):
                 score.tracks[t],
                 check_pedals=self.config.use_sustain_pedals,
                 check_pitch_bend=self.config.use_pitch_bends,
+                check_controls=self.config.use_control_changes,
             ) or (self.config.use_programs and program not in self.config.programs):
                 del score.tracks[t]
                 continue
@@ -582,6 +631,7 @@ class MusicTokenizer(ABC, HFHubMixin):
                 score.tracks[t],
                 check_pedals=self.config.use_sustain_pedals,
                 check_pitch_bend=self.config.use_pitch_bends,
+                check_controls=self.config.use_control_changes,
             ):
                 del score.tracks[t]
                 continue
@@ -973,6 +1023,81 @@ class MusicTokenizer(ABC, HFHubMixin):
 
         return PitchBend.from_numpy(**pitch_bends_soa)
 
+    def _preprocess_control_changes(
+        self,
+        control_changes: ControlChangeTickList,
+        original_times: np.ndarray,
+        resampling_factors: np.ndarray = None,
+    ) -> ControlChangeTickList:
+        r"""
+        Filter control changes and quantize their times and values.
+
+        Control changes whose number is not in ``config.control_change_numbers`` are
+        discarded. Continuous values use the configured bins, switches map values
+        below 64 to 0 and the rest to 127, and discrete values are preserved. Events
+        retain their order at equal times. For allowlisted absolute controllers,
+        adjacent messages with equal original timestamps and quantized values are
+        deduplicated. Other messages break adjacency even when filtered out;
+        commands, parameter-selection sequences and state transitions are preserved.
+
+        :param control_changes: control change events.
+        :param original_times: timestamps before score resampling, aligned with the
+            input controls.
+        :param resampling_factors: sections of resampling factors, when we need to
+            adjust the times of events to a specific ticks/beat value. This is required
+            when the Score has time signatures with different denominators. The factors
+            are given as a numpy array of shape ``(N,2)``, for ``N`` changes of ticks
+            per beat, and the second dimension representing the end tick of each
+            section and the number of ticks per beat respectively. (default: ``None``)
+        :return: filtered and quantized control changes in stable time order.
+        """
+        control_changes_soa = control_changes.numpy()
+
+        # Keep the original CC order at equal times, including repeated commands.
+        if len(control_changes_soa["time"]) > 1:
+            order = np.argsort(original_times, kind="stable")
+            original_times = original_times[order]
+            for key in control_changes_soa:
+                control_changes_soa[key] = control_changes_soa[key][order]
+
+        # Quantize only continuous and switch values; discrete values stay intact.
+        for number in np.unique(control_changes_soa["number"]):
+            values = self.control_change_values.get(number)
+            if values is not None and len(values) < 128:
+                mask = control_changes_soa["number"] == number
+                control_changes_soa["value"][mask] = np_get_closest(
+                    values, control_changes_soa["value"][mask]
+                )
+
+        # Check adjacency before filtering, and timestamps before any resampling.
+        keep = np.isin(
+            control_changes_soa["number"], list(self.config.control_change_numbers)
+        )
+        if len(original_times) > 1:
+            keep[1:] &= ~(
+                (np.diff(original_times) == 0)
+                & (np.diff(control_changes_soa["number"]) == 0)
+                & (np.diff(control_changes_soa["value"]) == 0)
+                & np.isin(
+                    control_changes_soa["number"][1:],
+                    list(DEDUPLICABLE_CONTROL_CHANGE_NUMBERS),
+                )
+            )
+        if not keep.all():
+            for key in control_changes_soa:
+                control_changes_soa[key] = control_changes_soa[key][keep]
+
+        # Adjust times if needed
+        if resampling_factors is not None and len(control_changes_soa["time"]) > 0:
+            resampling_factors = self.__convert_resampling_ratios_ticks_to_idx(
+                resampling_factors, control_changes_soa["time"]
+            )
+            control_changes_soa["time"] = self._adjust_time_to_tpb(
+                control_changes_soa["time"], resampling_factors
+            )
+
+        return ControlChange.from_numpy(**control_changes_soa)
+
     def _preprocess_pedals(
         self,
         pedals: PedalTickList,
@@ -1288,7 +1413,7 @@ class MusicTokenizer(ABC, HFHubMixin):
         Extract the tokens/events from a track (``symusic.Track``).
 
         Concerned events are: *Pitch*, *Velocity*, *Duration*, *NoteOn*, *NoteOff* and
-        optionally *Chord*, *Pedal* and *PitchBend*.
+        optionally *Chord*, *Pedal*, *PitchBend* and *ControlChange*.
         **If the tokenizer is using pitch intervals, the notes must be sorted by time
         then pitch values. This is done in**
         :py:func:`miditok.MusicTokenizer.preprocess_score`.
@@ -1394,7 +1519,27 @@ class MusicTokenizer(ABC, HFHubMixin):
                     Event("PitchBend", pitch_bend.value, pitch_bend.time, program)
                 )
 
-        # Control changes (in the future, and handle pedals redundancy)
+        # Control changes
+        if self.config.use_control_changes:
+            for control in track.controls:
+                if self.config.use_programs and not self.config.program_changes:
+                    events.append(
+                        Event(
+                            "Program",
+                            program,
+                            control.time,
+                            program,
+                            "ProgramControlChange",
+                        )
+                    )
+                events.append(
+                    Event(
+                        "ControlChange",
+                        f"{control.number}-{control.value}",
+                        control.time,
+                        program,
+                    )
+                )
 
         # Add chords
         if self.config.use_chords and not track.is_drum:
@@ -2005,13 +2150,14 @@ class MusicTokenizer(ABC, HFHubMixin):
         # Create controls for pedals
         # This is required so that they are saved when the Score is dumped, as symusic
         # will only write the control messages.
+        # CC64 tokenization disables legacy pedal tokens during initialization.
         if self.config.use_sustain_pedals:
             for track in score.tracks:
                 for pedal in track.pedals:
                     track.controls.append(ControlChange(pedal.time, 64, 127))
                     track.controls.append(ControlChange(pedal.end, 64, 0))
                 if len(track.pedals) > 0:
-                    track.controls.sort()
+                    track.controls.sort(key=lambda control: control.time)
 
         # Set default tempo and time signatures at tick 0 if not present
         if len(score.tempos) == 0 or score.tempos[0].time != 0:
@@ -2194,6 +2340,14 @@ class MusicTokenizer(ABC, HFHubMixin):
         # PitchBend
         if self.config.use_pitch_bends:
             vocab += [f"PitchBend_{pitch_bend}" for pitch_bend in self.pitch_bends]
+
+        # ControlChange
+        if self.config.use_control_changes:
+            vocab += [
+                f"ControlChange_{number}-{value}"
+                for number, values in self.control_change_values.items()
+                for value in values
+            ]
 
     def _update_token_types_indexes(self) -> None:
         r"""Update the _token_types_indexes attribute according to _event_to_token."""

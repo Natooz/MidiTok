@@ -480,6 +480,7 @@ def check_scores_equals(
     check_key_signatures: bool = True,
     check_pedals: bool = True,
     check_pitch_bends: bool = True,
+    check_control_changes: bool = True,
     log_prefix: str = "",
     use_time_ranges: bool = False,
     max_time_range: int = 120,
@@ -539,12 +540,12 @@ def check_scores_equals(
                 types_of_errors.append("PITCH BENDS")
                 break
 
-    """# Check control changes
+    # Check control changes
     if check_control_changes:
-        for inst1, inst2 in zip(score1.tracks, score2.tracks):
+        for inst1, inst2 in zip(score1.tracks, score2.tracks, strict=False):
             if inst1.controls != inst2.controls:
                 types_of_errors.append("CONTROL CHANGES")
-                break"""
+                break
 
     # Checks tempos
     if check_tempos and not tempos_equals(score1.tempos, score2.tempos):
@@ -617,6 +618,7 @@ def tokenize_and_check_equals(
         check_key_signatures=tokenizer.config.use_key_signatures,
         check_pedals=tokenizer.config.use_sustain_pedals,
         check_pitch_bends=tokenizer.config.use_pitch_bends,
+        check_control_changes=tokenizer.config.use_control_changes,
         log_prefix=log_prefix,
         use_time_ranges=use_time_ranges,
     )

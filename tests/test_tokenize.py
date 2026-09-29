@@ -2,15 +2,28 @@
 
 from __future__ import annotations
 
+import warnings
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
 import pytest
-from symusic import KeySignature, Note, Score, Track
+from symusic import (
+    ControlChange,
+    KeySignature,
+    Note,
+    Score,
+    Tempo,
+    TimeSignature,
+    Track,
+)
 
 import miditok
-from miditok.constants import SCORE_LOADING_EXCEPTION, USE_NOTE_DURATION_PROGRAMS
+from miditok.constants import (
+    DEFAULT_TOKENIZER_FILE_NAME,
+    SCORE_LOADING_EXCEPTION,
+    USE_NOTE_DURATION_PROGRAMS,
+)
 
 from .utils_tests import (
     ABC_PATHS,
@@ -75,12 +88,14 @@ _all_add_tokens = [
     "use_time_signatures",
     "use_sustain_pedals",
     "use_pitch_bends",
+    "use_control_changes",
     "use_pitch_intervals",
 ]
 tokenizations_add_tokens = {
     "MIDILike": _all_add_tokens,
     "REMI": _all_add_tokens,
     "TSD": _all_add_tokens,
+    "PerTok": ["use_velocities", "use_control_changes"],
     "CPWord": [
         "use_velocities",
         "use_note_duration_programs",
@@ -141,6 +156,10 @@ for tpi in range(len(TOK_PARAMS_ONE_TRACK_HARD) - 1, -1, -1):
         and params_["use_rests"]
         and params_["use_time_signatures"]
     ):
+        del TOK_PARAMS_ONE_TRACK_HARD[tpi]
+        continue
+    # CC64 disables legacy pedals; precedence is covered by its dedicated test.
+    if params_.get("use_control_changes") and params_.get("use_sustain_pedals"):
         del TOK_PARAMS_ONE_TRACK_HARD[tpi]
         continue
     # Parametrize PedalOff cases for configurations using pedals
@@ -358,3 +377,191 @@ def test_key_signatures_round_trip() -> None:
         config = miditok.TokenizerConfig(use_key_signatures=True)
         tokenizer = getattr(miditok, tokenization)(tokenizer_config=config)
         assert not tokenizer.config.use_key_signatures
+
+
+@pytest.mark.parametrize("tokenization", ["REMI", "TSD", "MIDILike", "PerTok"])
+@pytest.mark.parametrize("control_change_n_bins", [3, 128])
+@pytest.mark.parametrize("use_programs", [False, True])
+def test_control_changes_round_trip(
+    tokenization: str, control_change_n_bins: int, use_programs: bool, tmp_path: Path
+) -> None:
+    """Check CC value categories, command ordering and saved-tokenizer round trips."""
+    score = Score(480)
+    track = Track(program=0, is_drum=False, name="control_changes")
+    track.notes.append(Note(0, 240, 60, 100))
+    track.notes.append(Note(480, 240, 62, 100))
+    # Parameter selection must precede data entry; both increments must survive.
+    track.controls.extend(
+        [
+            ControlChange(0, 101, 0),
+            ControlChange(0, 100, 5),
+            ControlChange(0, 6, 31),
+            ControlChange(0, 38, 42),
+            ControlChange(0, 96, 0),
+            ControlChange(0, 96, 0),
+            ControlChange(0, 64, 127),
+            ControlChange(120, 1, 31),
+            ControlChange(120, 3, 31),
+            ControlChange(120, 66, 63),
+            ControlChange(120, 122, 64),
+            ControlChange(240, 7, 96),
+            ControlChange(240, 64, 48),
+            ControlChange(240, 66, 64),
+            ControlChange(240, 84, 31),
+            ControlChange(240, 88, 31),
+            ControlChange(480, 64, 0),
+            ControlChange(480, 67, 48),
+        ]
+    )
+    expected_control_numbers = [control.number for control in track.controls]
+    expected_control_values = [
+        0,
+        5,
+        31,
+        42,
+        0,
+        0,
+        127,
+        31,
+        31,
+        0,
+        127,
+        96,
+        48,
+        127,
+        31,
+        31,
+        0,
+        48,
+    ]
+    if control_change_n_bins == 3:
+        expected_control_values[7] = 0
+        expected_control_values[11] = 127
+        expected_control_values[12] = 64
+        expected_control_values[17] = 64
+    score.tracks.append(track)
+    # Enabling programs merges these tracks, which must not reorder their CCs.
+    score.tracks.append(Track(program=0, notes=[Note(0, 240, 67, 80)]))
+    score.tempos.append(Tempo(0, 120))
+    score.time_signatures.append(TimeSignature(0, 4, 4))
+
+    params = deepcopy(TOKENIZER_CONFIG_KWARGS)
+    params.update(
+        {
+            "use_control_changes": True,
+            "control_change_numbers": sorted(set(expected_control_numbers)),
+            "control_change_n_bins": control_change_n_bins,
+            "use_programs": use_programs,
+            "use_rests": True,
+            "use_tempos": True,
+            "use_time_signatures": True,
+            "use_sustain_pedals": False,
+            "use_pitch_bends": True,
+        }
+    )
+    adjust_tok_params_for_tests(tokenization, params)
+    tokenizer = getattr(miditok, tokenization)(miditok.TokenizerConfig(**params))
+
+    # Four continuous controllers, two switches and eight discrete controllers.
+    assert len(tokenizer.token_ids_of_type("ControlChange")) == (
+        4 * control_change_n_bins + 2 * 2 + 8 * 128
+    )
+    tokenizer.save(tmp_path)
+    tokenizer_reloaded = getattr(miditok, tokenization)(
+        params=tmp_path / DEFAULT_TOKENIZER_FILE_NAME
+    )
+    assert tokenizer_reloaded == tokenizer
+    assert tokenizer_reloaded.config.control_change_n_bins == control_change_n_bins
+
+    score_decoded, _, has_errors = tokenize_and_check_equals(
+        score, tokenizer_reloaded, "control_changes"
+    )
+    assert not has_errors
+    assert tokenizer.config.use_control_changes
+    assert [cc.number for cc in score_decoded.tracks[0].controls] == (
+        expected_control_numbers
+    )
+    assert [cc.value for cc in score_decoded.tracks[0].controls] == (
+        expected_control_values
+    )
+
+
+@pytest.mark.parametrize("tokenization", ["REMI", "TSD", "MIDILike"])
+@pytest.mark.parametrize("use_control_changes", [False, True])
+@pytest.mark.parametrize("include_cc64", [False, True])
+@pytest.mark.parametrize("sustain_pedal_duration", [False, True])
+def test_control_changes_sustain_precedence(
+    tokenization: str,
+    use_control_changes: bool,
+    include_cc64: bool,
+    sustain_pedal_duration: bool,
+) -> None:
+    """Keep exactly one sustain representation, including after MIDI export."""
+    score = Score(480)
+    score.tracks.append(
+        Track(
+            notes=[Note(0, 960, 60, 80)],
+            controls=[
+                ControlChange(0, 101, 0),
+                ControlChange(0, 100, 5),
+                ControlChange(0, 6, 31),
+                ControlChange(0, 96, 0),
+                ControlChange(0, 96, 0),
+                ControlChange(0, 1, 32),
+                ControlChange(0, 64, 127),
+                ControlChange(480, 64, 0),
+            ],
+        )
+    )
+    # MIDI loading provides both raw CC64 messages and derived pedal intervals.
+    score = Score.from_midi(score.dumps_midi())
+    config = miditok.TokenizerConfig(
+        use_control_changes=use_control_changes,
+        control_change_numbers=[101, 100, 6, 96, 1] + ([64] if include_cc64 else []),
+        use_sustain_pedals=True,
+        sustain_pedal_duration=sustain_pedal_duration,
+    )
+    with warnings.catch_warnings(record=True) as config_warnings:
+        warnings.simplefilter("always")
+        tokenizer = getattr(miditok, tokenization)(config)
+
+    use_cc64 = use_control_changes and include_cc64
+    assert len(config_warnings) == int(use_cc64)
+    if use_cc64:
+        assert "CC64" in str(config_warnings[0].message)
+    assert tokenizer.config.use_sustain_pedals == (not use_cc64)
+    assert tokenizer.config.sustain_pedal_duration == (
+        sustain_pedal_duration and not use_cc64
+    )
+
+    sequences = tokenizer(score)
+    assert any(
+        token.startswith("Pedal") for sequence in sequences for token in sequence.tokens
+    ) == (not use_cc64)
+    decoded = tokenizer(sequences)
+    if use_control_changes:
+        assert [cc.number for cc in decoded.tracks[0].controls if cc.number != 64] == [
+            101,
+            100,
+            6,
+            96,
+            96,
+            1,
+        ]
+    assert [cc.value for cc in decoded.tracks[0].controls if cc.number == 64] == [
+        127,
+        0,
+    ]
+    reloaded = Score.from_midi(decoded.dumps_midi())
+    assert [(pedal.time, pedal.duration) for pedal in reloaded.tracks[0].pedals] == [
+        (0, reloaded.ticks_per_quarter)
+    ]
+
+
+@pytest.mark.parametrize("control_change_n_bins", [0, 1, 129])
+def test_control_changes_invalid_bins(control_change_n_bins: int) -> None:
+    """Reject bin counts that cannot represent the continuous CC value range."""
+    with pytest.raises(ValueError, match="control_change_n_bins"):
+        miditok.TokenizerConfig(
+            use_control_changes=True, control_change_n_bins=control_change_n_bins
+        )

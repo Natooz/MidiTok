@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from pathlib import Path
     from typing import Any, Literal
 
-VOCAB_SIZE = 2000
+NUM_ADDITIONAL_TOKENS_FIRST_TRAINING = 200
 NUM_ADDITIONAL_TOKENS_SECOND_TRAINING = 400
 WORDPIECE_MAX_INPUT_CHARS_PER_WORD_BAR = 500  # higher than default MidiTok values
 WORDPIECE_MAX_INPUT_CHARS_PER_WORD_BEAT = 150
@@ -60,14 +60,18 @@ for tokenization_ in TOKENIZATIONS_TRAIN:
     ids=lambda s: f"{s}_split",
 )
 @pytest.mark.parametrize("files_paths", [MIDI_PATHS_ONE_TRACK], ids=lambda _: "")
-@pytest.mark.parametrize("vocab_size", [VOCAB_SIZE], ids=lambda s: f"vocab size {s}")
+@pytest.mark.parametrize(
+    "num_additional_tokens",
+    [NUM_ADDITIONAL_TOKENS_FIRST_TRAINING],
+    ids=lambda s: f"{s} additional tokens",
+)
 def test_tokenizer_training_and_encoding_decoding(
     tok_params_set: tuple[str, dict[str, Any]],
     tmp_path: Path,
     model: Literal["BPE", "Unigram", "WordPiece"],
     encode_ids_split: Literal["bar", "beat", "no"],
     files_paths: Sequence[Path],
-    vocab_size: int,
+    num_additional_tokens: int,
 ) -> None:
     r"""
     Train a tokenizer, check encoding-decoding keeps the same data.
@@ -77,6 +81,8 @@ def test_tokenizer_training_and_encoding_decoding(
     :param tok_params_set: tokenizer and its parameters to run.
     :param files_paths: list of paths of music files to use for the tests.
     :param encode_ids_split: type of token ids split before encoding/training.
+    :param num_additional_tokens: tokens to learn beyond the base vocabulary during
+        the first training, before adding more tokens during retraining.
     """
     """from transformers import AutoTokenizer
     import json
@@ -114,6 +120,9 @@ def test_tokenizer_training_and_encoding_decoding(
     tokenizer2: miditok.MusicTokenizer = getattr(miditok, tokenization)(
         tokenizer_config=miditok.TokenizerConfig(**params)
     )
+
+    # Leave room for learned tokens even when optional tokens enlarge the base vocab.
+    vocab_size = len(tokenizer1) + num_additional_tokens
 
     # Trains them
     training_kwargs = {}

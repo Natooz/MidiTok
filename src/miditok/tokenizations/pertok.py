@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from symusic import (
+    ControlChange,
     KeySignature,
     Note,
     Pedal,
@@ -104,6 +105,7 @@ class PerTok(MusicTokenizer):
             "PedalOff",
             "PitchIntervalChord",
             "PitchBend",
+            "ControlChange",
             "Chord",
             "PitchDrum",
             "Program",
@@ -617,6 +619,23 @@ class PerTok(MusicTokenizer):
                         tracks[current_program].pitch_bends.append(new_pitch_bend)
                     else:
                         current_track.pitch_bends.append(new_pitch_bend)
+                elif tok_type == "ControlChange":
+                    number, value = tok_val.split("-")
+                    mt = 0
+                    if (
+                        self.use_microtiming
+                        and ti + mt_offset < len(seq)
+                        and "MicroTiming" in seq[ti + mt_offset]
+                    ):
+                        mt = int(seq[ti + mt_offset].split("_")[1])
+                    new_control = ControlChange(
+                        int(current_tick + mt), int(number), int(value)
+                    )
+                    if self.config.one_token_stream_for_programs:
+                        check_inst(current_program)
+                        tracks[current_program].controls.append(new_control)
+                    else:
+                        current_track.controls.append(new_control)
 
                 if tok_type in [
                     "Program",
@@ -626,6 +645,7 @@ class PerTok(MusicTokenizer):
                     "Pedal",
                     "PedalOff",
                     "PitchBend",
+                    "ControlChange",
                     "Chord",
                 ]:
                     previous_note_end = max(previous_note_end, current_tick)

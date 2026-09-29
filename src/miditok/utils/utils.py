@@ -105,9 +105,6 @@ def is_track_empty(
     :param check_pitch_bend: whether to check the pitch bends. (default: ``False``)
     :return: a boolean indicating if the track has at least one element.
     """
-    if check_controls and check_pedals and check_pitch_bend:
-        return track.empty()
-
     is_empty = track.note_num() == 0
     if check_controls:
         is_empty &= len(track.controls) == 0
@@ -421,6 +418,7 @@ def merge_tracks(
 
     The notes (and optionally effects) will be concatenated and sorted by time.
     All the tracks will be merged into the first ``Track`` of the list.
+    Control changes keep their concatenation order at equal times.
 
     :param tracks: list of tracks to merge, or ``symusic.Score`` object.
     :param effects: will also merge effects, i.e. control changes, sustain pedals and
@@ -447,10 +445,9 @@ def merge_tracks(
             pb_sum += track.pitch_bends
         tracks_[0].pedals = pedals_sum
         tracks_[0].pedals.sort()
-        # Control changes
+        # Keep parameter-selection sequences and repeated commands in order.
+        cc_sum.sort(key=lambda control: control.time)
         tracks_[0].controls = cc_sum
-        # tracks_[0].controls = sum((t.controls for t in tracks_), [])
-        tracks_[0].controls.sort()
         # Pitch bends
         tracks_[0].pitch_bends = pb_sum
         tracks_[0].pitch_bends.sort()
@@ -631,7 +628,7 @@ def miditoolkit_to_symusic(midi: MidiFile) -> Score:
             track.controls.append(
                 ControlChange(control.time, control.number, control.value)
             )
-        track.controls.sort()
+        track.controls.sort(key=lambda cc: cc.time)
 
         for pb in inst.pitch_bends:
             track.pitch_bends.append(PitchBend(pb.time, pb.pitch))
