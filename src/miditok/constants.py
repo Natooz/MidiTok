@@ -489,3 +489,35 @@ CONTINUOUS_CONTROL_CHANGE_NUMBERS = {
     95,
 }
 SWITCH_CONTROL_CHANGE_NUMBERS = {65, 66, 68, 69, 122}
+
+# Absolute state setters eligible for removing adjacent identical repetitions.
+# Keep this policy separate from value quantization; commands and selectors stay out.
+DEDUPLICABLE_CONTROL_CHANGE_NUMBERS = {
+    1,
+    2,
+    4,
+    5,
+    7,
+    8,
+    10,
+    11,
+    64,
+    65,
+    66,
+    67,
+    68,
+    69,
+    71,
+    72,
+    73,
+    74,
+    75,
+    76,
+    77,
+    78,
+    91,
+    92,
+    93,
+    94,
+    95,
+}

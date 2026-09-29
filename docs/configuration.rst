@@ -76,9 +76,11 @@ Values are handled in three categories. These are MidiTok preprocessing policies
 * **Switch:** the numbers in ``SWITCH_CONTROL_CHANGE_NUMBERS`` (65, 66, 68, 69 and 122) use only 0 and 127. Input values below 64 become 0; values of 64 or higher become 127. CC122 formally defines only 0 and 127; applying the threshold to its other values is MidiTok's normalization policy.
 * **Discrete:** all other numbers retain the complete 0–127 value range, including selectors, commands, data-entry messages, fine-resolution bytes and unknown controllers. This preserves their raw values; it does not mean every value is defined by the MIDI specification for every command.
 
-Preprocessing preserves repeated messages and the input order of CCs at equal times. This matters for increment/decrement commands and parameter-selection sequences. See the `MIDI control change definitions <https://midi.org/midi-1-0-control-change-messages>`_.
+Preprocessing preserves the input order of CCs at equal times. For the absolute controllers in ``DEDUPLICABLE_CONTROL_CHANGE_NUMBERS``, consecutive messages with the same controller number, original timestamp and quantized value are reduced to one. Any intervening CC breaks adjacency, even if that CC is excluded from tokenization. Different values, pedal transitions, commands and parameter-selection sequences are preserved, as are messages whose distinct timestamps only become equal through resampling. Deduplication is performed within each original track before track merging. See the `MIDI control change definitions <https://midi.org/midi-1-0-control-change-messages>`_.
 
 When CC64 is selected and control-change tokenization is enabled, it takes precedence over the legacy pedal representation. If ``use_sustain_pedals`` is also enabled, the tokenizer emits a warning and disables it along with ``sustain_pedal_duration`` before building the vocabulary. When CC64 is excluded or control changes are disabled, the existing pedal arguments and MIDI export behavior remain available.
+
+When encoding an already preprocessed score, pass ``no_preprocess_score=True``. A second preprocessing pass sees the filtered and resampled events, so the original timestamps and intervening excluded CCs are no longer available for deduplication decisions.
 
 
 Special tokens

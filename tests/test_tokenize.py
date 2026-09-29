@@ -158,8 +158,12 @@ for tpi in range(len(TOK_PARAMS_ONE_TRACK_HARD) - 1, -1, -1):
     ):
         del TOK_PARAMS_ONE_TRACK_HARD[tpi]
         continue
+    # CC64 disables legacy pedals; precedence is covered by its dedicated test.
+    if params_.get("use_control_changes") and params_.get("use_sustain_pedals"):
+        del TOK_PARAMS_ONE_TRACK_HARD[tpi]
+        continue
     # Parametrize PedalOff cases for configurations using pedals
-    if params_.get("use_sustain_pedals") and not params_.get("use_control_changes"):
+    if params_.get("use_sustain_pedals"):
         params_copy = deepcopy(params_)
         params_copy["sustain_pedal_duration"] = True
         TOK_PARAMS_ONE_TRACK_HARD.insert(tpi + 1, (tokenization_, params_copy))

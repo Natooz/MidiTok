@@ -71,6 +71,7 @@ from .constants import (
     CURRENT_MIDITOK_VERSION,
     CURRENT_SYMUSIC_VERSION,
     CURRENT_TOKENIZERS_VERSION,
+    DEDUPLICABLE_CONTROL_CHANGE_NUMBERS,
     DEFAULT_TOKENIZER_FILE_NAME,
     DEFAULT_TRAINING_MODEL_NAME,
     EOS_TOKEN_NAME,
@@ -510,6 +511,8 @@ class MusicTokenizer(ABC, HFHubMixin):
         supported by the tokenizer will be deleted.
 
         This method is **not inplace** and does not alter the provided ``score`` object.
+        To encode its result, use ``encode(..., no_preprocess_score=True)``: a second
+        pass cannot distinguish original CC repetitions from resampling collisions.
 
         :param score: ``symusic.Score`` object to preprocess.
         :return: the preprocessed ``score``.
@@ -538,14 +541,10 @@ class MusicTokenizer(ABC, HFHubMixin):
             )
             new_tpq = self.config.max_num_pos_per_beat
 
+        # Retain original CC timestamps to distinguish resampling collisions.
+        original_score = score
         # Resample time if needed (not inplace) and attribute preprocessed time sig.
         score = self._resample_score(score, new_tpq, time_signatures_copy)
-
-        # Merge instruments of the same program / inst before preprocessing them.
-        # This allows to avoid potential duplicated notes in some multitrack settings
-        # This can however mess up chord detections.
-        if self.config.use_programs and self.config.one_token_stream_for_programs:
-            merge_same_program_tracks(score.tracks)
 
         # Process time signature changes
         # We need to do it before computing the ticks_per_beat sections
@@ -577,6 +576,23 @@ class MusicTokenizer(ABC, HFHubMixin):
         else:
             tpq_resampling_factors = None
 
+        # Process CCs before merging tracks, while original event order is available.
+        if self.config.use_control_changes:
+            for original_track, track in zip(
+                original_score.tracks, score.tracks, strict=True
+            ):
+                if len(track.controls) > 0:
+                    track.controls = self._preprocess_control_changes(
+                        track.controls,
+                        original_track.controls.numpy()["time"],
+                        tpq_resampling_factors,
+                    )
+
+        # Merge instruments of the same program / inst before preprocessing notes.
+        # This avoids potential duplicated notes but can affect chord detections.
+        if self.config.use_programs and self.config.one_token_stream_for_programs:
+            merge_same_program_tracks(score.tracks)
+
         # Preprocess track events
         for t in range(len(score.tracks) - 1, -1, -1):
             # Delete track only there is nothing inside being used
@@ -602,12 +618,6 @@ class MusicTokenizer(ABC, HFHubMixin):
             if self.config.use_pitch_bends and len(score.tracks[t].pitch_bends) > 0:
                 score.tracks[t].pitch_bends = self._preprocess_pitch_bends(
                     score.tracks[t].pitch_bends, tpq_resampling_factors
-                )
-
-            # Resample control changes
-            if self.config.use_control_changes and len(score.tracks[t].controls) > 0:
-                score.tracks[t].controls = self._preprocess_control_changes(
-                    score.tracks[t].controls, tpq_resampling_factors
                 )
 
             # Resample pedals durations
@@ -1016,6 +1026,7 @@ class MusicTokenizer(ABC, HFHubMixin):
     def _preprocess_control_changes(
         self,
         control_changes: ControlChangeTickList,
+        original_times: np.ndarray,
         resampling_factors: np.ndarray = None,
     ) -> ControlChangeTickList:
         r"""
@@ -1024,10 +1035,14 @@ class MusicTokenizer(ABC, HFHubMixin):
         Control changes whose number is not in ``config.control_change_numbers`` are
         discarded. Continuous values use the configured bins, switches map values
         below 64 to 0 and the rest to 127, and discrete values are preserved. Events
-        retain their order at equal times and are not deduplicated, as repeated
-        commands and parameter-selection sequences can be meaningful.
+        retain their order at equal times. For allowlisted absolute controllers,
+        adjacent messages with equal original timestamps and quantized values are
+        deduplicated. Other messages break adjacency even when filtered out;
+        commands, parameter-selection sequences and state transitions are preserved.
 
         :param control_changes: control change events.
+        :param original_times: timestamps before score resampling, aligned with the
+            input controls.
         :param resampling_factors: sections of resampling factors, when we need to
             adjust the times of events to a specific ticks/beat value. This is required
             when the Score has time signatures with different denominators. The factors
@@ -1038,30 +1053,39 @@ class MusicTokenizer(ABC, HFHubMixin):
         """
         control_changes_soa = control_changes.numpy()
 
-        # Filter out control changes whose number is not tokenized
-        if len(control_changes_soa["number"]) > 0:
-            numbers = np.array(
-                sorted(self.config.control_change_numbers), dtype=np.int64
-            )
-            mask = np.isin(control_changes_soa["number"].astype(np.int64), numbers)
-            if not mask.all():
-                for key in control_changes_soa:
-                    control_changes_soa[key] = control_changes_soa[key][mask]
-
         # Keep the original CC order at equal times, including repeated commands.
         if len(control_changes_soa["time"]) > 1:
-            order = np.argsort(control_changes_soa["time"], kind="stable")
+            order = np.argsort(original_times, kind="stable")
+            original_times = original_times[order]
             for key in control_changes_soa:
                 control_changes_soa[key] = control_changes_soa[key][order]
 
         # Quantize only continuous and switch values; discrete values stay intact.
         for number in np.unique(control_changes_soa["number"]):
-            values = self.control_change_values[number]
-            if len(values) < 128:
+            values = self.control_change_values.get(number)
+            if values is not None and len(values) < 128:
                 mask = control_changes_soa["number"] == number
                 control_changes_soa["value"][mask] = np_get_closest(
                     values, control_changes_soa["value"][mask]
                 )
+
+        # Check adjacency before filtering, and timestamps before any resampling.
+        keep = np.isin(
+            control_changes_soa["number"], list(self.config.control_change_numbers)
+        )
+        if len(original_times) > 1:
+            keep[1:] &= ~(
+                (np.diff(original_times) == 0)
+                & (np.diff(control_changes_soa["number"]) == 0)
+                & (np.diff(control_changes_soa["value"]) == 0)
+                & np.isin(
+                    control_changes_soa["number"][1:],
+                    list(DEDUPLICABLE_CONTROL_CHANGE_NUMBERS),
+                )
+            )
+        if not keep.all():
+            for key in control_changes_soa:
+                control_changes_soa[key] = control_changes_soa[key][keep]
 
         # Adjust times if needed
         if resampling_factors is not None and len(control_changes_soa["time"]) > 0:
