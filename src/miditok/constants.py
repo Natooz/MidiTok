@@ -49,6 +49,7 @@ USE_KEY_SIGNATURES = False
 USE_SUSTAIN_PEDALS = False
 USE_PITCH_BENDS = False
 USE_CONTROL_CHANGES = False
+CONTROL_CHANGE_N_BINS = 32
 USE_PROGRAMS = False
 USE_PITCHDRUM_TOKENS = True
 USE_NOTE_DURATION_PROGRAMS = list(range(-1, 128))
@@ -387,9 +388,9 @@ DRUM_SETS = {
 }
 
 # Control changes list (without specifications):
-# https://www.midi.org/specifications-old/item/table-3-control-change-messages-data-bytes-2
+# https://midi.org/midi-1-0-control-change-messages
 # Undefined and general control changes are not considered here
-# All these attributes can take values from 0 to 127, with some of them being on/off
+# Value handling follows the categories defined below this table.
 CONTROL_CHANGES = {
     # MSB
     0: "Bank Select",
@@ -420,7 +421,7 @@ CONTROL_CHANGES = {
     67: "Soft Pedal",
     68: "Legato Footswitch",
     69: "Hold 2",
-    # Continuous controls
+    # Sound controls and specialized messages
     70: "Sound Variation",
     71: "Timbre/Harmonic Intensity",
     72: "Release Time",
@@ -457,3 +458,34 @@ CONTROL_CHANGES = {
 }
 # Control change numbers tokenized by default when `use_control_changes` is enabled
 DEFAULT_CONTROL_CHANGE_NUMBERS = list(CONTROL_CHANGES)
+
+# Quantizable parameter levels. Preserve continuous pedal expression for CC64/67
+# (MIDI-CI Piano Profile v1.0, sections 4.2 and 7.1.2):
+# https://midi.org/midi-ci-profile-for-piano
+# Selectors, data entry, fine-resolution bytes and unknown CCs remain discrete.
+CONTINUOUS_CONTROL_CHANGE_NUMBERS = {
+    1,
+    2,
+    4,
+    5,
+    7,
+    8,
+    10,
+    11,
+    64,
+    67,
+    71,
+    72,
+    73,
+    74,
+    75,
+    76,
+    77,
+    78,
+    91,
+    92,
+    93,
+    94,
+    95,
+}
+SWITCH_CONTROL_CHANGE_NUMBERS = {65, 66, 68, 69, 122}

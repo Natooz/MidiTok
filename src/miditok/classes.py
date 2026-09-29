@@ -33,6 +33,7 @@ from .constants import (
     CHORD_MAPS,
     CHORD_TOKENS_WITH_ROOT_NOTE,
     CHORD_UNKNOWN,
+    CONTROL_CHANGE_N_BINS,
     DEFAULT_CONTROL_CHANGE_NUMBERS,
     DEFAULT_NOTE_DURATION,
     DELETE_EQUAL_SUCCESSIVE_TEMPO_CHANGES,
@@ -428,7 +429,8 @@ class TokenizerConfig:
         does not contain any. (default: ``False``)
     :param use_sustain_pedals: will use ``Pedal`` tokens to represent the sustain pedal
         events. In multitrack setting, The value of each ``Pedal`` token will be equal
-        to the program of the track. (default: ``False``)
+        to the program of the track. Disabled with a warning if control changes are
+        enabled and CC64 is selected. (default: ``False``)
     :param use_pitch_bends: will use ``PitchBend`` tokens. In multitrack setting, a
         ``Program`` token will be added before each ``PitchBend`` token.
         (default: ``False``)
@@ -443,6 +445,11 @@ class TokenizerConfig:
         ``use_control_changes`` is enabled. Control numbers outside of this list will
         be discarded during the preprocessing of the music files. (default: the keys of
         ``miditok.constants.CONTROL_CHANGES``)
+    :param control_change_n_bins: number of evenly spaced value levels for continuous
+        control changes, from 2 to 128, including 0 and 127. Values are rounded to the
+        nearest level. CC64 and CC67 remain continuous to preserve pedal expression;
+        switches always use 0 and 127, and discrete controls retain all 128 values.
+        Set to 128 to preserve all continuous values. (default: ``32``)
     :param use_pitch_intervals: if given True, will represent the pitch of the notes
         with pitch intervals tokens. This way, successive and simultaneous notes will
         be represented with respectively ``PitchIntervalTime`` and
@@ -620,6 +627,7 @@ class TokenizerConfig:
         use_pitch_bends: bool = USE_PITCH_BENDS,
         use_control_changes: bool = USE_CONTROL_CHANGES,
         control_change_numbers: Sequence[int] = DEFAULT_CONTROL_CHANGE_NUMBERS,
+        control_change_n_bins: int = CONTROL_CHANGE_N_BINS,
         use_programs: bool = USE_PROGRAMS,
         use_pitch_intervals: bool = USE_PITCH_INTERVALS,
         use_pitchdrum_tokens: bool = USE_PITCHDRUM_TOKENS,
@@ -691,6 +699,9 @@ class TokenizerConfig:
             )
             raise ValueError(msg)
         if use_control_changes:
+            if not 2 <= control_change_n_bins <= 128:
+                msg = "`control_change_n_bins` must be between 2 and 128."
+                raise ValueError(msg)
             for control_number in control_change_numbers:
                 if not 0 <= control_number <= 127:
                     msg = (
@@ -745,6 +756,7 @@ class TokenizerConfig:
         self.use_pitch_bends: bool = use_pitch_bends
         self.use_control_changes: bool = use_control_changes
         self.control_change_numbers: set[int] = set(control_change_numbers)
+        self.control_change_n_bins = control_change_n_bins
         self.use_programs: bool = use_programs
         self.use_pitch_intervals: bool = use_pitch_intervals
         self.use_pitchdrum_tokens: bool = use_pitchdrum_tokens

@@ -106,9 +106,6 @@ def adjust_tok_params_for_tests(tokenization: str, params: dict[str, Any]) -> No
     :param tokenization: tokenization.
     :param params: parameters as a dictionary of keyword arguments.
     """
-    # Control changes are supported by these tokenizations
-    if tokenization in ["REMI", "TSD", "MIDILike", "PerTok"]:
-        params["use_control_changes"] = True
     # Increase the TimeShift voc for Structured as it doesn't support successive
     # TimeShifts.
     if tokenization == "Structured":

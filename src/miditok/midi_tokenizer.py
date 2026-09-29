@@ -66,6 +66,7 @@ from .constants import (
     ABC_FILES_EXTENSIONS,
     BOS_TOKEN_NAME,
     CHR_ID_START,
+    CONTINUOUS_CONTROL_CHANGE_NUMBERS,
     CPU_COUNT_ADDED_WORKERS,
     CURRENT_MIDITOK_VERSION,
     CURRENT_SYMUSIC_VERSION,
@@ -79,6 +80,7 @@ from .constants import (
     PITCH_CLASSES,
     SCORE_LOADING_EXCEPTION,
     SUPPORTED_MUSIC_FILE_EXTENSIONS,
+    SWITCH_CONTROL_CHANGE_NUMBERS,
     TEMPO,
     TIME_SIGNATURE,
     TOKEN_TYPE_BEFORE_PC,
@@ -167,6 +169,20 @@ class MusicTokenizer(ABC, HFHubMixin):
         # vocabulary. This method is intended to be overridden by inheriting tokenizer
         # classes.
         self._tweak_config_before_creating_voc()
+
+        # Represent sustain only once when this tokenizer supports CC64 tokens.
+        if (
+            self.config.use_control_changes
+            and 64 in self.config.control_change_numbers
+            and self.config.use_sustain_pedals
+        ):
+            warnings.warn(
+                "CC64 is tokenized as a control change; disabling "
+                "`use_sustain_pedals` and `sustain_pedal_duration`.",
+                stacklevel=2,
+            )
+            self.config.use_sustain_pedals = False
+            self.config.sustain_pedal_duration = False
 
         # Determines whether the tokenizer will produce a single sequence of tokens for
         # all the tracks one token sequence per track. This is attribute is distinct
@@ -257,6 +273,21 @@ class MusicTokenizer(ABC, HFHubMixin):
         self.pitch_bends = np.zeros(1)
         if self.config.use_pitch_bends:
             self.pitch_bends = self.__create_pitch_bends()
+
+        # Share the allowed CC values between vocabulary creation and preprocessing.
+        self.control_change_values = {}
+        if self.config.use_control_changes:
+            continuous_values = np.rint(
+                np.linspace(0, 127, self.config.control_change_n_bins)
+            ).astype(np.intc)
+            for number in sorted(self.config.control_change_numbers):
+                if number in CONTINUOUS_CONTROL_CHANGE_NUMBERS:
+                    values = continuous_values
+                elif number in SWITCH_CONTROL_CHANGE_NUMBERS:
+                    values = np.array([0, 127], dtype=np.intc)
+                else:
+                    values = np.arange(128, dtype=np.intc)
+                self.control_change_values[number] = values
 
         # Vocabulary and token types graph
         # The vocabulary might have already been created if the tokenizer is being
@@ -988,11 +1019,13 @@ class MusicTokenizer(ABC, HFHubMixin):
         resampling_factors: np.ndarray = None,
     ) -> ControlChangeTickList:
         r"""
-        Resample the control change events from a track.
+        Filter control changes and quantize their times and values.
 
         Control changes whose number is not in ``config.control_change_numbers`` are
-        discarded. Control changes occurring at the same tick with the same number are
-        deduplicated by keeping the last one.
+        discarded. Continuous values use the configured bins, switches map values
+        below 64 to 0 and the rest to 127, and discrete values are preserved. Events
+        retain their order at equal times and are not deduplicated, as repeated
+        commands and parameter-selection sequences can be meaningful.
 
         :param control_changes: control change events.
         :param resampling_factors: sections of resampling factors, when we need to
@@ -1001,6 +1034,7 @@ class MusicTokenizer(ABC, HFHubMixin):
             are given as a numpy array of shape ``(N,2)``, for ``N`` changes of ticks
             per beat, and the second dimension representing the end tick of each
             section and the number of ticks per beat respectively. (default: ``None``)
+        :return: filtered and quantized control changes in stable time order.
         """
         control_changes_soa = control_changes.numpy()
 
@@ -1014,14 +1048,20 @@ class MusicTokenizer(ABC, HFHubMixin):
                 for key in control_changes_soa:
                     control_changes_soa[key] = control_changes_soa[key][mask]
 
-        # Sort by time then number so that the order is deterministic and the
-        # duplicates are adjacent
+        # Keep the original CC order at equal times, including repeated commands.
         if len(control_changes_soa["time"]) > 1:
-            order = np.lexsort(
-                (control_changes_soa["number"], control_changes_soa["time"])
-            )
+            order = np.argsort(control_changes_soa["time"], kind="stable")
             for key in control_changes_soa:
                 control_changes_soa[key] = control_changes_soa[key][order]
+
+        # Quantize only continuous and switch values; discrete values stay intact.
+        for number in np.unique(control_changes_soa["number"]):
+            values = self.control_change_values[number]
+            if len(values) < 128:
+                mask = control_changes_soa["number"] == number
+                control_changes_soa["value"][mask] = np_get_closest(
+                    values, control_changes_soa["value"][mask]
+                )
 
         # Adjust times if needed
         if resampling_factors is not None and len(control_changes_soa["time"]) > 0:
@@ -1031,17 +1071,6 @@ class MusicTokenizer(ABC, HFHubMixin):
             control_changes_soa["time"] = self._adjust_time_to_tpb(
                 control_changes_soa["time"], resampling_factors
             )
-
-        # Deduplicate control changes with the same time and number, keep the last
-        if len(control_changes_soa["time"]) > 1:
-            keep = np.ones(len(control_changes_soa["time"]), dtype=bool)
-            duplicates = (np.diff(control_changes_soa["time"]) == 0) & (
-                np.diff(control_changes_soa["number"]) == 0
-            )
-            keep[:-1][duplicates] = False
-            if not keep.all():
-                for key in control_changes_soa:
-                    control_changes_soa[key] = control_changes_soa[key][keep]
 
         return ControlChange.from_numpy(**control_changes_soa)
 
@@ -2097,15 +2126,14 @@ class MusicTokenizer(ABC, HFHubMixin):
         # Create controls for pedals
         # This is required so that they are saved when the Score is dumped, as symusic
         # will only write the control messages.
-        # When control changes are tokenized, they are decoded as is and we must not
-        # add the controls derived from the pedals, as this would duplicate them.
-        if self.config.use_sustain_pedals and not self.config.use_control_changes:
+        # CC64 tokenization disables legacy pedal tokens during initialization.
+        if self.config.use_sustain_pedals:
             for track in score.tracks:
                 for pedal in track.pedals:
                     track.controls.append(ControlChange(pedal.time, 64, 127))
                     track.controls.append(ControlChange(pedal.end, 64, 0))
                 if len(track.pedals) > 0:
-                    track.controls.sort()
+                    track.controls.sort(key=lambda control: control.time)
 
         # Set default tempo and time signatures at tick 0 if not present
         if len(score.tempos) == 0 or score.tempos[0].time != 0:
@@ -2293,8 +2321,8 @@ class MusicTokenizer(ABC, HFHubMixin):
         if self.config.use_control_changes:
             vocab += [
                 f"ControlChange_{number}-{value}"
-                for number in sorted(self.config.control_change_numbers)
-                for value in range(128)
+                for number, values in self.control_change_values.items()
+                for value in values
             ]
 
     def _update_token_types_indexes(self) -> None:

@@ -68,7 +68,17 @@ Below is an example of how pitch intervals would be tokenized, with a ``max_pitc
   :width: 800
   :alt: Schema of the pitch intervals over a piano-roll
 
-**Control changes** can be tokenized with the ``use_control_changes`` option. When enabled, a ``ControlChange_{number}-{value}`` token is created for each control change message of the tracks, with the control number and its value (both between 0 and 127) separated by a dash. By default, all the control numbers listed in ``miditok.constants.CONTROL_CHANGES`` are tokenized; you can restrict them with the ``control_change_numbers`` argument. Control changes are currently supported by the :ref:`MIDI-Like`, :ref:`REMI`, :ref:`TSD` and :class:`miditok.PerTok` tokenizations. See the `MIDI control change messages table <https://www.midi.org/specifications-old/item/table-3-control-change-messages-data-bytes-2>`_.
+**Control changes** can be tokenized with the ``use_control_changes`` option. Each message becomes a ``ControlChange_{number}-{value}`` token. By default, the control numbers listed in ``miditok.constants.CONTROL_CHANGES`` are selected; use ``control_change_numbers`` to choose a subset or include other numbers. Control changes are supported by :ref:`MIDI-Like`, :ref:`REMI`, :ref:`TSD` and :class:`miditok.PerTok`.
+
+Values are handled in three categories. These are MidiTok preprocessing policies for 7-bit MIDI 1.0 CC messages, rather than universal MIDI controller types; this option does not implement native 32-bit MIDI 2.0 CC messages.
+
+* **Continuous:** the numbers in ``CONTINUOUS_CONTROL_CHANGE_NUMBERS`` are quantized to ``control_change_n_bins`` evenly spaced integer levels, including 0 and 127. The default is 32 bins; any integer from 2 to 128 is supported. Set 128 to preserve all continuous values. CC64 (sustain) and CC67 (soft/una corda) retain intermediate pedal values, following the `MIDI-CI Piano Profile v1.0 <https://midi.org/midi-ci-profile-for-piano>`_ (sections 4.2 and 7.1.2).
+* **Switch:** the numbers in ``SWITCH_CONTROL_CHANGE_NUMBERS`` (65, 66, 68, 69 and 122) use only 0 and 127. Input values below 64 become 0; values of 64 or higher become 127. CC122 formally defines only 0 and 127; applying the threshold to its other values is MidiTok's normalization policy.
+* **Discrete:** all other numbers retain the complete 0–127 value range, including selectors, commands, data-entry messages, fine-resolution bytes and unknown controllers. This preserves their raw values; it does not mean every value is defined by the MIDI specification for every command.
+
+Preprocessing preserves repeated messages and the input order of CCs at equal times. This matters for increment/decrement commands and parameter-selection sequences. See the `MIDI control change definitions <https://midi.org/midi-1-0-control-change-messages>`_.
+
+When CC64 is selected and control-change tokenization is enabled, it takes precedence over the legacy pedal representation. If ``use_sustain_pedals`` is also enabled, the tokenizer emits a warning and disables it along with ``sustain_pedal_duration`` before building the vocabulary. When CC64 is excluded or control changes are disabled, the existing pedal arguments and MIDI export behavior remain available.
 
 
 Special tokens
