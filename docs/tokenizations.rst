@@ -28,7 +28,81 @@ You can get the REMI+ tokenization by using the :ref:`REMI` tokenizer with ``con
 BEAT
 ------------------------
 
-BEAT (uniform temporal steps) is a flat tokenization replacing the ``Bar`` and ``Position`` tokens of :ref:`REMI` with a single absolute ``Step`` token type on a uniform time grid. It represents notes as successions of ``Pitch``, ``Velocity`` and ``Duration`` tokens, and does not support time signatures. It was introduced in `BEAT (Qian et al.) <https://arxiv.org/abs/2604.19532>`_.
+BEAT (Beat-wise Encoding for Autoregressive Transformers) describes music one beat at a time. It was introduced in `BEAT (Qian et al.) <https://openreview.net/forum?id=XrrGXLksji>`_.
+
+A **Pattern describes what one pitch does during one beat**, split into four equal steps. MidiTok defines this beat using the time-signature denominator: a quarter note in 4/4, an eighth note in 6/8, or a half note in 2/2. At each step, record:
+
+* **0:** silent.
+* **1:** a note starts.
+* **2:** the note continues.
+
+For example, a note starts, lasts three steps, then stops:
+
+.. code-block:: text
+
+    Step:     1      2      3      4
+    Action:  Start  Hold   Hold   Silence
+    State:    1      2      2      0
+
+These four digits are packed into one number using weights 27, 9, 3 and 1:
+
+.. code-block:: text
+
+    1 x 27 + 2 x 9 + 2 x 3 + 0 x 1 = 51
+
+This becomes **Pattern_51**. The preceding ``Pitch`` token identifies which pitch it describes. This packing is just a base-3 number, because each step has three possible states.
+
+**Why four steps?** This is the chosen timing resolution. It keeps the pattern vocabulary small:
+
+.. list-table:: Timing resolution and pattern vocabulary
+    :header-rows: 1
+
+    * - Steps per beat
+      - Possible patterns
+    * - 4
+      - 3⁴ = 81
+    * - 8
+      - 3⁸ = 6,561
+
+More steps give finer timing but rapidly increase the vocabulary. MidiTok's BEAT fixes the resolution to four steps, overriding ``beat_res``, and uses pattern values from 0 to 80.
+
+BEAT always enables time signatures, enforcing ``use_time_signatures=True`` even if the configuration sets it to ``False``. Each complete bar contains as many beat groups as the time-signature numerator. The step length follows the denominator:
+
+.. list-table:: Beat groups and steps by time signature
+    :header-rows: 1
+
+    * - Time signature
+      - Groups per complete bar
+      - One group
+      - One step
+    * - 4/4
+      - 4
+      - Quarter note
+      - Sixteenth note
+    * - 6/8
+      - 6
+      - Eighth note
+      - Thirty-second note
+    * - 3/8
+      - 3
+      - Eighth note
+      - Thirty-second note
+    * - 2/2
+      - 2
+      - Half note
+      - Eighth note
+
+This follows MidiTok's denominator-based convention rather than the perceived musical pulse: 6/8 has six eighth-note groups here, although it is usually felt as two dotted-quarter beats. It also differs from the authors' reference implementation, which fixes each group to a quarter note. Time-signature changes update the group and step lengths at bar boundaries. Missing time signatures default to 4/4.
+
+This four-step resolution **does not limit note length**: a note can continue into following beats. For example, ``2222`` (``Pattern_80``) means "held throughout this beat." Notes spanning beats use these continuation states instead of ``Duration`` or ``NoteOff`` tokens.
+
+The sequence uses ``Pitch``, ``Pattern`` and optional ``Velocity`` triples, with explicit ``Bar`` and ``Beat`` markers and ``Rest_None`` for empty beats. Within each track and beat, pitches descend: the first pitch is absolute and subsequent pitch values are downward intervals. Tracks are grouped inside each beat in program order, with drums last, following Section 3.1 and the authors' reference implementation. MidiTok's ``Program`` tokens prefix each track's content within every beat, independently of the ``program_changes`` option.
+
+Velocity is averaged over active subdivisions for each pitch and beat, then quantized to the configured velocity bins. Decoding uses the onset beat's velocity. Overlapping notes of the same pitch are truncated at the next onset. Time signatures and optional key signatures are supported. Tempo, time-signature and key-signature changes are delayed to bar boundaries; key changes mapping to the same bar keep the last value.
+
+Duration, rest and relative-pitch encoding are intrinsic to BEAT; the optional flags for these features do not change its representation. Pedals, control changes, pitch bends, chords and attribute controls are not supported.
+
+BEAT always uses one token stream with program tokens, enforcing ``use_programs=True`` and ``one_token_stream_for_programs=True``. Tracks sharing a program (including multiple drum tracks) are preserved separately instead of being merged during preprocessing. As a MidiTok extension, their input order identifies them across beats: each emits a ``Program`` block in every beat, with ``Rest_None`` when silent. These silent blocks keep subsequent notes and sustains attached to the correct track without adding track-ID tokens. Tracks with unique programs still omit silent blocks.
 
 .. autoclass:: miditok.BEAT
     :show-inheritance:

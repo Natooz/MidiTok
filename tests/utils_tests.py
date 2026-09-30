@@ -106,12 +106,9 @@ def adjust_tok_params_for_tests(tokenization: str, params: dict[str, Any]) -> No
     :param tokenization: tokenization.
     :param params: parameters as a dictionary of keyword arguments.
     """
-    # BEAT does not support time signatures.
-    if tokenization == "BEAT":
-        params["use_time_signatures"] = False
     # Increase the TimeShift voc for Structured as it doesn't support successive
     # TimeShifts.
-    elif tokenization == "Structured":
+    if tokenization == "Structured":
         params["beat_res"] = {(0, 512): 8}
     # We don't test time signatures with Octuple as it can lead to time shifts, as the
     # TS changes are only carried at the onset times of the notes.
@@ -262,6 +259,43 @@ def adapt_ref_score_for_tests_assertion(
 
     # Preprocess the Score: downsample it, remove notes outside of pitch range...
     score = tokenizer.preprocess_score(score)
+
+    # BEAT assigns each onset the mean active velocity of its pitch in that beat.
+    # Compute the reference from note/beat intersections, independently of patterns.
+    if tokenization == "BEAT" and tokenizer.config.use_velocities:
+        beats = get_beats_ticks(score)
+        last_time_sig = next(
+            ts for ts in reversed(score.time_signatures) if ts.time <= beats[-1]
+        )
+        beats.append(
+            beats[-1]
+            + miditok.utils.compute_ticks_per_beat(
+                last_time_sig.denominator, score.ticks_per_quarter
+            )
+        )
+        for track in score.tracks:
+            notes_by_pitch = {}
+            for note in track.notes:
+                notes_by_pitch.setdefault(note.pitch, []).append(
+                    (note.time, note.end, note.velocity)
+                )
+            for pitch, pitch_notes in notes_by_pitch.items():
+                notes_by_pitch[pitch] = np.array(pitch_notes)
+            for note in track.notes:
+                beat_idx = np.searchsorted(beats, note.time, side="right") - 1
+                beat_start, beat_end = beats[beat_idx : beat_idx + 2]
+                pitch_notes = notes_by_pitch[note.pitch]
+                weights = np.maximum(
+                    0,
+                    np.minimum(pitch_notes[:, 1], beat_end)
+                    - np.maximum(pitch_notes[:, 0], beat_start),
+                )
+                mean_velocity = np.average(pitch_notes[:, 2], weights=weights)
+                # Shared nearest-bin quantization chooses the higher bin on ties.
+                note.velocity = min(
+                    tokenizer.velocities,
+                    key=lambda value: (abs(value - mean_velocity), -value),
+                )
 
     # For Octuple, as tempo is only carried at notes times, we need to adapt
     # their times for comparison. Set tempo changes at onset times of notes.
