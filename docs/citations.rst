@@ -165,3 +165,16 @@ MMM (Multi-Track Music Machine)
           archivePrefix={arXiv},
           primaryClass={cs.SD}
     }
+
+BEAT (Uniform Temporal Steps)
+------------------------------
+
+..  code-block:: bib
+
+    @inproceedings{qian2026beat,
+        title={{BEAT}: Tokenizing and Generating Symbolic Music by Uniform Temporal Steps},
+        author={Lekai Qian and Haoyu Gu and Jingwei Zhao and Ziyu Wang},
+        booktitle={Forty-third International Conference on Machine Learning},
+        year={2026},
+        url={https://openreview.net/forum?id=XrrGXLksji}
+    }

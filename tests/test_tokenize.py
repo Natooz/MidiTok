@@ -95,6 +95,11 @@ tokenizations_add_tokens = {
     "MIDILike": _all_add_tokens,
     "REMI": _all_add_tokens,
     "TSD": _all_add_tokens,
+    "BEAT": [
+        "use_velocities",
+        "use_tempos",
+        "use_key_signatures",
+    ],
     "PerTok": ["use_velocities", "use_control_changes"],
     "CPWord": [
         "use_velocities",
@@ -339,6 +344,7 @@ def test_key_signatures_round_trip() -> None:
     score.key_signatures.append(KeySignature(0, 3, 1))
 
     tokenizations_params = {
+        "BEAT": {},
         "REMI": {},
         "TSD": {},
         "MIDILike": {},
@@ -565,3 +571,406 @@ def test_control_changes_invalid_bins(control_change_n_bins: int) -> None:
         miditok.TokenizerConfig(
             use_control_changes=True, control_change_n_bins=control_change_n_bins
         )
+
+
+@pytest.mark.parametrize("use_programs", [False, True])
+@pytest.mark.parametrize("one_token_stream", [False, True])
+@pytest.mark.parametrize("program_changes", [False, True])
+def test_beat_tokenizer_patterns(
+    use_programs: bool, one_token_stream: bool, program_changes: bool
+) -> None:
+    """Check explicit paper patterns, relative pitches, repeated onsets and rests."""
+    tokenizer = miditok.BEAT(
+        miditok.TokenizerConfig(
+            num_velocities=127,
+            use_programs=use_programs,
+            one_token_stream_for_programs=one_token_stream,
+            program_changes=program_changes,
+        )
+    )
+    assert tokenizer.config.program_changes == (program_changes and use_programs)
+    assert tokenizer.config.use_programs
+    assert tokenizer.config.one_token_stream_for_programs
+    assert tokenizer.one_token_stream
+    score = Score(480)
+    score.tracks.append(
+        Track(
+            notes=[
+                Note(0, 960, 60, 80),
+                Note(120, 120, 67, 100),
+                Note(360, 120, 67, 60),
+                Note(1920, 480, 64, 80),
+            ]
+        )
+    )
+    expected = [
+        "Bar_None",
+        "TimeSig_4/4",
+        "Beat_None",
+        "Program_0",
+        "Pitch_67",
+        "Pattern_10",
+        "Velocity_80",
+        "Pitch_7",
+        "Pattern_53",
+        "Velocity_80",
+        "Beat_None",
+        "Program_0",
+        "Pitch_60",
+        "Pattern_80",
+        "Velocity_80",
+        "Beat_None",
+        "Rest_None",
+        "Beat_None",
+        "Rest_None",
+        "Bar_None",
+        "Beat_None",
+        "Program_0",
+        "Pitch_64",
+        "Pattern_53",
+        "Velocity_80",
+    ]
+    tokens = tokenizer(score)
+    assert isinstance(tokens, miditok.TokSequence)
+    assert tokens.tokens == expected
+    assert tokenizer.tokens_errors(tokens) == 0
+    decoded = tokenizer(tokens).resample(480)
+    expected_notes = [
+        Note(0, 960, 60, 80),
+        Note(120, 120, 67, 80),
+        Note(360, 120, 67, 80),
+        Note(1920, 480, 64, 80),
+    ]
+    assert list(decoded.tracks[0].notes) == expected_notes
+    assert "Step" not in tokenizer.tokens_types_graph
+    assert "Duration" not in tokenizer.tokens_types_graph
+    assert len(tokenizer.token_ids_of_type("Pattern")) == 81
+    assert tokenizer.preprocess_score(score) == tokenizer.preprocess_score(
+        tokenizer.preprocess_score(score)
+    )
+
+
+def test_beat_multitrack_and_meters(tmp_path: Path) -> None:
+    """Preserve sustain across meter changes and order instruments per beat."""
+    config = miditok.TokenizerConfig(
+        use_programs=True,
+        use_tempos=True,
+        use_time_signatures=True,
+        time_signature_range={8: [3, 6], 4: [4], 2: [2]},
+        num_velocities=127,
+    )
+    tokenizer = miditok.BEAT(config)
+    score = Score(480)
+    score.time_signatures = [
+        TimeSignature(0, 3, 8),
+        TimeSignature(1440, 6, 8),
+        TimeSignature(2880, 2, 2),
+    ]
+    score.tempos = [Tempo(0, 120), Tempo(240, 90), Tempo(300, 100)]
+    score.tracks = [
+        Track(program=24, notes=[Note(0, 4800, 60, 80)]),
+        Track(program=0, notes=[Note(0, 240, 72, 90), Note(1440, 480, 72, 90)]),
+        Track(is_drum=True, notes=[Note(0, 120, 36, 100)]),
+    ]
+    original = score.copy()
+    tokens = tokenizer(score)
+    assert score == original
+    first_beat = tokens.tokens[tokens.tokens.index("Beat_None") + 1 :]
+    first_beat = first_beat[: first_beat.index("Beat_None")]
+    assert [token for token in first_beat if token.startswith("Program_")] == [
+        "Program_0",
+        "Program_24",
+        "Program_-1",
+    ]
+    decoded, expected, has_errors = tokenize_and_check_equals(
+        score, tokenizer, "beat_meters"
+    )
+    assert not has_errors
+    guitar = next(track for track in decoded.tracks if track.program == 24)
+    assert guitar.notes[0].duration == 10 * decoded.ticks_per_quarter
+    assert [tempo.time for tempo in expected.tempos] == [
+        0,
+        6 * expected.ticks_per_quarter // 4,
+    ]
+    tokenizer.save(tmp_path)
+    restored = miditok.BEAT(params=tmp_path / DEFAULT_TOKENIZER_FILE_NAME)
+    assert restored(score).tokens == tokens.tokens
+
+
+@pytest.mark.parametrize("use_velocities", [False, True])
+def test_beat_overlaps_and_long_sustain(use_velocities: bool) -> None:
+    """Truncate overlapping pitches and sustain beyond duration-vocabulary limits."""
+    tokenizer = miditok.BEAT(miditok.TokenizerConfig(use_velocities=use_velocities))
+    score = Score(4)
+    score.tracks.append(
+        Track(
+            notes=[
+                Note(0, 100, 60, 80),
+                Note(0, 2, 60, 80),
+                Note(4, 8, 60, 80),
+                Note(0, 100, 72, 80),
+            ]
+        )
+    )
+    preprocessed = tokenizer.preprocess_score(score)
+    assert [
+        (note.time, note.duration, note.pitch) for note in preprocessed.tracks[0].notes
+    ] == [(0, 4, 60), (0, 100, 72), (4, 8, 60)]
+    _, _, has_errors = tokenize_and_check_equals(score, tokenizer, "beat_overlaps")
+    assert not has_errors
+
+
+def test_beat_empty_score() -> None:
+    tokenizer = miditok.BEAT(
+        miditok.TokenizerConfig(use_tempos=True, use_time_signatures=True)
+    )
+    score = Score(480)
+    tokens = tokenizer(score)
+    assert tokens.tokens[-2:] == ["Beat_None", "Rest_None"]
+    assert not tokenizer(tokens).tracks
+
+
+def test_beat_grid_splitting() -> None:
+    """Split sustain-only passages into six eighth-note beats per 6/8 bar."""
+    tokenizer = miditok.BEAT(miditok.TokenizerConfig(use_time_signatures=True))
+    score = Score(4)
+    score.time_signatures = [TimeSignature(0, 6, 8)]
+    score.tracks = [Track(notes=[Note(0, 36, 60, 80)])]
+    sequence = tokenizer(score)
+    beats = sequence.split_per_beats()
+    bars = sequence.split_per_bars()
+    assert len(beats) == 18
+    assert len(bars) == 3
+    assert all(beat.tokens.count("Beat_None") == 1 for beat in beats)
+    assert all(bar.tokens.count("Beat_None") == 6 for bar in bars)
+    assert [token for beat in beats for token in beat.tokens] == sequence.tokens
+
+
+def test_beat_default_single_stream() -> None:
+    """Encode program tokens in a single stream with the default configuration."""
+    tokenizer = miditok.BEAT()
+    score = Score(4)
+    score.tracks = [
+        Track(program=40, notes=[Note(0, 4, 72, 90)]),
+        Track(program=0, notes=[Note(0, 4, 60, 90)]),
+    ]
+    tokens = tokenizer(score)
+    assert isinstance(tokens, miditok.TokSequence)
+    decoded = tokenizer.decode(tokens)
+    assert [(track.program, track.notes[0].pitch) for track in decoded.tracks] == [
+        (0, 60),
+        (40, 72),
+    ]
+
+
+@pytest.mark.parametrize("is_drum", [False, True])
+@pytest.mark.parametrize("use_pitchdrum_tokens", [False, True])
+@pytest.mark.parametrize("use_velocities", [False, True])
+@pytest.mark.parametrize("time_signature", [(4, 4), (6, 8)])
+def test_beat_same_program_tracks(
+    is_drum: bool,
+    use_pitchdrum_tokens: bool,
+    use_velocities: bool,
+    time_signature: tuple[int, int],
+    tmp_path: Path,
+) -> None:
+    """Preserve track identity through overlapping pitches, rests and later onsets."""
+    tokenizer = miditok.BEAT(
+        miditok.TokenizerConfig(
+            num_velocities=127,
+            use_velocities=use_velocities,
+            use_pitchdrum_tokens=use_pitchdrum_tokens,
+            use_time_signatures=True,
+        )
+    )
+    score = Score(time_signature[1])
+    score.time_signatures = [TimeSignature(0, *time_signature)]
+    score.tracks = [
+        # The first track starts after the second, then falls silent and returns.
+        Track(is_drum=is_drum, notes=[Note(4, 4, 60, 80), Note(24, 4, 64, 80)]),
+        Track(program=24, notes=[Note(0, 4, 72, 90)]),
+        Track(is_drum=is_drum, notes=[Note(0, 20, 60, 100)]),
+        Track(is_drum=is_drum, notes=[Note(12, 4, 60, 70), Note(24, 4, 60, 70)]),
+    ]
+    original = score.copy()
+    preprocessed = tokenizer.preprocess_score(score)
+    assert score == original
+    assert len(preprocessed.tracks) == 4
+    assert tokenizer.preprocess_score(preprocessed) == preprocessed
+
+    tokens = tokenizer(score)
+    assert isinstance(tokens, miditok.TokSequence)
+    assert tokenizer.tokens_errors(tokens) == 0
+    program_token = "Program_-1" if is_drum else "Program_0"
+    beats = tokens.split_per_beats()
+    assert len(beats) == 7
+    assert all(beat.tokens.count(program_token) == 3 for beat in beats)
+    # Beat six is silent for all three tracks; their slots must still be present.
+    assert beats[5].tokens == ["Beat_None", *([program_token, "Rest_None"] * 3)]
+    decoded = tokenizer(tokens).resample(score.ticks_per_quarter)
+    expected_tracks = sorted(
+        preprocessed.tracks, key=lambda track: 128 if track.is_drum else track.program
+    )
+    assert len(decoded.tracks) == len(expected_tracks)
+    for expected, actual in zip(expected_tracks, decoded.tracks, strict=True):
+        assert (actual.program, actual.is_drum) == (expected.program, expected.is_drum)
+        if not use_velocities:
+            for note in expected.notes:
+                note.velocity = miditok.constants.DEFAULT_VELOCITY
+        assert actual.notes == expected.notes
+
+    tokenizer.save(tmp_path)
+    restored = miditok.BEAT(params=tmp_path / DEFAULT_TOKENIZER_FILE_NAME)
+    assert restored.one_token_stream
+    assert restored(score).tokens == tokens.tokens
+    assert restored(restored(score)).tracks == tokenizer(tokens).tracks
+
+
+@pytest.mark.parametrize("use_tempos", [False, True])
+def test_beat_key_signatures(use_tempos: bool, tmp_path: Path) -> None:
+    """Align keys to bars, keep the last collision, and decode globals only once."""
+    tokenizer = miditok.BEAT(
+        miditok.TokenizerConfig(
+            use_programs=True,
+            use_key_signatures=True,
+            use_time_signatures=True,
+            use_tempos=use_tempos,
+        )
+    )
+    score = Score(480)
+    score.time_signatures = [TimeSignature(0, 4, 4), TimeSignature(1920, 3, 4)]
+    score.tempos = [Tempo(0, 120), Tempo(240, 90)]
+    score.key_signatures = [
+        KeySignature(0, -1, 0),
+        KeySignature(240, 1, 0),
+        KeySignature(480, 2, 1),
+        KeySignature(1920, -3, 0),
+        KeySignature(2400, 4, 1),
+        KeySignature(4560, 5, 0),
+    ]
+    score.tracks = [
+        Track(program=0, notes=[Note(0, 2400, 60, 80)]),
+        Track(program=24, notes=[Note(480, 1440, 67, 90)]),
+    ]
+    original = score.copy()
+    expected_keys = [
+        KeySignature(0, -1, 0),
+        KeySignature(1920, -3, 0),
+        KeySignature(3360, 4, 1),
+        KeySignature(4800, 5, 0),
+    ]
+    preprocessed = tokenizer.preprocess_score(score)
+    assert score == original
+    assert list(preprocessed.resample(480).key_signatures) == expected_keys
+    assert tokenizer.preprocess_score(preprocessed) == preprocessed
+    tokens = tokenizer(score)
+    assert [token for token in tokens.tokens if token.startswith("KeySig_")] == [
+        "KeySig_-1:0",
+        "KeySig_-3:0",
+        "KeySig_4:1",
+        "KeySig_5:0",
+    ]
+    assert tokenizer._tokens_errors(tokens.tokens) == 0
+    assert list(tokenizer(tokens).resample(480).key_signatures) == expected_keys
+    tokenizer.save(tmp_path)
+    restored = miditok.BEAT(params=tmp_path / DEFAULT_TOKENIZER_FILE_NAME)
+    assert restored.config.use_key_signatures
+    assert list(restored(restored(score)).resample(480).key_signatures) == expected_keys
+
+
+@pytest.mark.parametrize(
+    "time_signature", [(2, 2), (3, 4), (4, 4), (3, 8), (6, 8), (3, 16)]
+)
+@pytest.mark.parametrize("use_time_signatures", [False, True])
+def test_beat_meter_resolution(
+    time_signature: tuple[int, int], use_time_signatures: bool
+) -> None:
+    """Keep four steps per denominator unit and numerator beats in a complete bar."""
+    tokenizer = miditok.BEAT(
+        miditok.TokenizerConfig(
+            use_time_signatures=use_time_signatures,
+            time_signature_range={2: [2], 4: [3, 4], 8: [3, 6], 16: [3]},
+            num_velocities=127,
+        )
+    )
+    score = Score(480)
+    score.time_signatures = [TimeSignature(0, *time_signature)]
+    assert tokenizer.config.use_time_signatures
+    numerator, denominator = time_signature
+    ticks_per_beat = 480 * 4 // denominator
+    score.tracks = [
+        Track(
+            notes=[
+                Note(0, ticks_per_beat * numerator, 60, 80),
+                Note(0, ticks_per_beat * 3 // 4, 67, 80),
+            ]
+        )
+    ]
+    preprocessed = tokenizer.preprocess_score(score)
+    assert preprocessed.ticks_per_quarter == denominator
+    tokens = tokenizer(score)
+    assert tokens.tokens.count("Beat_None") == numerator
+    assert "Pattern_51" in tokens.tokens
+    assert tokens.tokens.count("Pattern_80") == numerator - 1
+    assert list(tokenizer(tokens).resample(480).tracks[0].notes) == sorted(
+        score.tracks[0].notes, key=lambda note: (note.time, note.duration, note.pitch)
+    )
+
+
+@pytest.mark.parametrize(
+    ("time_signatures", "notes"),
+    [
+        (
+            [(0, 4, 4), (1920, 6, 8), (3360, 2, 2)],
+            [(1800, 180, 60, 80), (3300, 300, 64, 80)],
+        ),
+        # The new half-note grid starts at 360, not at a multiple of 240 ticks.
+        (
+            [(0, 3, 16), (360, 2, 2), (2280, 3, 8)],
+            [(330, 270, 60, 80), (360, 240, 64, 80), (2040, 300, 67, 80)],
+        ),
+    ],
+)
+def test_beat_sustain_across_denominator_changes(
+    time_signatures: list[tuple[int, int, int]], notes: list[tuple[int, int, int, int]]
+) -> None:
+    """Use the onset and offset grids when a note spans a denominator change."""
+    tokenizer = miditok.BEAT(
+        miditok.TokenizerConfig(
+            use_time_signatures=True,
+            time_signature_range={2: [2], 4: [4], 8: [3, 6], 16: [3]},
+            num_velocities=127,
+        )
+    )
+    score = Score(480)
+    score.time_signatures = [TimeSignature(*time_sig) for time_sig in time_signatures]
+    score.tracks = [Track(notes=[Note(*note) for note in notes])]
+    preprocessed = tokenizer.preprocess_score(score)
+    assert list(preprocessed.resample(480).tracks[0].notes) == list(
+        score.tracks[0].notes
+    )
+    assert tokenizer.preprocess_score(preprocessed) == preprocessed
+    tokens = tokenizer(score)
+    assert tokenizer.tokens_errors(tokens) == 0
+    assert list(tokenizer(tokens).resample(480).tracks[0].notes) == list(
+        score.tracks[0].notes
+    )
+
+
+def test_beat_key_signature_before_final_meter_change() -> None:
+    """Use the preceding meter to find the last bar boundary of the input score."""
+    tokenizer = miditok.BEAT(
+        miditok.TokenizerConfig(
+            use_key_signatures=True,
+            use_time_signatures=True,
+        )
+    )
+    score = Score(480)
+    score.time_signatures = [TimeSignature(0, 4, 4), TimeSignature(1920, 3, 4)]
+    score.key_signatures = [KeySignature(1440, 2, 1)]
+    score.tracks = [Track(notes=[Note(0, 480, 60, 80)])]
+    decoded = tokenizer(tokenizer(score)).resample(480)
+    assert list(decoded.key_signatures) == [
+        KeySignature(0, 0, 0),
+        KeySignature(1920, 2, 1),
+    ]

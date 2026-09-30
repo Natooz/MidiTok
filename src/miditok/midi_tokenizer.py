@@ -154,6 +154,8 @@ class MusicTokenizer(ABC, HFHubMixin):
         self._model = None
         # Used in _notes_to_events, especially MIDILike
         self._note_on_off = False
+        # Tokenizers that encode track identity can preserve same-program tracks.
+        self._merge_same_program_tracks = True
 
         # Initialize config
         # Loading params, or initializing them from args
@@ -590,7 +592,11 @@ class MusicTokenizer(ABC, HFHubMixin):
 
         # Merge instruments of the same program / inst before preprocessing notes.
         # This avoids potential duplicated notes but can affect chord detections.
-        if self.config.use_programs and self.config.one_token_stream_for_programs:
+        if (
+            self.config.use_programs
+            and self.config.one_token_stream_for_programs
+            and self._merge_same_program_tracks
+        ):
             merge_same_program_tracks(score.tracks)
 
         # Preprocess track events
@@ -636,17 +642,26 @@ class MusicTokenizer(ABC, HFHubMixin):
                 del score.tracks[t]
                 continue
 
-        # Process tempo changes
-        if self.config.use_tempos:
-            score.tempos = self._preprocess_tempos(score.tempos, tpq_resampling_factors)
-
-        # Process key signature changes
-        if self.config.use_key_signatures:
-            score.key_signatures = self._preprocess_key_signatures(score.key_signatures)
+        self._preprocess_global_events(score, tpq_resampling_factors)
 
         # We do not change markers and lyrics here as they are not used by MidiTok (yet)
-
         return score
+
+    def _preprocess_global_events(
+        self, score: Score, resampling_factors: np.ndarray = None
+    ) -> None:
+        """
+        Quantize tempo/key changes inplace after time signatures are preprocessed.
+
+        :param score: resampled score with preprocessed time signatures.
+        :param resampling_factors: section end ticks and ticks per step.
+        """
+        if self.config.use_tempos:
+            score.tempos = self._preprocess_tempos(score.tempos, resampling_factors)
+        if self.config.use_key_signatures:
+            score.key_signatures = self._preprocess_key_signatures(
+                score.key_signatures, resampling_factors
+            )
 
     def _resample_score(
         self, score: Score, _new_tpq: int, _time_signatures_copy: TimeSignatureTickList
@@ -707,27 +722,21 @@ class MusicTokenizer(ABC, HFHubMixin):
         Resample inplace the note velocities, remove notes outside of pitch range.
 
         Note durations will be clipped to the maximum duration that can be handled by
-        the tokenizer. This is done to prevent having incorrect offset values when
-        computing rests. Notes with pitches outside of self.pitch_range will be
-        deleted.
+        the tokenizer. This prevents incorrect offset values when computing rests.
+        Notes outside the pitch range are deleted.
 
         :param track: track containing the notes to resample.
-        :param resampling_factors: sections of resampling factors, when we need to
-            adjust the times of events to a specific ticks/beat value. This is required
-            when the file has time signatures with different denominators. The factors
-            are given as a numpy array of shape ``(N,2)``, for ``N`` changes of ticks
-            per beat, and the second dimension representing the end tick of each
-            section and the number of ticks per beat respectively. (default: ``None``)
+        :param resampling_factors: array of shape ``(N, 2)`` containing section end
+            ticks and ticks per step, when time signatures have different denominators.
+            (default: ``None``)
         :param ticks_per_beat: array indicating the number of ticks per beat per time
             signature denominator section. The numbers of ticks per beat depend on the
             time signatures of the file being parsed. The array has a shape ``(N,2)``,
             for ``N`` changes of ticks per beat, and the second dimension representing
             the end tick of each section and the number of ticks per beat respectively.
-            This argument is not required if
-            ``tokenizer.config.sustain_pedal_duration`` is disabled.
-            (default: ``None``)
-        :param min_duration: minimum duration (in tick) to set to notes that have
-            durations of 0 ticks after resampling. (default: ``1``)
+            When ``None``, skip duration-bin quantization. (default: ``None``)
+        :param min_duration: length in onset-grid steps for events whose endpoints
+            collapse onto one tick after quantization. (default: ``1``)
         """
         note_soa = track.notes.numpy()
 
@@ -757,28 +766,21 @@ class MusicTokenizer(ABC, HFHubMixin):
                 self.velocities, np.array(note_soa["velocity"])
             )
 
-        # Adjust times if needed
-        if resampling_factors is not None:
-            # First get the idx of the notes covered per section
-            resampling_factors = self.__convert_resampling_ratios_ticks_to_idx(
-                resampling_factors, note_soa["time"]
-            )
-            note_soa["time"] = self._adjust_time_to_tpb(
-                note_soa["time"], resampling_factors
-            )
-
-        # Resample duration values if NoteOff, otherwise adjust to the vocab
+        # On/off representations quantize both endpoints; duration-token
+        # representations quantize the onset here and the duration separately below.
         program = -1 if track.is_drum else track.program
-        if program in self.config.use_note_duration_programs:
-            if not self._note_on_off and ticks_per_beat is not None:
-                self._adjust_durations(note_soa, ticks_per_beat)
-            elif resampling_factors is not None:
-                note_soa["duration"] = self._adjust_time_to_tpb(
-                    note_soa["duration"], resampling_factors, min_duration
-                )
-                self._adjust_offset_spanning_across_time_sig(
-                    note_soa, resampling_factors
-                )
+        if resampling_factors is not None:
+            if self._note_on_off and program in self.config.use_note_duration_programs:
+                self._adjust_onsets_offsets(note_soa, resampling_factors, min_duration)
+            else:
+                self._adjust_time_to_tpb(note_soa["time"], resampling_factors)
+
+        if (
+            not self._note_on_off
+            and ticks_per_beat is not None
+            and program in self.config.use_note_duration_programs
+        ):
+            self._adjust_durations(note_soa, ticks_per_beat)
 
         # Symusic automatically sorts the notes by (time, duration, pitch) keys when
         # reading a music file. We hence don't need to sort the notes.
@@ -806,19 +808,16 @@ class MusicTokenizer(ABC, HFHubMixin):
         resampling_factors: np.ndarray = None,
     ) -> TempoTickList:
         r"""
-        Resample the tempo values of tempo change events.
+        Quantize tempo values and times, then remove redundant changes.
 
         For tempo changes occurring at the same tick/time, we only keep the last one.
         Consecutive identical tempo changes will be removed if
         ``self.config.delete_equal_successive_tempo_changes`` is True.
 
         :param tempos: tempo changes to resample.
-        :param resampling_factors: sections of resampling factors, when we need to
-            adjust the times of events to a specific ticks/beat value. This is required
-            when the file has time signatures with different denominators. The factors
-            are given as a numpy array of shape ``(N,2)``, for ``N`` changes of ticks
-            per beat, and the second dimension representing the end tick of each
-            section and the number of ticks per beat respectively. (default: ``None``)
+        :param resampling_factors: array of shape ``(N, 2)`` containing section end
+            ticks and ticks per step, when time signatures have different denominators.
+        :return: quantized tempo changes, including an initial tempo at tick 0.
         """
         # If we delete the successive equal tempo changes, we need to sort them by time
         # Fortunately, sorting is already performed by symusic when loading the file.
@@ -833,11 +832,9 @@ class MusicTokenizer(ABC, HFHubMixin):
         # Find the closest tempos
         tempos_soa["mspq"] = np_get_closest(self._tempos_mspq, tempos_soa["mspq"])
 
-        # Adjust times if needed
+        # Adjust times before deduplicating changes.
         if resampling_factors is not None:
-            tempos_soa["time"] = self._adjust_time_to_tpb(
-                tempos_soa["time"], resampling_factors
-            )
+            self._adjust_time_to_tpb(tempos_soa["time"], resampling_factors)
 
         # Find groups of tempos at the same onset ticks, equal consecutive ones
         # Keep only last tempo change for groups with same tick
@@ -953,23 +950,36 @@ class MusicTokenizer(ABC, HFHubMixin):
             time_sigs.insert(0, TimeSignature(0, *TIME_SIGNATURE))
 
     def _preprocess_key_signatures(
-        self, key_signatures: KeySignatureTickList
+        self,
+        key_signatures: KeySignatureTickList,
+        resampling_factors: np.ndarray = None,
     ) -> KeySignatureTickList:
         r"""
-        Preprocess the key signature changes of a Score.
+        Quantize key-signature times and keep the last change at each tick.
 
         Key signatures are sorted by time, and a default key signature is added at
         tick 0 if the ``Score`` does not contain any, or if the first one does not
         occur at tick 0. This mirrors the behavior of tempos and time signatures.
 
         :param key_signatures: key signature changes to preprocess.
+        :param resampling_factors: section end ticks and ticks per step, when time
+            signatures have different denominators.
         :return: the preprocessed key signature changes.
         """
+        # Preserve input order for simultaneous changes so the last one wins.
+        key_signatures.sort(key=lambda key_sig: key_sig.time)
+        key_signatures_soa = key_signatures.numpy()
+        if resampling_factors is not None:
+            self._adjust_time_to_tpb(key_signatures_soa["time"], resampling_factors)
+        key_signatures = KeySignature.from_numpy(**key_signatures_soa)
+        key_signatures = KeySignatureTickList(
+            list({key_sig.time: key_sig for key_sig in key_signatures}.values())
+        )
+
         if len(key_signatures) == 0 or key_signatures[0].time != 0:
             key_signatures.insert(
                 0, KeySignature(0, KEY_SIGNATURE_KEY, KEY_SIGNATURE_TONALITY)
             )
-        key_signatures.sort()
         return key_signatures
 
     def _preprocess_pitch_bends(
@@ -984,12 +994,9 @@ class MusicTokenizer(ABC, HFHubMixin):
         highest absolute value at a given tick.
 
         :param pitch_bends: pitch bend events.
-        :param resampling_factors: sections of resampling factors, when we need to
-            adjust the times of events to a specific ticks/beat value. This is required
-            when the Score has time signatures with different denominators. The factors
-            are given as a numpy array of shape ``(N,2)``, for ``N`` changes of ticks
-            per beat, and the second dimension representing the end tick of each
-            section and the number of ticks per beat respectively. (default: ``None``)
+        :param resampling_factors: array of shape ``(N, 2)`` containing section end
+            ticks and ticks per step, when time signatures have different denominators.
+            (default: ``None``)
         """
         pitch_bends_soa = pitch_bends.numpy()
 
@@ -1000,9 +1007,7 @@ class MusicTokenizer(ABC, HFHubMixin):
 
         # Adjust times if needed
         if resampling_factors is not None:
-            pitch_bends_soa["time"] = self._adjust_time_to_tpb(
-                pitch_bends_soa["time"], resampling_factors
-            )
+            self._adjust_time_to_tpb(pitch_bends_soa["time"], resampling_factors)
 
         # Find groups of pitch bends at the same onset ticks, and keep the > abs values
         if len(pitch_bends) > 1:
@@ -1043,12 +1048,9 @@ class MusicTokenizer(ABC, HFHubMixin):
         :param control_changes: control change events.
         :param original_times: timestamps before score resampling, aligned with the
             input controls.
-        :param resampling_factors: sections of resampling factors, when we need to
-            adjust the times of events to a specific ticks/beat value. This is required
-            when the Score has time signatures with different denominators. The factors
-            are given as a numpy array of shape ``(N,2)``, for ``N`` changes of ticks
-            per beat, and the second dimension representing the end tick of each
-            section and the number of ticks per beat respectively. (default: ``None``)
+        :param resampling_factors: array of shape ``(N, 2)`` containing section end
+            ticks and ticks per step, when time signatures have different denominators.
+            (default: ``None``)
         :return: filtered and quantized control changes in stable time order.
         """
         control_changes_soa = control_changes.numpy()
@@ -1089,12 +1091,7 @@ class MusicTokenizer(ABC, HFHubMixin):
 
         # Adjust times if needed
         if resampling_factors is not None and len(control_changes_soa["time"]) > 0:
-            resampling_factors = self.__convert_resampling_ratios_ticks_to_idx(
-                resampling_factors, control_changes_soa["time"]
-            )
-            control_changes_soa["time"] = self._adjust_time_to_tpb(
-                control_changes_soa["time"], resampling_factors
-            )
+            self._adjust_time_to_tpb(control_changes_soa["time"], resampling_factors)
 
         return ControlChange.from_numpy(**control_changes_soa)
 
@@ -1109,12 +1106,9 @@ class MusicTokenizer(ABC, HFHubMixin):
         Resamples the pedals durations.
 
         :param pedals: pedals to preprocess.
-        :param resampling_factors: sections of resampling factors, when we need to
-            adjust the times of events to a specific ticks/beat value. This is required
-            when the Score has time signatures with different denominators. The factors
-            are given as a numpy array of shape ``(N,2)``, for ``N`` changes of ticks
-            per beat, and the second dimension representing the end tick of each
-            section and the number of ticks per beat respectively. (default: ``None``)
+        :param resampling_factors: array of shape ``(N, 2)`` containing section end
+            ticks and ticks per step, when time signatures have different denominators.
+            (default: ``None``)
         :param ticks_per_beat: array indicating the number of ticks per beat per
             portions. The numbers of ticks per beat depend on the time signatures of
             the Score being parsed. The array has a shape ``(N,2)``, for ``N`` changes
@@ -1122,20 +1116,19 @@ class MusicTokenizer(ABC, HFHubMixin):
             each portion and the number of ticks per beat respectively. This argument
             is not required if ``tokenizer.config.sustain_pedal_duration`` is disabled.
             (default: ``None``)
-        :param min_duration: minimum duration (in tick) to set to notes that have
-            durations of 0 ticks after resampling. (default: ``1``)
+        :param min_duration: length in onset-grid steps for events whose endpoints
+            collapse onto one tick after quantization. (default: ``1``)
         """
         pedals_soa = pedals.numpy()
 
         # Adjust times if needed
         if resampling_factors is not None:
-            # First get the idx of the notes covered per section
-            resampling_factors_ = self.__convert_resampling_ratios_ticks_to_idx(
-                resampling_factors, pedals_soa["time"]
-            )
-            pedals_soa["time"] = self._adjust_time_to_tpb(
-                pedals_soa["time"], resampling_factors_
-            )
+            if self.config.sustain_pedal_duration and ticks_per_beat is not None:
+                self._adjust_time_to_tpb(pedals_soa["time"], resampling_factors)
+            else:
+                self._adjust_onsets_offsets(
+                    pedals_soa, resampling_factors, min_duration
+                )
 
         # Format durations (if needed) and merge successive pedals
         end_arr = pedals_soa["time"] + pedals_soa["duration"]
@@ -1170,72 +1163,92 @@ class MusicTokenizer(ABC, HFHubMixin):
             for key in pedals_soa:
                 pedals_soa[key] = pedals_soa[key][mask]
 
-        # Resample duration values if NoteOff, otherwise adjust to the vocab
+        # Duration-token representations use vocabulary bins instead of pedal offsets.
         if self.config.sustain_pedal_duration and ticks_per_beat is not None:
             self._adjust_durations(pedals_soa, ticks_per_beat)
-        elif resampling_factors is not None:
-            resampling_factors_ = self.__convert_resampling_ratios_ticks_to_idx(
-                resampling_factors, pedals_soa["time"]
-            )
-            pedals_soa["duration"] = self._adjust_time_to_tpb(
-                pedals_soa["duration"], resampling_factors_, min_duration
-            )
-            self._adjust_offset_spanning_across_time_sig(
-                pedals_soa, resampling_factors_
-            )
 
         return Pedal.from_numpy(**pedals_soa)
 
     @staticmethod
     def _adjust_time_to_tpb(
         times_arr: np.ndarray,
-        tpq_resampling_factor: np.ndarray,
-        min_duration: int | None = None,
+        resampling_factors: np.ndarray,
+        *,
+        sorted_times: bool = True,
     ) -> np.ndarray:
-        # Batch by factor (i.e. time signature denominator) section
+        """
+        Round absolute timestamps inplace, processing one meter section at a time.
+
+        :param times_arr: event timestamps, not durations.
+        :param resampling_factors: array of section end ticks and ticks per step.
+            Each section's grid begins at the preceding section's end tick (0 first).
+            The final section also covers times beyond its recorded end.
+        :param sorted_times: whether timestamps are already nondecreasing. For note
+            offsets, pass ``False`` to look up their sections without sorting them.
+        :return: the input array with timestamps quantized to their section's grid.
+        """
+        # Unordered offsets cannot be sliced by section. Look up their grids directly
+        # to preserve note associations without the cost of sorting all endpoints.
+        if not sorted_times:
+            section_indices = np.searchsorted(
+                resampling_factors[:-1, 0], times_arr, side="right"
+            )
+            step_ticks = resampling_factors[section_indices, 1]
+            grid_starts = np.r_[0, resampling_factors[:-1, 0]][section_indices]
+            times_arr[:] = (
+                np.round((times_arr - grid_starts) / step_ticks) * step_ticks
+                + grid_starts
+            )
+            return times_arr
+
+        # Find section slices before changing timestamps at their boundaries.
+        section_end_indices = np.searchsorted(times_arr, resampling_factors[:, 0])
+        section_end_indices[-1] = len(times_arr)
         idx_first = 0
-        for rf_idx, (idx_last, factor) in enumerate(tpq_resampling_factor):
-            idx_last_ = None if rf_idx == len(tpq_resampling_factor) - 1 else idx_last
-            # Round time values to the factor
-            # Except if the factor is 1, it means that the tpb is equal to the tpq
-            if factor != 1:
-                times_arr[idx_first:idx_last_] = (
-                    np.round(times_arr[idx_first:idx_last_] / factor) * factor
+        grid_start = 0
+        for (end_tick, step_ticks), idx_last in zip(
+            resampling_factors, section_end_indices, strict=True
+        ):
+            if step_ticks != 1 and idx_first < idx_last:
+                times_arr[idx_first:idx_last] = (
+                    np.round((times_arr[idx_first:idx_last] - grid_start) / step_ticks)
+                    * step_ticks
+                    + grid_start
                 )
-                if min_duration is not None:
-                    times_arr[idx_first:idx_last_][
-                        times_arr[idx_first:idx_last_] == 0
-                    ] = min_duration * factor
-            idx_first = idx_last_
+            idx_first = idx_last
+            grid_start = end_tick
 
         return times_arr
 
-    @staticmethod
-    def _adjust_offset_spanning_across_time_sig(
+    def _adjust_onsets_offsets(
+        self,
         notes_pedals_soa: dict[str, np.ndarray],
         resampling_factors: np.ndarray,
+        min_duration: int = 1,
     ) -> None:
-        end_arr = notes_pedals_soa["time"] + notes_pedals_soa["duration"]
-        idx_first = 0
-        for idx_fact, (idx_last, _) in enumerate(resampling_factors[:-1]):
-            # NoteOff/PedalOff idx with durations spanning across time sigs adjust end
-            spanning_durations_idx = np.where(
-                end_arr[idx_first:idx_last] >= notes_pedals_soa["time"][idx_last]
-            )[0]
-            for idx in spanning_durations_idx:
-                # Get the factor for the idx as it can be different from the next one
-                factor_for_idx = resampling_factors[
-                    np.argmax(
-                        resampling_factors[idx_fact:, 0]
-                        >= notes_pedals_soa["time"][idx]
-                    ),
-                    1,
-                ]
-                new_end = np.round(end_arr[idx] / factor_for_idx) * factor_for_idx
-                notes_pedals_soa["duration"][idx] = (
-                    new_end - notes_pedals_soa["time"][idx]
-                )
-            idx_first = idx_last
+        """
+        Quantize note/pedal endpoints in their own meters and rebuild durations.
+
+        :param notes_pedals_soa: onset-sorted arrays containing time and duration.
+            The arrays are updated inplace.
+        :param resampling_factors: section end ticks and ticks per step.
+        :param min_duration: length in onset-grid steps for collapsed events.
+        """
+        onsets = notes_pedals_soa["time"]
+        offsets = onsets + notes_pedals_soa["duration"]
+        self._adjust_time_to_tpb(onsets, resampling_factors)
+        self._adjust_time_to_tpb(offsets, resampling_factors, sorted_times=False)
+
+        # Events collapsing onto one tick still need a positive duration on the grid.
+        collapsed = offsets <= onsets
+        if np.any(collapsed):
+            onset_sections = np.searchsorted(
+                resampling_factors[:-1, 0], onsets[collapsed], side="right"
+            )
+            offsets[collapsed] = (
+                onsets[collapsed] + min_duration * resampling_factors[onset_sections, 1]
+            )
+        notes_pedals_soa["duration"] = offsets - onsets
 
     def _adjust_durations(
         self, notes_pedals_soa: dict[str, np.ndarray], ticks_per_beat: np.ndarray
@@ -1855,8 +1868,10 @@ class MusicTokenizer(ABC, HFHubMixin):
 
         # Tokenize it
         tokens = self._score_to_tokens(score, attribute_controls_indexes)
-        # Add bar/beat ticks here to TokSeq as they need to be from preprocessed Score
-        add_bar_beats_ticks_to_tokseq(tokens, score)
+        # Per-track tokenizers return a list of sequences, which has no tick attributes.
+        # BEAT returns one sequence with ticks already covering sustained notes.
+        if isinstance(tokens, list) or not (tokens._ticks_bars and tokens._ticks_beats):
+            add_bar_beats_ticks_to_tokseq(tokens, score)
 
         # Encode the ids if the tokenizer is trained
         if encode_ids and self.is_trained:
@@ -2579,15 +2594,13 @@ class MusicTokenizer(ABC, HFHubMixin):
 
     def _get_score_resampling_factor(self, score: Score) -> np.ndarray:
         """
-        Compute the portions of numbers of ticks in a beat in a ``symusic.Score``.
+        Compute the time-quantization step for each time-signature section.
 
-        The method returns a numpy array of shape ``(N,2)``, for N ticks-per-beat
-        changes, and the second dimension corresponding to the ending tick and the
-        number of ticks per beat of the portion.
         **The time signatures must be sorted by time.**
 
         :param score: ``symusic.Score`` to analyze.
-        :return: ticks per beat values as a numpy array.
+        :return: array of shape ``(N, 2)`` containing section end ticks and ticks per
+            step. These are tick boundaries, not indices into an event array.
         """
         resampling_factors = [
             [
@@ -2620,23 +2633,6 @@ class MusicTokenizer(ABC, HFHubMixin):
                 del resampling_factors[i]
 
         return np.array(resampling_factors, dtype=np.intc)
-
-    @staticmethod
-    def __convert_resampling_ratios_ticks_to_idx(
-        resampling_factors: np.ndarray, time_arr: np.array
-    ) -> np.ndarray:
-        idx_first = 0
-        factors_idx = resampling_factors.copy()
-        for rf_idx, last_tick_factor in enumerate(resampling_factors):
-            # Get the last concerned idx for this section.
-            if rf_idx + 1 == len(resampling_factors):
-                idx_last = len(time_arr) - 1
-            else:
-                idx_last = np.argmax(time_arr[idx_first:] >= last_tick_factor[0])
-            factors_idx[rf_idx, 0] = idx_last
-            idx_first = idx_last
-
-        return factors_idx
 
     def __create_tpb_to_ticks_array(self, rest: bool = False) -> dict[int, np.ndarray]:
         r"""
