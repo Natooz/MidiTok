@@ -179,6 +179,7 @@ class BEAT(MusicTokenizer):
             track.pianoroll(["frame", "onset"], encode_velocity=True)
             for track in tracks
         ]
+        pattern_weights = np.array([27, 9, 3, 1])
         events = []
         for bar_start, bar_end in pairwise(bars):
             ticks_per_beat = ticks_per_beat_sections[
@@ -195,7 +196,8 @@ class BEAT(MusicTokenizer):
                         :,
                         beat_start : beat_start + ticks_per_beat : ticks_per_beat // 4,
                     ]
-                    pitches = np.flatnonzero(np.any(segment[0] > 0, axis=1))[::-1]
+                    active = segment[0] > 0
+                    pitches = np.flatnonzero(np.any(active, axis=1))[::-1]
                     program = -1 if track.is_drum else track.program
                     # Same-program tracks need silent blocks to keep their positions.
                     if len(pitches) == 0 and num_tracks_per_program[program] == 1:
@@ -204,11 +206,20 @@ class BEAT(MusicTokenizer):
                     if len(pitches) == 0:
                         events.append(Event("Rest", "None", beat_start))
                         continue
+                    frames = segment[0, pitches]
+                    active = active[pitches]
+                    states = np.where(
+                        segment[1, pitches] > 0, 1, np.where(active, 2, 0)
+                    )
+                    patterns = states @ pattern_weights[: states.shape[1]]
+                    if self.config.use_velocities:
+                        velocities = np_get_closest(
+                            self.velocities,
+                            frames.sum(axis=1, where=active) / active.sum(axis=1),
+                        )
                     previous_pitch = None
-                    for pitch in pitches:
-                        frames, onsets = segment[:, pitch]
-                        states = np.where(onsets > 0, 1, np.where(frames > 0, 2, 0))
-                        pattern = int(states @ np.array([27, 9, 3, 1])[: len(states)])
+                    for pitch_index, pitch in enumerate(pitches):
+                        pattern = int(patterns[pitch_index])
                         is_drum = track.is_drum and self.config.use_pitchdrum_tokens
                         pitch_value = (
                             pitch
@@ -224,12 +235,7 @@ class BEAT(MusicTokenizer):
                         )
                         events.append(Event("Pattern", pattern, beat_start))
                         if self.config.use_velocities:
-                            velocity = int(
-                                np_get_closest(
-                                    self.velocities,
-                                    np.array([frames[frames > 0].mean()]),
-                                )[0]
-                            )
+                            velocity = int(velocities[pitch_index])
                             events.append(Event("Velocity", velocity, beat_start))
                         previous_pitch = pitch
                 if events[-1].type_ == "Beat":
