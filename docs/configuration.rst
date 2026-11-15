@@ -89,9 +89,9 @@ Special tokens
 MidiTok offers to include some special tokens to the vocabulary. These tokens with no "musical" information can be used for training purposes.
 To use special tokens, you must specify them with the ``special_tokens`` argument when creating a tokenizer. By default, this argument is set to ``["PAD", "BOS", "EOS", "MASK"]``. Their signification are:
 
-* **PAD** (``PAD_None``): a padding token to use when training a model with batches of sequences of unequal lengths. The padding token id is often set to 0. If you use Hugging Face models, be sure to pad inputs with this tokens, and pad labels with *-100*.
-* **BOS** (``SOS_None``): "Start Of Sequence" token, indicating that a token sequence is beginning.
-* **EOS** (``EOS_None``): "End Of Sequence" tokens, indicating that a token sequence is ending. For autoregressive generation, this token can be used to stop it.
+* **PAD** (``PAD_None``): a padding token to use when training a model with batches of sequences of unequal lengths. The padding token id is often set to 0. If you use Hugging Face models, be sure to pad inputs with this token, and pad labels with *-100*.
+* **BOS** (``BOS_None``): "Beginning Of Sequence" (or "Start Of Sequence") token, indicating that a token sequence is beginning.
+* **EOS** (``EOS_None``): "End Of Sequence" token, indicating that a token sequence is ending. For autoregressive generation, this token can be used to stop it.
 * **MASK** (``MASK_None``): a masking token, to use when pre-training a (bidirectional) model with a self-supervised objective like `BERT <https://arxiv.org/abs/1810.04805>`_.
 
-**Note:** you can use the ``tokenizer.special_tokens`` property to get the list of the special tokens of a tokenizer, and ``tokenizer.special_tokens`` for their ids.
+**Note:** you can use the ``tokenizer.special_tokens`` property to get the list of the special tokens of a tokenizer, and ``tokenizer.special_tokens_ids`` for their ids.
